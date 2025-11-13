@@ -1,6 +1,6 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { TrendingUp, Grid3x3 } from 'lucide-react';
+import { TrendingUp, Grid3x3, RefreshCw } from 'lucide-react';
 import { Header } from './Header';
 import { SubscriptionsList } from './SubscriptionsList';
 import { VideoCard } from './VideoCard';
@@ -11,8 +11,13 @@ type Tab = 'subscriptions' | 'latest';
 
 export const Dashboard = () => {
   const [activeTab, setActiveTab] = useState<Tab>('subscriptions');
-  const { videos, isLoading: videosLoading } = useLatestVideos();
+  const { videos, isLoading: videosLoading, refetch: refetchVideos } = useLatestVideos();
   const { allSubscriptions } = useSubscriptions();
+
+  useEffect(() => {
+    console.log('🎬 Dashboard mounted');
+    console.log('📊 Videos state:', { count: videos.length, isLoading: videosLoading });
+  }, [videos.length, videosLoading]);
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 via-white to-gray-50 dark:from-gray-950 dark:via-gray-900 dark:to-gray-950">
@@ -47,6 +52,19 @@ export const Dashboard = () => {
               <TrendingUp className="w-5 h-5" />
               <span>Latest Videos</span>
             </button>
+            {activeTab === 'latest' && (
+              <button
+                onClick={() => {
+                  console.log('🔄 Manual refresh triggered');
+                  refetchVideos();
+                }}
+                disabled={videosLoading}
+                className="flex items-center gap-2 px-4 py-2 rounded-lg font-medium bg-red-600 text-white hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+              >
+                <RefreshCw className={`w-4 h-4 ${videosLoading ? 'animate-spin' : ''}`} />
+                <span>Refresh</span>
+              </button>
+            )}
           </div>
         </div>
 
