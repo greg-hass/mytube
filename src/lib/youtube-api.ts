@@ -119,8 +119,10 @@ class YouTubeAPI {
     const errors: string[] = [];
 
     // Fetch latest videos from each channel in parallel
-    const videoPromises = channelsToCheck.map(async (channel) => {
+    const videoPromises = channelsToCheck.map(async (channel, index) => {
       try {
+        console.log(`🔎 [${index + 1}/${channelsToCheck.length}] Fetching videos for: ${channel.title} (${channel.id})`);
+
         const response = await this.fetch<YouTubeApiResponse<any>>('/search', {
           part: 'snippet',
           channelId: channel.id,
@@ -129,17 +131,38 @@ class YouTubeAPI {
           type: 'video',
         });
 
-        const videos = response.items.map((item: any) => ({
-          id: item.id.videoId,
-          title: item.snippet.title,
-          description: item.snippet.description,
-          thumbnail: item.snippet.thumbnails.high?.url || item.snippet.thumbnails.medium?.url || item.snippet.thumbnails.default.url,
-          channelId: item.snippet.channelId,
-          channelTitle: item.snippet.channelTitle,
-          publishedAt: item.snippet.publishedAt,
-        }));
+        console.log(`📦 Raw response for ${channel.title}:`, {
+          totalResults: response.pageInfo?.totalResults,
+          itemsCount: response.items?.length || 0,
+          hasItems: !!response.items,
+          items: response.items
+        });
 
-        console.log(`✅ ${channel.title}: Found ${videos.length} videos`);
+        if (!response.items || response.items.length === 0) {
+          console.log(`⚠️ ${channel.title}: No items in response`);
+          return [];
+        }
+
+        const videos = response.items.map((item: any) => {
+          console.log(`🎬 Video item:`, {
+            hasVideoId: !!item.id?.videoId,
+            videoId: item.id?.videoId,
+            title: item.snippet?.title,
+            channelTitle: item.snippet?.channelTitle
+          });
+
+          return {
+            id: item.id.videoId,
+            title: item.snippet.title,
+            description: item.snippet.description,
+            thumbnail: item.snippet.thumbnails.high?.url || item.snippet.thumbnails.medium?.url || item.snippet.thumbnails.default.url,
+            channelId: item.snippet.channelId,
+            channelTitle: item.snippet.channelTitle,
+            publishedAt: item.snippet.publishedAt,
+          };
+        });
+
+        console.log(`✅ ${channel.title}: Parsed ${videos.length} videos`);
         successCount++;
         return videos;
       } catch (error) {
