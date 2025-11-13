@@ -73,13 +73,33 @@ export const Dashboard = () => {
             >
               {videosLoading ? (
                 <div className="text-center py-12">
-                  <div className="inline-block w-8 h-8 border-4 border-red-600 border-t-transparent rounded-full animate-spin" />
+                  <div className="inline-block w-8 h-8 border-4 border-red-600 border-t-transparent rounded-full animate-spin mb-4" />
+                  <p className="text-gray-600 dark:text-gray-400">
+                    Loading latest videos from your subscriptions...
+                  </p>
+                  <p className="text-sm text-gray-500 dark:text-gray-500 mt-2">
+                    This may take a moment
+                  </p>
+                </div>
+              ) : videos.length === 0 ? (
+                <div className="text-center py-12">
+                  <p className="text-gray-600 dark:text-gray-400 text-lg mb-2">
+                    No videos found
+                  </p>
+                  <p className="text-sm text-gray-500">
+                    Make sure you have subscriptions with recent uploads
+                  </p>
                 </div>
               ) : (
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-                  {videos.slice(0, 20).map((video, index) => (
-                    <VideoCard key={video.id} video={video} index={index} />
-                  ))}
+                <div>
+                  <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">
+                    Showing {videos.length} recent videos
+                  </p>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+                    {videos.map((video, index) => (
+                      <VideoCard key={video.id} video={video} index={index} />
+                    ))}
+                  </div>
                 </div>
               )}
             </motion.div>

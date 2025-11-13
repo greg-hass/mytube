@@ -99,15 +99,20 @@ class YouTubeAPI {
 
   async getLatestVideos(maxResults = 50): Promise<YouTubeVideo[]> {
     try {
+      console.log('🎥 Fetching latest videos...');
+
       // Get subscriptions first
       const subscriptions = await this.getSubscriptions(500);
+      console.log(`📺 Found ${subscriptions.length} subscriptions`);
 
       if (subscriptions.length === 0) {
+        console.warn('⚠️ No subscriptions found');
         return [];
       }
 
       // Get latest video from each channel (sample first 20 channels to avoid quota issues)
       const channelsToCheck = subscriptions.slice(0, 20);
+      console.log(`🔍 Checking ${channelsToCheck.length} channels for videos...`);
       const allVideos: YouTubeVideo[] = [];
 
       // Fetch latest videos from each channel in parallel
@@ -121,7 +126,7 @@ class YouTubeAPI {
             type: 'video',
           });
 
-          return response.items.map((item: any) => ({
+          const videos = response.items.map((item: any) => ({
             id: item.id.videoId,
             title: item.snippet.title,
             description: item.snippet.description,
@@ -130,8 +135,11 @@ class YouTubeAPI {
             channelTitle: item.snippet.channelTitle,
             publishedAt: item.snippet.publishedAt,
           }));
+
+          console.log(`✅ ${channel.title}: Found ${videos.length} videos`);
+          return videos;
         } catch (error) {
-          console.error(`Error fetching videos for channel ${channel.title}:`, error);
+          console.error(`❌ Error fetching videos for channel ${channel.title}:`, error);
           return [];
         }
       });
@@ -139,14 +147,19 @@ class YouTubeAPI {
       const videosArrays = await Promise.all(videoPromises);
       videosArrays.forEach((videos) => allVideos.push(...videos));
 
+      console.log(`✨ Total videos collected: ${allVideos.length}`);
+
       // Sort by publish date (newest first)
       allVideos.sort((a, b) =>
         new Date(b.publishedAt).getTime() - new Date(a.publishedAt).getTime()
       );
 
-      return allVideos.slice(0, maxResults);
+      const finalVideos = allVideos.slice(0, maxResults);
+      console.log(`🎬 Returning ${finalVideos.length} videos`);
+
+      return finalVideos;
     } catch (error) {
-      console.error('Error fetching latest videos:', error);
+      console.error('❌ Error fetching latest videos:', error);
       return [];
     }
   }
