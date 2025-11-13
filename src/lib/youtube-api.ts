@@ -99,6 +99,7 @@ class YouTubeAPI {
 
   async getLatestVideos(maxResults = 50): Promise<YouTubeVideo[]> {
     console.log('🎥 Fetching latest videos...');
+    console.log('🔑 Access token present:', !!this.accessToken);
 
     // Get subscriptions first
     const subscriptions = await this.getSubscriptions(500);
@@ -106,13 +107,16 @@ class YouTubeAPI {
 
     if (subscriptions.length === 0) {
       console.warn('⚠️ No subscriptions found');
-      return [];
+      throw new Error('No YouTube subscriptions found. Please subscribe to some channels first.');
     }
 
     // Get latest video from each channel (sample first 20 channels to avoid quota issues)
     const channelsToCheck = subscriptions.slice(0, 20);
     console.log(`🔍 Checking ${channelsToCheck.length} channels for videos...`);
     const allVideos: YouTubeVideo[] = [];
+    let successCount = 0;
+    let errorCount = 0;
+    const errors: string[] = [];
 
     // Fetch latest videos from each channel in parallel
     const videoPromises = channelsToCheck.map(async (channel) => {
@@ -136,9 +140,13 @@ class YouTubeAPI {
         }));
 
         console.log(`✅ ${channel.title}: Found ${videos.length} videos`);
+        successCount++;
         return videos;
       } catch (error) {
-        console.error(`❌ Error fetching videos for channel ${channel.title}:`, error);
+        errorCount++;
+        const errorMsg = error instanceof Error ? error.message : String(error);
+        console.error(`❌ Error fetching videos for channel ${channel.title}:`, errorMsg);
+        errors.push(`${channel.title}: ${errorMsg}`);
         return [];
       }
     });
@@ -146,7 +154,19 @@ class YouTubeAPI {
     const videosArrays = await Promise.all(videoPromises);
     videosArrays.forEach((videos) => allVideos.push(...videos));
 
-    console.log(`✨ Total videos collected: ${allVideos.length}`);
+    console.log(`✨ Results: ${successCount} successful, ${errorCount} failed, ${allVideos.length} total videos`);
+
+    // If we had errors but got no videos, throw an error with details
+    if (allVideos.length === 0 && errorCount > 0) {
+      console.error('❌ All channel requests failed');
+      throw new Error(`Failed to fetch videos from all channels. ${errors.slice(0, 3).join('; ')}`);
+    }
+
+    // If we have no videos and no errors, channels might not have recent videos
+    if (allVideos.length === 0) {
+      console.warn('⚠️ No videos found from any channel');
+      return [];
+    }
 
     // Sort by publish date (newest first)
     allVideos.sort((a, b) =>

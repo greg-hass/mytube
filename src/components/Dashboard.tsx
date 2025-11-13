@@ -16,8 +16,14 @@ export const Dashboard = () => {
 
   useEffect(() => {
     console.log('🎬 Dashboard mounted');
-    console.log('📊 Videos state:', { count: videos.length, isLoading: videosLoading, error: videosError });
-  }, [videos.length, videosLoading, videosError]);
+    console.log('📊 Videos state:', {
+      count: videos.length,
+      isLoading: videosLoading,
+      hasError: !!videosError,
+      errorMessage: videosError ? (videosError instanceof Error ? videosError.message : String(videosError)) : null
+    });
+    console.log('📊 Raw videos array:', videos);
+  }, [videos.length, videosLoading, videosError, videos]);
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 via-white to-gray-50 dark:from-gray-950 dark:via-gray-900 dark:to-gray-950">
@@ -56,6 +62,7 @@ export const Dashboard = () => {
               <button
                 onClick={() => {
                   console.log('🔄 Manual refresh triggered');
+                  console.log('🔄 Current state before refresh:', { videosCount: videos.length, isLoading: videosLoading, hasError: !!videosError });
                   refetchVideos();
                 }}
                 disabled={videosLoading}
