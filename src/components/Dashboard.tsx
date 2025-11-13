@@ -11,13 +11,13 @@ type Tab = 'subscriptions' | 'latest';
 
 export const Dashboard = () => {
   const [activeTab, setActiveTab] = useState<Tab>('subscriptions');
-  const { videos, isLoading: videosLoading, refetch: refetchVideos } = useLatestVideos();
+  const { videos, isLoading: videosLoading, error: videosError, refetch: refetchVideos } = useLatestVideos();
   const { allSubscriptions } = useSubscriptions();
 
   useEffect(() => {
     console.log('🎬 Dashboard mounted');
-    console.log('📊 Videos state:', { count: videos.length, isLoading: videosLoading });
-  }, [videos.length, videosLoading]);
+    console.log('📊 Videos state:', { count: videos.length, isLoading: videosLoading, error: videosError });
+  }, [videos.length, videosLoading, videosError]);
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 via-white to-gray-50 dark:from-gray-950 dark:via-gray-900 dark:to-gray-950">
@@ -98,6 +98,23 @@ export const Dashboard = () => {
                   <p className="text-sm text-gray-500 dark:text-gray-500 mt-2">
                     This may take a moment
                   </p>
+                </div>
+              ) : videosError ? (
+                <div className="text-center py-12">
+                  <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-6 max-w-2xl mx-auto">
+                    <p className="text-red-600 dark:text-red-400 text-lg font-semibold mb-2">
+                      Error loading videos
+                    </p>
+                    <p className="text-red-800 dark:text-red-300 text-sm mb-4">
+                      {videosError instanceof Error ? videosError.message : 'Failed to fetch videos'}
+                    </p>
+                    <button
+                      onClick={() => refetchVideos()}
+                      className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors"
+                    >
+                      Try Again
+                    </button>
+                  </div>
                 </div>
               ) : videos.length === 0 ? (
                 <div className="text-center py-12">
