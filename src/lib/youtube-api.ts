@@ -99,23 +99,52 @@ class YouTubeAPI {
 
   async getLatestVideos(maxResults = 50): Promise<YouTubeVideo[]> {
     try {
-      const response = await this.fetch<YouTubeApiResponse<any>>('/activities', {
-        part: 'snippet,contentDetails',
-        home: 'true',
-        maxResults: maxResults.toString(),
+      // Get subscriptions first
+      const subscriptions = await this.getSubscriptions(500);
+
+      if (subscriptions.length === 0) {
+        return [];
+      }
+
+      // Get latest video from each channel (sample first 20 channels to avoid quota issues)
+      const channelsToCheck = subscriptions.slice(0, 20);
+      const allVideos: YouTubeVideo[] = [];
+
+      // Fetch latest videos from each channel in parallel
+      const videoPromises = channelsToCheck.map(async (channel) => {
+        try {
+          const response = await this.fetch<YouTubeApiResponse<any>>('/search', {
+            part: 'snippet',
+            channelId: channel.id,
+            maxResults: '3',
+            order: 'date',
+            type: 'video',
+          });
+
+          return response.items.map((item: any) => ({
+            id: item.id.videoId,
+            title: item.snippet.title,
+            description: item.snippet.description,
+            thumbnail: item.snippet.thumbnails.high?.url || item.snippet.thumbnails.medium?.url || item.snippet.thumbnails.default.url,
+            channelId: item.snippet.channelId,
+            channelTitle: item.snippet.channelTitle,
+            publishedAt: item.snippet.publishedAt,
+          }));
+        } catch (error) {
+          console.error(`Error fetching videos for channel ${channel.title}:`, error);
+          return [];
+        }
       });
 
-      return response.items
-        .filter((item: any) => item.snippet.type === 'upload')
-        .map((item: any) => ({
-          id: item.contentDetails.upload.videoId,
-          title: item.snippet.title,
-          description: item.snippet.description,
-          thumbnail: item.snippet.thumbnails.high?.url || item.snippet.thumbnails.medium.url,
-          channelId: item.snippet.channelId,
-          channelTitle: item.snippet.channelTitle,
-          publishedAt: item.snippet.publishedAt,
-        }));
+      const videosArrays = await Promise.all(videoPromises);
+      videosArrays.forEach((videos) => allVideos.push(...videos));
+
+      // Sort by publish date (newest first)
+      allVideos.sort((a, b) =>
+        new Date(b.publishedAt).getTime() - new Date(a.publishedAt).getTime()
+      );
+
+      return allVideos.slice(0, maxResults);
     } catch (error) {
       console.error('Error fetching latest videos:', error);
       return [];
