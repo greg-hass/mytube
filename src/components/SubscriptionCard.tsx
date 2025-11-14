@@ -2,6 +2,7 @@ import { motion } from 'framer-motion';
 import { ExternalLink, Users, Video } from 'lucide-react';
 import type { YouTubeChannel } from '../types/youtube';
 import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 
 interface Props {
   channel: YouTubeChannel;
@@ -10,9 +11,10 @@ interface Props {
 
 export const SubscriptionCard = ({ channel, index }: Props) => {
   const [imageLoaded, setImageLoaded] = useState(false);
+  const navigate = useNavigate();
 
   const openChannel = () => {
-    window.open(`https://youtube.com/channel/${channel.id}`, '_blank');
+    navigate(`/channel/${channel.id}`);
   };
 
   return (

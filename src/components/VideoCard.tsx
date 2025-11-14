@@ -2,6 +2,7 @@ import { motion } from 'framer-motion';
 import { Play, Clock } from 'lucide-react';
 import type { YouTubeVideo } from '../types/youtube';
 import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 
 interface Props {
   video: YouTubeVideo;
@@ -10,9 +11,10 @@ interface Props {
 
 export const VideoCard = ({ video, index }: Props) => {
   const [imageLoaded, setImageLoaded] = useState(false);
+  const navigate = useNavigate();
 
   const openVideo = () => {
-    window.open(`https://youtube.com/watch?v=${video.id}`, '_blank');
+    navigate(`/video/${video.id}`);
   };
 
   const formatDate = (dateString: string) => {
