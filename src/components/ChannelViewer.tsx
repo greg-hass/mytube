@@ -1,11 +1,14 @@
 import { useParams, useNavigate, Navigate } from 'react-router-dom';
-import { ArrowLeft, ExternalLink } from 'lucide-react';
+import { ArrowLeft, ExternalLink, Users, Video as VideoIcon } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { Header } from './Header';
+import { VideoCard } from './VideoCard';
+import { useChannelVideos } from '../hooks/useChannelVideos';
 
 export const ChannelViewer = () => {
   const { channelId } = useParams<{ channelId: string }>();
   const navigate = useNavigate();
+  const { videos, channelDetails, isLoading, error } = useChannelVideos(channelId);
 
   if (!channelId) {
     return <Navigate to="/" replace />;
@@ -31,48 +34,107 @@ export const ChannelViewer = () => {
           <span className="font-medium">Back</span>
         </motion.button>
 
-        {/* Channel Embed */}
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.1 }}
-          className="bg-white dark:bg-gray-800 rounded-2xl shadow-xl overflow-hidden"
-        >
-          {/* YouTube Subscribe Button Embed */}
-          <div className="relative w-full bg-gradient-to-br from-red-50 to-pink-50 dark:from-gray-800 dark:to-gray-900 p-12">
-            <div className="text-center">
-              <div className="mb-6">
-                <h2 className="text-3xl font-bold text-gray-900 dark:text-white mb-2">
-                  Channel Preview
-                </h2>
-                <p className="text-gray-600 dark:text-gray-400">
-                  YouTube channels can't be fully embedded, but you can open it below
-                </p>
+        {/* Channel Header */}
+        {channelDetails && (
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.1 }}
+            className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg overflow-hidden mb-8"
+          >
+            <div className="relative w-full bg-gradient-to-br from-red-50 to-pink-50 dark:from-gray-800 dark:to-gray-900 p-8">
+              <div className="flex items-center gap-6">
+                {channelDetails.thumbnail && (
+                  <img
+                    src={channelDetails.thumbnail}
+                    alt={channelDetails.title}
+                    className="w-24 h-24 rounded-full border-4 border-white dark:border-gray-700 shadow-lg"
+                  />
+                )}
+                <div className="flex-1">
+                  <h1 className="text-3xl font-bold text-gray-900 dark:text-white mb-2">
+                    {channelDetails.title}
+                  </h1>
+                  {channelDetails.description && (
+                    <p className="text-gray-600 dark:text-gray-400 line-clamp-2 mb-3">
+                      {channelDetails.description}
+                    </p>
+                  )}
+                  <div className="flex items-center gap-6 text-sm text-gray-600 dark:text-gray-400">
+                    {channelDetails.subscriberCount && (
+                      <div className="flex items-center gap-2">
+                        <Users className="w-4 h-4" />
+                        <span>{formatCount(channelDetails.subscriberCount)} subscribers</span>
+                      </div>
+                    )}
+                    {channelDetails.videoCount && (
+                      <div className="flex items-center gap-2">
+                        <VideoIcon className="w-4 h-4" />
+                        <span>{formatCount(channelDetails.videoCount)} videos</span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+                <button
+                  onClick={openInYouTube}
+                  className="flex items-center gap-2 px-6 py-3 rounded-xl bg-red-600 hover:bg-red-700 text-white font-semibold transition-all hover:scale-105 shadow-lg"
+                >
+                  <ExternalLink className="w-5 h-5" />
+                  <span>Open in YouTube</span>
+                </button>
               </div>
-
-              <button
-                onClick={openInYouTube}
-                className="inline-flex items-center gap-3 px-8 py-4 rounded-xl bg-red-600 hover:bg-red-700 text-white font-semibold text-lg transition-all transform hover:scale-105 shadow-lg"
-              >
-                <ExternalLink className="w-6 h-6" />
-                <span>Open Channel in YouTube</span>
-              </button>
             </div>
-          </div>
-        </motion.div>
+          </motion.div>
+        )}
 
-        {/* Info Box */}
+        {/* Videos Section */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.2 }}
-          className="mt-6 p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-200 dark:border-blue-800"
         >
-          <p className="text-sm text-blue-800 dark:text-blue-200">
-            💡 YouTube doesn't allow embedding full channel pages for security reasons. Click the button above to view the full channel experience on YouTube!
-          </p>
+          <h2 className="text-2xl font-bold mb-6 text-gray-900 dark:text-white">
+            Latest Videos
+          </h2>
+
+          {isLoading ? (
+            <div className="text-center py-12">
+              <div className="inline-block w-8 h-8 border-4 border-red-600 border-t-transparent rounded-full animate-spin mb-4" />
+              <p className="text-gray-600 dark:text-gray-400">
+                Loading videos...
+              </p>
+            </div>
+          ) : error ? (
+            <div className="text-center py-12">
+              <p className="text-red-600 dark:text-red-400 mb-2">
+                Failed to load videos
+              </p>
+              <p className="text-sm text-gray-500">
+                {error instanceof Error ? error.message : 'Unknown error'}
+              </p>
+            </div>
+          ) : videos.length === 0 ? (
+            <div className="text-center py-12">
+              <p className="text-gray-600 dark:text-gray-400 text-lg">
+                No videos found for this channel
+              </p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+              {videos.map((video, index) => (
+                <VideoCard key={video.id} video={video} index={index} />
+              ))}
+            </div>
+          )}
         </motion.div>
       </div>
     </div>
   );
 };
+
+function formatCount(count: string): string {
+  const num = parseInt(count);
+  if (num >= 1000000) return `${(num / 1000000).toFixed(1)}M`;
+  if (num >= 1000) return `${(num / 1000).toFixed(1)}K`;
+  return count;
+}
