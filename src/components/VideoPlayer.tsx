@@ -1,4 +1,4 @@
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, Navigate } from 'react-router-dom';
 import { ArrowLeft, ExternalLink } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { Header } from './Header';
@@ -8,8 +8,7 @@ export const VideoPlayer = () => {
   const navigate = useNavigate();
 
   if (!videoId) {
-    navigate('/');
-    return null;
+    return <Navigate to="/" replace />;
   }
 
   const openInYouTube = () => {

@@ -1,4 +1,4 @@
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, Navigate } from 'react-router-dom';
 import { ArrowLeft, ExternalLink } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { Header } from './Header';
@@ -8,8 +8,7 @@ export const ChannelViewer = () => {
   const navigate = useNavigate();
 
   if (!channelId) {
-    navigate('/');
-    return null;
+    return <Navigate to="/" replace />;
   }
 
   const openInYouTube = () => {
@@ -32,31 +31,33 @@ export const ChannelViewer = () => {
           <span className="font-medium">Back</span>
         </motion.button>
 
-        {/* Channel Viewer */}
+        {/* Channel Embed */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.1 }}
           className="bg-white dark:bg-gray-800 rounded-2xl shadow-xl overflow-hidden"
         >
-          <div className="relative w-full" style={{ minHeight: '600px' }}>
-            <iframe
-              src={`https://www.youtube.com/channel/${channelId}`}
-              title="YouTube channel viewer"
-              className="absolute top-0 left-0 w-full h-full"
-              style={{ minHeight: '600px' }}
-            />
-          </div>
+          {/* YouTube Subscribe Button Embed */}
+          <div className="relative w-full bg-gradient-to-br from-red-50 to-pink-50 dark:from-gray-800 dark:to-gray-900 p-12">
+            <div className="text-center">
+              <div className="mb-6">
+                <h2 className="text-3xl font-bold text-gray-900 dark:text-white mb-2">
+                  Channel Preview
+                </h2>
+                <p className="text-gray-600 dark:text-gray-400">
+                  YouTube channels can't be fully embedded, but you can open it below
+                </p>
+              </div>
 
-          {/* Open in YouTube Button */}
-          <div className="p-4 border-t border-gray-200 dark:border-gray-700">
-            <button
-              onClick={openInYouTube}
-              className="flex items-center gap-2 px-4 py-2 rounded-lg bg-red-600 hover:bg-red-700 text-white transition-colors"
-            >
-              <ExternalLink className="w-4 h-4" />
-              <span>Open in YouTube</span>
-            </button>
+              <button
+                onClick={openInYouTube}
+                className="inline-flex items-center gap-3 px-8 py-4 rounded-xl bg-red-600 hover:bg-red-700 text-white font-semibold text-lg transition-all transform hover:scale-105 shadow-lg"
+              >
+                <ExternalLink className="w-6 h-6" />
+                <span>Open Channel in YouTube</span>
+              </button>
+            </div>
           </div>
         </motion.div>
 
@@ -68,7 +69,7 @@ export const ChannelViewer = () => {
           className="mt-6 p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-200 dark:border-blue-800"
         >
           <p className="text-sm text-blue-800 dark:text-blue-200">
-            💡 You're viewing this channel in-app! Use the button above to open it in YouTube for full functionality.
+            💡 YouTube doesn't allow embedding full channel pages for security reasons. Click the button above to view the full channel experience on YouTube!
           </p>
         </motion.div>
       </div>
