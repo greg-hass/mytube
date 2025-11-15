@@ -3,12 +3,6 @@ import { persist } from 'zustand/middleware';
 import type { ViewMode, SortBy } from '../types/youtube';
 
 interface AppState {
-  // Auth
-  isAuthenticated: boolean;
-  accessToken: string | null;
-  setAuth: (token: string | null) => void;
-  logout: () => void;
-
   // UI
   theme: 'light' | 'dark';
   toggleTheme: () => void;
@@ -23,12 +17,6 @@ interface AppState {
 export const useStore = create<AppState>()(
   persist(
     (set) => ({
-      // Auth
-      isAuthenticated: false,
-      accessToken: null,
-      setAuth: (token) => set({ accessToken: token, isAuthenticated: !!token }),
-      logout: () => set({ accessToken: null, isAuthenticated: false }),
-
       // UI
       theme: 'dark',
       toggleTheme: () =>

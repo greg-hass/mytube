@@ -3,13 +3,14 @@ import {
   Youtube,
   Sun,
   Moon,
-  LogOut,
   Search,
   Grid3x3,
   List,
+  Download,
 } from 'lucide-react';
+import { OPMLUpload } from './OPMLUpload';
 import { useStore } from '../store/useStore';
-import { useYouTubeAuth } from '../hooks/useYouTubeAuth';
+import { useSubscriptionStorage } from '../hooks/useSubscriptionStorage';
 import type { SortBy } from '../types/youtube';
 
 export const Header = () => {
@@ -23,7 +24,16 @@ export const Header = () => {
     searchQuery,
     setSearchQuery,
   } = useStore();
-  const { logout } = useYouTubeAuth();
+  const { count, exportOPML } = useSubscriptionStorage();
+
+  const handleExport = () => {
+    try {
+      exportOPML();
+    } catch (error) {
+      console.error('Export failed:', error);
+      alert('Failed to export subscriptions. Make sure you have subscriptions loaded.');
+    }
+  };
 
   return (
     <motion.header
@@ -41,9 +51,14 @@ export const Header = () => {
             <div className="w-10 h-10 rounded-full bg-gradient-to-br from-red-600 to-red-500 flex items-center justify-center shadow-lg">
               <Youtube className="w-6 h-6 text-white" />
             </div>
-            <h1 className="hidden md:block text-xl font-bold bg-gradient-to-r from-red-600 to-red-500 bg-clip-text text-transparent">
-              Subscriptions
-            </h1>
+            <div>
+              <h1 className="hidden md:block text-xl font-bold bg-gradient-to-r from-red-600 to-red-500 bg-clip-text text-transparent">
+                Subscriptions
+              </h1>
+              <p className="hidden md:block text-xs text-gray-500 dark:text-gray-400">
+                {count} channels
+              </p>
+            </div>
           </motion.div>
 
           {/* Search */}
@@ -97,6 +112,20 @@ export const Header = () => {
               </button>
             </div>
 
+            {/* Import OPML */}
+            <OPMLUpload minimal />
+
+            {/* Export OPML */}
+            <motion.button
+              whileHover={{ scale: 1.05 }}
+              whileTap={{ scale: 0.95 }}
+              onClick={handleExport}
+              className="flex items-center gap-2 px-4 py-2 rounded-lg bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors"
+            >
+              <Download className="w-4 h-4" />
+              <span className="hidden sm:inline">Export</span>
+            </motion.button>
+
             {/* Theme Toggle */}
             <motion.button
               whileHover={{ scale: 1.1 }}
@@ -109,16 +138,6 @@ export const Header = () => {
               ) : (
                 <Sun className="w-5 h-5" />
               )}
-            </motion.button>
-
-            {/* Logout */}
-            <motion.button
-              whileHover={{ scale: 1.1 }}
-              whileTap={{ scale: 0.9 }}
-              onClick={logout}
-              className="p-2 rounded-lg hover:bg-red-50 dark:hover:bg-red-900/20 text-red-600 dark:text-red-400 transition-colors"
-            >
-              <LogOut className="w-5 h-5" />
             </motion.button>
           </div>
         </div>

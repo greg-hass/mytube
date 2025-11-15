@@ -1,18 +1,29 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { TrendingUp, Grid3x3, RefreshCw } from 'lucide-react';
 import { Header } from './Header';
 import { SubscriptionsList } from './SubscriptionsList';
 import { VideoCard } from './VideoCard';
-import { useLatestVideos } from '../hooks/useLatestVideos';
-import { useSubscriptions } from '../hooks/useSubscriptions';
+import { useRSSVideos } from '../hooks/useRSSVideos';
+import { useSubscriptionStorage } from '../hooks/useSubscriptionStorage';
 
 type Tab = 'subscriptions' | 'latest';
 
 export const Dashboard = () => {
   const [activeTab, setActiveTab] = useState<Tab>('subscriptions');
-  const { videos, isLoading: videosLoading, refetch: refetchVideos } = useLatestVideos();
-  const { allSubscriptions } = useSubscriptions();
+  const { allSubscriptions } = useSubscriptionStorage();
+
+  // Get channel IDs for RSS feed fetching
+  const channelIds = useMemo(() =>
+    allSubscriptions.map(sub => sub.id),
+    [allSubscriptions]
+  );
+
+  const { videos, isLoading: videosLoading, refresh: refetchVideos } = useRSSVideos({
+    channelIds,
+    maxChannels: 50,
+    autoRefresh: true,
+  });
 
   useEffect(() => {
     console.log('🎬 Dashboard mounted');
