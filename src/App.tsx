@@ -1,13 +1,13 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { ReactQueryDevtools } from '@tanstack/react-query-devtools';
-import { Login } from './components/Login';
 import { Dashboard } from './components/Dashboard';
 import { VideoPlayer } from './components/VideoPlayer';
 import { ChannelViewer } from './components/ChannelViewer';
+import { OPMLUpload } from './components/OPMLUpload';
 import { useStore } from './store/useStore';
-import { youtubeAPI } from './lib/youtube-api';
+import { useSubscriptionStorage } from './hooks/useSubscriptionStorage';
 
 // Create a client with optimized settings
 const queryClient = new QueryClient({
@@ -21,7 +21,9 @@ const queryClient = new QueryClient({
 });
 
 function App() {
-  const { isAuthenticated, accessToken, theme } = useStore();
+  const { theme } = useStore();
+  const { count, isLoading } = useSubscriptionStorage();
+  const [hasSubscriptions, setHasSubscriptions] = useState(false);
 
   // Initialize theme on mount
   useEffect(() => {
@@ -32,30 +34,31 @@ function App() {
     }
   }, [theme]);
 
-  // Set access token in API client
+  // Check if user has subscriptions
   useEffect(() => {
-    if (accessToken) {
-      youtubeAPI.setAccessToken(accessToken);
+    if (!isLoading) {
+      setHasSubscriptions(count > 0);
     }
-  }, [accessToken]);
+  }, [count, isLoading]);
 
-  // Load Google Identity Services
-  useEffect(() => {
-    const script = document.createElement('script');
-    script.src = 'https://accounts.google.com/gsi/client';
-    script.async = true;
-    script.defer = true;
-    document.body.appendChild(script);
-
-    return () => {
-      document.body.removeChild(script);
-    };
-  }, []);
+  // Show loading state while checking for subscriptions
+  if (isLoading) {
+    return (
+      <QueryClientProvider client={queryClient}>
+        <div className="min-h-screen bg-gradient-to-br from-gray-50 via-white to-gray-50 dark:from-gray-950 dark:via-gray-900 dark:to-gray-950 flex items-center justify-center">
+          <div className="text-center">
+            <div className="w-12 h-12 border-4 border-red-600 border-t-transparent rounded-full animate-spin mx-auto mb-4" />
+            <p className="text-gray-600 dark:text-gray-400">Loading...</p>
+          </div>
+        </div>
+      </QueryClientProvider>
+    );
+  }
 
   return (
     <QueryClientProvider client={queryClient}>
       <BrowserRouter>
-        {isAuthenticated ? (
+        {hasSubscriptions ? (
           <Routes>
             <Route path="/" element={<Dashboard />} />
             <Route path="/video/:videoId" element={<VideoPlayer />} />
@@ -63,7 +66,7 @@ function App() {
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
         ) : (
-          <Login />
+          <OPMLUpload onSuccess={() => setHasSubscriptions(true)} />
         )}
       </BrowserRouter>
       <ReactQueryDevtools initialIsOpen={false} />

@@ -3,11 +3,11 @@ import { useRef } from 'react';
 import { motion } from 'framer-motion';
 import { Loader2, Inbox } from 'lucide-react';
 import { SubscriptionCard } from './SubscriptionCard';
-import { useSubscriptions } from '../hooks/useSubscriptions';
+import { useSubscriptionStorage } from '../hooks/useSubscriptionStorage';
 import { useStore } from '../store/useStore';
 
 export const SubscriptionsList = () => {
-  const { subscriptions, isLoading } = useSubscriptions();
+  const { subscriptions, isLoading } = useSubscriptionStorage();
   const { viewMode } = useStore();
   const parentRef = useRef<HTMLDivElement>(null);
 
