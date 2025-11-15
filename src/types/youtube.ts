@@ -46,5 +46,24 @@ export interface YouTubeApiResponse<T> {
   nextPageToken?: string;
 }
 
+export interface RSSVideoEntry {
+  id: string;
+  title: string;
+  published: string;
+  author: {
+    name: string;
+    uri: string;
+  };
+  link: {
+    '@_href': string;
+  };
+  'media:group': {
+    'media:thumbnail': {
+      '@_url': string;
+    };
+    'media:description': string;
+  };
+}
+
 export type ViewMode = 'grid' | 'list';
 export type SortBy = 'name' | 'recent' | 'oldest';
