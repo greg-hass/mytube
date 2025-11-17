@@ -56,7 +56,7 @@ export const SubscriptionsList = () => {
 
   return (
     <>
-      <div className="bg-green-500 text-white p-2 text-center font-bold">NEW CODE LOADED ✓</div>
+      <div className="bg-green-500 text-white p-2 text-center font-bold text-xl">🎉 NEW CODE LOADED - PADDING FIXED! 🎉</div>
       <div ref={parentRef} className="h-[calc(100vh-155px)] overflow-auto px-4">
       <div
         style={{
