@@ -54,6 +54,8 @@ export const SubscriptionsList = () => {
 
   const itemsPerRow = viewMode === 'grid' ? 4 : 1;
 
+  console.log('🟢 SubscriptionsList RENDERING with new code!');
+
   return (
     <>
       <div className="bg-green-500 text-white p-2 text-center font-bold text-xl">🎉 NEW CODE LOADED - PADDING FIXED! 🎉</div>
