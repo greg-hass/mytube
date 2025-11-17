@@ -55,7 +55,7 @@ export const SubscriptionsList = () => {
   const itemsPerRow = viewMode === 'grid' ? 4 : 1;
 
   return (
-    <div ref={parentRef} className="h-[calc(100vh-180px)] overflow-auto px-4">
+    <div ref={parentRef} className="h-[calc(100vh-180px)] overflow-auto">
       <div
         style={{
           height: `${rowVirtualizer.getTotalSize()}px`,
