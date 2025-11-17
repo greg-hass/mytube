@@ -35,6 +35,10 @@ export const Dashboard = () => {
       <Header />
 
       <div className="max-w-7xl mx-auto pt-4 pb-8">
+        {/* DEBUG MARKER */}
+        <div className="bg-red-500 text-white p-4 text-center font-bold text-2xl mb-4">
+          ⚠️ NEW DASHBOARD CODE IS LOADED ⚠️
+        </div>
         {/* Tabs */}
         <div className="px-4 mb-2">
           <div className="flex items-center gap-2 bg-gray-100 dark:bg-gray-900 p-1 rounded-xl w-fit">
