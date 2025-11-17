@@ -34,9 +34,9 @@ export const Dashboard = () => {
     <div className="min-h-screen bg-gradient-to-br from-gray-50 via-white to-gray-50 dark:from-gray-950 dark:via-gray-900 dark:to-gray-950">
       <Header />
 
-      <div className="max-w-7xl mx-auto py-8">
+      <div className="max-w-7xl mx-auto pt-6 pb-8">
         {/* Tabs */}
-        <div className="px-4 mb-8">
+        <div className="px-4 mb-4">
           <div className="flex items-center gap-2 bg-gray-100 dark:bg-gray-900 p-1 rounded-xl w-fit">
             <button
               onClick={() => setActiveTab('subscriptions')}
