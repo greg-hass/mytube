@@ -125,7 +125,6 @@ export const AddChannelModal = ({ isOpen, onClose, onAdd }: AddChannelModalProps
             title: parsedInput.originalInput,
             description: '',
             thumbnail: `https://ui-avatars.com/api/?name=${encodeURIComponent(parsedInput.originalInput)}&background=random&color=fff`,
-            customUrl: parsedInput.type === 'custom_url' ? parsedInput.value : undefined,
           };
         }
       }
