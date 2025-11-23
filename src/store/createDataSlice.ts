@@ -26,6 +26,7 @@ export interface DataSlice {
     checkQuotaReset: () => void;
     markAsWatched: (videoId: string) => void;
     markAsUnwatched: (videoId: string) => void;
+    setWatchedVideos: (videos: string[]) => void;
     isWatched: (videoId: string) => boolean;
 }
 
@@ -72,6 +73,8 @@ export const createDataSlice: StateCreator<DataSlice> = (set, get) => ({
         newWatched.delete(videoId);
         return { watchedVideos: newWatched };
     }),
+
+    setWatchedVideos: (videos) => set({ watchedVideos: new Set(videos) }),
 
     isWatched: (videoId) => get().watchedVideos.has(videoId),
 });

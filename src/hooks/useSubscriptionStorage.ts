@@ -478,8 +478,15 @@ ${outlines}
 
       const mergedSubs = Array.from(mergedMap.values());
 
+      // Merge Watched Videos
+      const remoteWatched = remoteData.watchedVideos || [];
+      const localWatched = Array.from(useStore.getState().watchedVideos);
+      const mergedWatched = new Set([...localWatched, ...remoteWatched]);
+
       // 3. Update Local if needed
       // If merged list has more items than local, we found new stuff from server!
+      let updatedLocal = false;
+
       if (mergedSubs.length > localSubs.length) {
         console.log(`📥 Importing ${mergedSubs.length - localSubs.length} new channels from server...`);
         toast.loading('Syncing new channels from server...');
@@ -490,7 +497,16 @@ ${outlines}
 
         queryClient.invalidateQueries({ queryKey: ['subscriptions'] });
         queryClient.invalidateQueries({ queryKey: ['subscriptions-count'] });
+        updatedLocal = true;
+      }
 
+      if (mergedWatched.size > localWatched.length) {
+        console.log(`📥 Importing ${mergedWatched.size - localWatched.length} watched videos from server...`);
+        useStore.getState().setWatchedVideos(Array.from(mergedWatched));
+        updatedLocal = true;
+      }
+
+      if (updatedLocal) {
         toast.dismiss();
         toast.success('Synced with server!');
       }
@@ -501,7 +517,7 @@ ${outlines}
       // Simple check: if merged count > remote count, definitely push.
       // Also if local count > 0, we should probably push to ensure latest state (favorites etc) is saved.
 
-      if (mergedSubs.length > remoteSubs.length || localSubs.length > 0) {
+      if (mergedSubs.length > remoteSubs.length || mergedWatched.size > remoteWatched.length || localSubs.length > 0) {
         // We push the MERGED list to server, so server becomes the union too.
         const pushResponse = await fetch('/api/sync', {
           method: 'POST',
@@ -509,7 +525,7 @@ ${outlines}
           body: JSON.stringify({
             subscriptions: mergedSubs,
             settings: { searchQuery, sortBy, apiKey },
-            watchedVideos: Array.from(useStore.getState().watchedVideos || [])
+            watchedVideos: Array.from(mergedWatched)
           })
         });
 
