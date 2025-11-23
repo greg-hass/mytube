@@ -80,9 +80,10 @@ app.post('/api/sync', async (req, res) => {
             // ignore if file doesn't exist
         }
 
-        // Apply redirects to incoming subscriptions
-        if (existingData.redirects && data.subscriptions) {
-            const redirects = existingData.redirects;
+        // Apply redirects to incoming subscriptions and always preserve them
+        const redirects = existingData.redirects || {};
+
+        if (Object.keys(redirects).length > 0 && data.subscriptions) {
             const seenIds = new Set();
             const uniqueSubs = [];
 
@@ -103,9 +104,10 @@ app.post('/api/sync', async (req, res) => {
             });
 
             data.subscriptions = uniqueSubs;
-            // Preserve redirects in the new data
-            data.redirects = { ...existingData.redirects, ...(data.redirects || {}) };
         }
+
+        // ALWAYS preserve redirects from server, never let client overwrite them
+        data.redirects = { ...redirects, ...(data.redirects || {}) };
 
         await fs.writeFile(DATA_FILE, JSON.stringify(data, null, 2));
 
