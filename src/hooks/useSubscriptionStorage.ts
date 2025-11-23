@@ -528,9 +528,8 @@ ${outlines}
       // If merged list has more items than remote, or if local had updates (we can't easily tell updates without timestamps, but we can check counts or just push if local > remote)
       // To be safe and ensure server is always up to date with the UNION, we push if the merged set is different from remote set.
       // Simple check: if merged count > remote count, definitely push.
-      // Also if local count > 0, we should probably push to ensure latest state (favorites etc) is saved.
 
-      if (mergedSubs.length > remoteSubs.length || mergedWatched.size > remoteWatched.length || localSubs.length > 0) {
+      if (mergedSubs.length > remoteSubs.length || mergedWatched.size > remoteWatched.length) {
         // We push the MERGED list to server, so server becomes the union too.
         const pushResponse = await fetch('/api/sync', {
           method: 'POST',
