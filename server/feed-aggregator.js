@@ -54,6 +54,7 @@ async function aggregateFeeds() {
         else if (apiKey) console.log('ℹ️ API Key present but API fetching disabled in settings, using RSS');
 
         const allVideos = [];
+        let quotaExceeded = false;
 
         // Process in batches
         // If using API, we can fetch up to 50 channels at once!
@@ -198,6 +199,13 @@ async function aggregateFeeds() {
 
                 } catch (err) {
                     console.error('API batch error, falling back to pure RSS:', err.message, err.response?.data?.error);
+
+                    // Check for quota exceeded
+                    if (err.response?.data?.error?.errors?.[0]?.reason === 'quotaExceeded') {
+                        console.warn('⚠️ API Quota limit reached! Updating local counter to 10000.');
+                        // We will update the file at the end of the function
+                        quotaExceeded = true;
+                    }
 
                     // Fallback to RSS with delay to avoid 429s
                     for (const sub of batch) {
@@ -379,10 +387,16 @@ async function aggregateFeeds() {
             if (!currentData.settings) currentData.settings = {};
             if (!currentData.settings.quotaUsed) currentData.settings.quotaUsed = 0;
 
-            currentData.settings.quotaUsed += quotaCost;
+            if (quotaExceeded) {
+                // Force to max if we hit the limit
+                currentData.settings.quotaUsed = 10000;
+                console.log(`📊 Quota limit hit. Local counter forced to: 10000`);
+            } else {
+                currentData.settings.quotaUsed += quotaCost;
+                console.log(`📊 Quota used this run: ${quotaCost}. Total: ${currentData.settings.quotaUsed}`);
+            }
 
             await fs.writeFile(DATA_FILE, JSON.stringify(currentData, null, 2));
-            console.log(`📊 Quota used this run: ${quotaCost}. Total: ${currentData.settings.quotaUsed}`);
         }
 
         console.log(`✅ Aggregation complete: ${trimmedVideos.length} videos from ${subscriptions.length} channels`);
