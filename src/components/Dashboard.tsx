@@ -309,7 +309,7 @@ export const Dashboard = () => {
                   <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">
                     Showing {videos.length} recent videos
                   </p>
-                  <VirtualizedVideoGrid videos={videos} />
+                  <VirtualizedVideoGrid videos={videos} columns={4} />
                 </div>
               )}
             </motion.div>

@@ -18,9 +18,9 @@ export const VirtualizedVideoGrid = ({ videos, columns = 4 }: Props) => {
             if (!parentRef.current) return;
             const width = parentRef.current.offsetWidth;
 
-            // Dynamic column calculation based on minimum card width (e.g., 300px)
+            // Dynamic column calculation based on minimum card width (e.g., 260px)
             // This is more robust than hardcoded breakpoints
-            const minCardWidth = 300;
+            const minCardWidth = 260;
             const gap = 24; // gap-6 is 1.5rem = 24px
 
             // Calculate how many cards fit
