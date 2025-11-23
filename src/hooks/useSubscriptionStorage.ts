@@ -437,6 +437,67 @@ ${outlines}
     }
   };
 
+  // Sync with backend
+  const syncWithBackend = async () => {
+    try {
+      // 1. Fetch remote data
+      const response = await fetch('/api/sync');
+      if (!response.ok) return; // Backend might not be available (e.g. dev mode)
+
+      const remoteData = await response.json();
+      const localSubs = await getAllSubscriptions();
+
+      // 2. Merge strategy: Remote wins if it has data and we don't, or if it's newer
+      // For now, simple strategy: if we have 0 subs and remote has subs, import remote.
+      // If we have subs and remote has 0, push local.
+      // If both have subs, we'll implement a smarter merge later or just prefer local for now.
+
+      if (localSubs.length === 0 && remoteData.subscriptions?.length > 0) {
+        console.log('📥 Importing data from server...');
+        await clearAllSubscriptions();
+        await addSubscriptions(remoteData.subscriptions);
+        // Also sync other data if available
+        if (remoteData.watchedVideos) {
+          // TODO: Sync watched videos
+        }
+        queryClient.invalidateQueries({ queryKey: ['subscriptions'] });
+        queryClient.invalidateQueries({ queryKey: ['subscriptions-count'] });
+        return;
+      }
+
+      // 3. Push local data to backend (simple backup)
+      if (localSubs.length > 0) {
+        await fetch('/api/sync', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            subscriptions: localSubs,
+            settings: { searchQuery, sortBy, apiKey }, // Sync current settings
+            watchedVideos: Array.from(useStore.getState().watchedVideos || [])
+          })
+        });
+      }
+
+    } catch (err) {
+      console.error('Sync failed:', err);
+    }
+  };
+
+  // Run sync on mount
+  useEffect(() => {
+    syncWithBackend();
+  }, []);
+
+  // Auto-save to backend when subscriptions change
+  useEffect(() => {
+    if (!isLoading && subscriptions) {
+      const timer = setTimeout(() => {
+        syncWithBackend();
+      }, 2000); // Debounce 2s
+      return () => clearTimeout(timer);
+    }
+  }, [subscriptions, isLoading]);
+
   return {
     // Data
     subscriptions: filteredAndSortedSubscriptions,
