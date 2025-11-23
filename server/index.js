@@ -80,6 +80,19 @@ app.get('/api/videos', async (req, res) => {
     }
 });
 
+// POST /api/videos/refresh - Trigger immediate refresh
+app.post('/api/videos/refresh', async (req, res) => {
+    try {
+        const { aggregateFeeds } = require('./feed-aggregator');
+        // Don't await - trigger async
+        aggregateFeeds().catch(err => console.error('Manual refresh failed:', err));
+        res.json({ success: true, message: 'Refresh triggered' });
+    } catch (err) {
+        console.error('Refresh trigger error:', err);
+        res.status(500).json({ error: 'Failed to trigger refresh' });
+    }
+});
+
 app.listen(PORT, () => {
     console.log(`Sync server running on port ${PORT}`);
     // Start feed aggregator
