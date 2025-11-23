@@ -198,10 +198,10 @@ export const Header = ({ onAddChannel }: HeaderProps) => {
               <motion.div
                 initial={{ scale: 0 }}
                 animate={{ scale: 1 }}
-                className={`px-3 py-1.5 rounded-full text-xs font-semibold ${getQuotaColor()} shadow-lg`}
+                className={`px-3 py-1.5 rounded-full text-xs font-semibold ${getQuotaColor()} shadow-lg cursor-help`}
                 title={getQuotaTooltip()}
               >
-                {Math.round(quotaPercentage)}%
+                {quotaPercentage >= 100 ? 'Quota Full' : `${Math.round(quotaPercentage)}%`}
               </motion.div>
             )}
 

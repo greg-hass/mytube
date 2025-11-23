@@ -555,6 +555,13 @@ ${outlines}
           const currentQuota = useStore.getState().quotaUsed;
           if (remoteSettings.quotaUsed > currentQuota) {
             useStore.getState().incrementQuota(remoteSettings.quotaUsed - currentQuota);
+
+            // Alert user about quota status
+            if (remoteSettings.quotaUsed >= 10000) {
+              toast.error('API Quota Exceeded! Video updates paused until midnight PT.');
+            } else if (remoteSettings.quotaUsed >= 8000 && currentQuota < 8000) {
+              toast.warning(`API Quota at ${Math.round(remoteSettings.quotaUsed / 100)}%`);
+            }
           }
         }
       }
