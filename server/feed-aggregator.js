@@ -21,7 +21,7 @@ async function fetchChannelFeed(channelId) {
         const feedUrl = `https://www.youtube.com/feeds/videos.xml?channel_id=${channelId}`;
         const feed = await parser.parseURL(feedUrl);
 
-        return feed.items.map(item => ({
+        const videos = feed.items.map(item => ({
             id: item.id?.split(':').pop() || item.guid,
             title: item.title,
             channelId: channelId,
@@ -33,9 +33,18 @@ async function fetchChannelFeed(channelId) {
                 || `https://i.ytimg.com/vi/${item.id?.split(':').pop() || item.guid}/hqdefault.jpg`,
             description: item.contentSnippet || item.content || '',
         }));
+
+        // Extract channel metadata from feed
+        const channelMetadata = {
+            title: feed.title || 'Unknown Channel',
+            // RSS doesn't provide thumbnails, we'll use a default or fetch it separately
+            thumbnail: feed.image?.url || `https://yt3.ggpht.com/ytc/default_channel.jpg`
+        };
+
+        return { videos, channelMetadata };
     } catch (error) {
         console.error(`Failed to fetch feed for ${channelId}:`, error.message);
-        return [];
+        return { videos: [], channelMetadata: null };
     }
 }
 
@@ -208,7 +217,10 @@ async function aggregateFeeds() {
                     // But we can do them in parallel.
                     const playlistPromises = batch.map(async (sub) => {
                         const channelInfo = channelMap.get(sub.id);
-                        if (!channelInfo?.uploadsId) return fetchChannelFeed(sub.id); // Fallback to RSS for this channel
+                        if (!channelInfo?.uploadsId) {
+                            const { videos } = await fetchChannelFeed(sub.id);
+                            return videos;
+                        }
 
                         try {
                             const playlistUrl = `https://www.googleapis.com/youtube/v3/playlistItems?part=snippet,contentDetails&playlistId=${channelInfo.uploadsId}&maxResults=10&key=${apiKey}`;
@@ -229,7 +241,8 @@ async function aggregateFeeds() {
                             }));
                         } catch (err) {
                             console.error(`Failed to fetch playlist for ${sub.id}, falling back to RSS`, err.message);
-                            return fetchChannelFeed(sub.id);
+                            const { videos } = await fetchChannelFeed(sub.id);
+                            return videos;
                         }
                     });
 
@@ -250,8 +263,20 @@ async function aggregateFeeds() {
 
                     // Fallback to RSS with delay to avoid 429s
                     for (const sub of batch) {
-                        const videos = await fetchChannelFeed(sub.id);
+                        const { videos, channelMetadata } = await fetchChannelFeed(sub.id);
                         batchVideos.push(...videos);
+
+                        // Update subscription metadata if we got it from RSS
+                        if (channelMetadata && channelMetadata.title) {
+                            const subIndex = subscriptions.findIndex(s => s.id === sub.id);
+                            if (subIndex !== -1) {
+                                subscriptions[subIndex].title = channelMetadata.title;
+                                if (channelMetadata.thumbnail) {
+                                    subscriptions[subIndex].thumbnail = channelMetadata.thumbnail;
+                                }
+                            }
+                        }
+
                         // Small delay between RSS fetches in fallback mode
                         await new Promise(resolve => setTimeout(resolve, 500));
                     }
@@ -260,13 +285,40 @@ async function aggregateFeeds() {
                 // Quota was exceeded in a previous batch, use RSS for remaining batches
                 console.log(`  📡 RSS Mode: Fetching ${batch.length} channels (quota exhausted)`);
                 for (const sub of batch) {
-                    const videos = await fetchChannelFeed(sub.id);
+                    const { videos, channelMetadata } = await fetchChannelFeed(sub.id);
                     batchVideos.push(...videos);
+
+                    // Update subscription metadata if we got it from RSS
+                    if (channelMetadata && channelMetadata.title) {
+                        const subIndex = subscriptions.findIndex(s => s.id === sub.id);
+                        if (subIndex !== -1) {
+                            subscriptions[subIndex].title = channelMetadata.title;
+                            if (channelMetadata.thumbnail) {
+                                subscriptions[subIndex].thumbnail = channelMetadata.thumbnail;
+                            }
+                        }
+                    }
+
                     await new Promise(resolve => setTimeout(resolve, 500));
                 }
             } else {
                 // RSS Only
-                const batchPromises = batch.map(sub => fetchChannelFeed(sub.id));
+                const batchPromises = batch.map(async sub => {
+                    const { videos, channelMetadata } = await fetchChannelFeed(sub.id);
+
+                    // Update subscription metadata if we got it from RSS
+                    if (channelMetadata && channelMetadata.title) {
+                        const subIndex = subscriptions.findIndex(s => s.id === sub.id);
+                        if (subIndex !== -1) {
+                            subscriptions[subIndex].title = channelMetadata.title;
+                            if (channelMetadata.thumbnail) {
+                                subscriptions[subIndex].thumbnail = channelMetadata.thumbnail;
+                            }
+                        }
+                    }
+
+                    return videos;
+                });
                 const batchResults = await Promise.all(batchPromises);
                 batchResults.forEach(videos => batchVideos.push(...videos));
             }
@@ -409,6 +461,11 @@ async function aggregateFeeds() {
 
         // Keep only the latest MAX_VIDEOS
         const trimmedVideos = uniqueVideos.slice(0, MAX_VIDEOS);
+
+        // Save updated subscriptions (with metadata from RSS) back to db.json
+        parsedData.subscriptions = subscriptions;
+        await fs.writeFile(DATA_FILE, JSON.stringify(parsedData, null, 2));
+        console.log('💾 Saved updated subscription metadata');
 
         // Save to file
         await fs.writeFile(
