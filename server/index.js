@@ -108,6 +108,7 @@ app.post('/api/sync', async (req, res) => {
 
         // ALWAYS preserve redirects from server, never let client overwrite them
         data.redirects = { ...redirects, ...(data.redirects || {}) };
+        console.log(`💾 Preserving ${Object.keys(data.redirects || {}).length} redirects:`, Object.keys(data.redirects || {}));
 
         await fs.writeFile(DATA_FILE, JSON.stringify(data, null, 2));
 
