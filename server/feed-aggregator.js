@@ -21,21 +21,22 @@ async function fetchChannelFeed(channelId) {
         const feedUrl = `https://www.youtube.com/feeds/videos.xml?channel_id=${channelId}`;
         const feed = await parser.parseURL(feedUrl);
 
-        id: item.id?.split(':').pop() || item.guid,
+        return feed.items.map(item => ({
+            id: item.id?.split(':').pop() || item.guid,
             title: item.title,
-                channelId: channelId,
-                    channelTitle: feed.title || item.author || 'Unknown',
-                        publishedAt: item.pubDate || item.isoDate,
-                            thumbnail: item.media?.thumbnail?.[0]?.url
-                                || item['media:group']?.['media:thumbnail']?.[0]?.$.url
-                                || item.enclosure?.url
-                                || `https://i.ytimg.com/vi/${item.id?.split(':').pop() || item.guid}/hqdefault.jpg`,
-                                description: item.contentSnippet || item.content || '',
+            channelId: channelId,
+            channelTitle: feed.title || item.author || 'Unknown',
+            publishedAt: item.pubDate || item.isoDate,
+            thumbnail: item.media?.thumbnail?.[0]?.url
+                || item['media:group']?.['media:thumbnail']?.[0]?.$.url
+                || item.enclosure?.url
+                || `https://i.ytimg.com/vi/${item.id?.split(':').pop() || item.guid}/hqdefault.jpg`,
+            description: item.contentSnippet || item.content || '',
         }));
-} catch (error) {
-    console.error(`Failed to fetch feed for ${channelId}:`, error.message);
-    return [];
-}
+    } catch (error) {
+        console.error(`Failed to fetch feed for ${channelId}:`, error.message);
+        return [];
+    }
 }
 
 async function aggregateFeeds() {
