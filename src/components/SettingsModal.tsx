@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, Key, Save, CheckCircle2 } from 'lucide-react';
+import { X, Key, Save, CheckCircle2, AlertCircle } from 'lucide-react';
 import { useStore } from '../store/useStore';
 import { useSubscriptionStorage } from '../hooks/useSubscriptionStorage';
 
@@ -72,6 +72,21 @@ export const SettingsModal = ({ isOpen, onClose }: SettingsModalProps) => {
 
                         {/* Content - Scrollable */}
                         <div className="flex-1 overflow-y-auto p-4 md:p-6 space-y-6">
+                            {/* Quota Exceeded Alert */}
+                            {quotaUsed >= 10000 && (
+                                <div className="bg-red-100 dark:bg-red-900/30 border border-red-200 dark:border-red-800 rounded-lg p-4 flex items-start gap-3">
+                                    <AlertCircle className="w-5 h-5 text-red-600 dark:text-red-400 flex-shrink-0 mt-0.5" />
+                                    <div>
+                                        <h3 className="text-sm font-bold text-red-800 dark:text-red-200">
+                                            API Quota Exceeded
+                                        </h3>
+                                        <p className="text-sm text-red-700 dark:text-red-300 mt-1">
+                                            You have used all 10,000 daily API units. Video updates will be paused until the quota resets at midnight PT.
+                                        </p>
+                                    </div>
+                                </div>
+                            )}
+
                             {/* API Key Section */}
                             <div className="space-y-4">
                                 <div className="flex items-center gap-2">
