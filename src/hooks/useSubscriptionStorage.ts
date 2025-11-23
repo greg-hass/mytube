@@ -502,11 +502,11 @@ ${outlines}
 
       // Sync Settings (API Key, etc.)
       if (remoteData.settings) {
-        const { apiKey, useApiForVideos } = useStore.getState();
+        const { apiKey: currentApiKey, useApiForVideos } = useStore.getState();
         const remoteSettings = remoteData.settings;
 
         // If local is empty but remote has it, take remote
-        if (!apiKey && remoteSettings.apiKey) {
+        if (!currentApiKey && remoteSettings.apiKey) {
           console.log('📥 Importing API Key from server...');
           useStore.getState().setApiKey(remoteSettings.apiKey);
           updatedLocal = true;
@@ -537,7 +537,12 @@ ${outlines}
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             subscriptions: mergedSubs,
-            settings: { searchQuery, sortBy, apiKey },
+            settings: {
+              searchQuery,
+              sortBy,
+              apiKey: useStore.getState().apiKey, // Use fresh state
+              useApiForVideos: useStore.getState().useApiForVideos
+            },
             watchedVideos: Array.from(mergedWatched)
           })
         });
