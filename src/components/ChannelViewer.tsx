@@ -22,7 +22,11 @@ export const ChannelViewer = () => {
   const channelInfo = allSubscriptions.find(sub => sub.id === channelId);
 
   // Fetch videos for this specific channel
-  const { videos, isLoading, error, refresh } = useRSSVideos();
+  // Fetch videos for this specific channel
+  const { videos: allVideos, isLoading, error, refresh } = useRSSVideos();
+
+  // Filter videos for this channel
+  const videos = allVideos.filter(v => v.channelId === channelId);
 
   // If channel info is missing (e.g. ID changed after resolution), try to get it from videos
   const resolvedChannelInfo = channelInfo || (videos.length > 0 ? {
