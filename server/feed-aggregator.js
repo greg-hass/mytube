@@ -35,19 +35,44 @@ async function fetchChannelFeed(channelId) {
         }));
 
         // Extract channel metadata from feed
-        // Use the first video's thumbnail as a proxy for channel thumbnail, or use standard URL
-        const firstVideoThumb = videos.length > 0 ? videos[0].thumbnail : null;
-
         const channelMetadata = {
             title: feed.title || 'Unknown Channel',
-            // YouTube channel avatar can be derived from video thumbnails or use standard format
-            thumbnail: firstVideoThumb || `https://yt3.googleusercontent.com/ytc/channel/${channelId}`
+            thumbnail: null // Will be fetched separately
         };
 
         return { videos, channelMetadata };
     } catch (error) {
         console.error(`Failed to fetch feed for ${channelId}:`, error.message);
         return { videos: [], channelMetadata: null };
+    }
+}
+
+// Fetch real channel thumbnail by scraping the channel page
+async function fetchChannelThumbnail(channelId) {
+    try {
+        const url = `https://www.youtube.com/channel/${channelId}`;
+        const response = await axios.get(url, {
+            headers: { 'User-Agent': 'Mozilla/5.0' }
+        });
+
+        const html = response.data;
+
+        // Look for channel avatar in meta tags
+        const avatarMatch = html.match(/<meta property="og:image" content="([^"]+)"/);
+        if (avatarMatch) {
+            return avatarMatch[1];
+        }
+
+        // Alternative: Look for profile image in JSON-LD
+        const jsonMatch = html.match(/"avatar":\s*{\s*"thumbnails":\s*\[\s*{\s*"url":\s*"([^"]+)"/);
+        if (jsonMatch) {
+            return jsonMatch[1].replace(/\\u0026/g, '&');
+        }
+
+        return null;
+    } catch (error) {
+        console.error(`Failed to fetch thumbnail for ${channelId}:`, error.message);
+        return null;
     }
 }
 
@@ -274,8 +299,13 @@ async function aggregateFeeds() {
                             const subIndex = subscriptions.findIndex(s => s.id === sub.id);
                             if (subIndex !== -1) {
                                 subscriptions[subIndex].title = channelMetadata.title;
-                                if (channelMetadata.thumbnail) {
-                                    subscriptions[subIndex].thumbnail = channelMetadata.thumbnail;
+
+                                // Fetch real channel thumbnail if we don't have one
+                                if (!subscriptions[subIndex].thumbnail || subscriptions[subIndex].thumbnail.includes('ui-avatars')) {
+                                    const thumbnail = await fetchChannelThumbnail(sub.id);
+                                    if (thumbnail) {
+                                        subscriptions[subIndex].thumbnail = thumbnail;
+                                    }
                                 }
                             }
                         }
@@ -296,8 +326,13 @@ async function aggregateFeeds() {
                         const subIndex = subscriptions.findIndex(s => s.id === sub.id);
                         if (subIndex !== -1) {
                             subscriptions[subIndex].title = channelMetadata.title;
-                            if (channelMetadata.thumbnail) {
-                                subscriptions[subIndex].thumbnail = channelMetadata.thumbnail;
+
+                            // Fetch real channel thumbnail if we don't have one
+                            if (!subscriptions[subIndex].thumbnail || subscriptions[subIndex].thumbnail.includes('ui-avatars')) {
+                                const thumbnail = await fetchChannelThumbnail(sub.id);
+                                if (thumbnail) {
+                                    subscriptions[subIndex].thumbnail = thumbnail;
+                                }
                             }
                         }
                     }
@@ -314,8 +349,13 @@ async function aggregateFeeds() {
                         const subIndex = subscriptions.findIndex(s => s.id === sub.id);
                         if (subIndex !== -1) {
                             subscriptions[subIndex].title = channelMetadata.title;
-                            if (channelMetadata.thumbnail) {
-                                subscriptions[subIndex].thumbnail = channelMetadata.thumbnail;
+
+                            // Fetch real channel thumbnail if we don't have one
+                            if (!subscriptions[subIndex].thumbnail || subscriptions[subIndex].thumbnail.includes('ui-avatars')) {
+                                const thumbnail = await fetchChannelThumbnail(sub.id);
+                                if (thumbnail) {
+                                    subscriptions[subIndex].thumbnail = thumbnail;
+                                }
                             }
                         }
                     }
