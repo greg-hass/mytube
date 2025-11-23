@@ -47,6 +47,7 @@ async function aggregateFeeds() {
         const data = await fs.readFile(DATA_FILE, 'utf8');
         const parsedData = JSON.parse(data);
         const subscriptions = parsedData.subscriptions || [];
+        const apiKey = parsedData.settings?.apiKey;
         const useApi = parsedData.settings?.useApiForVideos && apiKey;
 
         if (useApi) console.log('🔑 Using YouTube API for fetching (enabled in settings)');
