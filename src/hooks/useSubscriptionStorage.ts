@@ -593,6 +593,7 @@ ${outlines}
               quotaUsed // Send local quota too
             },
             watchedVideos: Array.from(mergedWatched)
+            // NOTE: We intentionally don't send 'redirects' - those are server-only
           })
         });
 
