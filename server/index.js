@@ -15,11 +15,31 @@ app.use(express.json({ limit: '50mb' })); // Large limit for full data sync
 async function init() {
     try {
         await fs.mkdir(path.dirname(DATA_FILE), { recursive: true });
+
+        // Load or initialize db.json
+        let data = { subscriptions: [], settings: {}, watchedVideos: [], redirects: {} };
         try {
-            await fs.access(DATA_FILE);
-        } catch {
-            await fs.writeFile(DATA_FILE, JSON.stringify({ subscriptions: [], settings: {}, watchedVideos: [] }));
+            const fileContent = await fs.readFile(DATA_FILE, 'utf8');
+            data = JSON.parse(fileContent);
+        } catch (err) {
+            // File doesn't exist, use default
         }
+
+        // Merge static redirects from redirects.json if it exists
+        try {
+            const staticRedirectsFile = path.join(__dirname, 'redirects.json');
+            const staticRedirectsContent = await fs.readFile(staticRedirectsFile, 'utf8');
+            const staticRedirects = JSON.parse(staticRedirectsContent);
+
+            data.redirects = { ...data.redirects, ...staticRedirects };
+            console.log('✅ Merged static redirects:', Object.keys(staticRedirects));
+
+            // Save back to db.json
+            await fs.writeFile(DATA_FILE, JSON.stringify(data, null, 2));
+        } catch (err) {
+            // No static redirects or error reading, ignore
+        }
+
     } catch (err) {
         console.error('Failed to initialize data storage:', err);
     }
