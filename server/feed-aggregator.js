@@ -57,7 +57,8 @@ async function aggregateFeeds() {
 
         // Process in batches
         // If using API, we can fetch up to 50 channels at once!
-        const CURRENT_BATCH_SIZE = useApi ? 50 : BATCH_SIZE;
+        // Reducing to 30 to avoid potential URL length issues or 403s
+        const CURRENT_BATCH_SIZE = useApi ? 30 : BATCH_SIZE;
 
         // Resolve handles/custom URLs to real IDs if API is available
         if (useApi) {
@@ -196,10 +197,15 @@ async function aggregateFeeds() {
                     batchResults.forEach(videos => batchVideos.push(...videos));
 
                 } catch (err) {
-                    console.error('API batch error, falling back to pure RSS:', err.message);
-                    const batchPromises = batch.map(sub => fetchChannelFeed(sub.id));
-                    const batchResults = await Promise.all(batchPromises);
-                    batchResults.forEach(videos => batchVideos.push(...videos));
+                    console.error('API batch error, falling back to pure RSS:', err.message, err.response?.data?.error);
+
+                    // Fallback to RSS with delay to avoid 429s
+                    for (const sub of batch) {
+                        const videos = await fetchChannelFeed(sub.id);
+                        batchVideos.push(...videos);
+                        // Small delay between RSS fetches in fallback mode
+                        await new Promise(resolve => setTimeout(resolve, 500));
+                    }
                 }
             } else {
                 // RSS Only
