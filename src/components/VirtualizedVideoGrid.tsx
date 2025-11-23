@@ -73,6 +73,8 @@ export const VirtualizedVideoGrid = ({ videos, columns = 4 }: Props) => {
                     return (
                         <div
                             key={virtualRow.index}
+                            data-index={virtualRow.index}
+                            ref={rowVirtualizer.measureElement}
                             style={{
                                 position: 'absolute',
                                 top: 0,
@@ -81,7 +83,7 @@ export const VirtualizedVideoGrid = ({ videos, columns = 4 }: Props) => {
                                 transform: `translateY(${virtualRow.start}px)`,
                             }}
                         >
-                            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 mb-6">
+                            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 pb-6">
                                 {rowItems.map((video, idx) => (
                                     <VideoCard
                                         key={video.id}
