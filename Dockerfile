@@ -6,14 +6,17 @@ WORKDIR /app
 # Copy package files
 COPY package*.json ./
 
-# Install all dependencies (npm install includes devDependencies by default)
-RUN npm install
+# Install all dependencies
+RUN npm install && \
+  # Verify TypeScript was installed
+  ls -la node_modules/.bin/ && \
+  test -f node_modules/.bin/tsc || (echo "TypeScript not found!" && exit 1)
 
 # Copy source code
 COPY . .
 
-# Build the app (use node_modules/.bin/tsc directly)
-RUN ./node_modules/.bin/tsc -b && ./node_modules/.bin/vite build
+# Build the app
+RUN npm run build
 
 # Production stage
 FROM nginx:alpine
