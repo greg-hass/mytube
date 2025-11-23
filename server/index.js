@@ -51,6 +51,42 @@ app.post('/api/sync', async (req, res) => {
         // Add timestamp
         data.lastSyncedAt = new Date().toISOString();
 
+        // Read existing data to get redirects
+        let existingData = {};
+        try {
+            const fileContent = await fs.readFile(DATA_FILE, 'utf8');
+            existingData = JSON.parse(fileContent);
+        } catch (e) {
+            // ignore if file doesn't exist
+        }
+
+        // Apply redirects to incoming subscriptions
+        if (existingData.redirects && data.subscriptions) {
+            const redirects = existingData.redirects;
+            const seenIds = new Set();
+            const uniqueSubs = [];
+
+            data.subscriptions.forEach(sub => {
+                let finalId = sub.id;
+                // Check if this ID should be redirected
+                if (redirects[sub.id]) {
+                    console.log(`🔀 Server applying redirect on sync: ${sub.id} -> ${redirects[sub.id]}`);
+                    finalId = redirects[sub.id];
+                }
+
+                // Deduplicate
+                if (!seenIds.has(finalId)) {
+                    seenIds.add(finalId);
+                    // Use the redirected ID
+                    uniqueSubs.push({ ...sub, id: finalId });
+                }
+            });
+
+            data.subscriptions = uniqueSubs;
+            // Preserve redirects in the new data
+            data.redirects = { ...existingData.redirects, ...(data.redirects || {}) };
+        }
+
         await fs.writeFile(DATA_FILE, JSON.stringify(data, null, 2));
 
         // Trigger feed aggregation when subscriptions change
