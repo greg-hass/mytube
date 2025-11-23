@@ -1,5 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { useMemo, useCallback } from 'react';
+import { useMemo } from 'react';
 import type { YouTubeVideo } from '../types/youtube';
 
 export interface SyncStatus {
