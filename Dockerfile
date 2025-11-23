@@ -12,8 +12,8 @@ RUN npm install
 # Copy source code
 COPY . .
 
-# Build the app (use npx to ensure tsc is found in node_modules)
-RUN npx tsc -b && npx vite build
+# Build the app (use node_modules/.bin/tsc directly)
+RUN ./node_modules/.bin/tsc -b && ./node_modules/.bin/vite build
 
 # Production stage
 FROM nginx:alpine
