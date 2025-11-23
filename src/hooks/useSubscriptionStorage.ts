@@ -471,7 +471,6 @@ ${outlines}
           // Optional: Conflict resolution. 
           // If remote is favorite and local is not, should we sync favorite?
           // For now, let's keep it simple: Union of IDs.
-          const local = mergedMap.get(sub.id)!;
           // If remote is favorite, let's preserve that if local isn't explicitly false (hard to track without timestamps)
           // We'll stick to: Local wins conflicts, Remote adds missing items.
         }
