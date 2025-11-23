@@ -22,7 +22,6 @@ export const useRSSVideos = () => {
     data: serverData,
     isLoading,
     error,
-    refetch,
   } = useQuery({
     queryKey: ['server-videos'],
     queryFn: async () => {

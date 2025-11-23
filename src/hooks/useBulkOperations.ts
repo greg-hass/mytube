@@ -7,7 +7,7 @@ export function useBulkOperations() {
     const [selectedIds, setSelectedIds] = useState<string[]>([]);
     const [isSelectionMode, setIsSelectionMode] = useState(false);
     const { removeSubscription } = useSubscriptionStorage();
-    const { refresh } = useRSSVideos({ channelIds: [], autoRefresh: false });
+    const { refresh } = useRSSVideos();
 
     const toggleSelection = (id: string) => {
         setSelectedIds(prev =>

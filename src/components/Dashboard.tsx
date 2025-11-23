@@ -32,12 +32,7 @@ export const Dashboard = () => {
     [allSubscriptions]
   );
 
-  const { videos, isLoading: videosLoading, refresh: refetchVideos, syncStatus } = useRSSVideos({
-    channelIds,
-    // maxChannels is now handled internally by batching, but we can pass it if we want to limit the TOTAL number of channels to sync
-    // For now, we want to sync all of them, so we don't pass maxChannels (or pass a high number if needed)
-    autoRefresh: true,
-  });
+  const { videos, isLoading: videosLoading, refresh: refetchVideos, syncStatus } = useRSSVideos();
 
   // Calculate most active channels in the past week
   // Optimized to reduce re-renders and heavy calculations
