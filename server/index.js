@@ -158,6 +158,76 @@ app.post('/api/videos/refresh', async (req, res) => {
     }
 });
 
+// POST /api/resolve-channel - Resolve @handle or custom URL to real channel ID
+app.post('/api/resolve-channel', async (req, res) => {
+    try {
+        const { type, value } = req.body;
+
+        if (!type || !value) {
+            return res.status(400).json({ error: 'Missing type or value' });
+        }
+
+        // Use scraping to resolve the channel
+        const axios = require('axios');
+        let url;
+
+        if (type === 'handle') {
+            // Handle format: @username
+            const handle = value.startsWith('@') ? value : `@${value}`;
+            url = `https://www.youtube.com/${handle}`;
+        } else if (type === 'custom_url') {
+            // Custom URL format: /c/username or /user/username
+            url = `https://www.youtube.com/${value}`;
+        } else {
+            return res.status(400).json({ error: 'Invalid type' });
+        }
+
+        // Fetch the page and extract channel ID
+        const response = await axios.get(url, {
+            headers: { 'User-Agent': 'Mozilla/5.0' }
+        });
+
+        const html = response.data;
+
+        // Extract channel ID from various possible locations
+        let channelId = null;
+        let title = null;
+
+        // Method 1: Look for channel/UC... in the HTML
+        const channelMatch = html.match(/channel\/(UC[a-zA-Z0-9_-]{22})/);
+        if (channelMatch) {
+            channelId = channelMatch[1];
+        }
+
+        // Method 2: Look for "channelId":"UC..." in JSON-LD or other structured data
+        if (!channelId) {
+            const jsonMatch = html.match(/"channelId":"(UC[a-zA-Z0-9_-]{22})"/);
+            if (jsonMatch) {
+                channelId = jsonMatch[1];
+            }
+        }
+
+        // Extract title
+        const titleMatch = html.match(/<meta property="og:title" content="([^"]+)"/);
+        if (titleMatch) {
+            title = titleMatch[1];
+        }
+
+        if (!channelId) {
+            return res.status(404).json({ error: 'Could not resolve channel ID' });
+        }
+
+        res.json({
+            channelId,
+            title: title || value,
+            thumbnail: null // RSS will provide this later
+        });
+    } catch (err) {
+        console.error('Resolve channel error:', err.message);
+        res.status(500).json({ error: 'Failed to resolve channel' });
+    }
+});
+
 app.listen(PORT, () => {
     console.log(`Sync server running on port ${PORT}`);
     // Start feed aggregator

@@ -81,21 +81,53 @@ export const AddChannelModal = ({ isOpen, onClose, onAdd }: AddChannelModalProps
       let channelToAdd = channelInfo;
 
       if (!channelToAdd) {
-        // Construct a proper temporary ID based on input type
-        let id = parsedInput.value;
-        if (parsedInput.type === 'handle') {
-          id = `handle_${parsedInput.value}`;
-        } else if (parsedInput.type === 'custom_url') {
-          id = `custom_${parsedInput.value}`;
-        }
+        // If we don't have channel info, we need to resolve handles/custom URLs to real IDs
+        // This prevents storing handle_ or custom_ IDs in the database
+        let resolvedId = parsedInput.value;
 
-        channelToAdd = {
-          id,
-          title: parsedInput.originalInput,
-          description: '',
-          thumbnail: `https://ui-avatars.com/api/?name=${encodeURIComponent(parsedInput.originalInput)}&background=random&color=fff`,
-          customUrl: parsedInput.type === 'custom_url' ? parsedInput.value : undefined,
-        };
+        if (parsedInput.type === 'handle' || parsedInput.type === 'custom_url') {
+          try {
+            // Ask server to resolve the handle/custom URL to a real channel ID
+            const resolveResponse = await fetch('/api/resolve-channel', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                type: parsedInput.type,
+                value: parsedInput.value
+              })
+            });
+
+            if (resolveResponse.ok) {
+              const { channelId, title, thumbnail } = await resolveResponse.json();
+              resolvedId = channelId;
+
+              // Use the resolved info
+              channelToAdd = {
+                id: channelId,
+                title: title || parsedInput.originalInput,
+                description: '',
+                thumbnail: thumbnail || `https://ui-avatars.com/api/?name=${encodeURIComponent(parsedInput.originalInput)}&background=random&color=fff`,
+                customUrl: parsedInput.type === 'custom_url' ? parsedInput.value : undefined,
+              };
+            } else {
+              throw new Error('Failed to resolve channel');
+            }
+          } catch (err) {
+            console.error('Failed to resolve handle/custom URL:', err);
+            setValidationError('Unable to resolve channel. Please try a different URL or the channel ID directly.');
+            setIsLoading(false);
+            return;
+          }
+        } else {
+          // For direct channel IDs, just use them as-is
+          channelToAdd = {
+            id: resolvedId,
+            title: parsedInput.originalInput,
+            description: '',
+            thumbnail: `https://ui-avatars.com/api/?name=${encodeURIComponent(parsedInput.originalInput)}&background=random&color=fff`,
+            customUrl: parsedInput.type === 'custom_url' ? parsedInput.value : undefined,
+          };
+        }
       }
 
       await onAdd(channelToAdd);
@@ -161,10 +193,10 @@ export const AddChannelModal = ({ isOpen, onClose, onAdd }: AddChannelModalProps
                     onChange={handleInputChange}
                     placeholder="Channel ID, @handle, or full YouTube URL"
                     className={`w-full px-3 py-2 pr-10 border rounded-lg shadow-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white ${validationError
-                        ? 'border-red-500'
-                        : channelInfo
-                          ? 'border-green-500'
-                          : 'border-gray-300 dark:border-gray-600'
+                      ? 'border-red-500'
+                      : channelInfo
+                        ? 'border-green-500'
+                        : 'border-gray-300 dark:border-gray-600'
                       }`}
                     required
                   />
