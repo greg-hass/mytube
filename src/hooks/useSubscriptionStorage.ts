@@ -453,7 +453,7 @@ ${outlines}
       // 2.5 Apply Redirects to Local Data
       // If server says "handle_X" is now "UC_Y", we update our local list immediately
       // This prevents us from pushing "handle_X" back to the server
-      let localSubs = [...get().allSubscriptions];
+      let localSubs = await getAllSubscriptions();
       let localRedirectsApplied = false;
 
       if (Object.keys(redirects).length > 0) {
@@ -478,7 +478,9 @@ ${outlines}
 
         if (localRedirectsApplied) {
           // Update state immediately so the merge uses clean data
-          set({ allSubscriptions: localSubs });
+          await clearAllSubscriptions();
+          await addSubscriptions(localSubs);
+          queryClient.invalidateQueries({ queryKey: ['subscriptions'] });
         }
       }
 
@@ -493,15 +495,14 @@ ${outlines}
       // For now, we'll assume if it exists in both, local is "newer" or equal, so we keep local.
       // But if remote has something local doesn't, we add it.
       remoteSubs.forEach((sub: StoredSubscription) => {
-        if (!mergedMap.has(sub.id)) {
-          mergedMap.set(sub.id, sub);
+        if (!mergedSubsMap.has(sub.id)) {
+          mergedSubsMap.set(sub.id, sub);
         }
       });
 
-      const mergedSubs = Array.from(mergedMap.values());
+      const mergedSubs = Array.from(mergedSubsMap.values());
 
       // Merge Watched Videos
-      const remoteWatched = remoteData.watchedVideos || [];
       const localWatched = Array.from(useStore.getState().watchedVideos);
       const mergedWatched = new Set([...localWatched, ...remoteWatched]);
 
