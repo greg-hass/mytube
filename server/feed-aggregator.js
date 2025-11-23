@@ -35,10 +35,13 @@ async function fetchChannelFeed(channelId) {
         }));
 
         // Extract channel metadata from feed
+        // Use the first video's thumbnail as a proxy for channel thumbnail, or use standard URL
+        const firstVideoThumb = videos.length > 0 ? videos[0].thumbnail : null;
+
         const channelMetadata = {
             title: feed.title || 'Unknown Channel',
-            // YouTube channel thumbnails are available at a predictable URL
-            thumbnail: `https://yt3.googleusercontent.com/ytc/${channelId}`
+            // YouTube channel avatar can be derived from video thumbnails or use standard format
+            thumbnail: firstVideoThumb || `https://yt3.googleusercontent.com/ytc/channel/${channelId}`
         };
 
         return { videos, channelMetadata };
