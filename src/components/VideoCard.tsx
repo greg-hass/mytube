@@ -50,9 +50,17 @@ export const VideoCard = ({ video, index }: Props) => {
           alt={video.title}
           loading="lazy"
           onLoad={() => setImageLoaded(true)}
-          className={`w-full h-full object-cover transition-all duration-300 ${
-            imageLoaded ? 'opacity-100' : 'opacity-0'
-          }`}
+          onError={(e) => {
+            // Fallback to standard placeholder if main thumbnail fails
+            const target = e.target as HTMLImageElement;
+            if (!target.src.includes('mqdefault')) {
+              target.src = `https://i.ytimg.com/vi/${video.id}/mqdefault.jpg`;
+            } else {
+              setImageLoaded(true); // Show whatever we have (even if broken icon)
+            }
+          }}
+          className={`w-full h-full object-cover transition-all duration-300 ${imageLoaded ? 'opacity-100' : 'opacity-0'
+            }`}
         />
 
         {/* Play overlay */}
