@@ -39,6 +39,7 @@ export const useRSSVideos = () => {
   // Trigger server-side refresh
   const triggerServerRefresh = useMutation({
     mutationFn: async () => {
+      toast.loading('Refreshing videos from server...');
       const response = await fetch('/api/videos/refresh', {
         method: 'POST',
       });
@@ -48,11 +49,15 @@ export const useRSSVideos = () => {
       return response.json();
     },
     onSuccess: () => {
-      // Wait a bit for server to fetch, then refetch
-      setTimeout(() => {
-        queryClient.invalidateQueries({ queryKey: ['server-videos'] });
-      }, 2000);
+      toast.dismiss();
+      toast.success('Refresh complete!');
+      // Invalidate immediately since server is done
+      queryClient.invalidateQueries({ queryKey: ['server-videos'] });
     },
+    onError: (error) => {
+      toast.dismiss();
+      toast.error(`Refresh failed: ${error.message}`);
+    }
   });
 
   const videos = useMemo<YouTubeVideo[]>(() => {
