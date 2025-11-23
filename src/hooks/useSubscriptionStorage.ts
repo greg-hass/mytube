@@ -442,7 +442,7 @@ ${outlines}
   const syncWithBackend = async () => {
     try {
       // 1. Fetch Remote Data
-      const response = await fetch('/api/sync');
+      const response = await fetch(`/api/sync?t=${Date.now()}`);
       if (!response.ok) throw new Error('Failed to fetch from backend');
 
       const remoteData = await response.json();
