@@ -26,12 +26,6 @@ export const Dashboard = () => {
     sub.id.startsWith('handle_') || sub.id.startsWith('custom_')
   );
 
-  // Get channel IDs for RSS feed fetching
-  const channelIds = useMemo(() =>
-    allSubscriptions.map(sub => sub.id),
-    [allSubscriptions]
-  );
-
   const { videos, isLoading: videosLoading, refresh: refetchVideos, syncStatus } = useRSSVideos();
 
   // Calculate most active channels in the past week
