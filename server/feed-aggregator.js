@@ -137,8 +137,8 @@ async function aggregateFeeds() {
 
             let batchVideos = [];
 
-            if (useApi) {
-                // Use YouTube API
+            if (useApi && !quotaExceeded) {
+                // Use YouTube API (unless quota was already exceeded in a previous batch)
                 try {
                     // Filter out any non-UC IDs (like handles that failed resolution) to prevent API errors
                     const validIds = batch.map(sub => sub.id).filter(id => id.startsWith('UC'));
@@ -193,7 +193,7 @@ async function aggregateFeeds() {
                     });
 
                     const batchResults = await Promise.all(playlistPromises);
-                    const fetchedCount = batchResults.reduce((acc, v) => acc + v.length, 0);
+                    const fetchedCount = batchResults.reduce((acc, v => acc + v.length, 0);
                     console.log(`  ✨ API Batch: Fetched ${fetchedCount} videos from ${batch.length} channels`);
                     batchResults.forEach(videos => batchVideos.push(...videos));
 
@@ -202,7 +202,7 @@ async function aggregateFeeds() {
 
                     // Check for quota exceeded
                     if (err.response?.data?.error?.errors?.[0]?.reason === 'quotaExceeded') {
-                        console.warn('⚠️ API Quota limit reached! Updating local counter to 10000.');
+                        console.warn('⚠️ API Quota limit reached! Switching to RSS for all remaining batches.');
                         // We will update the file at the end of the function
                         quotaExceeded = true;
                     }
@@ -214,6 +214,14 @@ async function aggregateFeeds() {
                         // Small delay between RSS fetches in fallback mode
                         await new Promise(resolve => setTimeout(resolve, 500));
                     }
+                }
+            } else if (quotaExceeded) {
+                // Quota was exceeded in a previous batch, use RSS for remaining batches
+                console.log(`  📡 RSS Mode: Fetching ${batch.length} channels (quota exhausted)`);
+                for (const sub of batch) {
+                    const videos = await fetchChannelFeed(sub.id);
+                    batchVideos.push(...videos);
+                    await new Promise(resolve => setTimeout(resolve, 500));
                 }
             } else {
                 // RSS Only
