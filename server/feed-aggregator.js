@@ -37,8 +37,8 @@ async function fetchChannelFeed(channelId) {
         // Extract channel metadata from feed
         const channelMetadata = {
             title: feed.title || 'Unknown Channel',
-            // RSS doesn't provide thumbnails, we'll use a default or fetch it separately
-            thumbnail: feed.image?.url || `https://yt3.ggpht.com/ytc/default_channel.jpg`
+            // YouTube channel thumbnails are available at a predictable URL
+            thumbnail: `https://yt3.googleusercontent.com/ytc/${channelId}`
         };
 
         return { videos, channelMetadata };
