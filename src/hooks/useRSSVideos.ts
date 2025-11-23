@@ -26,7 +26,8 @@ export const useRSSVideos = () => {
   } = useQuery({
     queryKey: ['server-videos'],
     queryFn: async () => {
-      const response = await fetch('/api/videos');
+      // Add timestamp to prevent caching
+      const response = await fetch(`/api/videos?t=${Date.now()}`);
       if (!response.ok) {
         throw new Error('Failed to fetch videos from server');
       }

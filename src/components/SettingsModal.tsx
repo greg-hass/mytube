@@ -57,7 +57,7 @@ export const SettingsModal = ({ isOpen, onClose }: SettingsModalProps) => {
                         initial={{ opacity: 0, scale: 0.95, y: 20 }}
                         animate={{ opacity: 1, scale: 1, y: 0 }}
                         exit={{ opacity: 0, scale: 0.95, y: 20 }}
-                        className="fixed inset-0 md:inset-auto md:left-1/2 md:top-1/2 md:-translate-x-1/2 md:-translate-y-1/2 md:w-full md:max-w-2xl bg-white dark:bg-gray-900 md:rounded-2xl shadow-2xl z-50 flex flex-col max-h-[100dvh] md:max-h-[90vh]"
+                        className="fixed inset-0 z-[100] md:inset-auto md:left-1/2 md:top-1/2 md:-translate-x-1/2 md:-translate-y-1/2 md:w-full md:max-w-2xl bg-white dark:bg-gray-900 md:rounded-2xl shadow-2xl flex flex-col h-[100dvh] md:h-auto md:max-h-[90vh]"
                     >
                         {/* Header */}
                         <div className="flex items-center justify-between p-4 md:p-6 border-b border-gray-200 dark:border-gray-800 flex-shrink-0">
