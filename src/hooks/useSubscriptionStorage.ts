@@ -450,42 +450,66 @@ ${outlines}
 
       const remoteData = await response.json();
       const localSubs = await getAllSubscriptions();
+      const remoteSubs = remoteData.subscriptions || [];
 
-      console.log('Sync: Local subs:', localSubs.length, 'Remote subs:', remoteData.subscriptions?.length);
+      console.log('Sync: Local subs:', localSubs.length, 'Remote subs:', remoteSubs.length);
 
-      // 2. Merge strategy: Remote wins if it has data and we don't, or if it's newer
-      // For now, simple strategy: if we have 0 subs and remote has subs, import remote.
-      // If we have subs and remote has 0, push local.
-      // If both have subs, we'll implement a smarter merge later or just prefer local for now.
+      // 2. Merge Strategy: Union by ID
+      // Create a map of all subscriptions (Local + Remote)
+      const mergedMap = new Map<string, StoredSubscription>();
 
-      if (localSubs.length === 0 && remoteData.subscriptions?.length > 0) {
-        console.log('📥 Importing data from server...');
-        toast.loading('Syncing data from server...');
+      // Add local subs first
+      localSubs.forEach(sub => mergedMap.set(sub.id, sub));
 
-        await clearAllSubscriptions();
-        await addSubscriptions(remoteData.subscriptions);
-        // Also sync other data if available
-        if (remoteData.watchedVideos) {
-          // TODO: Sync watched videos
+      // Add remote subs (if not exists, or if we want to merge properties)
+      // For now, we'll assume if it exists in both, local is "newer" or equal, so we keep local.
+      // But if remote has something local doesn't, we add it.
+      remoteSubs.forEach((sub: StoredSubscription) => {
+        if (!mergedMap.has(sub.id)) {
+          mergedMap.set(sub.id, sub);
+        } else {
+          // Optional: Conflict resolution. 
+          // If remote is favorite and local is not, should we sync favorite?
+          // For now, let's keep it simple: Union of IDs.
+          const local = mergedMap.get(sub.id)!;
+          // If remote is favorite, let's preserve that if local isn't explicitly false (hard to track without timestamps)
+          // We'll stick to: Local wins conflicts, Remote adds missing items.
         }
+      });
+
+      const mergedSubs = Array.from(mergedMap.values());
+
+      // 3. Update Local if needed
+      // If merged list has more items than local, we found new stuff from server!
+      if (mergedSubs.length > localSubs.length) {
+        console.log(`📥 Importing ${mergedSubs.length - localSubs.length} new channels from server...`);
+        toast.loading('Syncing new channels from server...');
+
+        // We can just overwrite local with the merged list to be safe
+        await clearAllSubscriptions();
+        await addSubscriptions(mergedSubs);
+
         queryClient.invalidateQueries({ queryKey: ['subscriptions'] });
         queryClient.invalidateQueries({ queryKey: ['subscriptions-count'] });
 
         toast.dismiss();
         toast.success('Synced with server!');
-        return;
       }
 
-      // 3. Push local data to backend (simple backup)
-      if (localSubs.length > 0) {
-        // Only push if remote is different or empty (naive check)
-        // For now, just push to ensure server has latest
+      // 4. Update Remote if needed
+      // If merged list has more items than remote, or if local had updates (we can't easily tell updates without timestamps, but we can check counts or just push if local > remote)
+      // To be safe and ensure server is always up to date with the UNION, we push if the merged set is different from remote set.
+      // Simple check: if merged count > remote count, definitely push.
+      // Also if local count > 0, we should probably push to ensure latest state (favorites etc) is saved.
+
+      if (mergedSubs.length > remoteSubs.length || localSubs.length > 0) {
+        // We push the MERGED list to server, so server becomes the union too.
         const pushResponse = await fetch('/api/sync', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            subscriptions: localSubs,
-            settings: { searchQuery, sortBy, apiKey }, // Sync current settings
+            subscriptions: mergedSubs,
+            settings: { searchQuery, sortBy, apiKey },
             watchedVideos: Array.from(useStore.getState().watchedVideos || [])
           })
         });
