@@ -84,9 +84,9 @@ app.get('/api/videos', async (req, res) => {
 app.post('/api/videos/refresh', async (req, res) => {
     try {
         const { aggregateFeeds } = require('./feed-aggregator');
-        // Don't await - trigger async
-        aggregateFeeds().catch(err => console.error('Manual refresh failed:', err));
-        res.json({ success: true, message: 'Refresh triggered' });
+        // Await aggregation so client knows when it's done
+        await aggregateFeeds();
+        res.json({ success: true, message: 'Refresh complete' });
     } catch (err) {
         console.error('Refresh trigger error:', err);
         res.status(500).json({ error: 'Failed to trigger refresh' });

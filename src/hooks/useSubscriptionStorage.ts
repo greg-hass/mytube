@@ -517,6 +517,17 @@ ${outlines}
           // If they differ, toggle local to match remote
           useStore.getState().toggleUseApiForVideos();
         }
+
+        // Sync Quota
+        if (remoteSettings.quotaUsed !== undefined) {
+          // We trust server's quota usage as it's the one doing the work
+          // But we should probably take the max or just take server's?
+          // Server is the worker, so server knows best.
+          const currentQuota = useStore.getState().quotaUsed;
+          if (remoteSettings.quotaUsed > currentQuota) {
+            useStore.getState().incrementQuota(remoteSettings.quotaUsed - currentQuota);
+          }
+        }
       }
 
       if (updatedLocal) {
@@ -531,6 +542,8 @@ ${outlines}
 
       if (mergedSubs.length > remoteSubs.length || mergedWatched.size > remoteWatched.length) {
         // We push the MERGED list to server, so server becomes the union too.
+        const { searchQuery, sortBy, apiKey, useApiForVideos, quotaUsed } = useStore.getState();
+
         const pushResponse = await fetch('/api/sync', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -539,8 +552,9 @@ ${outlines}
             settings: {
               searchQuery,
               sortBy,
-              apiKey: useStore.getState().apiKey, // Use fresh state
-              useApiForVideos: useStore.getState().useApiForVideos
+              apiKey,
+              useApiForVideos,
+              quotaUsed // Send local quota too
             },
             watchedVideos: Array.from(mergedWatched)
           })

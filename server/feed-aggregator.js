@@ -163,6 +163,27 @@ async function aggregateFeeds() {
             }, null, 2)
         );
 
+        // Update quota usage in db.json if we used API
+        if (useApi) {
+            // Calculate quota used:
+            // 1 unit for channels list
+            // 1 unit per playlist fetch (we did 1 fetch per channel that had uploads)
+            // Note: This is an approximation.
+            const quotaCost = 1 + subscriptions.length;
+
+            // Read fresh data to avoid race conditions (though we are single threaded mostly)
+            const currentData = JSON.parse(await fs.readFile(DATA_FILE, 'utf8'));
+
+            // Initialize if missing
+            if (!currentData.settings) currentData.settings = {};
+            if (!currentData.settings.quotaUsed) currentData.settings.quotaUsed = 0;
+
+            currentData.settings.quotaUsed += quotaCost;
+
+            await fs.writeFile(DATA_FILE, JSON.stringify(currentData, null, 2));
+            console.log(`📊 Quota used this run: ${quotaCost}. Total: ${currentData.settings.quotaUsed}`);
+        }
+
         console.log(`✅ Aggregation complete: ${trimmedVideos.length} videos from ${subscriptions.length} channels`);
     } catch (error) {
         console.error('❌ Aggregation failed:', error);
