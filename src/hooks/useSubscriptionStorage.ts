@@ -13,6 +13,7 @@ import { parseOPMLToSubscriptions } from '../lib/opml-parser';
 import { resolveChannelThumbnail } from '../lib/icon-loader';
 import { useStore } from '../store/useStore';
 import type { YouTubeChannel } from '../types/youtube';
+import { toast } from 'sonner';
 
 /**
  * Hook for managing subscriptions in IndexedDB
@@ -442,10 +443,15 @@ ${outlines}
     try {
       // 1. Fetch remote data
       const response = await fetch('/api/sync');
-      if (!response.ok) return; // Backend might not be available (e.g. dev mode)
+      if (!response.ok) {
+        console.error('Sync fetch failed:', response.status, response.statusText);
+        return;
+      }
 
       const remoteData = await response.json();
       const localSubs = await getAllSubscriptions();
+
+      console.log('Sync: Local subs:', localSubs.length, 'Remote subs:', remoteData.subscriptions?.length);
 
       // 2. Merge strategy: Remote wins if it has data and we don't, or if it's newer
       // For now, simple strategy: if we have 0 subs and remote has subs, import remote.
@@ -454,6 +460,8 @@ ${outlines}
 
       if (localSubs.length === 0 && remoteData.subscriptions?.length > 0) {
         console.log('📥 Importing data from server...');
+        toast.loading('Syncing data from server...');
+
         await clearAllSubscriptions();
         await addSubscriptions(remoteData.subscriptions);
         // Also sync other data if available
@@ -462,12 +470,17 @@ ${outlines}
         }
         queryClient.invalidateQueries({ queryKey: ['subscriptions'] });
         queryClient.invalidateQueries({ queryKey: ['subscriptions-count'] });
+
+        toast.dismiss();
+        toast.success('Synced with server!');
         return;
       }
 
       // 3. Push local data to backend (simple backup)
       if (localSubs.length > 0) {
-        await fetch('/api/sync', {
+        // Only push if remote is different or empty (naive check)
+        // For now, just push to ensure server has latest
+        const pushResponse = await fetch('/api/sync', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -476,6 +489,12 @@ ${outlines}
             watchedVideos: Array.from(useStore.getState().watchedVideos || [])
           })
         });
+
+        if (!pushResponse.ok) {
+          console.error('Sync push failed:', pushResponse.status);
+        } else {
+          console.log('✅ Data pushed to server');
+        }
       }
 
     } catch (err) {
