@@ -1,5 +1,5 @@
 # Build stage
-FROM node:20-alpine AS builder
+FROM node:20-slim AS builder
 
 WORKDIR /app
 
@@ -7,10 +7,7 @@ WORKDIR /app
 COPY package*.json ./
 
 # Install all dependencies
-RUN npm install && \
-  # Verify TypeScript was installed
-  ls -la node_modules/.bin/ && \
-  test -f node_modules/.bin/tsc || (echo "TypeScript not found!" && exit 1)
+RUN npm install
 
 # Copy source code
 COPY . .
