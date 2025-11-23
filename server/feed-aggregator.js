@@ -463,9 +463,13 @@ async function aggregateFeeds() {
         const trimmedVideos = uniqueVideos.slice(0, MAX_VIDEOS);
 
         // Save updated subscriptions (with metadata from RSS) back to db.json
+        // IMPORTANT: Preserve redirects that were merged during init()
         parsedData.subscriptions = subscriptions;
+        if (!parsedData.redirects) {
+            parsedData.redirects = {};
+        }
         await fs.writeFile(DATA_FILE, JSON.stringify(parsedData, null, 2));
-        console.log('💾 Saved updated subscription metadata');
+        console.log('💾 Saved updated subscription metadata (preserving', Object.keys(parsedData.redirects).length, 'redirects)');
 
         // Save to file
         await fs.writeFile(
