@@ -13,7 +13,7 @@ export const SubscriptionsList = () => {
   const { viewMode } = useStore();
   const parentRef = useRef<HTMLDivElement>(null);
   const SCROLL_STORAGE_KEY = 'subscriptions-scroll-top';
-  const [itemsPerRow, setItemsPerRow] = useState(viewMode === 'grid' ? 4 : 1);
+  const [itemsPerRow, setItemsPerRow] = useState(viewMode === 'grid' ? 5 : 1);
 
   // Update items per row based on container width
   useEffect(() => {
@@ -27,10 +27,10 @@ export const SubscriptionsList = () => {
       const width = parentRef.current.offsetWidth;
       // Matches Tailwind breakpoints: sm: 640px, lg: 1024px, xl: 1280px
       // We subtract some padding/gap to be safe
-      if (width >= 1280) setItemsPerRow(4);
-      else if (width >= 1024) setItemsPerRow(3);
-      else if (width >= 640) setItemsPerRow(2);
-      else setItemsPerRow(1);
+      if (width >= 1280) setItemsPerRow(5);
+      else if (width >= 1024) setItemsPerRow(4);
+      else if (width >= 640) setItemsPerRow(3);
+      else setItemsPerRow(2);
     };
 
     // Initial check
@@ -139,7 +139,7 @@ export const SubscriptionsList = () => {
               <div
                 className={
                   viewMode === 'grid'
-                    ? 'grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 mb-6'
+                    ? 'grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3 sm:gap-6 mb-6'
                     : 'flex flex-col gap-4 mb-4'
                 }
               >

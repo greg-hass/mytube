@@ -172,8 +172,8 @@ export const Dashboard = () => {
 
       <div className="max-w-7xl mx-auto py-8">
         {/* Tabs */}
-        <div className="px-4 mb-8">
-          <div className="flex items-center gap-2 bg-gray-100 dark:bg-gray-900 p-1 rounded-xl w-fit">
+        <div className="px-4 mb-8 overflow-x-auto pb-2 -mx-4 px-4 sm:mx-0 sm:pb-0 scrollbar-hide">
+          <div className="flex items-center gap-2 bg-gray-100 dark:bg-gray-900 p-1 rounded-xl w-max sm:w-fit">
             <button
               onClick={() => setActiveTab('subscriptions')}
               className={`flex items-center gap-2 px-6 py-3 rounded-lg font-medium transition-all ${activeTab === 'subscriptions'

@@ -62,8 +62,8 @@ export const SubscriptionCard = memo(({ channel, index, onRemove, onToggleFavori
           >
             <Star
               className={`w-5 h-5 transition-all ${channel.isFavorite
-                  ? 'fill-yellow-400 text-yellow-400'
-                  : 'text-white'
+                ? 'fill-yellow-400 text-yellow-400'
+                : 'text-white'
                 }`}
             />
           </button>
@@ -142,8 +142,8 @@ export const SubscriptionCard = memo(({ channel, index, onRemove, onToggleFavori
       )}
 
       {/* Info */}
-      <div className="p-4">
-        <h3 className="font-semibold text-lg mb-2 line-clamp-1 group-hover:text-red-600 dark:group-hover:text-red-400 transition-colors">
+      <div className="p-3 sm:p-4">
+        <h3 className="font-semibold text-base sm:text-lg mb-2 line-clamp-1 group-hover:text-red-600 dark:group-hover:text-red-400 transition-colors">
           {channel.title}
         </h3>
 
