@@ -506,6 +506,25 @@ ${outlines}
         updatedLocal = true;
       }
 
+      // Sync Settings (API Key, etc.)
+      if (remoteData.settings) {
+        const { apiKey, useApiForVideos } = useStore.getState();
+        const remoteSettings = remoteData.settings;
+
+        // If local is empty but remote has it, take remote
+        if (!apiKey && remoteSettings.apiKey) {
+          console.log('📥 Importing API Key from server...');
+          useStore.getState().setApiKey(remoteSettings.apiKey);
+          updatedLocal = true;
+        }
+
+        // Sync other settings if needed
+        if (remoteSettings.useApiForVideos !== undefined && remoteSettings.useApiForVideos !== useApiForVideos) {
+          // If they differ, toggle local to match remote
+          useStore.getState().toggleUseApiForVideos();
+        }
+      }
+
       if (updatedLocal) {
         toast.dismiss();
         toast.success('Synced with server!');
