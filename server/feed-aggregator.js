@@ -193,7 +193,7 @@ async function aggregateFeeds() {
                     });
 
                     const batchResults = await Promise.all(playlistPromises);
-                    const fetchedCount = batchResults.reduce((acc, v => acc + v.length, 0);
+                    const fetchedCount = batchResults.reduce((acc, v) => acc + v.length, 0);
                     console.log(`  ✨ API Batch: Fetched ${fetchedCount} videos from ${batch.length} channels`);
                     batchResults.forEach(videos => batchVideos.push(...videos));
 
