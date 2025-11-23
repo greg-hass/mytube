@@ -61,6 +61,47 @@ async function aggregateFeeds() {
         // Reducing to 30 to avoid potential URL length issues or 403s
         const CURRENT_BATCH_SIZE = useApi ? 30 : BATCH_SIZE;
 
+        // Apply existing redirects from db.json (even if API is unavailable)
+        // This ensures static redirects work even when quota is exhausted
+        let hasRedirectUpdates = false;
+        const redirectedSubs = [];
+        const seenIds = new Set();
+
+        for (const sub of subscriptions) {
+            let finalId = sub.id;
+            let finalTitle = sub.title;
+            let finalThumb = sub.thumbnail;
+
+            // Check if this subscription has a redirect
+            if (parsedData.redirects && parsedData.redirects[sub.id]) {
+                finalId = parsedData.redirects[sub.id];
+                console.log(`🔀 Applying redirect: ${sub.id} -> ${finalId}`);
+                hasRedirectUpdates = true;
+            }
+
+            // Deduplicate
+            if (!seenIds.has(finalId)) {
+                seenIds.add(finalId);
+                redirectedSubs.push({
+                    ...sub,
+                    id: finalId,
+                    title: finalTitle,
+                    thumbnail: finalThumb
+                });
+            } else {
+                console.log(`  (Skipping duplicate: ${finalId})`);
+            }
+        }
+
+        if (hasRedirectUpdates) {
+            parsedData.subscriptions = redirectedSubs;
+            await fs.writeFile(DATA_FILE, JSON.stringify(parsedData, null, 2));
+            console.log('💾 Updated subscriptions with redirects');
+            // Update local reference
+            subscriptions.length = 0;
+            subscriptions.push(...redirectedSubs);
+        }
+
         // Resolve handles/custom URLs to real IDs if API is available
         if (useApi) {
             let hasUpdates = false;
