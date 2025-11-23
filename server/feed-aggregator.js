@@ -308,10 +308,13 @@ async function aggregateFeeds() {
 
                     // Fetch thumbnails in parallel for this batch
                     console.log(`  🖼️  Fetching thumbnails for ${batch.length} channels...`);
-                    const thumbnailPromises = batch.map(async sub => {
+                    const thumbnailPromises = batch.map(async (sub, idx) => {
                         const subIndex = subscriptions.findIndex(s => s.id === sub.id);
+                        console.log(`    [${idx}] ${sub.id}: subIndex=${subIndex}, hasThumbnail=${!!subscriptions[subIndex]?.thumbnail}`);
+
                         if (subIndex !== -1 && (!subscriptions[subIndex].thumbnail || subscriptions[subIndex].thumbnail.includes('ui-avatars'))) {
                             try {
+                                console.log(`    [${idx}] Fetching thumbnail for ${sub.id}...`);
                                 const thumbnail = await fetchChannelThumbnail(sub.id);
                                 if (thumbnail) {
                                     subscriptions[subIndex].thumbnail = thumbnail;
@@ -322,6 +325,8 @@ async function aggregateFeeds() {
                             } catch (err) {
                                 console.error(`    ✗ ${sub.id}: Error -`, err.message);
                             }
+                        } else {
+                            console.log(`    [${idx}] Skipping ${sub.id} (already has thumbnail or not found)`);
                         }
                     });
                     await Promise.all(thumbnailPromises);
