@@ -138,7 +138,15 @@ async function aggregateFeeds() {
             if (useApi) {
                 // Use YouTube API
                 try {
-                    const channelIds = batch.map(sub => sub.id).join(',');
+                    // Filter out any non-UC IDs (like handles that failed resolution) to prevent API errors
+                    const validIds = batch.map(sub => sub.id).filter(id => id.startsWith('UC'));
+
+                    if (validIds.length === 0) {
+                        // All IDs in this batch are invalid/handles, fallback to RSS
+                        throw new Error('No valid UC IDs in batch');
+                    }
+
+                    const channelIds = validIds.join(',');
                     // First get uploads playlist IDs (cost: 1 unit)
                     const channelsUrl = `https://www.googleapis.com/youtube/v3/channels?part=contentDetails,snippet&id=${channelIds}&key=${apiKey}`;
                     const channelsRes = await axios.get(channelsUrl);
