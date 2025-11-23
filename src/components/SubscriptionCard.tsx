@@ -1,16 +1,20 @@
 import { motion } from 'framer-motion';
-import { ExternalLink, Users, Video } from 'lucide-react';
+import { ExternalLink, Users, Video, Trash2, Star } from 'lucide-react';
 import type { YouTubeChannel } from '../types/youtube';
-import { useState } from 'react';
+import { useState, memo } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { generatePlaceholderThumbnail, handleImageLoadError } from '../lib/icon-loader';
 
 interface Props {
   channel: YouTubeChannel;
   index: number;
+  onRemove?: (channelId: string) => void;
+  onToggleFavorite?: (channelId: string) => void;
 }
 
-export const SubscriptionCard = ({ channel, index }: Props) => {
+export const SubscriptionCard = memo(({ channel, index, onRemove, onToggleFavorite }: Props) => {
   const [imageLoaded, setImageLoaded] = useState(false);
+  const [confirmOpen, setConfirmOpen] = useState(false);
   const navigate = useNavigate();
 
   const openChannel = () => {
@@ -32,15 +36,38 @@ export const SubscriptionCard = ({ channel, index }: Props) => {
           <div className="absolute inset-0 animate-pulse bg-gradient-to-r from-gray-200 via-gray-300 to-gray-200 dark:from-gray-800 dark:via-gray-700 dark:to-gray-800" />
         )}
         <img
-          src={channel.thumbnail}
+          src={channel.thumbnail || generatePlaceholderThumbnail(channel.title || channel.id)}
           alt={channel.title}
           loading="lazy"
-          onLoad={() => setImageLoaded(true)}
-          className={`w-full h-full object-cover transition-all duration-300 group-hover:scale-110 ${
-            imageLoaded ? 'opacity-100' : 'opacity-0'
-          }`}
+          onError={(e) => {
+            handleImageLoadError(e, channel.id, channel.title);
+          }}
+          onLoad={() => {
+            setImageLoaded(true);
+          }}
+          className={`w-full h-full object-cover transition-all duration-300 group-hover:scale-110 ${imageLoaded ? 'opacity-100' : 'opacity-0'
+            }`}
         />
         <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
+
+        {/* Favorite button (top-left, hover only) */}
+        {onToggleFavorite && (
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              onToggleFavorite(channel.id);
+            }}
+            className="absolute top-2 left-2 p-2 rounded-full bg-black/50 hover:bg-black/70 backdrop-blur-sm transition-all opacity-0 group-hover:opacity-100 z-10"
+            title={channel.isFavorite ? 'Remove from favorites' : 'Add to favorites'}
+          >
+            <Star
+              className={`w-5 h-5 transition-all ${channel.isFavorite
+                  ? 'fill-yellow-400 text-yellow-400'
+                  : 'text-white'
+                }`}
+            />
+          </button>
+        )}
 
         {/* Hover overlay */}
         <motion.div
@@ -57,7 +84,62 @@ export const SubscriptionCard = ({ channel, index }: Props) => {
             <ExternalLink className="w-6 h-6 text-red-600" />
           </motion.div>
         </motion.div>
+
+        {/* Unsubscribe button (hover only) */}
+        {onRemove && (
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              setConfirmOpen(true);
+            }}
+            className="absolute top-2 right-2 p-2 rounded-full bg-red-600 text-white shadow-lg hover:bg-red-700 transition-all opacity-0 group-hover:opacity-100 group-hover:translate-y-0 translate-y-1"
+            title="Unsubscribe from this channel"
+          >
+            <Trash2 className="w-4 h-4" />
+          </button>
+        )}
       </div>
+
+      {/* Unsubscribe confirmation (styled modal centered on screen) */}
+      {confirmOpen && onRemove && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm"
+          onClick={() => setConfirmOpen(false)}
+        >
+          <div
+            className="w-72 rounded-xl bg-white dark:bg-gray-900 shadow-2xl border border-gray-200 dark:border-gray-700 p-4 space-y-3"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h4 className="text-sm font-semibold text-gray-900 dark:text-gray-100">
+              Unsubscribe?
+            </h4>
+            <p className="text-sm text-gray-600 dark:text-gray-400">
+              Remove <span className="font-medium">{channel.title}</span> from your subscriptions.
+            </p>
+            <div className="flex justify-end gap-2">
+              <button
+                className="px-3 py-1.5 rounded-lg text-sm bg-gray-100 hover:bg-gray-200 text-gray-800 dark:bg-gray-800 dark:hover:bg-gray-700 dark:text-gray-200 transition-colors"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setConfirmOpen(false);
+                }}
+              >
+                Cancel
+              </button>
+              <button
+                className="px-3 py-1.5 rounded-lg text-sm bg-red-600 hover:bg-red-700 text-white transition-colors"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onRemove(channel.id);
+                  setConfirmOpen(false);
+                }}
+              >
+                Unsubscribe
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Info */}
       <div className="p-4">
@@ -90,7 +172,7 @@ export const SubscriptionCard = ({ channel, index }: Props) => {
       </div>
     </motion.div>
   );
-};
+});
 
 function formatCount(count: string): string {
   const num = parseInt(count);

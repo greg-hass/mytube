@@ -23,6 +23,7 @@ export interface StoredSubscription {
   addedAt: number;         // Timestamp when imported
   customUrl?: string;      // Channel custom URL
   description?: string;    // Channel description
+  isFavorite?: boolean;    // Whether channel is marked as favorite
 }
 
 /**
@@ -226,6 +227,36 @@ export async function removeSubscription(channelId: string): Promise<void> {
     'readwrite',
     (store) => store.delete(channelId)
   );
+}
+
+/**
+ * Update an existing subscription with new information
+ */
+export async function updateSubscription(subscription: StoredSubscription): Promise<void> {
+  await executeTransaction(
+    SUBSCRIPTIONS_STORE,
+    'readwrite',
+    (store) => store.put(subscription)
+  );
+}
+
+/**
+ * Toggle favorite status for a channel
+ */
+export async function toggleFavorite(channelId: string): Promise<void> {
+  const subscription = await getSubscription(channelId);
+  if (subscription) {
+    subscription.isFavorite = !subscription.isFavorite;
+    await updateSubscription(subscription);
+  }
+}
+
+/**
+ * Get all favorite channels
+ */
+export async function getFavoriteChannels(): Promise<StoredSubscription[]> {
+  const allSubs = await getAllSubscriptions();
+  return allSubs.filter(sub => sub.isFavorite === true);
 }
 
 /**
@@ -481,6 +512,32 @@ export async function deleteDatabase(): Promise<void> {
 
     request.onblocked = () => {
       reject(new Error('Database deletion blocked - close all tabs using this database'));
+    };
+  });
+}
+
+/**
+ * Replace a subscription with a new one (handles ID changes)
+ * Deletes the old subscription and adds the new one in a transaction
+ */
+export async function replaceSubscription(oldId: string, newSubscription: StoredSubscription): Promise<void> {
+  const db = await getDB();
+  const transaction = db.transaction(SUBSCRIPTIONS_STORE, 'readwrite');
+  const store = transaction.objectStore(SUBSCRIPTIONS_STORE);
+
+  return new Promise((resolve, reject) => {
+    // Delete old subscription
+    store.delete(oldId);
+
+    // Add new subscription
+    store.put(newSubscription);
+
+    transaction.oncomplete = () => {
+      resolve();
+    };
+
+    transaction.onerror = () => {
+      reject(new Error(`Replace subscription failed: ${transaction.error?.message}`));
     };
   });
 }

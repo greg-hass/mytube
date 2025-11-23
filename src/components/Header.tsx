@@ -7,13 +7,22 @@ import {
   Grid3x3,
   List,
   Download,
+  Plus,
+  Settings,
 } from 'lucide-react';
+import { useState } from 'react';
 import { OPMLUpload } from './OPMLUpload';
+import { SettingsModal } from './SettingsModal';
 import { useStore } from '../store/useStore';
 import { useSubscriptionStorage } from '../hooks/useSubscriptionStorage';
 import type { SortBy } from '../types/youtube';
 
-export const Header = () => {
+interface HeaderProps {
+  onAddChannel?: () => void;
+}
+
+export const Header = ({ onAddChannel }: HeaderProps) => {
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const {
     theme,
     toggleTheme,
@@ -23,16 +32,38 @@ export const Header = () => {
     setSortBy,
     searchQuery,
     setSearchQuery,
+    quotaUsed,
   } = useStore();
-  const { count, exportOPML } = useSubscriptionStorage();
+  const { count, exportOPML, exportJSON } = useSubscriptionStorage();
+  const [showExportMenu, setShowExportMenu] = useState(false);
 
-  const handleExport = () => {
+  const handleExport = (format: 'opml' | 'json') => {
     try {
-      exportOPML();
+      if (format === 'opml') {
+        exportOPML();
+      } else {
+        exportJSON();
+      }
+      setShowExportMenu(false);
     } catch (error) {
       console.error('Export failed:', error);
       alert('Failed to export subscriptions. Make sure you have subscriptions loaded.');
     }
+  };
+
+  // Calculate quota warning level
+  const quotaPercentage = (quotaUsed / 10000) * 100;
+  const showQuotaWarning = quotaPercentage >= 80;
+
+  const getQuotaColor = () => {
+    if (quotaPercentage >= 95) return 'bg-red-500 text-white';
+    if (quotaPercentage >= 90) return 'bg-orange-500 text-white';
+    return 'bg-yellow-500 text-white';
+  };
+
+  const getQuotaTooltip = () => {
+    const remaining = 10000 - quotaUsed;
+    return `${quotaUsed.toLocaleString()} / 10,000 units used (${remaining.toLocaleString()} remaining)\nResets daily at midnight PT`;
   };
 
   return (
@@ -77,6 +108,19 @@ export const Header = () => {
 
           {/* Controls */}
           <div className="flex items-center gap-2">
+            {/* Add Channel Button */}
+            {onAddChannel && (
+              <motion.button
+                whileHover={{ scale: 1.05 }}
+                whileTap={{ scale: 0.95 }}
+                onClick={onAddChannel}
+                className="flex items-center gap-2 px-4 py-2 rounded-lg bg-red-600 hover:bg-red-700 text-white transition-colors"
+              >
+                <Plus className="w-4 h-4" />
+                <span className="hidden sm:inline">Add Channel</span>
+              </motion.button>
+            )}
+
             {/* Sort */}
             <select
               value={sortBy}
@@ -92,21 +136,19 @@ export const Header = () => {
             <div className="hidden sm:flex items-center gap-1 p-1 rounded-lg bg-gray-100 dark:bg-gray-800">
               <button
                 onClick={() => setViewMode('grid')}
-                className={`p-2 rounded ${
-                  viewMode === 'grid'
-                    ? 'bg-white dark:bg-gray-900 shadow'
-                    : 'hover:bg-gray-200 dark:hover:bg-gray-700'
-                } transition-all`}
+                className={`p-2 rounded ${viewMode === 'grid'
+                  ? 'bg-white dark:bg-gray-900 shadow'
+                  : 'hover:bg-gray-200 dark:hover:bg-gray-700'
+                  } transition-all`}
               >
                 <Grid3x3 className="w-5 h-5" />
               </button>
               <button
                 onClick={() => setViewMode('list')}
-                className={`p-2 rounded ${
-                  viewMode === 'list'
-                    ? 'bg-white dark:bg-gray-900 shadow'
-                    : 'hover:bg-gray-200 dark:hover:bg-gray-700'
-                } transition-all`}
+                className={`p-2 rounded ${viewMode === 'list'
+                  ? 'bg-white dark:bg-gray-900 shadow'
+                  : 'hover:bg-gray-200 dark:hover:bg-gray-700'
+                  } transition-all`}
               >
                 <List className="w-5 h-5" />
               </button>
@@ -115,15 +157,63 @@ export const Header = () => {
             {/* Import OPML */}
             <OPMLUpload minimal />
 
-            {/* Export OPML */}
+            {/* Export OPML/JSON */}
+            <div className="relative">
+              <motion.button
+                whileHover={{ scale: 1.05 }}
+                whileTap={{ scale: 0.95 }}
+                onClick={() => setShowExportMenu(!showExportMenu)}
+                className="flex items-center gap-2 px-4 py-2 rounded-lg bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors"
+              >
+                <Download className="w-4 h-4" />
+                <span className="hidden sm:inline">Export</span>
+              </motion.button>
+
+              {showExportMenu && (
+                <>
+                  <div
+                    className="fixed inset-0 z-40"
+                    onClick={() => setShowExportMenu(false)}
+                  />
+                  <div className="absolute right-0 top-12 w-40 bg-white dark:bg-gray-900 rounded-lg shadow-xl border border-gray-200 dark:border-gray-800 z-50 overflow-hidden">
+                    <button
+                      onClick={() => handleExport('opml')}
+                      className="w-full px-4 py-2 text-left hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+                    >
+                      OPML
+                    </button>
+                    <button
+                      onClick={() => handleExport('json')}
+                      className="w-full px-4 py-2 text-left hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+                    >
+                      JSON
+                    </button>
+                  </div>
+                </>
+              )}
+            </div>
+
+            {/* Quota Warning */}
+            {showQuotaWarning && (
+              <motion.div
+                initial={{ scale: 0 }}
+                animate={{ scale: 1 }}
+                className={`px-3 py-1.5 rounded-full text-xs font-semibold ${getQuotaColor()} shadow-lg`}
+                title={getQuotaTooltip()}
+              >
+                {Math.round(quotaPercentage)}%
+              </motion.div>
+            )}
+
+            {/* Settings */}
             <motion.button
-              whileHover={{ scale: 1.05 }}
-              whileTap={{ scale: 0.95 }}
-              onClick={handleExport}
-              className="flex items-center gap-2 px-4 py-2 rounded-lg bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors"
+              whileHover={{ scale: 1.1 }}
+              whileTap={{ scale: 0.9 }}
+              onClick={() => setIsSettingsOpen(true)}
+              className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+              title="Settings"
             >
-              <Download className="w-4 h-4" />
-              <span className="hidden sm:inline">Export</span>
+              <Settings className="w-5 h-5" />
             </motion.button>
 
             {/* Theme Toggle */}
@@ -142,6 +232,8 @@ export const Header = () => {
           </div>
         </div>
       </div>
+
+      <SettingsModal isOpen={isSettingsOpen} onClose={() => setIsSettingsOpen(false)} />
     </motion.header>
   );
 };

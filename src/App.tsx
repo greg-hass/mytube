@@ -1,29 +1,22 @@
 import { useEffect, useState } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { ReactQueryDevtools } from '@tanstack/react-query-devtools';
 import { Dashboard } from './components/Dashboard';
 import { VideoPlayer } from './components/VideoPlayer';
 import { ChannelViewer } from './components/ChannelViewer';
 import { OPMLUpload } from './components/OPMLUpload';
 import { useStore } from './store/useStore';
 import { useSubscriptionStorage } from './hooks/useSubscriptionStorage';
-
-// Create a client with optimized settings
-const queryClient = new QueryClient({
-  defaultOptions: {
-    queries: {
-      refetchOnWindowFocus: false,
-      retry: 1,
-      staleTime: 1000 * 60 * 5, // 5 minutes
-    },
-  },
-});
+import { Toaster } from 'sonner';
 
 function App() {
-  const { theme } = useStore();
+  const { theme, checkQuotaReset } = useStore();
   const { count, isLoading } = useSubscriptionStorage();
   const [hasSubscriptions, setHasSubscriptions] = useState(false);
+
+  // Check for quota reset on mount
+  useEffect(() => {
+    checkQuotaReset();
+  }, [checkQuotaReset]);
 
   // Initialize theme on mount
   useEffect(() => {
@@ -44,19 +37,18 @@ function App() {
   // Show loading state while checking for subscriptions
   if (isLoading) {
     return (
-      <QueryClientProvider client={queryClient}>
-        <div className="min-h-screen bg-gradient-to-br from-gray-50 via-white to-gray-50 dark:from-gray-950 dark:via-gray-900 dark:to-gray-950 flex items-center justify-center">
-          <div className="text-center">
-            <div className="w-12 h-12 border-4 border-red-600 border-t-transparent rounded-full animate-spin mx-auto mb-4" />
-            <p className="text-gray-600 dark:text-gray-400">Loading...</p>
-          </div>
+      <div className="min-h-screen bg-gradient-to-br from-gray-50 via-white to-gray-50 dark:from-gray-950 dark:via-gray-900 dark:to-gray-950 flex items-center justify-center">
+        <div className="text-center">
+          <div className="w-12 h-12 border-4 border-red-600 border-t-transparent rounded-full animate-spin mx-auto mb-4" />
+          <p className="text-gray-600 dark:text-gray-400">Loading...</p>
         </div>
-      </QueryClientProvider>
+      </div>
     );
   }
 
   return (
-    <QueryClientProvider client={queryClient}>
+    <>
+      <Toaster position="top-right" richColors closeButton />
       <BrowserRouter>
         {hasSubscriptions ? (
           <Routes>
@@ -69,8 +61,7 @@ function App() {
           <OPMLUpload onSuccess={() => setHasSubscriptions(true)} />
         )}
       </BrowserRouter>
-      <ReactQueryDevtools initialIsOpen={false} />
-    </QueryClientProvider>
+    </>
   );
 }
 

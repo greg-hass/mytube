@@ -1,48 +1,38 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
-import type { ViewMode, SortBy } from '../types/youtube';
+import { createUISlice, type UISlice } from './createUISlice';
+import { createDataSlice, type DataSlice } from './createDataSlice';
 
-interface AppState {
-  // UI
-  theme: 'light' | 'dark';
-  toggleTheme: () => void;
-  viewMode: ViewMode;
-  setViewMode: (mode: ViewMode) => void;
-  sortBy: SortBy;
-  setSortBy: (sort: SortBy) => void;
-  searchQuery: string;
-  setSearchQuery: (query: string) => void;
+type AppState = UISlice & DataSlice;
+
+// Initialize quota reset checker
+function initQuotaResetListener() {
+  // Check for quota reset every minute
+  setInterval(() => {
+    useStore.getState().checkQuotaReset();
+  }, 60000); // 60 seconds
 }
 
 export const useStore = create<AppState>()(
   persist(
-    (set) => ({
-      // UI
-      theme: 'dark',
-      toggleTheme: () =>
-        set((state) => {
-          const newTheme = state.theme === 'light' ? 'dark' : 'light';
-          if (newTheme === 'dark') {
-            document.documentElement.classList.add('dark');
-          } else {
-            document.documentElement.classList.remove('dark');
-          }
-          return { theme: newTheme };
-        }),
-      viewMode: 'grid',
-      setViewMode: (mode) => set({ viewMode: mode }),
-      sortBy: 'name',
-      setSortBy: (sort) => set({ sortBy: sort }),
-      searchQuery: '',
-      setSearchQuery: (query) => set({ searchQuery: query }),
+    (...a) => ({
+      ...createUISlice(...a),
+      ...createDataSlice(...a),
     }),
     {
-      name: 'youtube-subs-storage',
+      name: 'app-storage',
       partialize: (state) => ({
         theme: state.theme,
         viewMode: state.viewMode,
         sortBy: state.sortBy,
+        apiKey: state.apiKey,
+        useApiForVideos: state.useApiForVideos,
+        quotaUsed: state.quotaUsed,
+        lastQuotaResetDate: state.lastQuotaResetDate,
       }),
     }
   )
 );
+
+// Start the quota reset checker
+initQuotaResetListener();

@@ -1,14 +1,16 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { useMemo } from 'react';
+import { useEffect, useMemo } from 'react';
 import {
   getAllSubscriptions,
   addSubscriptions,
   removeSubscription,
   clearAllSubscriptions,
   getSubscriptionCount,
+  toggleFavorite,
   type StoredSubscription,
 } from '../lib/indexeddb';
 import { parseOPMLToSubscriptions } from '../lib/opml-parser';
+import { resolveChannelThumbnail } from '../lib/icon-loader';
 import { useStore } from '../store/useStore';
 import type { YouTubeChannel } from '../types/youtube';
 
@@ -18,7 +20,7 @@ import type { YouTubeChannel } from '../types/youtube';
  */
 export const useSubscriptionStorage = () => {
   const queryClient = useQueryClient();
-  const { searchQuery, sortBy } = useStore();
+  const { searchQuery, sortBy, apiKey } = useStore();
 
   // Fetch all subscriptions from IndexedDB
   const {
@@ -99,8 +101,93 @@ export const useSubscriptionStorage = () => {
       description: sub.description || '',
       thumbnail: sub.thumbnail || '',
       customUrl: sub.customUrl,
+      isFavorite: sub.isFavorite,
     }));
   }, [subscriptions]);
+
+  // Backfill missing channel thumbnails
+  // If API key is present, we can also refresh existing thumbnails to ensure high quality
+  useEffect(() => {
+    if (!subscriptions || subscriptions.length === 0) return;
+
+    let isCancelled = false;
+
+    const hydrateThumbnails = async () => {
+      // If we have an API key, we can batch fetch everything efficiently
+      if (apiKey) {
+        // Find channels that need updates (missing thumbnail or low res/placeholder)
+        // Or just update everything if it's been a while? For now, let's prioritize missing ones
+        // but also update placeholders.
+        const needsUpdate = subscriptions.filter(sub =>
+          !sub.thumbnail ||
+          sub.thumbnail.startsWith('data:') ||
+          sub.thumbnail.includes('mqdefault') // Upgrade to high res
+        );
+
+        if (needsUpdate.length === 0) return;
+
+        // Process in chunks of 50
+        const idsToFetch = needsUpdate.map(sub => sub.id);
+
+        // Import dynamically to avoid circular dependency issues if any
+        const { fetchChannelsBatch } = await import('../lib/youtube-api');
+
+        const updatedChannels = await fetchChannelsBatch(idsToFetch, apiKey);
+
+        if (isCancelled) return;
+
+        if (updatedChannels.length > 0) {
+          const updates: StoredSubscription[] = [];
+
+          for (const channel of updatedChannels) {
+            const original = subscriptions.find(s => s.id === channel.id);
+            if (original && original.thumbnail !== channel.thumbnail) {
+              updates.push({
+                ...original,
+                thumbnail: channel.thumbnail,
+                description: channel.description || original.description,
+                // Update title too if it changed? Maybe safer to keep user's title if they edited it?
+                // But usually they don't edit it. Let's update it.
+                title: channel.title || original.title
+              });
+            }
+          }
+
+          if (updates.length > 0) {
+            await addSubscriptions(updates);
+            queryClient.invalidateQueries({ queryKey: ['subscriptions'] });
+          }
+        }
+      } else {
+        // Fallback to scraping for missing thumbnails only
+        const missingThumbnails = subscriptions.filter((sub) => !sub.thumbnail);
+        if (missingThumbnails.length === 0) return;
+
+        const updates: StoredSubscription[] = [];
+
+        for (const sub of missingThumbnails) {
+          const thumbnail = await resolveChannelThumbnail(sub.id);
+
+          if (isCancelled) return;
+
+          if (thumbnail) {
+            updates.push({ ...sub, thumbnail });
+          }
+        }
+
+        if (!isCancelled && updates.length > 0) {
+          await addSubscriptions(updates);
+          queryClient.invalidateQueries({ queryKey: ['subscriptions'] });
+        }
+      }
+    };
+
+    void hydrateThumbnails();
+
+    return () => {
+      isCancelled = true;
+    };
+  }, [subscriptions, queryClient, apiKey]);
 
   // Filter and sort subscriptions
   const filteredAndSortedSubscriptions = useMemo(() => {
@@ -175,6 +262,181 @@ ${outlines}
     URL.revokeObjectURL(url);
   };
 
+  // Export subscriptions as JSON (includes all data)
+  const exportJSON = () => {
+    if (!subscriptions || subscriptions.length === 0) {
+      throw new Error('No subscriptions to export');
+    }
+
+    const exportData = {
+      version: '1.0',
+      exportedAt: new Date().toISOString(),
+      subscriptions: subscriptions,
+      settings: {
+        apiKey: useStore.getState().apiKey,
+        useApiForVideos: useStore.getState().useApiForVideos,
+      },
+      watchedVideos: Array.from(useStore.getState().watchedVideos),
+    };
+
+    const json = JSON.stringify(exportData, null, 2);
+    const blob = new Blob([json], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `youtube-subscriptions-${new Date().toISOString().split('T')[0]}.json`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  };
+
+  // Import subscriptions from JSON
+  const importJSON = async (jsonContent: string) => {
+    try {
+      const data = JSON.parse(jsonContent);
+
+      // Validate structure
+      if (!data.subscriptions || !Array.isArray(data.subscriptions)) {
+        throw new Error('Invalid JSON format: missing subscriptions array');
+      }
+
+      // Import subscriptions
+      await addSubscriptions(data.subscriptions);
+
+      // Optionally restore settings
+      if (data.settings) {
+        if (data.settings.apiKey) {
+          useStore.getState().setApiKey(data.settings.apiKey);
+        }
+        if (typeof data.settings.useApiForVideos === 'boolean') {
+          const currentState = useStore.getState().useApiForVideos;
+          if (currentState !== data.settings.useApiForVideos) {
+            useStore.getState().toggleUseApiForVideos();
+          }
+        }
+      }
+
+      // Restore watched videos
+      if (data.watchedVideos && Array.isArray(data.watchedVideos)) {
+        data.watchedVideos.forEach((videoId: string) => {
+          useStore.getState().markAsWatched(videoId);
+        });
+      }
+
+      return data.subscriptions.length;
+    } catch (error) {
+      throw new Error(`Failed to import JSON: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  };
+
+  // Refresh all channel details (thumbnails, titles, etc.) using API
+  const refreshAllChannels = async () => {
+    if (!subscriptions || subscriptions.length === 0 || !apiKey) return;
+
+    const realIds: string[] = [];
+    const tempSubscriptions: StoredSubscription[] = [];
+
+    subscriptions.forEach(sub => {
+      if (sub.id.startsWith('UC')) {
+        realIds.push(sub.id);
+      } else if (sub.id.startsWith('handle_') || sub.id.startsWith('custom_')) {
+        tempSubscriptions.push(sub);
+      }
+    });
+
+    const { fetchChannelsBatch, fetchChannelInfo } = await import('../lib/youtube-api');
+
+    const updates: StoredSubscription[] = [];
+    const removals: string[] = [];
+
+    // 1. Batch fetch real IDs
+    if (realIds.length > 0) {
+      const updatedRealChannels = await fetchChannelsBatch(realIds, apiKey);
+
+      for (const channel of updatedRealChannels) {
+        const original = subscriptions.find(s => s.id === channel.id);
+        if (original) {
+          updates.push({
+            ...original,
+            thumbnail: channel.thumbnail,
+            title: channel.title,
+            description: channel.description || original.description,
+            customUrl: channel.customUrl || original.customUrl
+          });
+        }
+      }
+    }
+
+    // 2. Resolve temporary IDs one by one
+    for (const sub of tempSubscriptions) {
+      let inputType: 'handle' | 'custom_url';
+      let inputValue: string;
+
+      if (sub.id.startsWith('handle_')) {
+        inputType = 'handle';
+        inputValue = sub.id.replace('handle_', '');
+      } else {
+        inputType = 'custom_url';
+        inputValue = sub.id.replace('custom_', '');
+      }
+
+      try {
+        const channelInfo = await fetchChannelInfo({
+          type: inputType,
+          value: inputValue,
+          originalInput: inputValue
+        }, apiKey);
+
+        if (channelInfo) {
+          // We found the real channel!
+          removals.push(sub.id);
+
+          // Check if the real ID already exists to avoid duplicates
+          const existingRealSub = subscriptions.find(s => s.id === channelInfo.id);
+
+          if (existingRealSub) {
+            // Update existing real subscription
+            updates.push({
+              ...existingRealSub,
+              thumbnail: channelInfo.thumbnail,
+              title: channelInfo.title,
+              description: channelInfo.description,
+              customUrl: channelInfo.customUrl
+            });
+          } else {
+            // Create new subscription with real ID, preserving user settings
+            updates.push({
+              id: channelInfo.id,
+              title: channelInfo.title,
+              description: channelInfo.description || '',
+              thumbnail: channelInfo.thumbnail || '',
+              customUrl: channelInfo.customUrl,
+              addedAt: sub.addedAt
+            });
+          }
+        }
+      } catch (error) {
+        console.error(`Failed to resolve temporary ID ${sub.id}:`, error);
+      }
+    }
+
+    // Apply changes
+    if (removals.length > 0) {
+      for (const id of removals) {
+        await removeSubscription(id);
+      }
+    }
+
+    if (updates.length > 0) {
+      await addSubscriptions(updates);
+    }
+
+    if (removals.length > 0 || updates.length > 0) {
+      queryClient.invalidateQueries({ queryKey: ['subscriptions'] });
+    }
+  };
+
   return {
     // Data
     subscriptions: filteredAndSortedSubscriptions,
@@ -191,7 +453,14 @@ ${outlines}
     addSubscriptions: addSubscriptionsMutation.mutateAsync,
     removeSubscription: removeSubscriptionMutation.mutateAsync,
     clearAll: clearAllMutation.mutateAsync,
+    toggleFavorite: async (channelId: string) => {
+      await toggleFavorite(channelId);
+      queryClient.invalidateQueries({ queryKey: ['subscriptions'] });
+    },
     exportOPML,
+    exportJSON,
+    importJSON,
+    refreshAllChannels, // Expose new function
 
     // Mutation states
     isImporting: importOPML.isPending,
@@ -212,5 +481,5 @@ function escapeXml(text: string): string {
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;')
-    .replace(/'/g, '&apos;');
+    .replace(/'/g, '&#39;');
 }

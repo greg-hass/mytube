@@ -1,37 +1,69 @@
 import { useVirtualizer } from '@tanstack/react-virtual';
-import { useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { motion } from 'framer-motion';
-import { Loader2, Inbox } from 'lucide-react';
+import { Inbox } from 'lucide-react';
+import { toast } from 'sonner';
 import { SubscriptionCard } from './SubscriptionCard';
+import { SkeletonCard } from './SkeletonCard';
 import { useSubscriptionStorage } from '../hooks/useSubscriptionStorage';
 import { useStore } from '../store/useStore';
 
 export const SubscriptionsList = () => {
-  const { subscriptions, isLoading } = useSubscriptionStorage();
+  const { subscriptions, rawSubscriptions, isLoading, removeSubscription, addSubscriptions, toggleFavorite } = useSubscriptionStorage();
   const { viewMode } = useStore();
   const parentRef = useRef<HTMLDivElement>(null);
+  const SCROLL_STORAGE_KEY = 'subscriptions-scroll-top';
+  const [itemsPerRow, setItemsPerRow] = useState(viewMode === 'grid' ? 4 : 1);
+
+  // Update items per row based on container width
+  useEffect(() => {
+    if (viewMode === 'list') {
+      setItemsPerRow(1);
+      return;
+    }
+
+    const updateItemsPerRow = () => {
+      if (!parentRef.current) return;
+      const width = parentRef.current.offsetWidth;
+      // Matches Tailwind breakpoints: sm: 640px, lg: 1024px, xl: 1280px
+      // We subtract some padding/gap to be safe
+      if (width >= 1280) setItemsPerRow(4);
+      else if (width >= 1024) setItemsPerRow(3);
+      else if (width >= 640) setItemsPerRow(2);
+      else setItemsPerRow(1);
+    };
+
+    // Initial check
+    updateItemsPerRow();
+
+    const observer = new ResizeObserver(updateItemsPerRow);
+    if (parentRef.current) {
+      observer.observe(parentRef.current);
+    }
+
+    return () => observer.disconnect();
+  }, [viewMode]);
 
   // Virtual scrolling for performance with large lists
   const rowVirtualizer = useVirtualizer({
-    count: Math.ceil(subscriptions.length / (viewMode === 'grid' ? 4 : 1)),
+    count: Math.ceil(subscriptions.length / itemsPerRow),
     getScrollElement: () => parentRef.current,
     estimateSize: () => (viewMode === 'grid' ? 320 : 200),
-    overscan: 5,
+    overscan: 10, // Increased for smoother scrolling
   });
 
   if (isLoading) {
     return (
-      <div className="flex items-center justify-center min-h-[400px]">
-        <motion.div
-          initial={{ opacity: 0, scale: 0.8 }}
-          animate={{ opacity: 1, scale: 1 }}
-          className="text-center"
-        >
-          <Loader2 className="w-12 h-12 text-red-600 animate-spin mx-auto mb-4" />
-          <p className="text-gray-600 dark:text-gray-400">
-            Loading your subscriptions...
-          </p>
-        </motion.div>
+      <div className="px-4">
+        <div className={
+          viewMode === 'grid'
+            ? 'grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6'
+            : 'flex flex-col gap-4'
+        }>
+          {Array.from({ length: 8 }).map((_, i) => (
+            <SkeletonCard key={i} index={i} />
+          ))}
+        </div>
       </div>
     );
   }
@@ -52,7 +84,30 @@ export const SubscriptionsList = () => {
     );
   }
 
-  const itemsPerRow = viewMode === 'grid' ? 4 : 1;
+  // Restore and persist scroll position
+  useEffect(() => {
+    const container = parentRef.current;
+    if (!container) return;
+
+    // Restore on mount
+    const saved = sessionStorage.getItem(SCROLL_STORAGE_KEY);
+    if (saved) {
+      const value = Number(saved);
+      if (!Number.isNaN(value)) {
+        container.scrollTop = value;
+      }
+    }
+
+    // Persist on scroll
+    const handleScroll = () => {
+      sessionStorage.setItem(SCROLL_STORAGE_KEY, String(container.scrollTop));
+    };
+
+    container.addEventListener('scroll', handleScroll);
+    return () => {
+      container.removeEventListener('scroll', handleScroll);
+    };
+  }, [SCROLL_STORAGE_KEY, subscriptions.length]);
 
   return (
     <div ref={parentRef} className="h-[calc(100vh-180px)] overflow-auto px-4">
@@ -93,6 +148,35 @@ export const SubscriptionsList = () => {
                     key={channel.id}
                     channel={channel}
                     index={startIndex + idx}
+                    onRemove={async (channelId) => {
+                      const removedChannel = rawSubscriptions.find(s => s.id === channelId);
+                      await removeSubscription(channelId);
+
+                      if (removedChannel) {
+                        toast.success(`Removed ${removedChannel.title}`, {
+                          description: 'Channel removed from subscriptions',
+                          action: {
+                            label: 'Undo',
+                            onClick: async () => {
+                              await addSubscriptions([removedChannel]);
+                              toast.success('Channel restored');
+                            },
+                          },
+                        });
+                      }
+                    }}
+                    onToggleFavorite={async (channelId) => {
+                      const channel = subscriptions.find(s => s.id === channelId);
+                      const wasFavorite = channel?.isFavorite;
+
+                      await toggleFavorite(channelId);
+
+                      if (channel) {
+                        toast.success(
+                          wasFavorite ? `Removed ${channel.title} from favorites` : `Added ${channel.title} to favorites`
+                        );
+                      }
+                    }}
                   />
                 ))}
               </div>
