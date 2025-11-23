@@ -441,25 +441,53 @@ ${outlines}
   // Sync with backend
   const syncWithBackend = async () => {
     try {
-      // 1. Fetch remote data
+      // 1. Fetch Remote Data
       const response = await fetch('/api/sync');
-      if (!response.ok) {
-        console.error('Sync fetch failed:', response.status, response.statusText);
-        return;
-      }
+      if (!response.ok) throw new Error('Failed to fetch from backend');
 
       const remoteData = await response.json();
-      const localSubs = await getAllSubscriptions();
       const remoteSubs = remoteData.subscriptions || [];
+      const remoteWatched = remoteData.watchedVideos || [];
+      const redirects = remoteData.redirects || {};
 
-      console.log('Sync: Local subs:', localSubs.length, 'Remote subs:', remoteSubs.length);
+      // 2.5 Apply Redirects to Local Data
+      // If server says "handle_X" is now "UC_Y", we update our local list immediately
+      // This prevents us from pushing "handle_X" back to the server
+      let localSubs = [...get().allSubscriptions];
+      let localRedirectsApplied = false;
 
-      // 2. Merge Strategy: Union by ID
-      // Create a map of all subscriptions (Local + Remote)
-      const mergedMap = new Map<string, StoredSubscription>();
+      if (Object.keys(redirects).length > 0) {
+        localSubs = localSubs.map(sub => {
+          if (redirects[sub.id]) {
+            console.log(`🔀 Applying redirect: ${sub.id} -> ${redirects[sub.id]}`);
+            localRedirectsApplied = true;
+            return { ...sub, id: redirects[sub.id] };
+          }
+          return sub;
+        });
+
+        // After renaming, we might have duplicates (e.g. we had both handle_X and UC_Y)
+        // Deduplicate local list, preferring the one with more info or just the first one
+        const uniqueLocal = new Map<string, StoredSubscription>();
+        localSubs.forEach(sub => {
+          if (!uniqueLocal.has(sub.id)) {
+            uniqueLocal.set(sub.id, sub);
+          }
+        });
+        localSubs = Array.from(uniqueLocal.values());
+
+        if (localRedirectsApplied) {
+          // Update state immediately so the merge uses clean data
+          set({ allSubscriptions: localSubs });
+        }
+      }
+
+      // 3. Merge Logic (Union)
+      // We want to keep all subscriptions from both sides.
+      const mergedSubsMap = new Map<string, StoredSubscription>();
 
       // Add local subs first
-      localSubs.forEach(sub => mergedMap.set(sub.id, sub));
+      localSubs.forEach(sub => mergedSubsMap.set(sub.id, sub));
 
       // Add remote subs (if not exists, or if we want to merge properties)
       // For now, we'll assume if it exists in both, local is "newer" or equal, so we keep local.

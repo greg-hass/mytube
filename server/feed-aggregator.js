@@ -88,6 +88,10 @@ async function aggregateFeeds() {
 
                             console.log(`✨ Resolved ${sub.id} -> ${realId} (${realTitle})`);
 
+                            // Save redirect so clients can update too
+                            if (!parsedData.redirects) parsedData.redirects = {};
+                            parsedData.redirects[sub.id] = realId;
+
                             // Check if we already have this ID (either in original list or resolved list)
                             // We need to check against the *future* list we are building
                             if (!seenIds.has(realId)) {
