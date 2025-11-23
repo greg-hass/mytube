@@ -299,20 +299,24 @@ async function aggregateFeeds() {
                             const subIndex = subscriptions.findIndex(s => s.id === sub.id);
                             if (subIndex !== -1) {
                                 subscriptions[subIndex].title = channelMetadata.title;
-
-                                // Fetch real channel thumbnail if we don't have one
-                                if (!subscriptions[subIndex].thumbnail || subscriptions[subIndex].thumbnail.includes('ui-avatars')) {
-                                    const thumbnail = await fetchChannelThumbnail(sub.id);
-                                    if (thumbnail) {
-                                        subscriptions[subIndex].thumbnail = thumbnail;
-                                    }
-                                }
                             }
                         }
 
                         // Small delay between RSS fetches in fallback mode
                         await new Promise(resolve => setTimeout(resolve, 500));
                     }
+
+                    // Fetch thumbnails in parallel for this batch
+                    const thumbnailPromises = batch.map(async sub => {
+                        const subIndex = subscriptions.findIndex(s => s.id === sub.id);
+                        if (subIndex !== -1 && (!subscriptions[subIndex].thumbnail || subscriptions[subIndex].thumbnail.includes('ui-avatars'))) {
+                            const thumbnail = await fetchChannelThumbnail(sub.id);
+                            if (thumbnail) {
+                                subscriptions[subIndex].thumbnail = thumbnail;
+                            }
+                        }
+                    });
+                    await Promise.all(thumbnailPromises);
                 }
             } else if (quotaExceeded) {
                 // Quota was exceeded in a previous batch, use RSS for remaining batches
@@ -326,19 +330,23 @@ async function aggregateFeeds() {
                         const subIndex = subscriptions.findIndex(s => s.id === sub.id);
                         if (subIndex !== -1) {
                             subscriptions[subIndex].title = channelMetadata.title;
-
-                            // Fetch real channel thumbnail if we don't have one
-                            if (!subscriptions[subIndex].thumbnail || subscriptions[subIndex].thumbnail.includes('ui-avatars')) {
-                                const thumbnail = await fetchChannelThumbnail(sub.id);
-                                if (thumbnail) {
-                                    subscriptions[subIndex].thumbnail = thumbnail;
-                                }
-                            }
                         }
                     }
 
                     await new Promise(resolve => setTimeout(resolve, 500));
                 }
+
+                // Fetch thumbnails in parallel for this batch
+                const thumbnailPromises = batch.map(async sub => {
+                    const subIndex = subscriptions.findIndex(s => s.id === sub.id);
+                    if (subIndex !== -1 && (!subscriptions[subIndex].thumbnail || subscriptions[subIndex].thumbnail.includes('ui-avatars'))) {
+                        const thumbnail = await fetchChannelThumbnail(sub.id);
+                        if (thumbnail) {
+                            subscriptions[subIndex].thumbnail = thumbnail;
+                        }
+                    }
+                });
+                await Promise.all(thumbnailPromises);
             } else {
                 // RSS Only
                 const batchPromises = batch.map(async sub => {
@@ -349,14 +357,6 @@ async function aggregateFeeds() {
                         const subIndex = subscriptions.findIndex(s => s.id === sub.id);
                         if (subIndex !== -1) {
                             subscriptions[subIndex].title = channelMetadata.title;
-
-                            // Fetch real channel thumbnail if we don't have one
-                            if (!subscriptions[subIndex].thumbnail || subscriptions[subIndex].thumbnail.includes('ui-avatars')) {
-                                const thumbnail = await fetchChannelThumbnail(sub.id);
-                                if (thumbnail) {
-                                    subscriptions[subIndex].thumbnail = thumbnail;
-                                }
-                            }
                         }
                     }
 
@@ -364,6 +364,18 @@ async function aggregateFeeds() {
                 });
                 const batchResults = await Promise.all(batchPromises);
                 batchResults.forEach(videos => batchVideos.push(...videos));
+
+                // Fetch thumbnails in parallel for this batch
+                const thumbnailPromises = batch.map(async sub => {
+                    const subIndex = subscriptions.findIndex(s => s.id === sub.id);
+                    if (subIndex !== -1 && (!subscriptions[subIndex].thumbnail || subscriptions[subIndex].thumbnail.includes('ui-avatars'))) {
+                        const thumbnail = await fetchChannelThumbnail(sub.id);
+                        if (thumbnail) {
+                            subscriptions[subIndex].thumbnail = thumbnail;
+                        }
+                    }
+                });
+                await Promise.all(thumbnailPromises);
             }
 
             allVideos.push(...batchVideos);

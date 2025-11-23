@@ -9,6 +9,7 @@ import {
   Download,
   Plus,
   Settings,
+  RefreshCw,
 } from 'lucide-react';
 import { useState } from 'react';
 import { OPMLUpload } from './OPMLUpload';
@@ -36,6 +37,22 @@ export const Header = ({ onAddChannel }: HeaderProps) => {
   } = useStore();
   const { count, exportOPML, exportJSON } = useSubscriptionStorage();
   const [showExportMenu, setShowExportMenu] = useState(false);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+
+  const handleRefresh = async () => {
+    setIsRefreshing(true);
+    try {
+      const response = await fetch('/api/videos/refresh', { method: 'POST' });
+      if (response.ok) {
+        console.log('Refresh triggered successfully');
+      }
+    } catch (error) {
+      console.error('Refresh failed:', error);
+    } finally {
+      // Keep spinning for a bit to show it's working
+      setTimeout(() => setIsRefreshing(false), 2000);
+    }
+  };
 
   const handleExport = (format: 'opml' | 'json') => {
     try {
@@ -120,6 +137,18 @@ export const Header = ({ onAddChannel }: HeaderProps) => {
                 <span className="hidden sm:inline">Add Channel</span>
               </motion.button>
             )}
+
+            {/* Refresh Button */}
+            <motion.button
+              whileHover={{ scale: 1.05 }}
+              whileTap={{ scale: 0.95 }}
+              onClick={handleRefresh}
+              disabled={isRefreshing}
+              className="p-2 rounded-lg bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors disabled:opacity-50"
+              title="Refresh feeds"
+            >
+              <RefreshCw className={`w-5 h-5 ${isRefreshing ? 'animate-spin' : ''}`} />
+            </motion.button>
 
             {/* Sort */}
             <select
