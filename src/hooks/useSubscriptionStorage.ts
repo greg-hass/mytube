@@ -554,7 +554,7 @@ ${outlines}
           // Server is the worker, so server knows best.
           const currentQuota = useStore.getState().quotaUsed;
           if (remoteSettings.quotaUsed > currentQuota) {
-            useStore.getState().incrementQuota(remoteSettings.quotaUsed - currentQuota);
+            useStore.getState().setQuota(remoteSettings.quotaUsed);
 
             // Alert user about quota status
             if (remoteSettings.quotaUsed >= 10000) {

@@ -22,6 +22,7 @@ export interface DataSlice {
     setApiKey: (key: string) => void;
     toggleUseApiForVideos: () => void;
     incrementQuota: (amount: number) => void;
+    setQuota: (amount: number) => void;
     resetQuota: () => void;
     checkQuotaReset: () => void;
     markAsWatched: (videoId: string) => void;
@@ -46,6 +47,8 @@ export const createDataSlice: StateCreator<DataSlice> = (set, get) => ({
     incrementQuota: (amount) => set((state) => ({
         quotaUsed: state.quotaUsed + amount
     })),
+
+    setQuota: (amount) => set({ quotaUsed: amount }),
 
     resetQuota: () => set({ quotaUsed: 0 }),
 
