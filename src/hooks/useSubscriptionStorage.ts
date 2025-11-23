@@ -563,7 +563,9 @@ ${outlines}
     syncWithBackend();
   }, []);
 
-  // Auto-save to backend when subscriptions change
+  // Auto-save to backend when subscriptions or settings change
+  const { useApiForVideos } = useStore();
+
   useEffect(() => {
     if (!isLoading && subscriptions) {
       const timer = setTimeout(() => {
@@ -571,7 +573,7 @@ ${outlines}
       }, 2000); // Debounce 2s
       return () => clearTimeout(timer);
     }
-  }, [subscriptions, isLoading]);
+  }, [subscriptions, isLoading, apiKey, useApiForVideos]);
 
   return {
     // Data
