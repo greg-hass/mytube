@@ -136,13 +136,19 @@ app.get('/api/videos', async (req, res) => {
     }
 });
 
-// POST /api/videos/refresh - Trigger immediate refresh
+// POST /api/videos/refresh - Trigger immediate refresh (async)
 app.post('/api/videos/refresh', async (req, res) => {
     try {
         const { aggregateFeeds } = require('./feed-aggregator');
-        // Await aggregation so client knows when it's done
-        await aggregateFeeds();
-        res.json({ success: true, message: 'Refresh complete' });
+
+        // Trigger aggregation in background (don't await)
+        aggregateFeeds().catch(err => console.error('Background aggregation error:', err));
+
+        // Return immediately
+        res.json({
+            success: true,
+            message: 'Refresh started in background. Check back in a few minutes.'
+        });
     } catch (err) {
         console.error('Refresh trigger error:', err);
         res.status(500).json({ error: 'Failed to trigger refresh' });
