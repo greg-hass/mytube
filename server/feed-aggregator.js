@@ -233,11 +233,21 @@ async function aggregateFeeds() {
 
                     const channelMap = new Map();
                     channelsRes.data.items?.forEach(item => {
+                        const thumbnail = item.snippet.thumbnails.high?.url || item.snippet.thumbnails.medium?.url;
+                        const title = item.snippet.title;
+
                         channelMap.set(item.id, {
                             uploadsId: item.contentDetails.relatedPlaylists.uploads,
-                            thumbnail: item.snippet.thumbnails.high?.url || item.snippet.thumbnails.medium?.url,
-                            title: item.snippet.title
+                            thumbnail,
+                            title
                         });
+
+                        // Update subscription metadata
+                        const subIndex = subscriptions.findIndex(s => s.id === item.id);
+                        if (subIndex !== -1) {
+                            if (title) subscriptions[subIndex].title = title;
+                            if (thumbnail) subscriptions[subIndex].thumbnail = thumbnail;
+                        }
                     });
 
                     // Fetch videos for each channel's upload playlist
