@@ -28,6 +28,7 @@ export const useStore = create<AppState>()(
         apiKey: state.apiKey,
         useApiForVideos: state.useApiForVideos,
         quotaUsed: state.quotaUsed,
+        apiExhausted: state.apiExhausted,
         lastQuotaResetDate: state.lastQuotaResetDate,
       }),
     }

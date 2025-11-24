@@ -35,7 +35,7 @@ export const Header = ({ onAddChannel }: HeaderProps) => {
     setSearchQuery,
     apiKey,
     useApiForVideos,
-    quotaUsed,
+    apiExhausted,
   } = useStore();
   const { count, exportOPML, exportJSON } = useSubscriptionStorage();
   const [showExportMenu, setShowExportMenu] = useState(false);
@@ -215,15 +215,15 @@ export const Header = ({ onAddChannel }: HeaderProps) => {
             {/* API Status */}
             {apiKey && (
               <div
-                className={`hidden lg:flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium border ${useApiForVideos && quotaUsed < 10000
+                className={`hidden lg:flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium border ${useApiForVideos && !apiExhausted
                   ? 'bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-400 border-green-200 dark:border-green-800'
                   : 'bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-400 border-red-200 dark:border-red-800'
                   }`}
-                title={useApiForVideos && quotaUsed < 10000 ? 'Using YouTube API for updates' : 'API disabled or quota exceeded. Using RSS fallback.'}
+                title={useApiForVideos && !apiExhausted ? 'Using YouTube API for updates' : 'API disabled or quota exhausted (403). Using RSS fallback.'}
               >
-                <div className={`w-1.5 h-1.5 rounded-full ${useApiForVideos && quotaUsed < 10000 ? 'bg-green-500' : 'bg-red-500'
+                <div className={`w-1.5 h-1.5 rounded-full ${useApiForVideos && !apiExhausted ? 'bg-green-500' : 'bg-red-500'
                   }`} />
-                <span>{useApiForVideos && quotaUsed < 10000 ? 'API Active' : 'API Inactive'}</span>
+                <span>{useApiForVideos && !apiExhausted ? 'API Active' : 'API Inactive'}</span>
               </div>
             )}
 

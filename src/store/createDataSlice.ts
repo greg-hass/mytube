@@ -16,6 +16,7 @@ export interface DataSlice {
     apiKey: string;
     useApiForVideos: boolean;
     quotaUsed: number;
+    apiExhausted: boolean;
     lastQuotaResetDate: string;
     watchedVideos: Set<string>;
 
@@ -23,6 +24,7 @@ export interface DataSlice {
     toggleUseApiForVideos: () => void;
     incrementQuota: (amount: number) => void;
     setQuota: (amount: number) => void;
+    setApiExhausted: (exhausted: boolean) => void;
     resetQuota: () => void;
     checkQuotaReset: () => void;
     markAsWatched: (videoId: string) => void;
@@ -35,6 +37,7 @@ export const createDataSlice: StateCreator<DataSlice> = (set, get) => ({
     apiKey: '',
     useApiForVideos: false,
     quotaUsed: 0,
+    apiExhausted: false,
     lastQuotaResetDate: getCurrentPacificDate(),
     watchedVideos: new Set<string>(),
 
@@ -50,7 +53,9 @@ export const createDataSlice: StateCreator<DataSlice> = (set, get) => ({
 
     setQuota: (amount) => set({ quotaUsed: amount }),
 
-    resetQuota: () => set({ quotaUsed: 0 }),
+    setApiExhausted: (exhausted) => set({ apiExhausted: exhausted }),
+
+    resetQuota: () => set({ quotaUsed: 0, apiExhausted: false }),
 
     checkQuotaReset: () => {
         const state = get();

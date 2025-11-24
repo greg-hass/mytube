@@ -579,11 +579,17 @@ async function aggregateFeeds() {
             if (!currentData.settings) currentData.settings = {};
             if (!currentData.settings.quotaUsed) currentData.settings.quotaUsed = 0;
 
+            // Update API Status based on actual results (403 vs 200)
             if (quotaExceeded) {
-                // Force to max if we hit the limit
+                // We hit a 403 error
+                currentData.settings.apiExhausted = true;
+                // Force counter to max for legacy compatibility
                 currentData.settings.quotaUsed = 10000;
-                console.log(`📊 Quota limit hit. Local counter forced to: 10000`);
+                console.log(`📊 API Status: EXHAUSTED (403 received).`);
             } else {
+                // We successfully used the API
+                currentData.settings.apiExhausted = false;
+
                 // If we successfully used the API but the counter is huge (e.g. from yesterday or not reset),
                 // and we didn't hit the limit, then the counter is wrong. Reset it to just this run's cost.
                 if (currentData.settings.quotaUsed >= 10000) {
@@ -592,7 +598,7 @@ async function aggregateFeeds() {
                 }
 
                 currentData.settings.quotaUsed += quotaCost;
-                console.log(`📊 Quota used this run: ${quotaCost}. Total: ${currentData.settings.quotaUsed}`);
+                console.log(`📊 API Status: ACTIVE. Quota used this run: ${quotaCost}. Total: ${currentData.settings.quotaUsed}`);
             }
 
             await fs.writeFile(DATA_FILE, JSON.stringify(currentData, null, 2));

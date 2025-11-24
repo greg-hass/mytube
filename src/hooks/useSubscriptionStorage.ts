@@ -578,6 +578,11 @@ ${outlines}
             }
           }
         }
+
+        // Sync API Exhausted Status
+        if (remoteSettings.apiExhausted !== undefined) {
+          useStore.getState().setApiExhausted(remoteSettings.apiExhausted);
+        }
       }
 
       if (updatedLocal) {
