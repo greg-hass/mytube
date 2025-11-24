@@ -246,7 +246,11 @@ async function aggregateFeeds() {
                         const subIndex = subscriptions.findIndex(s => s.id === item.id);
                         if (subIndex !== -1) {
                             if (title) subscriptions[subIndex].title = title;
-                            if (thumbnail) subscriptions[subIndex].thumbnail = thumbnail;
+                            if (thumbnail) {
+                                subscriptions[subIndex].thumbnail = thumbnail;
+                                // Log occasionally to avoid spam, or log all for debugging
+                                console.log(`    ✓ API: Updated thumbnail for ${item.id}`);
+                            }
                         }
                     });
 
