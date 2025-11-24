@@ -33,7 +33,6 @@ export const Header = ({ onAddChannel }: HeaderProps) => {
     setSortBy,
     searchQuery,
     setSearchQuery,
-    quotaUsed,
   } = useStore();
   const { count, exportOPML, exportJSON } = useSubscriptionStorage();
   const [showExportMenu, setShowExportMenu] = useState(false);
@@ -68,20 +67,7 @@ export const Header = ({ onAddChannel }: HeaderProps) => {
     }
   };
 
-  // Calculate quota warning level
-  const quotaPercentage = (quotaUsed / 10000) * 100;
-  const showQuotaWarning = quotaPercentage >= 80;
 
-  const getQuotaColor = () => {
-    if (quotaPercentage >= 95) return 'bg-red-500 text-white';
-    if (quotaPercentage >= 90) return 'bg-orange-500 text-white';
-    return 'bg-yellow-500 text-white';
-  };
-
-  const getQuotaTooltip = () => {
-    const remaining = 10000 - quotaUsed;
-    return `${quotaUsed.toLocaleString()} / 10,000 units used (${remaining.toLocaleString()} remaining)\nResets daily at midnight PT`;
-  };
 
   return (
     <motion.header
@@ -222,17 +208,7 @@ export const Header = ({ onAddChannel }: HeaderProps) => {
               )}
             </div>
 
-            {/* Quota Warning */}
-            {showQuotaWarning && (
-              <motion.div
-                initial={{ scale: 0 }}
-                animate={{ scale: 1 }}
-                className={`px-3 py-1.5 rounded-full text-xs font-semibold ${getQuotaColor()} shadow-lg cursor-help`}
-                title={getQuotaTooltip()}
-              >
-                {quotaPercentage >= 100 ? 'Quota Full' : `${Math.round(quotaPercentage)}%`}
-              </motion.div>
-            )}
+
 
             {/* Settings */}
             <motion.button

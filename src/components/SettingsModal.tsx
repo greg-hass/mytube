@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, Key, Save, CheckCircle2, AlertCircle } from 'lucide-react';
+import { X, Key, CheckCircle2, AlertCircle, RefreshCw, Zap, BarChart3, ShieldCheck } from 'lucide-react';
 import { useStore } from '../store/useStore';
 import { useSubscriptionStorage } from '../hooks/useSubscriptionStorage';
 
@@ -39,6 +39,9 @@ export const SettingsModal = ({ isOpen, onClose }: SettingsModalProps) => {
         }, 1000);
     };
 
+    const quotaPercentage = Math.min((quotaUsed / 10000) * 100, 100);
+    const isQuotaExceeded = quotaUsed >= 10000;
+
     return (
         <AnimatePresence>
             {isOpen && (
@@ -49,7 +52,7 @@ export const SettingsModal = ({ isOpen, onClose }: SettingsModalProps) => {
                         animate={{ opacity: 1 }}
                         exit={{ opacity: 0 }}
                         onClick={onClose}
-                        className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50"
+                        className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50"
                     />
 
                     {/* Modal */}
@@ -57,157 +60,151 @@ export const SettingsModal = ({ isOpen, onClose }: SettingsModalProps) => {
                         initial={{ opacity: 0, scale: 0.95, y: 20 }}
                         animate={{ opacity: 1, scale: 1, y: 0 }}
                         exit={{ opacity: 0, scale: 0.95, y: 20 }}
-                        className="fixed inset-0 z-[100] md:inset-auto md:left-1/2 md:top-1/2 md:-translate-x-1/2 md:-translate-y-1/2 md:w-full md:max-w-2xl bg-white dark:bg-gray-900 md:rounded-2xl shadow-2xl flex flex-col h-[100dvh] md:h-auto md:max-h-[90vh]"
+                        className="fixed inset-0 z-[100] md:inset-auto md:left-1/2 md:top-1/2 md:-translate-x-1/2 md:-translate-y-1/2 md:w-full md:max-w-xl bg-white dark:bg-gray-900 md:rounded-2xl shadow-2xl flex flex-col h-[100dvh] md:h-auto md:max-h-[85vh] overflow-hidden border border-gray-200 dark:border-gray-800"
                     >
                         {/* Header */}
-                        <div className="flex items-center justify-between p-4 md:p-6 border-b border-gray-200 dark:border-gray-800 flex-shrink-0">
-                            <h2 className="text-xl md:text-2xl font-bold">Settings</h2>
+                        <div className="flex items-center justify-between p-5 border-b border-gray-100 dark:border-gray-800 bg-white/50 dark:bg-gray-900/50 backdrop-blur-md sticky top-0 z-10">
+                            <h2 className="text-xl font-bold bg-gradient-to-r from-gray-900 to-gray-700 dark:from-white dark:to-gray-300 bg-clip-text text-transparent">
+                                Settings
+                            </h2>
                             <button
                                 onClick={onClose}
-                                className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+                                className="p-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors text-gray-500 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white"
                             >
                                 <X className="w-5 h-5" />
                             </button>
                         </div>
 
-                        {/* Content - Scrollable */}
-                        <div className="flex-1 overflow-y-auto p-4 md:p-6 space-y-6">
-                            {/* Quota Exceeded Alert */}
-                            {quotaUsed >= 10000 && (
-                                <div className="bg-red-100 dark:bg-red-900/30 border border-red-200 dark:border-red-800 rounded-lg p-4 flex items-start gap-3">
-                                    <AlertCircle className="w-5 h-5 text-red-600 dark:text-red-400 flex-shrink-0 mt-0.5" />
-                                    <div>
-                                        <h3 className="text-sm font-bold text-red-800 dark:text-red-200">
-                                            API Quota Exceeded
-                                        </h3>
-                                        <p className="text-sm text-red-700 dark:text-red-300 mt-1">
-                                            You have used all 10,000 daily API units. Video updates will be paused until the quota resets at midnight PT.
-                                        </p>
-                                    </div>
-                                </div>
-                            )}
+                        {/* Content */}
+                        <div className="flex-1 overflow-y-auto p-5 space-y-8 custom-scrollbar">
 
-                            {/* API Key Section */}
-                            <div className="space-y-4">
-                                <div className="flex items-center gap-2">
-                                    <Key className="w-5 h-5 text-red-600" />
-                                    <h3 className="text-lg font-semibold">YouTube API Key</h3>
+                            {/* API Configuration Section */}
+                            <section className="space-y-4">
+                                <div className="flex items-center gap-2 text-red-600 mb-2">
+                                    <Key className="w-5 h-5" />
+                                    <h3 className="font-semibold text-gray-900 dark:text-white">API Configuration</h3>
                                 </div>
 
-                                <div className="bg-blue-50 dark:bg-blue-900/20 p-3 md:p-4 rounded-lg border border-blue-200 dark:border-blue-800">
-                                    <p className="text-xs md:text-sm text-blue-800 dark:text-blue-200 break-words">
-                                        💡 Adding an API key enables faster video fetching and higher quality channel icons.
-                                    </p>
-                                </div>
-
-                                <div className="space-y-2">
-                                    <label className="block text-sm font-medium">API Key</label>
-                                    <input
-                                        type="password"
-                                        value={inputKey}
-                                        onChange={(e) => setInputKey(e.target.value)}
-                                        placeholder="Enter your YouTube Data API v3 key"
-                                        className="w-full px-3 md:px-4 py-2 rounded-lg bg-gray-100 dark:bg-gray-800 border-2 border-transparent focus:border-red-500 focus:bg-white dark:focus:bg-gray-900 transition-all outline-none text-sm md:text-base"
-                                    />
-                                    <p className="text-xs text-gray-500 dark:text-gray-400 break-words">
-                                        Get your API key from{' '}
-                                        <a
-                                            href="https://console.cloud.google.com/apis/credentials"
-                                            target="_blank"
-                                            rel="noopener noreferrer"
-                                            className="text-red-600 hover:underline break-all"
-                                        >
-                                            Google Cloud Console
-                                        </a>
-                                    </p>
-                                </div>
-
-                                <button
-                                    onClick={handleSave}
-                                    disabled={isSaved}
-                                    className="w-full flex items-center justify-center gap-2 px-4 py-2 rounded-lg bg-red-600 hover:bg-red-700 disabled:bg-green-600 text-white transition-colors text-sm md:text-base"
-                                >
-                                    {isSaved ? (
-                                        <>
-                                            <CheckCircle2 className="w-4 h-4 md:w-5 md:h-5" />
-                                            <span>Saved!</span>
-                                        </>
-                                    ) : (
-                                        <>
-                                            <Save className="w-4 h-4 md:w-5 md:h-5" />
-                                            <span>Save API Key</span>
-                                        </>
-                                    )}
-                                </button>
-                            </div>
-
-                            {/* API Features Section */}
-                            {apiKey && (
-                                <div className="space-y-4 pt-4 border-t border-gray-200 dark:border-gray-800">
-                                    <h3 className="text-lg font-semibold">API Features</h3>
-
-                                    {/* Use API for Videos Toggle */}
-                                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3 md:p-4 bg-gray-50 dark:bg-gray-800 rounded-lg">
-                                        <div className="flex-1 min-w-0">
-                                            <p className="font-medium text-sm md:text-base">Use API for Video Fetching</p>
-                                            <p className="text-xs md:text-sm text-gray-500 dark:text-gray-400 break-words">
-                                                Faster and more reliable, but uses quota
-                                            </p>
-                                        </div>
-                                        <button
-                                            onClick={toggleUseApiForVideos}
-                                            className={`flex-shrink-0 relative w-12 h-6 md:w-14 md:h-7 rounded-full transition-colors ${useApiForVideos
-                                                ? 'bg-red-600'
-                                                : 'bg-gray-300 dark:bg-gray-600'
-                                                }`}
-                                        >
-                                            <motion.div
-                                                className="absolute top-0.5 left-0.5 w-5 h-5 md:w-6 md:h-6 bg-white rounded-full shadow-md"
-                                                animate={{ x: useApiForVideos ? 24 : 0 }}
-                                                transition={{ type: 'spring', stiffness: 500, damping: 30 }}
+                                <div className="bg-gray-50 dark:bg-gray-800/50 rounded-xl p-5 border border-gray-100 dark:border-gray-800 space-y-4">
+                                    <div className="space-y-2">
+                                        <label className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                                            YouTube Data API Key
+                                        </label>
+                                        <div className="relative">
+                                            <input
+                                                type="password"
+                                                value={inputKey}
+                                                onChange={(e) => setInputKey(e.target.value)}
+                                                placeholder="Enter your API key..."
+                                                className="w-full pl-4 pr-10 py-2.5 rounded-lg bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 focus:border-red-500 focus:ring-2 focus:ring-red-500/20 transition-all outline-none text-sm"
                                             />
-                                        </button>
-                                    </div>
-
-                                    {/* Quota Display */}
-                                    <div className="p-3 md:p-4 bg-gray-50 dark:bg-gray-800 rounded-lg">
-                                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-2">
-                                            <span className="text-sm font-medium">Daily Quota Used</span>
-                                            <span className="text-lg md:text-xl font-bold text-red-600">
-                                                {quotaUsed.toLocaleString()} / 10,000
-                                            </span>
+                                            <div className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400">
+                                                {isSaved ? <CheckCircle2 className="w-4 h-4 text-green-500" /> : <ShieldCheck className="w-4 h-4" />}
+                                            </div>
                                         </div>
-                                        <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2">
-                                            <div
-                                                className="bg-red-600 h-2 rounded-full transition-all"
-                                                style={{ width: `${Math.min((quotaUsed / 10000) * 100, 100)}%` }}
-                                            />
-                                        </div>
-                                        <p className="text-xs text-gray-500 dark:text-gray-400 mt-2 break-words">
-                                            Resets daily at midnight PT
+                                        <p className="text-xs text-gray-500 dark:text-gray-400">
+                                            Required for fetching high-quality metadata and faster updates.
+                                            <a href="https://console.cloud.google.com/apis/credentials" target="_blank" rel="noopener noreferrer" className="text-red-600 hover:underline ml-1">
+                                                Get a key
+                                            </a>
                                         </p>
                                     </div>
 
-                                    {/* Refresh Icons Button */}
                                     <button
-                                        onClick={handleRefreshIcons}
-                                        disabled={isRefreshingIcons || iconRefreshSuccess}
-                                        className="w-full flex items-center justify-center gap-2 px-4 py-2 rounded-lg bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 disabled:bg-green-600 disabled:text-white transition-colors text-sm md:text-base"
+                                        onClick={handleSave}
+                                        disabled={isSaved || !inputKey}
+                                        className={`w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg font-medium transition-all ${isSaved
+                                            ? 'bg-green-500 text-white'
+                                            : 'bg-gray-900 dark:bg-white text-white dark:text-gray-900 hover:opacity-90'
+                                            }`}
                                     >
-                                        {iconRefreshSuccess ? (
-                                            <>
-                                                <CheckCircle2 className="w-4 h-4 md:w-5 md:h-5" />
-                                                <span>Refreshed!</span>
-                                            </>
-                                        ) : (
-                                            <>
-                                                <span className="break-words">
-                                                    {isRefreshingIcons ? 'Refreshing...' : 'Refresh All Channel Icons'}
-                                                </span>
-                                            </>
-                                        )}
+                                        {isSaved ? 'Saved Successfully' : 'Save Changes'}
                                     </button>
                                 </div>
+                            </section>
+
+                            {/* Features Section */}
+                            {apiKey && (
+                                <section className="space-y-4">
+                                    <div className="flex items-center gap-2 text-blue-600 mb-2">
+                                        <Zap className="w-5 h-5" />
+                                        <h3 className="font-semibold text-gray-900 dark:text-white">Performance & Features</h3>
+                                    </div>
+
+                                    <div className="grid gap-4">
+                                        {/* API Toggle */}
+                                        <div className="flex items-center justify-between p-4 bg-white dark:bg-gray-800 rounded-xl border border-gray-100 dark:border-gray-700 shadow-sm">
+                                            <div className="space-y-1">
+                                                <p className="font-medium text-gray-900 dark:text-white">Enhanced Fetching</p>
+                                                <p className="text-xs text-gray-500 dark:text-gray-400">Use API for faster, reliable updates</p>
+                                            </div>
+                                            <button
+                                                onClick={toggleUseApiForVideos}
+                                                className={`relative w-12 h-6 rounded-full transition-colors ${useApiForVideos ? 'bg-blue-600' : 'bg-gray-200 dark:bg-gray-700'
+                                                    }`}
+                                            >
+                                                <motion.div
+                                                    className="absolute top-1 left-1 w-4 h-4 bg-white rounded-full shadow-sm"
+                                                    animate={{ x: useApiForVideos ? 24 : 0 }}
+                                                    transition={{ type: "spring", stiffness: 500, damping: 30 }}
+                                                />
+                                            </button>
+                                        </div>
+
+                                        {/* Quota Usage */}
+                                        <div className="p-4 bg-white dark:bg-gray-800 rounded-xl border border-gray-100 dark:border-gray-700 shadow-sm space-y-3">
+                                            <div className="flex items-center justify-between">
+                                                <div className="flex items-center gap-2">
+                                                    <BarChart3 className="w-4 h-4 text-gray-500" />
+                                                    <span className="text-sm font-medium text-gray-700 dark:text-gray-300">Daily Quota</span>
+                                                </div>
+                                                <span className={`text-sm font-bold ${isQuotaExceeded ? 'text-red-500' : 'text-gray-900 dark:text-white'}`}>
+                                                    {quotaUsed.toLocaleString()} / 10,000
+                                                </span>
+                                            </div>
+
+                                            <div className="w-full bg-gray-100 dark:bg-gray-700 rounded-full h-2 overflow-hidden">
+                                                <motion.div
+                                                    initial={{ width: 0 }}
+                                                    animate={{ width: `${quotaPercentage}%` }}
+                                                    className={`h-full rounded-full ${isQuotaExceeded ? 'bg-red-500' : quotaPercentage > 80 ? 'bg-orange-500' : 'bg-blue-500'
+                                                        }`}
+                                                />
+                                            </div>
+
+                                            {isQuotaExceeded && (
+                                                <div className="flex items-start gap-2 text-xs text-red-600 bg-red-50 dark:bg-red-900/20 p-2 rounded-lg">
+                                                    <AlertCircle className="w-3 h-3 mt-0.5 flex-shrink-0" />
+                                                    <span>Quota exceeded. Updates paused until midnight PT.</span>
+                                                </div>
+                                            )}
+                                        </div>
+
+                                        {/* Maintenance */}
+                                        <div className="p-4 bg-white dark:bg-gray-800 rounded-xl border border-gray-100 dark:border-gray-700 shadow-sm">
+                                            <div className="flex items-center justify-between mb-3">
+                                                <div className="space-y-1">
+                                                    <p className="font-medium text-gray-900 dark:text-white">Refresh Metadata</p>
+                                                    <p className="text-xs text-gray-500 dark:text-gray-400">Update channel icons and names</p>
+                                                </div>
+                                            </div>
+                                            <button
+                                                onClick={handleRefreshIcons}
+                                                disabled={isRefreshingIcons || iconRefreshSuccess}
+                                                className="w-full py-2 px-4 rounded-lg bg-gray-50 dark:bg-gray-700/50 hover:bg-gray-100 dark:hover:bg-gray-700 text-sm font-medium text-gray-700 dark:text-gray-200 transition-colors flex items-center justify-center gap-2"
+                                            >
+                                                {isRefreshingIcons ? (
+                                                    <RefreshCw className="w-4 h-4 animate-spin" />
+                                                ) : iconRefreshSuccess ? (
+                                                    <CheckCircle2 className="w-4 h-4 text-green-500" />
+                                                ) : (
+                                                    <RefreshCw className="w-4 h-4" />
+                                                )}
+                                                {isRefreshingIcons ? 'Refreshing...' : iconRefreshSuccess ? 'Done!' : 'Refresh Icons'}
+                                            </button>
+                                        </div>
+                                    </div>
+                                </section>
                             )}
                         </div>
                     </motion.div>
