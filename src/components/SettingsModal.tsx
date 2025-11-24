@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, Key, CheckCircle2, AlertCircle, RefreshCw, Zap, BarChart3, ShieldCheck } from 'lucide-react';
+import { X, Key, CheckCircle2, RefreshCw, Zap, ShieldCheck } from 'lucide-react';
 import { useStore } from '../store/useStore';
 import { useSubscriptionStorage } from '../hooks/useSubscriptionStorage';
 
@@ -10,7 +10,7 @@ interface SettingsModalProps {
 }
 
 export const SettingsModal = ({ isOpen, onClose }: SettingsModalProps) => {
-    const { apiKey, setApiKey, useApiForVideos, toggleUseApiForVideos, quotaUsed } = useStore();
+    const { apiKey, setApiKey, useApiForVideos, toggleUseApiForVideos } = useStore();
     const { refreshAllChannels } = useSubscriptionStorage();
     const [inputKey, setInputKey] = useState(apiKey);
     const [isSaved, setIsSaved] = useState(false);
@@ -38,9 +38,6 @@ export const SettingsModal = ({ isOpen, onClose }: SettingsModalProps) => {
             onClose();
         }, 1000);
     };
-
-    const quotaPercentage = Math.min((quotaUsed / 10000) * 100, 100);
-    const isQuotaExceeded = quotaUsed >= 10000;
 
     return (
         <AnimatePresence>
@@ -151,34 +148,7 @@ export const SettingsModal = ({ isOpen, onClose }: SettingsModalProps) => {
                                             </button>
                                         </div>
 
-                                        {/* Quota Usage */}
-                                        <div className="p-4 bg-white dark:bg-gray-800 rounded-xl border border-gray-100 dark:border-gray-700 shadow-sm space-y-3">
-                                            <div className="flex items-center justify-between">
-                                                <div className="flex items-center gap-2">
-                                                    <BarChart3 className="w-4 h-4 text-gray-500" />
-                                                    <span className="text-sm font-medium text-gray-700 dark:text-gray-300">Daily Quota</span>
-                                                </div>
-                                                <span className={`text-sm font-bold ${isQuotaExceeded ? 'text-red-500' : 'text-gray-900 dark:text-white'}`}>
-                                                    {quotaUsed.toLocaleString()} / 10,000
-                                                </span>
-                                            </div>
 
-                                            <div className="w-full bg-gray-100 dark:bg-gray-700 rounded-full h-2 overflow-hidden">
-                                                <motion.div
-                                                    initial={{ width: 0 }}
-                                                    animate={{ width: `${quotaPercentage}%` }}
-                                                    className={`h-full rounded-full ${isQuotaExceeded ? 'bg-red-500' : quotaPercentage > 80 ? 'bg-orange-500' : 'bg-blue-500'
-                                                        }`}
-                                                />
-                                            </div>
-
-                                            {isQuotaExceeded && (
-                                                <div className="flex items-start gap-2 text-xs text-red-600 bg-red-50 dark:bg-red-900/20 p-2 rounded-lg">
-                                                    <AlertCircle className="w-3 h-3 mt-0.5 flex-shrink-0" />
-                                                    <span>Quota exceeded. Updates paused until midnight PT.</span>
-                                                </div>
-                                            )}
-                                        </div>
 
                                         {/* Maintenance */}
                                         <div className="p-4 bg-white dark:bg-gray-800 rounded-xl border border-gray-100 dark:border-gray-700 shadow-sm">
