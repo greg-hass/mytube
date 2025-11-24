@@ -580,6 +580,13 @@ async function aggregateFeeds() {
                 currentData.settings.quotaUsed = 10000;
                 console.log(`📊 Quota limit hit. Local counter forced to: 10000`);
             } else {
+                // If we successfully used the API but the counter is huge (e.g. from yesterday or not reset),
+                // and we didn't hit the limit, then the counter is wrong. Reset it to just this run's cost.
+                if (currentData.settings.quotaUsed >= 10000) {
+                    console.log(`📊 API working but quota counter high (${currentData.settings.quotaUsed}). Resetting counter.`);
+                    currentData.settings.quotaUsed = 0;
+                }
+
                 currentData.settings.quotaUsed += quotaCost;
                 console.log(`📊 Quota used this run: ${quotaCost}. Total: ${currentData.settings.quotaUsed}`);
             }
