@@ -491,12 +491,21 @@ ${outlines}
       // Add local subs first
       localSubs.forEach(sub => mergedSubsMap.set(sub.id, sub));
 
-      // Add remote subs (if not exists, or if we want to merge properties)
-      // For now, we'll assume if it exists in both, local is "newer" or equal, so we keep local.
-      // But if remote has something local doesn't, we add it.
-      remoteSubs.forEach((sub: StoredSubscription) => {
-        if (!mergedSubsMap.has(sub.id)) {
-          mergedSubsMap.set(sub.id, sub);
+      // Add remote subs and merge metadata
+      remoteSubs.forEach((remoteSub: StoredSubscription) => {
+        const localSub = mergedSubsMap.get(remoteSub.id);
+        if (localSub) {
+          // If exists locally, merge metadata from server (server is source of truth for title/thumbnail)
+          // But keep local 'publishedAt' or other user-specific fields if we had them
+          mergedSubsMap.set(remoteSub.id, {
+            ...localSub,
+            title: remoteSub.title || localSub.title,
+            thumbnail: remoteSub.thumbnail || localSub.thumbnail,
+            description: remoteSub.description || localSub.description,
+            // If server has a real ID and local has handle_, we should probably swap, but redirects handle that on server.
+          });
+        } else {
+          mergedSubsMap.set(remoteSub.id, remoteSub);
         }
       });
 
@@ -507,14 +516,19 @@ ${outlines}
       const mergedWatched = new Set([...localWatched, ...remoteWatched]);
 
       // 3. Update Local if needed
-      // If merged list has more items than local, we found new stuff from server!
+      // We should update local if there are ANY differences, or just always update to be safe and ensure metadata sync.
+      // Since we merged server metadata above, 'mergedSubs' now contains the latest thumbnails.
+      // We'll compare JSON stringified to see if we need to write to DB (optimization), or just write.
+      // Writing 200 items to IndexedDB is fast. Let's just do it if we have remote data.
+
       let updatedLocal = false;
+      const localStr = JSON.stringify(localSubs.sort((a, b) => a.id.localeCompare(b.id)));
+      const mergedStr = JSON.stringify(mergedSubs.sort((a, b) => a.id.localeCompare(b.id)));
 
-      if (mergedSubs.length > localSubs.length) {
-        console.log(`📥 Importing ${mergedSubs.length - localSubs.length} new channels from server...`);
-        toast.loading('Syncing new channels from server...');
+      if (localStr !== mergedStr) {
+        console.log(`📥 Syncing changes from server (metadata or new channels)...`);
 
-        // We can just overwrite local with the merged list to be safe
+        // We can just overwrite local with the merged list
         await clearAllSubscriptions();
         await addSubscriptions(mergedSubs);
 
