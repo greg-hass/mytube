@@ -297,8 +297,10 @@ async function aggregateFeeds() {
                     console.error('API batch error, falling back to pure RSS:', err.message, err.response?.data?.error);
 
                     // Check for quota exceeded
-                    if (err.response?.data?.error?.errors?.[0]?.reason === 'quotaExceeded') {
-                        console.warn('⚠️ API Quota limit reached! Switching to RSS for all remaining batches.');
+                    if (err.response?.status === 403 ||
+                        err.response?.data?.error?.errors?.[0]?.reason === 'quotaExceeded' ||
+                        err.message?.includes('403')) {
+                        console.warn('⚠️ API Quota limit reached (403)! Switching to RSS for all remaining batches.');
                         // We will update the file at the end of the function
                         quotaExceeded = true;
                     }
