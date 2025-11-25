@@ -37,17 +37,19 @@ export const Dashboard = () => {
       if (channel?.isMuted) return false;
 
       // Check shorts (duration <= 60 seconds)
-      // Only filter if we have duration data
-      if (!showShorts && video.duration !== undefined && video.duration !== null && video.duration <= 60) {
+      // Only filter if we have VALID duration data (not 0, not null, not undefined)
+      if (!showShorts && video.duration !== undefined && video.duration !== null && video.duration > 0 && video.duration <= 60) {
         return false;
       }
 
       return true;
     });
 
-    // Debug: Log how many videos have duration data
-    const withDuration = videos.filter(v => v.duration !== undefined && v.duration !== null).length;
-    console.log(`📊 Videos: ${videos.length} total, ${withDuration} with duration data, ${filtered.length} after filtering (showShorts: ${showShorts})`);
+    // Debug: Log how many videos have duration data and sample values
+    const withDuration = videos.filter(v => v.duration !== undefined && v.duration !== null && v.duration > 0).length;
+    const durationSamples = videos.slice(0, 5).map(v => ({ title: v.title.substring(0, 30), duration: v.duration }));
+    console.log(`📊 Videos: ${videos.length} total, ${withDuration} with valid duration data, ${filtered.length} after filtering (showShorts: ${showShorts})`);
+    console.log(`📊 Sample durations:`, durationSamples);
 
     return filtered;
   }, [videos, allSubscriptions, showShorts]);

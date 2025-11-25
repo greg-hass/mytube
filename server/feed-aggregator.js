@@ -39,18 +39,30 @@ async function fetchChannelFeed(channelId) {
         const feedUrl = `https://www.youtube.com/feeds/videos.xml?channel_id=${channelId}`;
         const feed = await parser.parseURL(feedUrl);
 
-        const videos = feed.items.map(item => {
+        const videos = feed.items.map((item, idx) => {
             // Extract duration from media:group
-            let duration = 0;
+            let duration = null; // null means "unknown", not "0 seconds"
             try {
                 // YouTube RSS has <yt:duration seconds="123"/> inside <media:group>
                 const durationSeconds = item.mediaGroup?.['yt:duration']?.[0]?.$.seconds;
+
+                // Debug: Log first video's structure
+                if (idx === 0) {
+                    console.log('📺 Sample RSS item structure:', {
+                        hasMediaGroup: !!item.mediaGroup,
+                        mediaGroupKeys: item.mediaGroup ? Object.keys(item.mediaGroup) : [],
+                        ytDuration: item.mediaGroup?.['yt:duration'],
+                        durationSeconds: durationSeconds
+                    });
+                }
+
                 if (durationSeconds) {
                     duration = parseInt(durationSeconds, 10);
                 }
             } catch (e) {
-                // If parsing fails, default to 0
-                duration = 0;
+                // If parsing fails, leave as null
+                console.error('Duration parsing error:', e.message);
+                duration = null;
             }
 
             return {
