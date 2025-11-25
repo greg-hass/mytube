@@ -39,19 +39,34 @@ async function fetchChannelFeed(channelId) {
         const feedUrl = `https://www.youtube.com/feeds/videos.xml?channel_id=${channelId}`;
         const feed = await parser.parseURL(feedUrl);
 
-        const videos = feed.items.map(item => ({
-            id: item.id?.split(':').pop() || item.guid,
-            title: item.title,
-            channelId: channelId,
-            channelTitle: feed.title || item.author || 'Unknown',
-            publishedAt: item.pubDate || item.isoDate,
-            thumbnail: item.media?.thumbnail?.[0]?.url
-                || item['media:group']?.['media:thumbnail']?.[0]?.$.url
-                || item.enclosure?.url
-                || `https://i.ytimg.com/vi/${item.id?.split(':').pop() || item.guid}/hqdefault.jpg`,
-            description: item.contentSnippet || item.content || '',
-            duration: parseInt(item.mediaGroup?.['yt:duration'] || 0),
-        }));
+        const videos = feed.items.map(item => {
+            // Extract duration from media:group
+            let duration = 0;
+            try {
+                // YouTube RSS has <yt:duration seconds="123"/> inside <media:group>
+                const durationSeconds = item.mediaGroup?.['yt:duration']?.[0]?.$.seconds;
+                if (durationSeconds) {
+                    duration = parseInt(durationSeconds, 10);
+                }
+            } catch (e) {
+                // If parsing fails, default to 0
+                duration = 0;
+            }
+
+            return {
+                id: item.id?.split(':').pop() || item.guid,
+                title: item.title,
+                channelId: channelId,
+                channelTitle: feed.title || item.author || 'Unknown',
+                publishedAt: item.pubDate || item.isoDate,
+                thumbnail: item.media?.thumbnail?.[0]?.url
+                    || item['media:group']?.['media:thumbnail']?.[0]?.$.url
+                    || item.enclosure?.url
+                    || `https://i.ytimg.com/vi/${item.id?.split(':').pop() || item.guid}/hqdefault.jpg`,
+                description: item.contentSnippet || item.content || '',
+                duration: duration,
+            };
+        });
 
         // Extract channel metadata from feed
         const channelMetadata = {
