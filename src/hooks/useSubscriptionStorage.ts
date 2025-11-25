@@ -76,10 +76,23 @@ export const useSubscriptionStorage = () => {
       await removeSubscription(channelId);
       return channelId;
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['subscriptions'] });
-      queryClient.invalidateQueries({ queryKey: ['subscriptions-count'] });
+    onSuccess: async (removedChannelId: string) => {
+      // Update the subscriptions cache directly
+      queryClient.setQueryData<StoredSubscription[]>(['subscriptions'], (oldSubscriptions) => {
+        if (!oldSubscriptions) return [];
+        return oldSubscriptions.filter(sub => sub.id !== removedChannelId);
+      });
+
+      // Decrement the subscription count
+      queryClient.setQueryData<number>(['subscriptions-count'], (oldCount) => {
+        return (oldCount || 0) - 1;
+      });
+
+      // Invalidate RSS videos, as the list of subscriptions has changed
       queryClient.invalidateQueries({ queryKey: ['rss-videos'] });
+
+      // Push changes to server to persist removal
+      await syncWithBackend();
     },
   });
 
