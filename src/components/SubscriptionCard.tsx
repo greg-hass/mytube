@@ -47,9 +47,20 @@ export const SubscriptionCard = memo(({ channel, index, onRemove, onToggleFavori
             setImageLoaded(true);
           }}
           className={`w-full h-full object-cover transition-all duration-300 group-hover:scale-110 ${imageLoaded ? 'opacity-100' : 'opacity-0'
+            } ${channel.isMuted ? 'grayscale opacity-50' : ''
             }`}
         />
         <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
+
+        {/* Muted overlay */}
+        {channel.isMuted && (
+          <div className="absolute inset-0 bg-black/30 flex items-center justify-center">
+            <div className="bg-red-600/90 text-white px-3 py-1.5 rounded-full text-sm font-medium flex items-center gap-1.5 shadow-lg">
+              <VolumeX className="w-4 h-4" />
+              <span>Muted</span>
+            </div>
+          </div>
+        )}
 
         {/* Favorite button (top-left, hover only) */}
         {/* Action buttons (top-left, hover only) */}
@@ -77,9 +88,7 @@ export const SubscriptionCard = memo(({ channel, index, onRemove, onToggleFavori
                 e.stopPropagation();
                 onToggleMute(channel.id);
               }}
-              className={`p-2 rounded-full backdrop-blur-sm transition-all opacity-0 group-hover:opacity-100 ${channel.isMuted
-                ? 'bg-red-600/90 text-white'
-                : 'bg-black/50 hover:bg-black/70 text-white'
+              className={`p-2 rounded-full backdrop-blur-sm transition-all ${channel.isMuted ? 'opacity-100 bg-red-600/90 text-white' : 'opacity-0 group-hover:opacity-100 bg-black/50 hover:bg-black/70 text-white'
                 }`}
               title={channel.isMuted ? 'Unmute channel' : 'Mute channel'}
             >
