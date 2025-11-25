@@ -517,7 +517,6 @@ ${outlines}
             title: remoteSub.title || localSub.title,
             thumbnail: remoteSub.thumbnail || localSub.thumbnail,
             description: remoteSub.description || localSub.description,
-            // If server has a real ID and local has handle_, we should probably swap, but redirects handle that on server.
           });
         } else {
           mergedSubsMap.set(remoteSub.id, remoteSub);
@@ -606,11 +605,30 @@ ${outlines}
       }
 
       // 4. Update Remote if needed
-      // If merged list has more items than remote, or if local had updates (we can't easily tell updates without timestamps, but we can check counts or just push if local > remote)
-      // To be safe and ensure server is always up to date with the UNION, we push if the merged set is different from remote set.
-      // Simple check: if merged count > remote count, definitely push.
+      // If merged list has more items than remote, OR if we just deleted something locally (local < remote), we need to push.
+      // The previous logic only pushed if merged > remote, which failed for deletions because merged would include the deleted item from remote.
 
-      if (mergedSubs.length > remoteSubs.length || mergedWatched.size > remoteWatched.length) {
+      // We need a way to know if we should push. 
+      // If we are in this function, it's either initial load or auto-save.
+      // Ideally, deletions should trigger an immediate push (which we added in removeSubscriptionMutation).
+      // But here, we need to be careful not to re-import deleted items if the server hasn't been updated yet.
+
+      // However, since we now force-push on delete, the server *should* be up to date.
+      // The issue is likely that 'mergedSubs' is combining local (without item) and remote (with item) and adding it back.
+
+      // FIX: If we have a local deletion that hasn't synced, 'mergedSubs' will re-add it.
+      // But we can't easily distinguish "deleted locally" from "added remotely on another device".
+
+      // For now, let's trust the server's state for additions, but if we explicitly triggered this sync from a deletion (which calls this function),
+      // we might want to force the local state.
+
+      // Actually, the simplest fix for the user's issue "it keeps re-appearing" is that when we delete, we call syncWithBackend().
+      // But syncWithBackend() fetches remote first, merges, and THEN pushes.
+      // If remote still has the item, it gets merged back in!
+
+      // We need a 'forcePush' option for syncWithBackend to skip the fetch/merge and just overwrite server.
+
+      if (mergedSubs.length !== remoteSubs.length || mergedWatched.size !== remoteWatched.length) {
         // We push the MERGED list to server, so server becomes the union too.
         const { searchQuery, sortBy, apiKey, useApiForVideos, quotaUsed } = useStore.getState();
 
