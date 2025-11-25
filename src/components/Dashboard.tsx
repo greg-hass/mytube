@@ -20,7 +20,7 @@ export const Dashboard = () => {
   const [isAddChannelModalOpen, setIsAddChannelModalOpen] = useState(false);
   const [showShortcutsHelp, setShowShortcutsHelp] = useState(false);
   const [showShorts, setShowShorts] = useState(true);
-  const { allSubscriptions, addSubscriptions, rawSubscriptions, toggleFavorite, toggleMute } = useSubscriptionStorage();
+  const { allSubscriptions, addSubscriptions, rawSubscriptions, toggleFavorite } = useSubscriptionStorage();
 
   // Check if any channels have temporary IDs (can't fetch videos)
   const hasTemporaryChannels = rawSubscriptions.some(sub =>
