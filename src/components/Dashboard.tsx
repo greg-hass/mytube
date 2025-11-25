@@ -19,7 +19,8 @@ export const Dashboard = () => {
   const [activeTab, setActiveTab] = useState<Tab>('subscriptions');
   const [isAddChannelModalOpen, setIsAddChannelModalOpen] = useState(false);
   const [showShortcutsHelp, setShowShortcutsHelp] = useState(false);
-  const { allSubscriptions, addSubscriptions, rawSubscriptions, toggleFavorite } = useSubscriptionStorage();
+  const [showShorts, setShowShorts] = useState(true);
+  const { allSubscriptions, addSubscriptions, rawSubscriptions, toggleFavorite, toggleMute } = useSubscriptionStorage();
 
   // Check if any channels have temporary IDs (can't fetch videos)
   const hasTemporaryChannels = rawSubscriptions.some(sub =>
@@ -27,6 +28,20 @@ export const Dashboard = () => {
   );
 
   const { videos, isLoading: videosLoading, refresh: refetchVideos, syncStatus } = useRSSVideos();
+
+  // Filter videos based on mute status and shorts preference
+  const filteredVideos = useMemo(() => {
+    return videos.filter(video => {
+      // Check if channel is muted
+      const channel = allSubscriptions.find(sub => sub.id === video.channelId);
+      if (channel?.isMuted) return false;
+
+      // Check shorts (duration <= 60 seconds)
+      if (!showShorts && video.duration && video.duration <= 60) return false;
+
+      return true;
+    });
+  }, [videos, allSubscriptions, showShorts]);
 
   // Calculate most active channels in the past week
   // Optimized to reduce re-renders and heavy calculations
@@ -238,6 +253,25 @@ export const Dashboard = () => {
               </div>
             )}
           </div>
+
+
+          {/* Filters */}
+          {activeTab === 'latest' && (
+            <div className="flex items-center gap-4 ml-auto">
+              <label className="flex items-center gap-2 cursor-pointer select-none">
+                <div className="relative">
+                  <input
+                    type="checkbox"
+                    checked={showShorts}
+                    onChange={(e) => setShowShorts(e.target.checked)}
+                    className="sr-only peer"
+                  />
+                  <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-red-300 dark:peer-focus:ring-red-800 rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-gray-600 peer-checked:bg-red-600"></div>
+                </div>
+                <span className="text-sm font-medium text-gray-700 dark:text-gray-300">Show Shorts</span>
+              </label>
+            </div>
+          )}
         </div>
 
         {/* Content */}
@@ -296,9 +330,9 @@ export const Dashboard = () => {
               ) : (
                 <div>
                   <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">
-                    Showing {videos.length} recent videos
+                    Showing {filteredVideos.length} recent videos
                   </p>
-                  <VirtualizedVideoGrid videos={videos} columns={4} />
+                  <VirtualizedVideoGrid videos={filteredVideos} columns={4} />
                 </div>
               )}
             </motion.div>
@@ -470,6 +504,6 @@ export const Dashboard = () => {
         isOpen={showShortcutsHelp}
         onClose={() => setShowShortcutsHelp(false)}
       />
-    </div>
+    </div >
   );
 };

@@ -228,6 +228,34 @@ app.post('/api/resolve-channel', async (req, res) => {
     }
 });
 
+// POST /api/subscriptions/:id/mute - Toggle mute status for a channel
+app.post('/api/subscriptions/:id/mute', async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { isMuted } = req.body;
+
+        if (typeof isMuted !== 'boolean') {
+            return res.status(400).json({ error: 'isMuted must be a boolean' });
+        }
+
+        const data = JSON.parse(await fs.readFile(DATA_FILE, 'utf8'));
+
+        const subIndex = data.subscriptions.findIndex(s => s.id === id);
+        if (subIndex === -1) {
+            return res.status(404).json({ error: 'Subscription not found' });
+        }
+
+        data.subscriptions[subIndex].isMuted = isMuted;
+
+        await fs.writeFile(DATA_FILE, JSON.stringify(data, null, 2));
+
+        res.json({ success: true, isMuted });
+    } catch (err) {
+        console.error('Mute channel error:', err);
+        res.status(500).json({ error: 'Failed to update channel' });
+    }
+});
+
 app.listen(PORT, () => {
     console.log(`Sync server running on port ${PORT}`);
     // Start feed aggregator

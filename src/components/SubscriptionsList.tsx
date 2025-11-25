@@ -9,7 +9,7 @@ import { useSubscriptionStorage } from '../hooks/useSubscriptionStorage';
 import { useStore } from '../store/useStore';
 
 export const SubscriptionsList = () => {
-  const { subscriptions, rawSubscriptions, isLoading, removeSubscription, addSubscriptions, toggleFavorite } = useSubscriptionStorage();
+  const { subscriptions, rawSubscriptions, isLoading, removeSubscription, addSubscriptions, toggleFavorite, toggleMute } = useSubscriptionStorage();
   const { viewMode } = useStore();
   const parentRef = useRef<HTMLDivElement>(null);
   const SCROLL_STORAGE_KEY = 'subscriptions-scroll-top';
@@ -174,6 +174,18 @@ export const SubscriptionsList = () => {
                       if (channel) {
                         toast.success(
                           wasFavorite ? `Removed ${channel.title} from favorites` : `Added ${channel.title} to favorites`
+                        );
+                      }
+                    }}
+                    onToggleMute={async (channelId) => {
+                      const channel = subscriptions.find(s => s.id === channelId);
+                      const wasMuted = channel?.isMuted;
+
+                      await toggleMute(channelId);
+
+                      if (channel) {
+                        toast.success(
+                          wasMuted ? `Unmuted ${channel.title}` : `Muted ${channel.title}`
                         );
                       }
                     }}

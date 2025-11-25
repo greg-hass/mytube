@@ -7,6 +7,7 @@ import {
   clearAllSubscriptions,
   getSubscriptionCount,
   toggleFavorite,
+  toggleMute,
   type StoredSubscription,
 } from '../lib/indexeddb';
 import { parseOPMLToSubscriptions } from '../lib/opml-parser';
@@ -665,10 +666,14 @@ ${outlines}
       await toggleFavorite(channelId);
       queryClient.invalidateQueries({ queryKey: ['subscriptions'] });
     },
+    toggleMute: async (channelId: string) => {
+      await toggleMute(channelId);
+      queryClient.invalidateQueries({ queryKey: ['subscriptions'] });
+    },
     exportOPML,
     exportJSON,
     importJSON,
-    refreshAllChannels, // Expose new function
+    refreshAllChannels,
 
     // Mutation states
     isImporting: importOPML.isPending,

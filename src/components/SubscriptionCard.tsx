@@ -1,5 +1,5 @@
 import { motion } from 'framer-motion';
-import { ExternalLink, Users, Video, Trash2, Star } from 'lucide-react';
+import { ExternalLink, Users, Video, Trash2, Star, Volume2, VolumeX } from 'lucide-react';
 import type { YouTubeChannel } from '../types/youtube';
 import { useState, memo } from 'react';
 import { useNavigate } from 'react-router-dom';
@@ -10,9 +10,10 @@ interface Props {
   index: number;
   onRemove?: (channelId: string) => void;
   onToggleFavorite?: (channelId: string) => void;
+  onToggleMute?: (channelId: string) => void;
 }
 
-export const SubscriptionCard = memo(({ channel, index, onRemove, onToggleFavorite }: Props) => {
+export const SubscriptionCard = memo(({ channel, index, onRemove, onToggleFavorite, onToggleMute }: Props) => {
   const [imageLoaded, setImageLoaded] = useState(false);
   const [confirmOpen, setConfirmOpen] = useState(false);
   const navigate = useNavigate();
@@ -51,23 +52,41 @@ export const SubscriptionCard = memo(({ channel, index, onRemove, onToggleFavori
         <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
 
         {/* Favorite button (top-left, hover only) */}
-        {onToggleFavorite && (
-          <button
-            onClick={(e) => {
-              e.stopPropagation();
-              onToggleFavorite(channel.id);
-            }}
-            className="absolute top-2 left-2 p-2 rounded-full bg-black/50 hover:bg-black/70 backdrop-blur-sm transition-all opacity-0 group-hover:opacity-100 z-10"
-            title={channel.isFavorite ? 'Remove from favorites' : 'Add to favorites'}
-          >
-            <Star
-              className={`w-5 h-5 transition-all ${channel.isFavorite
-                ? 'fill-yellow-400 text-yellow-400'
-                : 'text-white'
+        {/* Action buttons (top-left, hover only) */}
+        <div className="absolute top-2 left-2 flex gap-2 z-10">
+          {onToggleFavorite && (
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                onToggleFavorite(channel.id);
+              }}
+              className="p-2 rounded-full bg-black/50 hover:bg-black/70 backdrop-blur-sm transition-all opacity-0 group-hover:opacity-100"
+              title={channel.isFavorite ? 'Remove from favorites' : 'Add to favorites'}
+            >
+              <Star
+                className={`w-5 h-5 transition-all ${channel.isFavorite
+                  ? 'fill-yellow-400 text-yellow-400'
+                  : 'text-white'
+                  }`}
+              />
+            </button>
+          )}
+          {onToggleMute && (
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                onToggleMute(channel.id);
+              }}
+              className={`p-2 rounded-full backdrop-blur-sm transition-all opacity-0 group-hover:opacity-100 ${channel.isMuted
+                ? 'bg-red-600/90 text-white'
+                : 'bg-black/50 hover:bg-black/70 text-white'
                 }`}
-            />
-          </button>
-        )}
+              title={channel.isMuted ? 'Unmute channel' : 'Mute channel'}
+            >
+              {channel.isMuted ? <VolumeX className="w-5 h-5" /> : <Volume2 className="w-5 h-5" />}
+            </button>
+          )}
+        </div>
 
         {/* Hover overlay */}
         <motion.div

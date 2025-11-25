@@ -7,8 +7,26 @@ const parser = new Parser({
     timeout: 10000,
     headers: {
         'User-Agent': 'Mozilla/5.0 (compatible; RSS Reader/1.0)'
+    },
+    customFields: {
+        item: [
+            ['media:group', 'mediaGroup'],
+            ['yt:videoId', 'ytVideoId'],
+            ['yt:channelId', 'ytChannelId']
+        ]
     }
 });
+
+// Helper to parse ISO 8601 duration to seconds
+function parseDuration(duration) {
+    if (!duration) return 0;
+    const match = duration.match(/PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?/);
+    if (!match) return 0;
+    const hours = (parseInt(match[1]) || 0);
+    const minutes = (parseInt(match[2]) || 0);
+    const seconds = (parseInt(match[3]) || 0);
+    return hours * 3600 + minutes * 60 + seconds;
+}
 
 const DATA_FILE = path.join(__dirname, 'data', 'db.json');
 const VIDEOS_FILE = path.join(__dirname, 'data', 'videos.json');
@@ -32,6 +50,7 @@ async function fetchChannelFeed(channelId) {
                 || item.enclosure?.url
                 || `https://i.ytimg.com/vi/${item.id?.split(':').pop() || item.guid}/hqdefault.jpg`,
             description: item.contentSnippet || item.content || '',
+            duration: parseInt(item.mediaGroup?.['yt:duration'] || 0),
         }));
 
         // Extract channel metadata from feed
@@ -289,9 +308,37 @@ async function aggregateFeeds() {
                     });
 
                     const batchResults = await Promise.all(playlistPromises);
-                    const fetchedCount = batchResults.reduce((acc, v) => acc + v.length, 0);
-                    console.log(`  ✨ API Batch: Fetched ${fetchedCount} videos from ${batch.length} channels`);
+
+                    // Flatten results
                     batchResults.forEach(videos => batchVideos.push(...videos));
+
+                    // Fetch durations for these videos using the 'videos' endpoint
+                    // We can fetch up to 50 IDs at once
+                    const videoIds = batchVideos.map(v => v.id);
+                    if (videoIds.length > 0) {
+                        try {
+                            // Split into chunks of 50
+                            const chunkSize = 50;
+                            for (let k = 0; k < videoIds.length; k += chunkSize) {
+                                const chunkIds = videoIds.slice(k, k + chunkSize);
+                                const videosUrl = `https://www.googleapis.com/youtube/v3/videos?part=contentDetails&id=${chunkIds.join(',')}&key=${apiKey}`;
+                                const videosRes = await axios.get(videosUrl);
+
+                                videosRes.data.items?.forEach(item => {
+                                    const video = batchVideos.find(v => v.id === item.id);
+                                    if (video) {
+                                        video.duration = parseDuration(item.contentDetails.duration);
+                                    }
+                                });
+                            }
+                            console.log(`    ✓ API: Fetched details (duration) for ${videoIds.length} videos`);
+                        } catch (err) {
+                            console.error('    ⚠ API: Failed to fetch video durations:', err.message);
+                        }
+                    }
+
+                    const fetchedCount = batchVideos.length;
+                    console.log(`  ✨ API Batch: Fetched ${fetchedCount} videos from ${batch.length} channels`);
 
                 } catch (err) {
                     console.error('API batch error, falling back to pure RSS:', err.message, err.response?.data?.error);

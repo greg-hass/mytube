@@ -5,6 +5,7 @@ export interface YouTubeChannel {
   thumbnail: string;
   customUrl?: string;
   isFavorite?: boolean;
+  isMuted?: boolean;
   subscriberCount?: string;
   videoCount?: string;
 }
@@ -17,7 +18,7 @@ export interface YouTubeVideo {
   channelId: string;
   channelTitle: string;
   publishedAt: string;
-  duration?: string;
+  duration?: number;
   viewCount?: string;
 }
 

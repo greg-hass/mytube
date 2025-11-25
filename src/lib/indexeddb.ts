@@ -24,6 +24,7 @@ export interface StoredSubscription {
   customUrl?: string;      // Channel custom URL
   description?: string;    // Channel description
   isFavorite?: boolean;    // Whether channel is marked as favorite
+  isMuted?: boolean;       // Whether channel is muted from latest feed
 }
 
 /**
@@ -250,6 +251,19 @@ export async function toggleFavorite(channelId: string): Promise<void> {
     await updateSubscription(subscription);
   }
 }
+
+/**
+ * Toggle mute status for a channel
+ */
+export async function toggleMute(channelId: string): Promise<void> {
+  const subscription = await getSubscription(channelId);
+  if (subscription) {
+    subscription.isMuted = !subscription.isMuted;
+    await updateSubscription(subscription);
+  }
+}
+
+
 
 /**
  * Get all favorite channels
