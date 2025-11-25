@@ -104,6 +104,7 @@ export const useSubscriptionStorage = () => {
       thumbnail: sub.thumbnail || '',
       customUrl: sub.customUrl,
       isFavorite: sub.isFavorite,
+      isMuted: sub.isMuted,
     }));
   }, [subscriptions]);
 
@@ -668,6 +669,15 @@ ${outlines}
     },
     toggleMute: async (channelId: string) => {
       await toggleMute(channelId);
+      // Optimistically update the cached subscriptions to reflect mute state change
+      const current = queryClient.getQueryData<any[]>(['subscriptions']);
+      if (current) {
+        const updated = current.map((sub) =>
+          sub.id === channelId ? { ...sub, isMuted: !sub.isMuted } : sub
+        );
+        queryClient.setQueryData(['subscriptions'], updated);
+      }
+      // Also invalidate to ensure fresh fetch later
       queryClient.invalidateQueries({ queryKey: ['subscriptions'] });
     },
     exportOPML,
