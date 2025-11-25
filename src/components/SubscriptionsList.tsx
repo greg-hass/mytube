@@ -181,7 +181,11 @@ export const SubscriptionsList = () => {
                       const channel = subscriptions.find(s => s.id === channelId);
                       const wasMuted = channel?.isMuted;
 
+                      console.log('🔇 Toggling mute for:', channel?.title, 'Current state:', wasMuted);
+
                       await toggleMute(channelId);
+
+                      console.log('✅ Mute toggled successfully');
 
                       if (channel) {
                         toast.success(
