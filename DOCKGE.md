@@ -16,7 +16,7 @@ services:
     image: ghcr.io/greg-hass/youtube-subscriptions:latest
     container_name: youtube-subscriptions
     ports:
-      - "3000:80"
+      - "5173:80"
     volumes:
       - ./data:/app/server/data
     restart: unless-stopped
@@ -36,7 +36,7 @@ services:
 Open:
 
 ```text
-http://your-server-ip:3000
+http://your-server-ip:5173
 ```
 
 ## Updating

@@ -3,7 +3,7 @@ services:
     image: ghcr.io/greg-hass/youtube-subscriptions:latest
     container_name: youtube-subscriptions
     ports:
-      - "3000:80"
+      - "5173:80"
     volumes:
       - ./server/data:/app/server/data
     restart: unless-stopped
