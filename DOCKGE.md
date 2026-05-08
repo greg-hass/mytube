@@ -23,6 +23,9 @@ services:
     environment:
       - NODE_ENV=production
       - PORT=3001
+      - FEED_REFRESH_ENABLED=true
+      - FEED_REFRESH_INTERVAL_MINUTES=15
+      - FEED_REFRESH_ON_START=true
     healthcheck:
       test: ["CMD", "curl", "-fsS", "http://localhost/api/videos/status"]
       interval: 30s
@@ -52,6 +55,7 @@ docker compose up -d
 
 - The app and API run in the same container.
 - `/api` is proxied internally from nginx to Node.
+- The server refreshes due RSS feeds every 15 minutes by default.
 - Persistent subscriptions, videos, watched state, and redirects live in `./data`.
 - If the package is private in GitHub Container Registry, log in first:
 

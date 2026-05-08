@@ -38,6 +38,9 @@ services:
     environment:
       - NODE_ENV=production
       - PORT=3001
+      - FEED_REFRESH_ENABLED=true
+      - FEED_REFRESH_INTERVAL_MINUTES=15
+      - FEED_REFRESH_ON_START=true
     healthcheck:
       test: ["CMD", "curl", "-fsS", "http://localhost/api/videos/status"]
       interval: 30s
@@ -85,6 +88,18 @@ docker compose logs -f
 docker ps
 curl http://localhost:5173/api/videos/status
 ```
+
+The status response includes `scheduledRefresh.nextRunAt`, so you can confirm the background refresh loop is active.
+
+## Scheduled Refresh
+
+The container keeps the feed warm automatically.
+
+- `FEED_REFRESH_ENABLED=true` enables the background scheduler
+- `FEED_REFRESH_INTERVAL_MINUTES=15` refreshes due feeds every 15 minutes
+- `FEED_REFRESH_ON_START=true` checks the cache when the container starts
+
+Set `FEED_REFRESH_INTERVAL_MINUTES=30` or `60` if you want a quieter server.
 
 ## Backup
 

@@ -37,10 +37,18 @@ const MAX_ARCHIVED_VIDEOS = 5000;
 const API_RESOLVER_DAILY_QUOTA_CAP = 100;
 const STARTUP_CACHE_MAX_AGE_MS = 10 * 60 * 1000;
 const CHANNEL_REFRESH_INTERVAL_MS = 20 * 60 * 1000;
+const DEFAULT_SCHEDULED_REFRESH_INTERVAL_MS = 15 * 60 * 1000;
 const DEFAULT_DATA = { subscriptions: [], settings: {}, watchedVideos: [], redirects: {} };
 let aggregationPromise = null;
 let rerunRequested = false;
 let queuedAggregationOptions = {};
+let scheduledRefreshTimer = null;
+let scheduledRefreshStatus = {
+    enabled: false,
+    intervalMs: DEFAULT_SCHEDULED_REFRESH_INTERVAL_MS,
+    nextRunAt: null,
+    lastRunAt: null,
+};
 let aggregationStatus = {
     state: 'idle',
     current: 0,
@@ -76,6 +84,28 @@ function getChannelsDueForRefresh(subscriptions = [], channelRefreshes = {}, opt
 
         return now - lastFetchedTime >= CHANNEL_REFRESH_INTERVAL_MS;
     });
+}
+
+function parseBooleanEnv(value, defaultValue = true) {
+    if (value === undefined || value === null || value === '') return defaultValue;
+    return !['0', 'false', 'no', 'off'].includes(String(value).trim().toLowerCase());
+}
+
+function parseRefreshIntervalMs(value) {
+    const minutes = Number(value);
+    if (!Number.isFinite(minutes) || minutes <= 0) {
+        return DEFAULT_SCHEDULED_REFRESH_INTERVAL_MS;
+    }
+
+    return Math.round(minutes * 60 * 1000);
+}
+
+function getScheduledRefreshConfig(env = process.env) {
+    return {
+        enabled: parseBooleanEnv(env.FEED_REFRESH_ENABLED, true),
+        refreshOnStartup: parseBooleanEnv(env.FEED_REFRESH_ON_START, true),
+        intervalMs: parseRefreshIntervalMs(env.FEED_REFRESH_INTERVAL_MINUTES),
+    };
 }
 
 function mergeChannelRefreshes(existingRefreshes = {}, activeChannelIds = new Set(), fetchedChannels = [], fetchedAt = new Date().toISOString()) {
@@ -756,10 +786,19 @@ async function aggregateFeeds(options = {}) {
 }
 
 function getAggregationStatus() {
-    return aggregationStatus;
+    return {
+        ...aggregationStatus,
+        scheduledRefresh: { ...scheduledRefreshStatus },
+    };
 }
 
 async function aggregateOnStartupIfStale() {
+    const scheduledConfig = getScheduledRefreshConfig();
+    if (!scheduledConfig.refreshOnStartup) {
+        console.log('⏭️ Startup feed refresh disabled by FEED_REFRESH_ON_START=false');
+        return;
+    }
+
     try {
         const [data, videoCache] = await Promise.all([
             readJson(DATA_FILE, DEFAULT_DATA),
@@ -794,16 +833,73 @@ async function aggregateOnStartupIfStale() {
     aggregateFeeds();
 }
 
-// Run immediately on start
-aggregateOnStartupIfStale();
+function stopScheduledRefresh() {
+    if (scheduledRefreshTimer) {
+        clearTimeout(scheduledRefreshTimer);
+        scheduledRefreshTimer = null;
+    }
 
-// Run every 15 minutes
-setInterval(aggregateFeeds, 15 * 60 * 1000);
+    scheduledRefreshStatus = {
+        ...scheduledRefreshStatus,
+        enabled: false,
+        nextRunAt: null,
+    };
+}
+
+function startScheduledRefresh(config = getScheduledRefreshConfig()) {
+    stopScheduledRefresh();
+
+    scheduledRefreshStatus = {
+        enabled: config.enabled,
+        intervalMs: config.intervalMs,
+        nextRunAt: null,
+        lastRunAt: null,
+    };
+
+    if (!config.enabled) {
+        console.log('⏭️ Scheduled feed refresh disabled by FEED_REFRESH_ENABLED=false');
+        return scheduledRefreshStatus;
+    }
+
+    const scheduleNext = () => {
+        const nextRunTime = Date.now() + config.intervalMs;
+        scheduledRefreshStatus = {
+            ...scheduledRefreshStatus,
+            enabled: true,
+            intervalMs: config.intervalMs,
+            nextRunAt: new Date(nextRunTime).toISOString(),
+        };
+
+        scheduledRefreshTimer = setTimeout(() => {
+            scheduledRefreshStatus = {
+                ...scheduledRefreshStatus,
+                lastRunAt: new Date().toISOString(),
+                nextRunAt: null,
+            };
+            aggregateFeeds().catch(err => console.error('Scheduled aggregation failed:', err));
+            scheduleNext();
+        }, config.intervalMs);
+
+        scheduledRefreshTimer.unref?.();
+    };
+
+    scheduleNext();
+    console.log(`⏱️ Scheduled feed refresh every ${Math.round(config.intervalMs / 60000)} minutes`);
+    return scheduledRefreshStatus;
+}
+
+// Run immediately on start when enabled
+aggregateOnStartupIfStale();
+startScheduledRefresh();
 
 module.exports = {
     CHANNEL_REFRESH_INTERVAL_MS,
+    DEFAULT_SCHEDULED_REFRESH_INTERVAL_MS,
     aggregateFeeds,
     getAggregationStatus,
     getChannelsDueForRefresh,
+    getScheduledRefreshConfig,
+    startScheduledRefresh,
+    stopScheduledRefresh,
     mergeChannelRefreshes
 };
