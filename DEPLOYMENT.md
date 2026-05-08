@@ -31,7 +31,7 @@ services:
     image: ghcr.io/greg-hass/youtube-subscriptions:latest
     container_name: youtube-subscriptions
     ports:
-      - "3000:80"
+      - "5173:80"
     volumes:
       - ./data:/app/server/data
     restart: unless-stopped
@@ -56,7 +56,7 @@ docker compose up -d
 Open:
 
 ```text
-http://your-server-ip:3000
+http://your-server-ip:5173
 ```
 
 ## If The GHCR Package Is Private
@@ -83,7 +83,7 @@ docker image prune -f
 ```bash
 docker compose logs -f
 docker ps
-curl http://localhost:3000/api/videos/status
+curl http://localhost:5173/api/videos/status
 ```
 
 ## Backup
