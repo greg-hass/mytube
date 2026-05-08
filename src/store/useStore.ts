@@ -26,11 +26,19 @@ export const useStore = create<AppState>()(
         viewMode: state.viewMode,
         sortBy: state.sortBy,
         apiKey: state.apiKey,
-        useApiForVideos: state.useApiForVideos,
         quotaUsed: state.quotaUsed,
         apiExhausted: state.apiExhausted,
         lastQuotaResetDate: state.lastQuotaResetDate,
+        watchedVideos: Array.from(state.watchedVideos),
       }),
+      merge: (persistedState, currentState) => {
+        const persisted = persistedState as Partial<AppState> & { watchedVideos?: string[] };
+        return {
+          ...currentState,
+          ...persisted,
+          watchedVideos: new Set(Array.isArray(persisted.watchedVideos) ? persisted.watchedVideos : []),
+        };
+      },
     }
   )
 );

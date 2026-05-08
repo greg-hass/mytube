@@ -1,8 +1,7 @@
 import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, Key, CheckCircle2, RefreshCw, Zap, ShieldCheck } from 'lucide-react';
+import { X, Key, CheckCircle2, ShieldCheck } from 'lucide-react';
 import { useStore } from '../store/useStore';
-import { useSubscriptionStorage } from '../hooks/useSubscriptionStorage';
 
 interface SettingsModalProps {
     isOpen: boolean;
@@ -10,25 +9,9 @@ interface SettingsModalProps {
 }
 
 export const SettingsModal = ({ isOpen, onClose }: SettingsModalProps) => {
-    const { apiKey, setApiKey, useApiForVideos, toggleUseApiForVideos } = useStore();
-    const { refreshAllChannels } = useSubscriptionStorage();
+    const { apiKey, setApiKey } = useStore();
     const [inputKey, setInputKey] = useState(apiKey);
     const [isSaved, setIsSaved] = useState(false);
-    const [isRefreshingIcons, setIsRefreshingIcons] = useState(false);
-    const [iconRefreshSuccess, setIconRefreshSuccess] = useState(false);
-
-    const handleRefreshIcons = async () => {
-        setIsRefreshingIcons(true);
-        try {
-            await refreshAllChannels();
-            setIconRefreshSuccess(true);
-            setTimeout(() => setIconRefreshSuccess(false), 2000);
-        } catch (error) {
-            console.error('Failed to refresh icons:', error);
-        } finally {
-            setIsRefreshingIcons(false);
-        }
-    };
 
     const handleSave = () => {
         setApiKey(inputKey);
@@ -100,7 +83,7 @@ export const SettingsModal = ({ isOpen, onClose }: SettingsModalProps) => {
                                             </div>
                                         </div>
                                         <p className="text-xs text-gray-500 dark:text-gray-400">
-                                            Required for fetching high-quality metadata and faster updates.
+                                            Optional. Videos and thumbnails use RSS; the key is only used as a capped fallback for resolving channel handles.
                                             <a href="https://console.cloud.google.com/apis/credentials" target="_blank" rel="noopener noreferrer" className="text-red-600 hover:underline ml-1">
                                                 Get a key
                                             </a>
@@ -119,63 +102,6 @@ export const SettingsModal = ({ isOpen, onClose }: SettingsModalProps) => {
                                     </button>
                                 </div>
                             </section>
-
-                            {/* Features Section */}
-                            {apiKey && (
-                                <section className="space-y-4">
-                                    <div className="flex items-center gap-2 text-blue-600 mb-2">
-                                        <Zap className="w-5 h-5" />
-                                        <h3 className="font-semibold text-gray-900 dark:text-white">Performance & Features</h3>
-                                    </div>
-
-                                    <div className="grid gap-4">
-                                        {/* API Toggle */}
-                                        <div className="flex items-center justify-between p-4 bg-white dark:bg-gray-800 rounded-xl border border-gray-100 dark:border-gray-700 shadow-sm">
-                                            <div className="space-y-1">
-                                                <p className="font-medium text-gray-900 dark:text-white">Enhanced Fetching</p>
-                                                <p className="text-xs text-gray-500 dark:text-gray-400">Use API for faster, reliable updates</p>
-                                            </div>
-                                            <button
-                                                onClick={toggleUseApiForVideos}
-                                                className={`relative w-12 h-6 rounded-full transition-colors ${useApiForVideos ? 'bg-blue-600' : 'bg-gray-200 dark:bg-gray-700'
-                                                    }`}
-                                            >
-                                                <motion.div
-                                                    className="absolute top-1 left-1 w-4 h-4 bg-white rounded-full shadow-sm"
-                                                    animate={{ x: useApiForVideos ? 24 : 0 }}
-                                                    transition={{ type: "spring", stiffness: 500, damping: 30 }}
-                                                />
-                                            </button>
-                                        </div>
-
-
-
-                                        {/* Maintenance */}
-                                        <div className="p-4 bg-white dark:bg-gray-800 rounded-xl border border-gray-100 dark:border-gray-700 shadow-sm">
-                                            <div className="flex items-center justify-between mb-3">
-                                                <div className="space-y-1">
-                                                    <p className="font-medium text-gray-900 dark:text-white">Refresh Metadata</p>
-                                                    <p className="text-xs text-gray-500 dark:text-gray-400">Update channel icons and names</p>
-                                                </div>
-                                            </div>
-                                            <button
-                                                onClick={handleRefreshIcons}
-                                                disabled={isRefreshingIcons || iconRefreshSuccess}
-                                                className="w-full py-2 px-4 rounded-lg bg-gray-50 dark:bg-gray-700/50 hover:bg-gray-100 dark:hover:bg-gray-700 text-sm font-medium text-gray-700 dark:text-gray-200 transition-colors flex items-center justify-center gap-2"
-                                            >
-                                                {isRefreshingIcons ? (
-                                                    <RefreshCw className="w-4 h-4 animate-spin" />
-                                                ) : iconRefreshSuccess ? (
-                                                    <CheckCircle2 className="w-4 h-4 text-green-500" />
-                                                ) : (
-                                                    <RefreshCw className="w-4 h-4" />
-                                                )}
-                                                {isRefreshingIcons ? 'Refreshing...' : iconRefreshSuccess ? 'Done!' : 'Refresh Icons'}
-                                            </button>
-                                        </div>
-                                    </div>
-                                </section>
-                            )}
                         </div>
                     </motion.div>
                 </>

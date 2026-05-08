@@ -1,17 +1,20 @@
 import { useParams, useNavigate } from 'react-router-dom';
-import { useEffect } from 'react';
-import { ArrowLeft, ExternalLink, RefreshCw } from 'lucide-react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { useEffect, useMemo, useState } from 'react';
+import { ArrowLeft, CheckCircle2, RefreshCw } from 'lucide-react';
+import { motion } from 'framer-motion';
 import { Header } from './Header';
-import { VideoCard } from './VideoCard';
+import { VirtualizedVideoGrid } from './VirtualizedVideoGrid';
 import { useRSSVideos } from '../hooks/useRSSVideos';
 import { useSubscriptionStorage } from '../hooks/useSubscriptionStorage';
 import { generatePlaceholderThumbnail, handleImageLoadError } from '../lib/icon-loader';
+import { useStore } from '../store/useStore';
 
 export const ChannelViewer = () => {
   const { channelId } = useParams<{ channelId: string }>();
   const navigate = useNavigate();
   const { allSubscriptions } = useSubscriptionStorage();
+  const { watchedVideos, markAsWatched } = useStore();
+  const [hideWatched, setHideWatched] = useState(false);
 
   if (!channelId) {
     navigate('/');
@@ -22,40 +25,46 @@ export const ChannelViewer = () => {
   const channelInfo = allSubscriptions.find(sub => sub.id === channelId);
 
   // Fetch videos for this specific channel
-  // Fetch videos for this specific channel
   const { videos: allVideos, isLoading, error, refresh } = useRSSVideos();
 
-  // Filter videos for this channel
-  const videos = allVideos.filter(v => v.channelId === channelId);
+  const channelVideos = useMemo(() => {
+    return allVideos
+      .filter(v => v.channelId === channelId)
+      .sort((a, b) => new Date(b.publishedAt).getTime() - new Date(a.publishedAt).getTime());
+  }, [allVideos, channelId]);
+
+  const videos = useMemo(() => {
+    return channelVideos.filter((video) => !hideWatched || !watchedVideos.has(video.id));
+  }, [channelVideos, hideWatched, watchedVideos]);
 
   // If channel info is missing (e.g. ID changed after resolution), try to get it from videos
-  const resolvedChannelInfo = channelInfo || (videos.length > 0 ? {
-    id: videos[0].channelId,
-    title: videos[0].channelTitle,
-    thumbnail: videos[0].thumbnail,
+  const resolvedChannelInfo = channelInfo || (channelVideos.length > 0 ? {
+    id: channelVideos[0].channelId,
+    title: channelVideos[0].channelTitle,
+    thumbnail: channelVideos[0].thumbnail,
     description: '',
     addedAt: 0
   } : undefined);
 
   // Redirect if we have a resolved ID that matches a subscription but differs from URL
   useEffect(() => {
-    if (!channelInfo && videos.length > 0) {
-      const resolvedId = videos[0].channelId;
+    if (!channelInfo && channelVideos.length > 0) {
+      const resolvedId = channelVideos[0].channelId;
       const matchingSub = allSubscriptions.find(sub => sub.id === resolvedId);
       if (matchingSub && resolvedId !== channelId) {
         console.log(`Redirecting from ${channelId} to resolved ID ${resolvedId}`);
         navigate(`/channel/${resolvedId}`, { replace: true });
       }
     }
-  }, [channelInfo, videos, allSubscriptions, channelId, navigate]);
+  }, [channelInfo, channelVideos, allSubscriptions, channelId, navigate]);
 
-  const openInYouTube = () => {
-    window.open(`https://youtube.com/channel/${channelId}`, '_blank');
-  };
+  useEffect(() => {
+    window.scrollTo({ top: 0 });
+  }, [channelId]);
 
   if (error) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-gray-50 via-white to-gray-50 dark:from-gray-950 dark:via-gray-900 dark:to-gray-950">
+      <div className="app-shell min-h-screen">
         <Header />
         <div className="max-w-7xl mx-auto py-8 px-4">
           <motion.div
@@ -83,145 +92,131 @@ export const ChannelViewer = () => {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-50 via-white to-gray-50 dark:from-gray-950 dark:via-gray-900 dark:to-gray-950">
+    <div className="app-shell min-h-screen">
       <Header />
 
-      <div className="max-w-7xl mx-auto py-8 px-4">
-        {/* Back Button */}
+      <div className="max-w-7xl mx-auto py-3 sm:py-8 px-4">
         <motion.button
           initial={{ opacity: 0, x: -20 }}
           animate={{ opacity: 1, x: 0 }}
           onClick={() => navigate(-1)}
-          className="flex items-center gap-2 mb-6 px-4 py-2 rounded-lg bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors shadow-sm"
+          className="mb-4 flex items-center gap-2 rounded-lg bg-gray-100 px-3 py-2 text-sm font-medium transition-colors hover:bg-gray-200 dark:bg-gray-800 dark:hover:bg-gray-700 sm:mb-6"
         >
-          <ArrowLeft className="w-5 h-5" />
-          <span className="font-medium">Back</span>
+          <ArrowLeft className="w-4 h-4" />
+          <span>Back</span>
         </motion.button>
 
-        {/* Channel Header */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.1 }}
-          className="bg-white dark:bg-gray-800 rounded-2xl shadow-xl overflow-hidden mb-6"
+          transition={{ duration: 0.16 }}
+          className="mb-4 flex items-center gap-3 sm:mb-6 sm:gap-4"
         >
-          <div className="p-6">
-            <div className="flex items-center gap-4 mb-4">
-              <div className="relative w-16 h-16">
-                <img
-                  src={
-                    resolvedChannelInfo?.thumbnail ||
-                    (resolvedChannelInfo ? generatePlaceholderThumbnail(resolvedChannelInfo.title) : undefined)
-                  }
-                  alt={resolvedChannelInfo?.title || 'Channel thumbnail'}
-                  className="w-16 h-16 rounded-full object-cover bg-gray-200"
-                  onError={(e) => {
-                    if (resolvedChannelInfo) {
-                      handleImageLoadError(e, resolvedChannelInfo.id, resolvedChannelInfo.title);
-                    }
-                  }}
-                  onLoad={() => {
-                    // Silent success - no need to log every successful image load
-                  }}
-                />
-              </div>
-              <div>
-                <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">
-                  {resolvedChannelInfo?.title || 'Unknown Channel'}
-                </h1>
-                <p className="text-gray-600 dark:text-gray-400">
-                  {videos.length} videos
-                </p>
-              </div>
-            </div>
+          <img
+            src={
+              resolvedChannelInfo?.thumbnail ||
+              (resolvedChannelInfo ? generatePlaceholderThumbnail(resolvedChannelInfo.title) : undefined)
+            }
+            alt={resolvedChannelInfo?.title || 'Channel thumbnail'}
+            className="h-14 w-14 flex-none rounded-full bg-gray-200 object-cover sm:h-16 sm:w-16"
+            onError={(e) => {
+              if (resolvedChannelInfo) {
+                handleImageLoadError(e, resolvedChannelInfo.id, resolvedChannelInfo.title);
+              }
+            }}
+          />
+          <div className="min-w-0">
+            <h1 className="truncate text-xl font-bold text-gray-900 dark:text-gray-100 sm:text-2xl">
+              {resolvedChannelInfo?.title || 'Unknown Channel'}
+            </h1>
+            <p className="text-sm text-gray-600 dark:text-gray-400 sm:text-base">
+              {channelVideos.length} videos
+            </p>
           </div>
         </motion.div>
 
-        {/* Videos */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.2 }}
-          className="bg-white dark:bg-gray-800 rounded-2xl shadow-xl overflow-hidden"
+          transition={{ duration: 0.16 }}
         >
-          <div className="p-6">
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="text-xl font-semibold text-gray-900 dark:text-gray-100">
-                Latest Videos
-              </h2>
-              <button
-                onClick={() => refresh()}
-                disabled={isLoading}
-                className="flex items-center gap-2 px-4 py-2 rounded-lg bg-red-600 text-white hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
-              >
-                <RefreshCw className={`w-4 h-4 ${isLoading ? 'animate-spin' : ''}`} />
-                <span>Refresh</span>
-              </button>
+          {isLoading ? (
+            <div className="text-center py-12">
+              <div className="inline-block w-8 h-8 border-4 border-red-600 border-t-transparent rounded-full animate-spin mb-4" />
+              <p className="text-gray-600 dark:text-gray-400">
+                Loading videos...
+              </p>
             </div>
-
-            <AnimatePresence mode="wait">
-              {isLoading ? (
-                <motion.div
-                  key="loading"
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  exit={{ opacity: 0 }}
-                  className="text-center py-12"
-                >
-                  <div className="inline-block w-8 h-8 border-4 border-red-600 border-t-transparent rounded-full animate-spin mb-4" />
-                  <p className="text-gray-600 dark:text-gray-400">
-                    Loading videos...
-                  </p>
-                </motion.div>
-              ) : videos.length === 0 ? (
-                <motion.div
-                  key="empty"
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  exit={{ opacity: 0 }}
-                  className="text-center py-12"
-                >
+          ) : channelVideos.length === 0 ? (
+            <div className="text-center py-12">
+              <p className="text-gray-600 dark:text-gray-400 text-lg mb-2">
+                No videos found
+              </p>
+              <p className="text-sm text-gray-500">
+                This channel might not have any recent uploads
+              </p>
+            </div>
+          ) : (
+            <div>
+              <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+                <p className="text-sm text-gray-500 dark:text-gray-400">
+                  Showing {videos.length} videos
+                </p>
+                <div className="flex flex-wrap items-center gap-3">
+                  <label className="flex items-center gap-2 cursor-pointer select-none">
+                    <div className="relative">
+                      <input
+                        type="checkbox"
+                        checked={hideWatched}
+                        onChange={(e) => setHideWatched(e.target.checked)}
+                        className="sr-only peer"
+                      />
+                      <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-emerald-300 dark:peer-focus:ring-emerald-800 rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-gray-600 peer-checked:bg-emerald-600"></div>
+                    </div>
+                    <span className="text-sm font-medium text-gray-700 dark:text-gray-300">Hide watched</span>
+                  </label>
+                  <button
+                    onClick={() => refresh()}
+                    disabled={isLoading}
+                    className="hidden sm:flex items-center gap-2 px-4 py-2 rounded-lg bg-red-600 text-white hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+                  >
+                    <RefreshCw className={`w-4 h-4 ${isLoading ? 'animate-spin' : ''}`} />
+                    <span>Refresh</span>
+                  </button>
+                  {videos.length > 0 && (
+                    <button
+                      type="button"
+                      onClick={() => videos.forEach((video) => markAsWatched(video.id))}
+                      className="hidden sm:flex items-center gap-2 px-4 py-2 rounded-lg font-medium bg-gray-100 text-gray-800 hover:bg-gray-200 dark:bg-gray-800 dark:text-gray-100 dark:hover:bg-gray-700 transition-all"
+                    >
+                      <CheckCircle2 className="w-4 h-4" />
+                      <span>Mark shown watched</span>
+                    </button>
+                  )}
+                </div>
+              </div>
+              {videos.length === 0 ? (
+                <div className="text-center py-12">
                   <p className="text-gray-600 dark:text-gray-400 text-lg mb-2">
-                    No videos found
+                    No unwatched videos
                   </p>
                   <p className="text-sm text-gray-500">
-                    This channel might not have any recent uploads
+                    Turn off Hide watched to see the full channel timeline
                   </p>
-                </motion.div>
+                </div>
               ) : (
-                <motion.div
-                  key="videos"
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  exit={{ opacity: 0 }}
-                  className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6"
-                >
-                  {videos.map((video, index) => (
-                    <VideoCard key={video.id} video={video} index={index} />
-                  ))}
-                </motion.div>
+                <VirtualizedVideoGrid
+                  videos={videos}
+                  columns={4}
+                  channelThumbnails={
+                    resolvedChannelInfo
+                      ? new Map([[resolvedChannelInfo.id, resolvedChannelInfo.thumbnail]])
+                      : undefined
+                  }
+                />
               )}
-            </AnimatePresence>
-          </div>
-        </motion.div>
-
-        {/* Open in YouTube Button */}
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.3 }}
-          className="mt-6 p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-200 dark:border-blue-800"
-        >
-          <p className="text-sm text-blue-800 dark:text-blue-200 mb-3">
-            💡 Want more features? Open this channel in YouTube for full functionality.
-          </p>
-          <button
-            onClick={openInYouTube}
-            className="flex items-center gap-2 px-4 py-2 rounded-lg bg-red-600 hover:bg-red-700 text-white transition-colors w-full"
-          >
-            <ExternalLink className="w-4 h-4" />
-            <span>Open in YouTube</span>
-          </button>
+            </div>
+          )}
         </motion.div>
       </div>
     </div>

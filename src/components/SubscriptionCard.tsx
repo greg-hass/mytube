@@ -3,7 +3,7 @@ import { ExternalLink, Users, Video, Trash2, Star, Volume2, VolumeX } from 'luci
 import type { YouTubeChannel } from '../types/youtube';
 import { useState, memo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { generatePlaceholderThumbnail, handleImageLoadError } from '../lib/icon-loader';
+import { getDisplayThumbnail, handleImageLoadError } from '../lib/icon-loader';
 
 interface Props {
   channel: YouTubeChannel;
@@ -13,7 +13,7 @@ interface Props {
   onToggleMute?: (channelId: string) => void;
 }
 
-export const SubscriptionCard = memo(({ channel, index, onRemove, onToggleFavorite, onToggleMute }: Props) => {
+export const SubscriptionCard = memo(({ channel, onRemove, onToggleFavorite, onToggleMute }: Props) => {
   const [imageLoaded, setImageLoaded] = useState(false);
   const [confirmOpen, setConfirmOpen] = useState(false);
   const navigate = useNavigate();
@@ -26,7 +26,7 @@ export const SubscriptionCard = memo(({ channel, index, onRemove, onToggleFavori
     <motion.div
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
-      transition={{ delay: index * 0.02, duration: 0.3 }}
+      transition={{ duration: 0.16 }}
       whileHover={{ y: -8, scale: 1.02 }}
       onClick={openChannel}
       className="group cursor-pointer bg-white dark:bg-gray-900 rounded-2xl overflow-hidden shadow-lg hover:shadow-2xl transition-all duration-300 border border-gray-200 dark:border-gray-800"
@@ -37,9 +37,10 @@ export const SubscriptionCard = memo(({ channel, index, onRemove, onToggleFavori
           <div className="absolute inset-0 animate-pulse bg-gradient-to-r from-gray-200 via-gray-300 to-gray-200 dark:from-gray-800 dark:via-gray-700 dark:to-gray-800" />
         )}
         <img
-          src={channel.thumbnail || generatePlaceholderThumbnail(channel.title || channel.id)}
+          src={getDisplayThumbnail(channel.thumbnail, channel.title || channel.id)}
           alt={channel.title}
-          loading="lazy"
+          loading="eager"
+          decoding="async"
           onError={(e) => {
             handleImageLoadError(e, channel.id, channel.title);
           }}

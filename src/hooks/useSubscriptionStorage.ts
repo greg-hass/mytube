@@ -10,8 +10,9 @@ import {
   toggleMute,
   type StoredSubscription,
 } from '../lib/indexeddb';
-import { parseOPMLToSubscriptions } from '../lib/opml-parser';
+import { parseSubscriptionImportToSubscriptions } from '../lib/opml-parser';
 import { resolveChannelThumbnail } from '../lib/icon-loader';
+import { hasPlaceholderThumbnail, mergeRemoteSubscriptionMetadata } from '../lib/subscription-sync';
 import { useStore } from '../store/useStore';
 import type { YouTubeChannel } from '../types/youtube';
 import { toast } from 'sonner';
@@ -22,7 +23,32 @@ import { toast } from 'sonner';
  */
 export const useSubscriptionStorage = () => {
   const queryClient = useQueryClient();
-  const { searchQuery, sortBy, apiKey } = useStore();
+  const { searchQuery, sortBy, apiKey, watchedVideos } = useStore();
+
+  const getSubscriptionsWithServerMetadata = async () => {
+    const localSubs = await getAllSubscriptions();
+
+    try {
+      const response = await fetch(`/api/sync?t=${Date.now()}`);
+      if (!response.ok) return localSubs;
+
+      const remoteData = await response.json();
+      const remoteSubs = remoteData.subscriptions || [];
+      const mergedSubs = mergeRemoteSubscriptionMetadata(localSubs, remoteSubs);
+
+      const localStr = JSON.stringify([...localSubs].sort((a, b) => a.id.localeCompare(b.id)));
+      const mergedStr = JSON.stringify([...mergedSubs].sort((a, b) => a.id.localeCompare(b.id)));
+
+      if (localStr !== mergedStr) {
+        await addSubscriptions(mergedSubs);
+      }
+
+      return mergedSubs;
+    } catch (error) {
+      console.warn('Failed to load server subscription metadata:', error);
+      return localSubs;
+    }
+  };
 
   // Fetch all subscriptions from IndexedDB
   const {
@@ -32,7 +58,7 @@ export const useSubscriptionStorage = () => {
     refetch,
   } = useQuery({
     queryKey: ['subscriptions'],
-    queryFn: getAllSubscriptions,
+    queryFn: getSubscriptionsWithServerMetadata,
     staleTime: 1000 * 60 * 5, // 5 minutes
     gcTime: 1000 * 60 * 30, // 30 minutes
   });
@@ -44,10 +70,10 @@ export const useSubscriptionStorage = () => {
     staleTime: 1000 * 60 * 5,
   });
 
-  // Mutation to import OPML file
+  // Mutation to import OPML or Google Takeout CSV file
   const importOPML = useMutation({
-    mutationFn: async (opmlContent: string) => {
-      const newSubscriptions = parseOPMLToSubscriptions(opmlContent);
+    mutationFn: async (importContent: string) => {
+      const newSubscriptions = parseSubscriptionImportToSubscriptions(importContent);
       await addSubscriptions(newSubscriptions);
       return newSubscriptions;
     },
@@ -91,8 +117,9 @@ export const useSubscriptionStorage = () => {
       // Invalidate RSS videos, as the list of subscriptions has changed
       queryClient.invalidateQueries({ queryKey: ['rss-videos'] });
 
-      // Push changes to server to persist removal
-      await syncWithBackend();
+      // Push the post-delete local list directly. A normal sync would fetch the
+      // server first and merge the deleted channel straight back in.
+      await pushLocalStateToBackend();
     },
   });
 
@@ -121,80 +148,31 @@ export const useSubscriptionStorage = () => {
     }));
   }, [subscriptions]);
 
-  // Backfill missing channel thumbnails
-  // If API key is present, we can also refresh existing thumbnails to ensure high quality
+  // Backfill missing channel thumbnails without spending API quota.
   useEffect(() => {
     if (!subscriptions || subscriptions.length === 0) return;
 
     let isCancelled = false;
 
     const hydrateThumbnails = async () => {
-      // If we have an API key, we can batch fetch everything efficiently
-      if (apiKey) {
-        // Find channels that need updates (missing thumbnail or low res/placeholder)
-        // Or just update everything if it's been a while? For now, let's prioritize missing ones
-        // but also update placeholders.
-        const needsUpdate = subscriptions.filter(sub =>
-          !sub.thumbnail ||
-          sub.thumbnail.startsWith('data:') ||
-          sub.thumbnail.includes('mqdefault') // Upgrade to high res
-        );
+      const missingThumbnails = subscriptions.filter((sub) => !sub.thumbnail);
+      if (missingThumbnails.length === 0) return;
 
-        if (needsUpdate.length === 0) return;
+      const updates: StoredSubscription[] = [];
 
-        // Process in chunks of 50
-        const idsToFetch = needsUpdate.map(sub => sub.id);
-
-        // Import dynamically to avoid circular dependency issues if any
-        const { fetchChannelsBatch } = await import('../lib/youtube-api');
-
-        const updatedChannels = await fetchChannelsBatch(idsToFetch, apiKey);
+      for (const sub of missingThumbnails) {
+        const thumbnail = await resolveChannelThumbnail(sub.id);
 
         if (isCancelled) return;
 
-        if (updatedChannels.length > 0) {
-          const updates: StoredSubscription[] = [];
-
-          for (const channel of updatedChannels) {
-            const original = subscriptions.find(s => s.id === channel.id);
-            if (original && original.thumbnail !== channel.thumbnail) {
-              updates.push({
-                ...original,
-                thumbnail: channel.thumbnail,
-                description: channel.description || original.description,
-                // Update title too if it changed? Maybe safer to keep user's title if they edited it?
-                // But usually they don't edit it. Let's update it.
-                title: channel.title || original.title
-              });
-            }
-          }
-
-          if (updates.length > 0) {
-            await addSubscriptions(updates);
-            queryClient.invalidateQueries({ queryKey: ['subscriptions'] });
-          }
+        if (thumbnail) {
+          updates.push({ ...sub, thumbnail });
         }
-      } else {
-        // Fallback to scraping for missing thumbnails only
-        const missingThumbnails = subscriptions.filter((sub) => !sub.thumbnail);
-        if (missingThumbnails.length === 0) return;
+      }
 
-        const updates: StoredSubscription[] = [];
-
-        for (const sub of missingThumbnails) {
-          const thumbnail = await resolveChannelThumbnail(sub.id);
-
-          if (isCancelled) return;
-
-          if (thumbnail) {
-            updates.push({ ...sub, thumbnail });
-          }
-        }
-
-        if (!isCancelled && updates.length > 0) {
-          await addSubscriptions(updates);
-          queryClient.invalidateQueries({ queryKey: ['subscriptions'] });
-        }
+      if (!isCancelled && updates.length > 0) {
+        await addSubscriptions(updates);
+        queryClient.invalidateQueries({ queryKey: ['subscriptions'] });
       }
     };
 
@@ -203,7 +181,7 @@ export const useSubscriptionStorage = () => {
     return () => {
       isCancelled = true;
     };
-  }, [subscriptions, queryClient, apiKey]);
+  }, [subscriptions, queryClient]);
 
   // Filter and sort subscriptions
   const filteredAndSortedSubscriptions = useMemo(() => {
@@ -237,6 +215,66 @@ export const useSubscriptionStorage = () => {
 
     return result;
   }, [channelSubscriptions, searchQuery, sortBy]);
+
+  const repairChannelIcons = async ({ useApi = false }: { useApi?: boolean } = {}) => {
+    const localSubs = await getAllSubscriptions();
+    let repairedSubs = localSubs;
+
+    try {
+      const response = await fetch(`/api/sync?t=${Date.now()}`);
+      if (!response.ok) throw new Error('Failed to fetch server subscriptions');
+
+      const remoteData = await response.json();
+      const remoteSubs = remoteData.subscriptions || [];
+      repairedSubs = mergeRemoteSubscriptionMetadata(localSubs, remoteSubs);
+    } catch (error) {
+      if (!useApi) throw error;
+      console.warn('Server icon repair unavailable, trying API repair:', error);
+    }
+
+    if (useApi && apiKey) {
+      const channelIds = Array.from(new Set(
+        repairedSubs
+          .map((sub) => sub.id)
+          .filter((id) => id.startsWith('UC'))
+      ));
+
+      if (channelIds.length > 0) {
+        const { fetchChannelIconsBatch } = await import('../lib/youtube-api');
+        const apiChannels = await fetchChannelIconsBatch(channelIds, apiKey);
+        const apiChannelsById = new Map(apiChannels.map((channel) => [channel.id, channel]));
+
+        repairedSubs = repairedSubs.map((sub) => {
+          const apiChannel = apiChannelsById.get(sub.id);
+          if (!apiChannel?.thumbnail) return sub;
+
+          return {
+            ...sub,
+            title: apiChannel.title || sub.title,
+            description: apiChannel.description || sub.description,
+            thumbnail: apiChannel.thumbnail,
+            customUrl: apiChannel.customUrl || sub.customUrl,
+          };
+        });
+      }
+    }
+
+    const localStr = JSON.stringify([...localSubs].sort((a, b) => a.id.localeCompare(b.id)));
+    const repairedStr = JSON.stringify([...repairedSubs].sort((a, b) => a.id.localeCompare(b.id)));
+
+    if (localStr !== repairedStr) {
+      await addSubscriptions(repairedSubs);
+      queryClient.setQueryData(['subscriptions'], repairedSubs);
+      queryClient.invalidateQueries({ queryKey: ['subscriptions'] });
+      queryClient.invalidateQueries({ queryKey: ['subscriptions-count'] });
+      return repairedSubs.filter((sub) => {
+        const original = localSubs.find((localSub) => localSub.id === sub.id);
+        return original?.thumbnail !== sub.thumbnail;
+      }).length;
+    }
+
+    return 0;
+  };
 
   // Export current subscriptions as OPML
   const exportOPML = () => {
@@ -290,7 +328,6 @@ ${outlines}
       subscriptions: subscriptions,
       settings: {
         apiKey: useStore.getState().apiKey,
-        useApiForVideos: useStore.getState().useApiForVideos,
       },
       watchedVideos: Array.from(useStore.getState().watchedVideos),
     };
@@ -324,12 +361,6 @@ ${outlines}
       if (data.settings) {
         if (data.settings.apiKey) {
           useStore.getState().setApiKey(data.settings.apiKey);
-        }
-        if (typeof data.settings.useApiForVideos === 'boolean') {
-          const currentState = useStore.getState().useApiForVideos;
-          if (currentState !== data.settings.useApiForVideos) {
-            useStore.getState().toggleUseApiForVideos();
-          }
         }
       }
 
@@ -454,6 +485,30 @@ ${outlines}
   };
 
   // Sync with backend
+  const pushLocalStateToBackend = async () => {
+    const localSubs = await getAllSubscriptions();
+    const { searchQuery, sortBy, apiKey, quotaUsed } = useStore.getState();
+
+    const response = await fetch('/api/sync', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        subscriptions: localSubs,
+        settings: {
+          searchQuery,
+          sortBy,
+          apiKey,
+          quotaUsed,
+        },
+        watchedVideos: Array.from(useStore.getState().watchedVideos),
+      }),
+    });
+
+    if (!response.ok) {
+      throw new Error(`Failed to push local subscriptions: ${response.status}`);
+    }
+  };
+
   const syncWithBackend = async () => {
     try {
       // 1. Fetch Remote Data
@@ -559,7 +614,7 @@ ${outlines}
 
       // Sync Settings (API Key, etc.)
       if (remoteData.settings) {
-        const { apiKey: currentApiKey, useApiForVideos } = useStore.getState();
+        const { apiKey: currentApiKey } = useStore.getState();
         const remoteSettings = remoteData.settings;
 
         // If local is empty but remote has it, take remote
@@ -567,12 +622,6 @@ ${outlines}
           console.log('📥 Importing API Key from server...');
           useStore.getState().setApiKey(remoteSettings.apiKey);
           updatedLocal = true;
-        }
-
-        // Sync other settings if needed
-        if (remoteSettings.useApiForVideos !== undefined && remoteSettings.useApiForVideos !== useApiForVideos) {
-          // If they differ, toggle local to match remote
-          useStore.getState().toggleUseApiForVideos();
         }
 
         // Sync Quota
@@ -630,7 +679,7 @@ ${outlines}
 
       if (mergedSubs.length !== remoteSubs.length || mergedWatched.size !== remoteWatched.length) {
         // We push the MERGED list to server, so server becomes the union too.
-        const { searchQuery, sortBy, apiKey, useApiForVideos, quotaUsed } = useStore.getState();
+        const { searchQuery, sortBy, apiKey, quotaUsed } = useStore.getState();
 
         const pushResponse = await fetch('/api/sync', {
           method: 'POST',
@@ -641,7 +690,6 @@ ${outlines}
               searchQuery,
               sortBy,
               apiKey,
-              useApiForVideos,
               quotaUsed // Send local quota too
             },
             watchedVideos: Array.from(mergedWatched)
@@ -666,9 +714,19 @@ ${outlines}
     syncWithBackend();
   }, []);
 
-  // Auto-save to backend when subscriptions or settings change
-  const { useApiForVideos } = useStore();
+  useEffect(() => {
+    if (!subscriptions?.some(hasPlaceholderThumbnail)) return;
 
+    const timer = setTimeout(() => {
+      repairChannelIcons().catch((error) => {
+        console.error('Icon repair failed:', error);
+      });
+    }, 500);
+
+    return () => clearTimeout(timer);
+  }, [subscriptions]);
+
+  // Auto-save to backend when subscriptions or settings change
   useEffect(() => {
     if (!isLoading && subscriptions) {
       const timer = setTimeout(() => {
@@ -676,7 +734,7 @@ ${outlines}
       }, 2000); // Debounce 2s
       return () => clearTimeout(timer);
     }
-  }, [subscriptions, isLoading, apiKey, useApiForVideos]);
+  }, [subscriptions, isLoading, apiKey, watchedVideos]);
 
   return {
     // Data
@@ -715,6 +773,7 @@ ${outlines}
     exportJSON,
     importJSON,
     refreshAllChannels,
+    repairChannelIcons,
 
     // Mutation states
     isImporting: importOPML.isPending,

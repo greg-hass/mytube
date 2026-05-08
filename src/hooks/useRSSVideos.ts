@@ -9,6 +9,19 @@ export interface SyncStatus {
   isSyncing: boolean;
   lastUpdated: number;
   errors: number;
+  videos: number;
+  state: 'idle' | 'running' | 'queued' | 'error';
+}
+
+interface AggregationStatus {
+  state: 'idle' | 'running' | 'queued' | 'error';
+  current: number;
+  total: number;
+  videos: number;
+  errors: number;
+  startedAt: string | null;
+  completedAt: string | null;
+  lastUpdated: string | null;
 }
 
 /**
@@ -17,6 +30,23 @@ export interface SyncStatus {
  */
 export const useRSSVideos = () => {
   const queryClient = useQueryClient();
+
+  const {
+    data: aggregationStatus,
+  } = useQuery<AggregationStatus>({
+    queryKey: ['server-videos-status'],
+    queryFn: async () => {
+      const response = await fetch(`/api/videos/status?t=${Date.now()}`);
+      if (!response.ok) {
+        throw new Error('Failed to fetch video refresh status');
+      }
+      return response.json();
+    },
+    staleTime: 0,
+    refetchInterval: 2000,
+  });
+
+  const isAggregating = aggregationStatus?.state === 'running' || aggregationStatus?.state === 'queued';
 
   // Fetch videos from server
   const {
@@ -33,14 +63,14 @@ export const useRSSVideos = () => {
       }
       return response.json();
     },
+    placeholderData: (previousData) => previousData,
     staleTime: 1000 * 60, // 1 minute
-    refetchInterval: 1000 * 60 * 5, // Auto-refresh every 5 minutes
+    refetchInterval: isAggregating ? 5000 : 1000 * 60 * 5,
   });
 
   // Trigger server-side refresh
   const triggerServerRefresh = useMutation({
     mutationFn: async () => {
-      toast.loading('Refreshing videos from server...');
       const response = await fetch('/api/videos/refresh', {
         method: 'POST',
       });
@@ -50,13 +80,9 @@ export const useRSSVideos = () => {
       return response.json();
     },
     onSuccess: () => {
-      toast.dismiss();
-      toast.success('Refresh complete!');
-      // Invalidate immediately since server is done
-      queryClient.invalidateQueries({ queryKey: ['server-videos'] });
+      queryClient.invalidateQueries({ queryKey: ['server-videos-status'] });
     },
     onError: (error) => {
-      toast.dismiss();
       toast.error(`Refresh failed: ${error.message}`);
     }
   });
@@ -67,14 +93,22 @@ export const useRSSVideos = () => {
   }, [serverData]);
 
   const syncStatus = useMemo<SyncStatus>(() => {
+    const state = aggregationStatus?.state || 'idle';
+    const current = aggregationStatus?.current ?? serverData?.totalChannels ?? 0;
+    const total = aggregationStatus?.total ?? serverData?.totalChannels ?? 0;
+    const videosCount = aggregationStatus?.videos ?? serverData?.videos?.length ?? 0;
+    const lastUpdated = aggregationStatus?.lastUpdated || serverData?.lastUpdated;
+
     return {
-      total: serverData?.totalChannels || 0,
-      current: serverData?.totalChannels || 0,
-      isSyncing: triggerServerRefresh.isPending,
-      lastUpdated: serverData?.lastUpdated ? new Date(serverData.lastUpdated).getTime() : Date.now(),
-      errors: 0,
+      total,
+      current,
+      isSyncing: triggerServerRefresh.isPending || state === 'running' || state === 'queued',
+      lastUpdated: lastUpdated ? new Date(lastUpdated).getTime() : Date.now(),
+      errors: aggregationStatus?.errors || 0,
+      videos: videosCount,
+      state,
     };
-  }, [serverData, triggerServerRefresh.isPending]);
+  }, [aggregationStatus, serverData, triggerServerRefresh.isPending]);
 
   const cacheStatus = useMemo(() => {
     const lastUpdated = serverData?.lastUpdated ? new Date(serverData.lastUpdated).getTime() : 0;

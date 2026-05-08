@@ -1,124 +1,60 @@
-# Dockge Deployment - Simple Version
+# Dockge Deployment
 
-## Option 1: Clone and Build Locally (Recommended)
+This app is published as a single GitHub Container Registry image:
 
-### Step 1: SSH into your Ubuntu server
-
-### Step 2: Clone the repository
-```bash
-cd ~
-git clone https://github.com/greg-hass/youtube-subscriptions.git
-cd youtube-subscriptions
+```text
+ghcr.io/greg-hass/youtube-subscriptions:latest
 ```
 
-### Step 3: In Dockge, create a new stack
+## Dockge Stack
 
-**Stack Name:** `youtube-subscriptions`
-
-**Compose Content:**
-```yaml
-version: '3.8'
-
-services:
-  youtube-subscriptions:
-    build: .
-    container_name: youtube-subscriptions
-    ports:
-      - "3000:80"
-    restart: unless-stopped
-    environment:
-      - NODE_ENV=production
-    healthcheck:
-      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost/"]
-      interval: 30s
-      timeout: 3s
-      retries: 3
-      start_period: 5s
-```
-
-**Important:** In Dockge, set the **Working Directory** to: `/root/youtube-subscriptions` (or wherever you cloned it)
-
-### Step 4: Click "Deploy"
-
----
-
-## Option 2: Manual Docker Build (If Dockge doesn't work)
-
-```bash
-# SSH into your server
-cd ~/youtube-subscriptions
-
-# Build the image
-docker build -t youtube-subscriptions .
-
-# Run with docker-compose
-docker-compose up -d
-```
-
-Then access at `http://your-server-ip:3000`
-
----
-
-## Option 3: Use Pre-built Image (Coming Soon)
-
-Once I push to GitHub Container Registry, you can use:
+Create a new stack named `youtube-subscriptions` and use:
 
 ```yaml
-version: '3.8'
-
 services:
   youtube-subscriptions:
     image: ghcr.io/greg-hass/youtube-subscriptions:latest
     container_name: youtube-subscriptions
     ports:
       - "3000:80"
+    volumes:
+      - ./data:/app/server/data
     restart: unless-stopped
+    environment:
+      - NODE_ENV=production
+      - PORT=3001
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost/api/videos/status"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+    labels:
+      - "com.centurylinklabs.watchtower.enable=true"
 ```
 
----
+Open:
 
-## Quick Fix for Your Current Error
+```text
+http://your-server-ip:3000
+```
 
-The error happens because Docker can't authenticate to GitHub. Here's the fix:
+## Updating
 
-1. **In Dockge, delete the current stack**
+After GitHub Actions publishes a new image:
 
-2. **SSH into your server:**
 ```bash
-cd /opt/stacks  # or wherever Dockge stores stacks
-mkdir youtube-subscriptions
-cd youtube-subscriptions
-git clone https://github.com/greg-hass/youtube-subscriptions.git .
+docker compose pull
+docker compose up -d
 ```
 
-3. **Back in Dockge, create new stack** with this compose:
-```yaml
-version: '3.8'
+## Notes
 
-services:
-  app:
-    build: .
-    ports:
-      - "3000:80"
-    restart: unless-stopped
+- The app and API run in the same container.
+- `/api` is proxied internally from nginx to Node.
+- Persistent subscriptions, videos, watched state, and redirects live in `./data`.
+- If the package is private in GitHub Container Registry, log in first:
+
+```bash
+echo YOUR_GITHUB_TOKEN | docker login ghcr.io -u YOUR_GITHUB_USERNAME --password-stdin
 ```
-
-4. **Set the working directory** in Dockge to where you cloned the repo
-
-5. **Deploy!**
-
----
-
-## Troubleshooting
-
-**If build fails:**
-- Make sure you cloned the repo first
-- Check Dockge's working directory setting
-- Try building manually: `docker build -t youtube-subscriptions .`
-
-**If port 3000 is taken:**
-- Change to `"8080:80"` or any other port
-
-**Can't access from browser:**
-- Check firewall: `sudo ufw allow 3000`
-- Verify container is running: `docker ps`

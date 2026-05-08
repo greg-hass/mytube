@@ -10,19 +10,28 @@ import {
   Plus,
   Settings,
   RefreshCw,
+  Menu,
+  X,
 } from 'lucide-react';
-import { useState } from 'react';
-import { OPMLUpload } from './OPMLUpload';
+import { lazy, Suspense, useState } from 'react';
 import { SettingsModal } from './SettingsModal';
 import { useStore } from '../store/useStore';
 import { useSubscriptionStorage } from '../hooks/useSubscriptionStorage';
 import type { SortBy } from '../types/youtube';
 
+const OPMLUpload = lazy(() => import('./OPMLUpload').then((module) => ({ default: module.OPMLUpload })));
+
 interface HeaderProps {
   onAddChannel?: () => void;
+  showMobileSearch?: boolean;
+  searchPlaceholder?: string;
 }
 
-export const Header = ({ onAddChannel }: HeaderProps) => {
+export const Header = ({
+  onAddChannel,
+  showMobileSearch = true,
+  searchPlaceholder = 'Search channels...',
+}: HeaderProps) => {
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const {
     theme,
@@ -33,12 +42,11 @@ export const Header = ({ onAddChannel }: HeaderProps) => {
     setSortBy,
     searchQuery,
     setSearchQuery,
-    apiKey,
-    useApiForVideos,
-    apiExhausted,
   } = useStore();
   const { count, exportOPML, exportJSON } = useSubscriptionStorage();
   const [showExportMenu, setShowExportMenu] = useState(false);
+  const [showMobileMenu, setShowMobileMenu] = useState(false);
+  const [showMobileSearchPanel, setShowMobileSearchPanel] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
 
   const handleRefresh = async () => {
@@ -73,12 +81,13 @@ export const Header = ({ onAddChannel }: HeaderProps) => {
 
 
   return (
-    <motion.header
-      initial={{ y: -100 }}
-      animate={{ y: 0 }}
-      className="sticky top-0 z-50 glass border-b border-gray-200 dark:border-gray-800 shadow-sm"
-    >
-      <div className="max-w-7xl mx-auto px-4 py-4">
+    <>
+      <motion.header
+        initial={{ y: -100 }}
+        animate={{ y: 0 }}
+        className="sticky top-0 z-50 glass safe-top border-b border-gray-200 dark:border-gray-800/80 shadow-sm"
+      >
+        <div className="max-w-7xl mx-auto px-4 py-3 md:py-4">
         <div className="flex items-center justify-between gap-4">
           {/* Logo */}
           <motion.div
@@ -89,10 +98,10 @@ export const Header = ({ onAddChannel }: HeaderProps) => {
               <Youtube className="w-6 h-6 text-white" />
             </div>
             <div>
-              <h1 className="hidden md:block text-xl font-bold bg-gradient-to-r from-red-600 to-red-500 bg-clip-text text-transparent">
+              <h1 className="text-lg md:text-xl font-bold bg-gradient-to-r from-red-600 to-red-500 bg-clip-text text-transparent">
                 Subscriptions
               </h1>
-              <p className="hidden md:block text-xs text-gray-500 dark:text-gray-400">
+              <p className="text-xs text-gray-500 dark:text-gray-400">
                 {count} channels
               </p>
             </div>
@@ -104,7 +113,7 @@ export const Header = ({ onAddChannel }: HeaderProps) => {
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
               <input
                 type="text"
-                placeholder="Search channels..."
+                placeholder={searchPlaceholder}
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 className="w-full pl-10 pr-4 py-2 rounded-full bg-gray-100 dark:bg-gray-800 border-2 border-transparent focus:border-red-500 focus:bg-white dark:focus:bg-gray-900 transition-all outline-none"
@@ -113,7 +122,7 @@ export const Header = ({ onAddChannel }: HeaderProps) => {
           </div>
 
           {/* Controls */}
-          <div className="flex items-center gap-2">
+          <div className="hidden md:flex items-center gap-2">
             {/* Add Channel Button */}
             {onAddChannel && (
               <motion.button
@@ -173,7 +182,9 @@ export const Header = ({ onAddChannel }: HeaderProps) => {
             </div>
 
             {/* Import OPML */}
-            <OPMLUpload minimal />
+            <Suspense fallback={null}>
+              <OPMLUpload minimal />
+            </Suspense>
 
             {/* Export OPML/JSON */}
             <div className="relative">
@@ -211,22 +222,6 @@ export const Header = ({ onAddChannel }: HeaderProps) => {
               )}
             </div>
 
-
-            {/* API Status */}
-            {apiKey && (
-              <div
-                className={`hidden lg:flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium border ${useApiForVideos && !apiExhausted
-                  ? 'bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-400 border-green-200 dark:border-green-800'
-                  : 'bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-400 border-red-200 dark:border-red-800'
-                  }`}
-                title={useApiForVideos && !apiExhausted ? 'Using YouTube API for updates' : 'API disabled or quota exhausted (403). Using RSS fallback.'}
-              >
-                <div className={`w-1.5 h-1.5 rounded-full ${useApiForVideos && !apiExhausted ? 'bg-green-500' : 'bg-red-500'
-                  }`} />
-                <span>{useApiForVideos && !apiExhausted ? 'API Active' : 'API Inactive'}</span>
-              </div>
-            )}
-
             {/* Settings */}
             <motion.button
               whileHover={{ scale: 1.1 }}
@@ -252,24 +247,199 @@ export const Header = ({ onAddChannel }: HeaderProps) => {
               )}
             </motion.button>
           </div>
+
+          <div className="flex md:hidden items-center gap-2">
+            {onAddChannel && (
+              <button
+                data-testid="mobile-add-channel-button"
+                onClick={onAddChannel}
+                className="p-2 rounded-lg bg-red-600 text-white hover:bg-red-700 transition-colors"
+                title="Add channel"
+              >
+                <Plus className="w-5 h-5" />
+              </button>
+            )}
+            <button
+              data-testid="mobile-refresh-button"
+              onClick={handleRefresh}
+              disabled={isRefreshing}
+              className="p-2 rounded-lg bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors disabled:opacity-50"
+              title="Refresh feeds"
+            >
+              <RefreshCw className={`w-5 h-5 ${isRefreshing ? 'animate-spin' : ''}`} />
+            </button>
+            {showMobileSearch && (
+              <button
+                data-testid="mobile-search-button"
+                onClick={() => setShowMobileSearchPanel((isOpen) => !isOpen)}
+                className="p-2 rounded-lg bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors"
+                title="Search"
+              >
+                {showMobileSearchPanel ? <X className="w-5 h-5" /> : <Search className="w-5 h-5" />}
+              </button>
+            )}
+            <button
+              data-testid="mobile-menu-button"
+              onClick={() => setShowMobileMenu(true)}
+              className="p-2 rounded-lg bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors"
+              title="Open menu"
+            >
+              <Menu className="w-5 h-5" />
+            </button>
+          </div>
         </div>
 
         {/* Search (Mobile) */}
-        <div className="mt-4 md:hidden">
+        {showMobileSearch && showMobileSearchPanel && <div className="mt-3 md:hidden">
           <div className="relative">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
             <input
               type="text"
-              placeholder="Search channels..."
+              placeholder={searchPlaceholder}
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full pl-10 pr-4 py-2 rounded-full bg-gray-100 dark:bg-gray-800 border-2 border-transparent focus:border-red-500 focus:bg-white dark:focus:bg-gray-900 transition-all outline-none"
+              className="w-full pl-10 pr-10 py-2 rounded-full bg-gray-100 dark:bg-gray-800 border-2 border-transparent focus:border-red-500 focus:bg-white dark:focus:bg-gray-900 transition-all outline-none"
             />
+            <button
+              onClick={() => setShowMobileSearchPanel(false)}
+              className="absolute right-2 top-1/2 -translate-y-1/2 rounded-full p-1 text-gray-400 hover:bg-gray-200 hover:text-gray-700 dark:hover:bg-gray-700 dark:hover:text-gray-200"
+              title="Close search"
+            >
+              <X className="h-4 w-4" />
+            </button>
           </div>
+        </div>}
         </div>
-      </div>
+      </motion.header>
+
+      {showMobileMenu && (
+        <div data-testid="mobile-menu-panel" className="fixed inset-0 z-[100] md:hidden">
+          <button
+            className="absolute inset-0 bg-gray-950/60 backdrop-blur-[2px]"
+            aria-label="Close menu"
+            onClick={() => setShowMobileMenu(false)}
+          />
+          <aside className="safe-top absolute right-0 top-0 h-full w-[82vw] max-w-sm overflow-y-auto border-l border-gray-200 bg-gray-50 p-4 shadow-2xl dark:border-gray-800/80 dark:bg-gray-950">
+            <div className="mb-5 flex items-center justify-between">
+              <div>
+                <p className="text-lg font-semibold text-gray-900 dark:text-gray-100">Menu</p>
+                <p className="text-sm text-gray-500 dark:text-gray-400">{count} channels</p>
+              </div>
+              <button
+                onClick={() => setShowMobileMenu(false)}
+                className="rounded-lg p-2 text-gray-600 hover:bg-gray-100 dark:text-gray-200 dark:hover:bg-gray-800"
+                title="Close menu"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            <div className="space-y-3">
+              {onAddChannel && (
+                <button
+                  onClick={() => {
+                    setShowMobileMenu(false);
+                    onAddChannel();
+                  }}
+                  className="flex w-full items-center justify-center gap-2 rounded-lg bg-red-600 px-4 py-3 font-semibold text-white shadow-lg shadow-red-950/20 hover:bg-red-700"
+                >
+                  <Plus className="h-4 w-4" />
+                  Add Channel
+                </button>
+              )}
+
+              <button
+                onClick={handleRefresh}
+                disabled={isRefreshing}
+                className="flex w-full items-center justify-center gap-2 rounded-lg bg-gray-100 px-4 py-3 font-medium hover:bg-gray-200 disabled:opacity-50 dark:bg-gray-800/90 dark:hover:bg-gray-700"
+              >
+                <RefreshCw className={`h-4 w-4 ${isRefreshing ? 'animate-spin' : ''}`} />
+                Refresh Feeds
+              </button>
+
+              <div>
+                <label className="mb-2 block text-xs font-medium uppercase tracking-wide text-gray-500 dark:text-gray-400">
+                  Sort
+                </label>
+                <select
+                  value={sortBy}
+                  onChange={(e) => setSortBy(e.target.value as SortBy)}
+                  className="w-full rounded-lg border border-transparent bg-gray-100 px-3 py-3 outline-none transition-all focus:border-red-500 dark:bg-gray-800/90"
+                >
+                  <option value="name">A-Z</option>
+                  <option value="recent">Recent</option>
+                  <option value="oldest">Oldest</option>
+                </select>
+              </div>
+
+              <div className="flex items-center gap-1 rounded-lg bg-gray-100 p-1 dark:bg-gray-800/90">
+                <button
+                  onClick={() => setViewMode('grid')}
+                  className={`flex flex-1 items-center justify-center gap-2 rounded px-3 py-3 ${viewMode === 'grid'
+                    ? 'bg-white shadow dark:bg-gray-950'
+                    : 'hover:bg-gray-200 dark:hover:bg-gray-700'
+                    } transition-all`}
+                >
+                  <Grid3x3 className="h-4 w-4" />
+                  Grid
+                </button>
+                <button
+                  onClick={() => setViewMode('list')}
+                  className={`flex flex-1 items-center justify-center gap-2 rounded px-3 py-3 ${viewMode === 'list'
+                    ? 'bg-white shadow dark:bg-gray-950'
+                    : 'hover:bg-gray-200 dark:hover:bg-gray-700'
+                    } transition-all`}
+                >
+                  <List className="h-4 w-4" />
+                  List
+                </button>
+              </div>
+
+              <div className="[&>button]:w-full [&>button]:justify-center [&>button]:py-3">
+                <Suspense fallback={null}>
+                  <OPMLUpload minimal showLabelOnMobile />
+                </Suspense>
+              </div>
+
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  onClick={() => handleExport('opml')}
+                  className="flex items-center justify-center gap-2 rounded-lg bg-gray-100 px-3 py-3 hover:bg-gray-200 dark:bg-gray-800/90 dark:hover:bg-gray-700"
+                >
+                  <Download className="h-4 w-4" />
+                  OPML
+                </button>
+                <button
+                  onClick={() => handleExport('json')}
+                  className="flex items-center justify-center gap-2 rounded-lg bg-gray-100 px-3 py-3 hover:bg-gray-200 dark:bg-gray-800/90 dark:hover:bg-gray-700"
+                >
+                  <Download className="h-4 w-4" />
+                  JSON
+                </button>
+              </div>
+
+              <div className="grid grid-cols-2 gap-2 pt-2">
+                <button
+                  onClick={() => setIsSettingsOpen(true)}
+                  className="flex items-center justify-center gap-2 rounded-lg bg-gray-100 px-3 py-3 hover:bg-gray-200 dark:bg-gray-800/90 dark:hover:bg-gray-700"
+                >
+                  <Settings className="h-4 w-4" />
+                  Settings
+                </button>
+                <button
+                  onClick={toggleTheme}
+                  className="flex items-center justify-center gap-2 rounded-lg bg-gray-100 px-3 py-3 hover:bg-gray-200 dark:bg-gray-800/90 dark:hover:bg-gray-700"
+                >
+                  {theme === 'light' ? <Moon className="h-4 w-4" /> : <Sun className="h-4 w-4" />}
+                  Theme
+                </button>
+              </div>
+            </div>
+          </aside>
+        </div>
+      )}
 
       <SettingsModal isOpen={isSettingsOpen} onClose={() => setIsSettingsOpen(false)} />
-    </motion.header>
+    </>
   );
 };

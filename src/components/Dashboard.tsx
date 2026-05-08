@@ -1,26 +1,38 @@
-import { useState, useEffect, useMemo } from 'react';
+import { lazy, Suspense, useState, useEffect, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { TrendingUp, Grid3x3, RefreshCw, Loader2, Activity, Heart, Star } from 'lucide-react';
+import { TrendingUp, Grid3x3, RefreshCw, Loader2, Activity, Heart, CheckCircle2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { Header } from './Header';
 import { SubscriptionsList } from './SubscriptionsList';
 import { VirtualizedVideoGrid } from './VirtualizedVideoGrid';
-import { VideoCard } from './VideoCard';
-import { AddChannelModal } from './AddChannelModal';
 import { useKeyboardShortcuts } from '../hooks/useKeyboardShortcuts';
 import { KeyboardShortcutsHelp } from './KeyboardShortcutsHelp';
 import { useRSSVideos } from '../hooks/useRSSVideos';
 import { useSubscriptionStorage } from '../hooks/useSubscriptionStorage';
+import { useFavoriteVideos } from '../hooks/useFavoriteVideos';
+import { useStore } from '../store/useStore';
+import { buildVideoFeedIndex, filterIndexedVideos } from '../lib/video-feed-index';
+import {
+  getVisibleTimelineVideos,
+  MOBILE_TIMELINE_INCREMENT,
+  MOBILE_TIMELINE_INITIAL_LIMIT,
+} from '../lib/timeline-window';
 import type { YouTubeChannel } from '../types/youtube';
 
 type Tab = 'subscriptions' | 'latest' | 'activity' | 'favorites';
+const AddChannelModal = lazy(() => import('./AddChannelModal').then((module) => ({ default: module.AddChannelModal })));
 
 export const Dashboard = () => {
-  const [activeTab, setActiveTab] = useState<Tab>('subscriptions');
+  const [activeTab, setActiveTab] = useState<Tab>('latest');
   const [isAddChannelModalOpen, setIsAddChannelModalOpen] = useState(false);
   const [showShortcutsHelp, setShowShortcutsHelp] = useState(false);
   const [showShorts, setShowShorts] = useState(true);
-  const { allSubscriptions, addSubscriptions, rawSubscriptions, toggleFavorite } = useSubscriptionStorage();
+  const [hideWatched, setHideWatched] = useState(false);
+  const [isMobileTimeline, setIsMobileTimeline] = useState(false);
+  const [mobileVideoLimit, setMobileVideoLimit] = useState(MOBILE_TIMELINE_INITIAL_LIMIT);
+  const { allSubscriptions, addSubscriptions, rawSubscriptions } = useSubscriptionStorage();
+  const { favoriteVideoIds, favoriteVideos: savedFavoriteVideos } = useFavoriteVideos();
+  const { searchQuery, watchedVideos, markAsWatched } = useStore();
 
   // Check if any channels have temporary IDs (can't fetch videos)
   const hasTemporaryChannels = rawSubscriptions.some(sub =>
@@ -28,31 +40,29 @@ export const Dashboard = () => {
   );
 
   const { videos, isLoading: videosLoading, refresh: refetchVideos, syncStatus } = useRSSVideos();
+  const feedProgressPercent = syncStatus?.total
+    ? Math.round((syncStatus.current / syncStatus.total) * 100)
+    : 0;
+  const channelThumbnails = useMemo(() => {
+    return new Map(allSubscriptions.map((channel) => [channel.id, channel.thumbnail]));
+  }, [allSubscriptions]);
+  const videoFeedIndex = useMemo(() => {
+    return buildVideoFeedIndex(videos, allSubscriptions);
+  }, [videos, allSubscriptions]);
 
-  // Filter videos based on mute status and shorts preference
   const filteredVideos = useMemo(() => {
-    const filtered = videos.filter(video => {
-      // Check if channel is muted
-      const channel = allSubscriptions.find(sub => sub.id === video.channelId);
-      if (channel?.isMuted) return false;
+    return filterIndexedVideos(videoFeedIndex, { searchQuery, showShorts })
+      .map((item) => item.video)
+      .filter((video) => !hideWatched || !watchedVideos.has(video.id));
+  }, [videoFeedIndex, showShorts, searchQuery, hideWatched, watchedVideos]);
 
-      // Check shorts (duration <= 60 seconds)
-      // Only filter if we have VALID duration data (not 0, not null, not undefined)
-      if (!showShorts && video.duration !== undefined && video.duration !== null && video.duration > 0 && video.duration <= 60) {
-        return false;
-      }
-
-      return true;
+  const visibleLatestVideos = useMemo(() => {
+    return getVisibleTimelineVideos(filteredVideos, {
+      isMobile: isMobileTimeline,
+      searchQuery,
+      visibleCount: mobileVideoLimit,
     });
-
-    // Debug: Log how many videos have duration data and sample values
-    const withDuration = videos.filter(v => v.duration !== undefined && v.duration !== null && v.duration > 0).length;
-    const durationSamples = videos.slice(0, 5).map(v => ({ title: v.title.substring(0, 30), duration: v.duration }));
-    console.log(`📊 Videos: ${videos.length} total, ${withDuration} with valid duration data, ${filtered.length} after filtering (showShorts: ${showShorts})`);
-    console.log(`📊 Sample durations:`, durationSamples);
-
-    return filtered;
-  }, [videos, allSubscriptions, showShorts]);
+  }, [filteredVideos, isMobileTimeline, mobileVideoLimit, searchQuery]);
 
   // Calculate most active channels in the past week
   // Optimized to reduce re-renders and heavy calculations
@@ -132,21 +142,59 @@ export const Dashboard = () => {
     },
   ]);
 
-  // Calculate favorite channels and their videos
-  const favoriteChannels = useMemo(() => {
-    return allSubscriptions.filter(sub => sub.isFavorite === true);
-  }, [allSubscriptions]);
-
   const favoriteVideos = useMemo(() => {
-    const favoriteChannelIds = new Set(favoriteChannels.map(ch => ch.id));
-    return videos.filter(video => favoriteChannelIds.has(video.channelId));
-  }, [videos, favoriteChannels]);
+    const currentVideosById = new Map(videos.map((video) => [video.id, video]));
+    const favoritesById = new Map(savedFavoriteVideos.map((video) => [
+      video.id,
+      currentVideosById.get(video.id) ?? video,
+    ]));
+
+    for (const video of videos) {
+      if (favoriteVideoIds.has(video.id) && !favoritesById.has(video.id)) {
+        favoritesById.set(video.id, video);
+      }
+    }
+
+    return Array.from(favoritesById.values()).sort(
+      (a, b) => new Date(b.publishedAt).getTime() - new Date(a.publishedAt).getTime()
+    );
+  }, [videos, favoriteVideoIds, savedFavoriteVideos]);
+
+  const changeTab = (tab: Tab) => {
+    setActiveTab(tab);
+
+    if (tab === 'favorites') {
+      sessionStorage.removeItem('favorite-videos-scroll');
+      requestAnimationFrame(() => {
+        window.scrollTo({ top: 0 });
+      });
+    }
+  };
 
   useEffect(() => {
     // Only log significant state changes for debugging
     // Uncomment for development debugging:
     // console.log('🎬 Dashboard mounted with', videos.length, 'videos');
   }, []); // Only run once on mount
+
+  useEffect(() => {
+    const updateMobileTimeline = () => {
+      setIsMobileTimeline(
+        typeof window.matchMedia === 'function'
+          ? window.matchMedia('(max-width: 639px)').matches
+          : window.innerWidth < 640
+      );
+    };
+
+    updateMobileTimeline();
+
+    window.addEventListener('resize', updateMobileTimeline, { passive: true });
+    return () => window.removeEventListener('resize', updateMobileTimeline);
+  }, []);
+
+  useEffect(() => {
+    setMobileVideoLimit(MOBILE_TIMELINE_INITIAL_LIMIT);
+  }, [searchQuery, showShorts, hideWatched]);
 
   // Helper function to format time ago
   const formatTimeAgo = (date: Date) => {
@@ -182,72 +230,107 @@ export const Dashboard = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-50 via-white to-gray-50 dark:from-gray-950 dark:via-gray-900 dark:to-gray-950">
-      <Header onAddChannel={() => setIsAddChannelModalOpen(true)} />
+    <div className="app-shell min-h-screen">
+      <Header
+        onAddChannel={() => setIsAddChannelModalOpen(true)}
+        showMobileSearch={activeTab === 'subscriptions' || activeTab === 'latest'}
+        searchPlaceholder={activeTab === 'latest' ? 'Search videos...' : 'Search channels...'}
+      />
 
-      <div className="max-w-7xl mx-auto py-8">
+      <div className="max-w-7xl mx-auto py-3 sm:py-8">
         {/* Tabs */}
-        <div className="px-4 mb-8 overflow-x-auto pb-2 -mx-4 px-4 sm:mx-0 sm:pb-0 scrollbar-hide">
-          <div className="flex items-center gap-2 bg-gray-100 dark:bg-gray-900 p-1 rounded-xl w-max sm:w-fit">
+        <div
+          data-testid="dashboard-tabs"
+          className="sticky top-[calc(env(safe-area-inset-top)+4.25rem)] z-40 px-4 mb-3 pb-2 pt-2 bg-gray-50 dark:bg-gray-950 sm:top-[5rem] sm:mb-8"
+        >
+          <div className="grid grid-cols-4 gap-1 bg-gray-100 dark:bg-gray-900 p-1 rounded-xl shadow-sm sm:flex sm:items-center sm:w-fit sm:gap-2">
             <button
-              onClick={() => setActiveTab('subscriptions')}
-              className={`flex items-center gap-2 px-6 py-3 rounded-lg font-medium transition-all ${activeTab === 'subscriptions'
+              onClick={() => changeTab('subscriptions')}
+              className={`flex min-w-0 items-center justify-center gap-1 px-1.5 py-2 rounded-lg text-xs sm:text-base font-medium transition-all sm:gap-2 sm:px-6 sm:py-3 ${activeTab === 'subscriptions'
                 ? 'bg-white dark:bg-gray-800 shadow-md'
                 : 'hover:bg-gray-200 dark:hover:bg-gray-800'
                 }`}
             >
-              <Grid3x3 className="w-5 h-5" />
-              <span>Subscriptions</span>
-              <span className="text-xs bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400 px-2 py-1 rounded-full">
+              <Grid3x3 className="w-4 h-4 sm:w-5 sm:h-5" />
+              <span>Subs</span>
+              <span className="hidden sm:inline-flex text-xs bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400 px-2 py-1 rounded-full">
                 {allSubscriptions.length}
               </span>
             </button>
             <button
-              onClick={() => setActiveTab('latest')}
-              className={`flex items-center gap-2 px-6 py-3 rounded-lg font-medium transition-all ${activeTab === 'latest'
+              onClick={() => changeTab('latest')}
+              className={`flex min-w-0 items-center justify-center gap-1 px-1.5 py-2 rounded-lg text-xs sm:text-base font-medium transition-all sm:gap-2 sm:px-6 sm:py-3 ${activeTab === 'latest'
                 ? 'bg-white dark:bg-gray-800 shadow-md'
                 : 'hover:bg-gray-200 dark:hover:bg-gray-800'
                 }`}
             >
-              <TrendingUp className="w-5 h-5" />
-              <span>Latest Videos</span>
+              <TrendingUp className="w-4 h-4 sm:w-5 sm:h-5" />
+              <span>Latest</span>
             </button>
             <button
-              onClick={() => setActiveTab('activity')}
-              className={`flex items-center gap-2 px-6 py-3 rounded-lg font-medium transition-all ${activeTab === 'activity'
+              onClick={() => changeTab('activity')}
+              className={`flex min-w-0 items-center justify-center gap-1 px-1.5 py-2 rounded-lg text-xs sm:text-base font-medium transition-all sm:gap-2 sm:px-6 sm:py-3 ${activeTab === 'activity'
                 ? 'bg-white dark:bg-gray-800 shadow-md'
                 : 'hover:bg-gray-200 dark:hover:bg-gray-800'
                 }`}
             >
-              <Activity className="w-5 h-5" />
+              <Activity className="w-4 h-4 sm:w-5 sm:h-5" />
               <span>Activity</span>
-              <span className="text-xs bg-green-100 dark:bg-green-900/30 text-green-600 dark:text-green-400 px-2 py-1 rounded-full">
+              <span className="hidden sm:inline-flex text-xs bg-green-100 dark:bg-green-900/30 text-green-600 dark:text-green-400 px-2 py-1 rounded-full">
                 {activeChannels.length}
               </span>
             </button>
             <button
-              onClick={() => setActiveTab('favorites')}
-              className={`flex items-center gap-2 px-6 py-3 rounded-lg font-medium transition-all ${activeTab === 'favorites'
+              onClick={() => changeTab('favorites')}
+              className={`flex min-w-0 items-center justify-center gap-1 px-1.5 py-2 rounded-lg text-xs sm:text-base font-medium transition-all sm:gap-2 sm:px-6 sm:py-3 ${activeTab === 'favorites'
                 ? 'bg-white dark:bg-gray-800 shadow-md'
                 : 'hover:bg-gray-200 dark:hover:bg-gray-800'
                 }`}
             >
-              <Heart className="w-5 h-5" />
-              <span>Favorites</span>
-              <span className="text-xs bg-pink-100 dark:bg-pink-900/30 text-pink-600 dark:text-pink-400 px-2 py-1 rounded-full">
-                {favoriteChannels.length}
+              <Heart className="w-4 h-4 sm:w-5 sm:h-5" />
+              <span>Faves</span>
+              <span className="hidden sm:inline-flex text-xs bg-pink-100 dark:bg-pink-900/30 text-pink-600 dark:text-pink-400 px-2 py-1 rounded-full">
+                {favoriteVideos.length}
               </span>
             </button>
-            {activeTab === 'latest' && (
+          </div>
+
+          {activeTab === 'latest' && (
+            <div className="mt-2 flex items-center justify-between gap-3">
+              <label className="flex items-center gap-2 cursor-pointer select-none">
+                <div className="relative">
+                  <input
+                    type="checkbox"
+                    checked={showShorts}
+                    onChange={(e) => setShowShorts(e.target.checked)}
+                    className="sr-only peer"
+                  />
+                  <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-red-300 dark:peer-focus:ring-red-800 rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-gray-600 peer-checked:bg-red-600"></div>
+                </div>
+                <span className="text-sm font-medium text-gray-700 dark:text-gray-300">Shorts</span>
+              </label>
+              <label className="flex items-center gap-2 cursor-pointer select-none">
+                <div className="relative">
+                  <input
+                    type="checkbox"
+                    checked={hideWatched}
+                    onChange={(e) => setHideWatched(e.target.checked)}
+                    className="sr-only peer"
+                  />
+                  <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-emerald-300 dark:peer-focus:ring-emerald-800 rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-gray-600 peer-checked:bg-emerald-600"></div>
+                </div>
+                <span className="text-sm font-medium text-gray-700 dark:text-gray-300">Hide watched</span>
+              </label>
+
               <div className="flex items-center gap-2">
                 {syncStatus?.isSyncing && (
                   <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300 text-sm font-medium animate-in fade-in slide-in-from-left-4">
                     <Loader2 className="w-4 h-4 animate-spin" />
                     <span className="hidden sm:inline">
-                      Syncing {syncStatus.current}/{syncStatus.total}
+                      {syncStatus.state === 'queued' ? 'Queued' : 'Building'} {syncStatus.current}/{syncStatus.total}
                     </span>
                     <span className="sm:hidden">
-                      {Math.round((syncStatus.current / syncStatus.total) * 100)}%
+                      {feedProgressPercent}%
                     </span>
                   </div>
                 )}
@@ -256,34 +339,22 @@ export const Dashboard = () => {
                     refetchVideos();
                   }}
                   disabled={videosLoading || syncStatus?.isSyncing}
-                  className="flex items-center gap-2 px-4 py-2 rounded-lg font-medium bg-red-600 text-white hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+                  className="hidden sm:flex items-center gap-2 px-4 py-2 rounded-lg font-medium bg-red-600 text-white hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
                 >
                   <RefreshCw className={`w-4 h-4 ${videosLoading || syncStatus?.isSyncing ? 'animate-spin' : ''}`} />
-                  <span className="hidden sm:inline">Refresh</span>
+                  <span>Refresh</span>
                 </button>
+                {visibleLatestVideos.length > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => visibleLatestVideos.forEach((video) => markAsWatched(video.id))}
+                    className="hidden sm:flex items-center gap-2 px-4 py-2 rounded-lg font-medium bg-gray-100 text-gray-800 hover:bg-gray-200 dark:bg-gray-800 dark:text-gray-100 dark:hover:bg-gray-700 transition-all"
+                  >
+                    <CheckCircle2 className="w-4 h-4" />
+                    <span>Mark shown watched</span>
+                  </button>
+                )}
               </div>
-            )}
-          </div>
-
-
-          {/* Filters */}
-          {activeTab === 'latest' && (
-            <div className="flex items-center gap-4 ml-auto">
-              <label className="flex items-center gap-2 cursor-pointer select-none">
-                <div className="relative">
-                  <input
-                    type="checkbox"
-                    checked={showShorts}
-                    onChange={(e) => {
-                      console.log('🔄 Toggle clicked, new value:', e.target.checked);
-                      setShowShorts(e.target.checked);
-                    }}
-                    className="sr-only peer"
-                  />
-                  <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-red-300 dark:peer-focus:ring-red-800 rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-gray-600 peer-checked:bg-red-600"></div>
-                </div>
-                <span className="text-sm font-medium text-gray-700 dark:text-gray-300">Show Shorts</span>
-              </label>
             </div>
           )}
         </div>
@@ -314,11 +385,20 @@ export const Dashboard = () => {
                   {syncStatus?.isSyncing ? (
                     <>
                       <div className="inline-block w-8 h-8 border-4 border-red-600 border-t-transparent rounded-full animate-spin mb-4" />
-                      <p className="text-gray-600 dark:text-gray-400">
-                        Loading latest videos from your subscriptions...
+                      <p className="text-gray-800 dark:text-gray-200 text-lg font-semibold">
+                        Building your feed
                       </p>
                       <p className="text-sm text-gray-500 dark:text-gray-500 mt-2">
-                        Syncing {syncStatus.current}/{syncStatus.total} channels
+                        {syncStatus.current} / {syncStatus.total} channels checked
+                      </p>
+                      <div className="w-full max-w-sm h-2 bg-gray-200 dark:bg-gray-800 rounded-full overflow-hidden mx-auto mt-4">
+                        <div
+                          className="h-full bg-red-600 rounded-full transition-all"
+                          style={{ width: `${feedProgressPercent}%` }}
+                        />
+                      </div>
+                      <p className="text-xs text-gray-500 dark:text-gray-500 mt-3">
+                        {syncStatus.videos} videos found so far
                       </p>
                     </>
                   ) : hasTemporaryChannels ? (
@@ -343,10 +423,49 @@ export const Dashboard = () => {
                 </div>
               ) : (
                 <div>
-                  <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">
+                  {syncStatus?.isSyncing && (
+                    <div className="mb-4 rounded-lg border border-blue-200 dark:border-blue-900/60 bg-blue-50 dark:bg-blue-950/30 px-4 py-3">
+                      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                        <div>
+                          <p className="text-sm font-semibold text-blue-900 dark:text-blue-100">
+                            Building your feed
+                          </p>
+                          <p className="text-xs text-blue-700 dark:text-blue-300">
+                            {syncStatus.current} / {syncStatus.total} channels checked, {syncStatus.videos} videos found
+                          </p>
+                        </div>
+                        <span className="text-xs font-medium text-blue-700 dark:text-blue-300">
+                          {feedProgressPercent}%
+                        </span>
+                      </div>
+                      <div className="mt-3 h-2 bg-blue-100 dark:bg-blue-900 rounded-full overflow-hidden">
+                        <div
+                          className="h-full bg-blue-600 rounded-full transition-all"
+                          style={{ width: `${feedProgressPercent}%` }}
+                        />
+                      </div>
+                    </div>
+                  )}
+                  <p className="hidden sm:block text-sm text-gray-500 dark:text-gray-400 mb-4">
                     Showing {filteredVideos.length} recent videos
                   </p>
-                  <VirtualizedVideoGrid videos={filteredVideos} columns={4} />
+                  <VirtualizedVideoGrid
+                    videos={visibleLatestVideos}
+                    columns={4}
+                    scrollStorageKey="latest-videos-scroll"
+                    channelThumbnails={channelThumbnails}
+                  />
+                  {visibleLatestVideos.length < filteredVideos.length && (
+                    <div className="mt-4 flex justify-center pb-8 sm:hidden">
+                      <button
+                        type="button"
+                        onClick={() => setMobileVideoLimit((count) => count + MOBILE_TIMELINE_INCREMENT)}
+                        className="rounded-lg bg-gray-800 px-4 py-2 text-sm font-medium text-white dark:bg-gray-700"
+                      >
+                        Show older videos
+                      </button>
+                    </div>
+                  )}
                 </div>
               )}
             </motion.div>
@@ -359,89 +478,37 @@ export const Dashboard = () => {
               transition={{ duration: 0.3 }}
               className="px-4"
             >
-              {favoriteChannels.length === 0 ? (
+              {favoriteVideos.length === 0 ? (
                 <div className="text-center py-12">
                   <Heart className="w-20 h-20 text-gray-300 dark:text-gray-700 mx-auto mb-4" />
                   <p className="text-gray-600 dark:text-gray-400 text-lg mb-2">
-                    No favorite channels yet
+                    No favorite videos yet
                   </p>
                   <p className="text-sm text-gray-500">
-                    Click the star icon on any channel to add it to your favorites
+                    Tap the heart on any video to save it here
                   </p>
                 </div>
               ) : (
-                <div className="grid grid-cols-1 xl:grid-cols-4 gap-6">
-                  {/* Left column: Favorite channels list (1 column) */}
-                  <div className="xl:col-span-1 bg-white dark:bg-gray-800 rounded-xl p-4 shadow-sm border border-gray-200 dark:border-gray-700 h-fit xl:sticky xl:top-4">
-                    <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4 flex items-center gap-2">
-                      <Heart className="w-5 h-5 text-pink-500" />
-                      Favorite Channels ({favoriteChannels.length})
-                    </h3>
-                    <div className="space-y-2 max-h-[calc(100vh-200px)] overflow-y-auto">
-                      {favoriteChannels.map((channel) => (
-                        <div
-                          key={channel.id}
-                          className="flex items-center gap-3 p-3 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors group"
-                        >
-                          <img
-                            src={channel.thumbnail}
-                            alt={channel.title}
-                            className="w-12 h-12 rounded-full object-cover"
-                          />
-                          <div className="flex-1 min-w-0">
-                            <p className="font-medium text-gray-900 dark:text-gray-100 truncate text-sm">
-                              {channel.title}
-                            </p>
-                          </div>
-                          <button
-                            onClick={async () => {
-                              await toggleFavorite(channel.id);
-                              toast.success(`Removed ${channel.title} from favorites`);
-                            }}
-                            className="opacity-0 group-hover:opacity-100 transition-opacity p-1.5 rounded-full hover:bg-gray-200 dark:hover:bg-gray-600"
-                            title="Remove from favorites"
-                          >
-                            <Star className="w-4 h-4 fill-yellow-400 text-yellow-400" />
-                          </button>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-
-                  {/* Right column: Videos from favorite channels (3 columns) */}
-                  <div className="xl:col-span-3">
-                    {favoriteVideos.length === 0 ? (
-                      <div className="text-center py-12">
-                        <p className="text-gray-600 dark:text-gray-400 text-lg mb-2">
-                          No videos from favorite channels
-                        </p>
-                        <p className="text-sm text-gray-500">
-                          Your favorite channels haven't uploaded recently
-                        </p>
-                      </div>
-                    ) : (
-                      <div>
-                        <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">
-                          Showing {favoriteVideos.length} video{favoriteVideos.length !== 1 ? 's' : ''}
-                        </p>
-                        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
-                          {favoriteVideos.map((video, index) => (
-                            <VideoCard key={video.id} video={video} index={index} />
-                          ))}
-                        </div>
-                      </div>
-                    )}
-                  </div>
+                <div>
+                  <p className="hidden sm:block text-sm text-gray-500 dark:text-gray-400 mb-4">
+                    Showing {favoriteVideos.length} favorite video{favoriteVideos.length !== 1 ? 's' : ''}
+                  </p>
+                  <VirtualizedVideoGrid
+                    videos={favoriteVideos}
+                    columns={4}
+                    scrollStorageKey="favorite-videos-scroll"
+                    channelThumbnails={channelThumbnails}
+                  />
                 </div>
               )}
             </motion.div>
           ) : (
             <motion.div
               key="activity"
-              initial={{ opacity: 0, x: 20 }}
-              animate={{ opacity: 1, x: 0 }}
-              exit={{ opacity: 0, x: -20 }}
-              transition={{ duration: 0.3 }}
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.16 }}
               className="px-4"
             >
               <div className="mb-4">
@@ -465,11 +532,8 @@ export const Dashboard = () => {
               ) : (
                 <div className="space-y-3">
                   {activeChannels.map((item, index) => (
-                    <motion.div
+                    <div
                       key={item.channel.id}
-                      initial={{ opacity: 0, y: 20 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      transition={{ delay: index * 0.03 }}
                       onClick={() => window.location.href = `/channel/${item.channel.id}`}
                       className="flex items-center gap-4 p-4 bg-white dark:bg-gray-800 rounded-xl shadow-sm hover:shadow-md transition-all cursor-pointer border border-gray-200 dark:border-gray-700"
                     >
@@ -497,7 +561,7 @@ export const Dashboard = () => {
                           {formatTimeAgo(item.latestVideo)}
                         </p>
                       </div>
-                    </motion.div>
+                    </div>
                   ))}
                 </div>
               )}
@@ -507,11 +571,13 @@ export const Dashboard = () => {
       </div>
 
       {/* Add Channel Modal */}
-      <AddChannelModal
-        isOpen={isAddChannelModalOpen}
-        onClose={() => setIsAddChannelModalOpen(false)}
-        onAdd={handleAddChannel}
-      />
+      <Suspense fallback={null}>
+        <AddChannelModal
+          isOpen={isAddChannelModalOpen}
+          onClose={() => setIsAddChannelModalOpen(false)}
+          onAdd={handleAddChannel}
+        />
+      </Suspense>
 
       {/* Keyboard Shortcuts Help */}
       <KeyboardShortcutsHelp
