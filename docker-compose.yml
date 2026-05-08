@@ -10,6 +10,9 @@ services:
     environment:
       - NODE_ENV=production
       - PORT=3001
+      - FEED_REFRESH_ENABLED=true
+      - FEED_REFRESH_INTERVAL_MINUTES=15
+      - FEED_REFRESH_ON_START=true
     healthcheck:
       test: ["CMD", "curl", "-fsS", "http://localhost/api/videos/status"]
       interval: 30s

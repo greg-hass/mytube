@@ -4,6 +4,8 @@ import { describe, expect, it } from 'vitest';
 const require = createRequire(import.meta.url);
 const {
     CHANNEL_REFRESH_INTERVAL_MS,
+    DEFAULT_SCHEDULED_REFRESH_INTERVAL_MS,
+    getScheduledRefreshConfig,
     getChannelsDueForRefresh,
     mergeChannelRefreshes,
 } = require('./feed-aggregator');
@@ -63,5 +65,30 @@ describe('feed refresh policy', () => {
             UC_KEEP: { lastFetchedAt: '2026-05-06T18:00:00.000Z' },
             UC_NEW: { lastFetchedAt: '2026-05-06T20:00:00.000Z' },
         });
+    });
+
+    it('uses a visible scheduled refresh config with safe Docker env overrides', () => {
+        expect(getScheduledRefreshConfig({})).toEqual({
+            enabled: true,
+            refreshOnStartup: true,
+            intervalMs: DEFAULT_SCHEDULED_REFRESH_INTERVAL_MS,
+        });
+
+        expect(getScheduledRefreshConfig({
+            FEED_REFRESH_ENABLED: 'false',
+            FEED_REFRESH_ON_START: 'false',
+            FEED_REFRESH_INTERVAL_MINUTES: '30',
+        })).toEqual({
+            enabled: false,
+            refreshOnStartup: false,
+            intervalMs: 30 * 60 * 1000,
+        });
+    });
+
+    it('falls back to the default scheduled refresh interval for invalid values', () => {
+        expect(getScheduledRefreshConfig({ FEED_REFRESH_INTERVAL_MINUTES: '0' }).intervalMs)
+            .toBe(DEFAULT_SCHEDULED_REFRESH_INTERVAL_MS);
+        expect(getScheduledRefreshConfig({ FEED_REFRESH_INTERVAL_MINUTES: 'not-a-number' }).intervalMs)
+            .toBe(DEFAULT_SCHEDULED_REFRESH_INTERVAL_MS);
     });
 });
