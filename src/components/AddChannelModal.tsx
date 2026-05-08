@@ -15,30 +15,84 @@ export const AddChannelModal = ({ isOpen, onClose, onAdd }: AddChannelModalProps
   const [input, setInput] = useState('');
   const [parsedInput, setParsedInput] = useState<ParsedChannelInput | null>(null);
   const [channelInfo, setChannelInfo] = useState<YouTubeChannel | null>(null);
+  const [searchResults, setSearchResults] = useState<YouTubeChannel[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [isValidating, setIsValidating] = useState(false);
+  const [isSearching, setIsSearching] = useState(false);
   const [validationError, setValidationError] = useState<string>('');
 
   // Validate input whenever it changes
   useEffect(() => {
-    if (!input.trim()) {
+    const trimmedInput = input.trim();
+
+    if (!trimmedInput) {
       setParsedInput(null);
       setChannelInfo(null);
+      setSearchResults([]);
       setValidationError('');
       return;
     }
 
-    const parsed = parseChannelInput(input);
+    const parsed = parseChannelInput(trimmedInput);
+    const canResolveDirectly =
+      parsed.type === 'channel_id' ||
+      parsed.type === 'handle' ||
+      trimmedInput.includes('youtube.com');
+
     setParsedInput(parsed);
 
     if (parsed.type === 'invalid') {
       setValidationError('Invalid YouTube channel format');
       setChannelInfo(null);
-    } else {
+    } else if (canResolveDirectly) {
       setValidationError('');
       // Auto-fetch channel info for valid inputs
       void fetchChannelInfo(parsed);
+    } else {
+      setValidationError('');
+      setChannelInfo(null);
     }
+  }, [input]);
+
+  useEffect(() => {
+    const query = input.trim();
+    if (query.length < 2) {
+      setSearchResults([]);
+      setIsSearching(false);
+      return;
+    }
+
+    const controller = new AbortController();
+    const timeout = window.setTimeout(async () => {
+      setIsSearching(true);
+      try {
+        const response = await fetch(`/api/channel-search?q=${encodeURIComponent(query)}`, {
+          signal: controller.signal,
+        });
+
+        if (!response.ok) {
+          throw new Error(`Search failed with ${response.status}`);
+        }
+
+        const data = await response.json();
+        const results = Array.isArray(data.results) ? data.results : [];
+        setSearchResults(results);
+      } catch (error) {
+        if ((error as Error).name !== 'AbortError') {
+          console.error('Channel keyword search failed:', error);
+          setSearchResults([]);
+        }
+      } finally {
+        if (!controller.signal.aborted) {
+          setIsSearching(false);
+        }
+      }
+    }, 300);
+
+    return () => {
+      controller.abort();
+      window.clearTimeout(timeout);
+    };
   }, [input]);
 
   const fetchChannelInfo = async (parsed: ParsedChannelInput) => {
@@ -69,9 +123,8 @@ export const AddChannelModal = ({ isOpen, onClose, onAdd }: AddChannelModalProps
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    // Allow adding channel even if we couldn't fetch detailed info
-    if (!parsedInput || parsedInput.type === 'invalid') {
-      setValidationError('Please enter a valid YouTube channel');
+    if (!channelInfo && (!parsedInput || parsedInput.type === 'invalid')) {
+      setValidationError('Search for a channel or enter a valid YouTube channel');
       return;
     }
 
@@ -81,6 +134,12 @@ export const AddChannelModal = ({ isOpen, onClose, onAdd }: AddChannelModalProps
       let channelToAdd = channelInfo;
 
       if (!channelToAdd) {
+        if (!parsedInput || parsedInput.type === 'invalid') {
+          setValidationError('Choose a channel from the search results');
+          setIsLoading(false);
+          return;
+        }
+
         // If we don't have channel info, we need to resolve handles/custom URLs to real IDs
         // This prevents storing handle_ or custom_ IDs in the database
         let resolvedId = parsedInput.value;
@@ -147,6 +206,22 @@ export const AddChannelModal = ({ isOpen, onClose, onAdd }: AddChannelModalProps
     setInput(e.target.value);
   };
 
+  const canSubmit =
+    Boolean(channelInfo) ||
+    parsedInput?.type === 'channel_id' ||
+    parsedInput?.type === 'handle' ||
+    (parsedInput?.type === 'custom_url' && input.includes('youtube.com'));
+
+  const selectSearchResult = (channel: YouTubeChannel) => {
+    setChannelInfo(channel);
+    setParsedInput({
+      type: 'channel_id',
+      value: channel.id,
+      originalInput: channel.title,
+    });
+    setValidationError('');
+  };
+
   return (
     <AnimatePresence>
       {isOpen && (
@@ -190,7 +265,7 @@ export const AddChannelModal = ({ isOpen, onClose, onAdd }: AddChannelModalProps
                     id="channelInput"
                     value={input}
                     onChange={handleInputChange}
-                    placeholder="Channel ID, @handle, or full YouTube URL"
+                    placeholder="Search keywords, @handle, channel ID, or URL"
                     className={`w-full px-3 py-2 pr-10 border rounded-lg shadow-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white ${validationError
                       ? 'border-red-500'
                       : channelInfo
@@ -200,7 +275,7 @@ export const AddChannelModal = ({ isOpen, onClose, onAdd }: AddChannelModalProps
                     required
                   />
                   <div className="absolute inset-y-0 right-0 flex items-center pr-3">
-                    {isValidating ? (
+                    {isValidating || isSearching ? (
                       <div className="w-4 h-4 border-2 border-blue-600 border-t-transparent rounded-full animate-spin" />
                     ) : channelInfo ? (
                       <Check className="w-5 h-5 text-green-500" />
@@ -219,12 +294,53 @@ export const AddChannelModal = ({ isOpen, onClose, onAdd }: AddChannelModalProps
                   </p>
                 )}
 
-                {parsedInput && parsedInput.type !== 'invalid' && !validationError && (
+                {parsedInput && parsedInput.type !== 'invalid' && !validationError && channelInfo && (
                   <p className="mt-2 text-sm text-gray-600 dark:text-gray-400">
                     Detected: {getDisplayText(parsedInput)}
                   </p>
                 )}
               </div>
+
+              {searchResults.length > 0 && (
+                <div className="space-y-2">
+                  <p className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                    Search results
+                  </p>
+                  <div className="max-h-64 space-y-2 overflow-y-auto pr-1">
+                    {searchResults.map((channel) => (
+                      <button
+                        key={channel.id}
+                        type="button"
+                        onClick={() => selectSearchResult(channel)}
+                        className={`flex w-full items-center gap-3 rounded-lg border p-3 text-left transition-colors ${channelInfo?.id === channel.id
+                          ? 'border-red-500 bg-red-50 dark:bg-red-950/30'
+                          : 'border-gray-200 bg-gray-50 hover:border-gray-300 hover:bg-gray-100 dark:border-gray-700 dark:bg-gray-900 dark:hover:border-gray-600 dark:hover:bg-gray-800'
+                          }`}
+                      >
+                        <img
+                          src={channel.thumbnail || `https://ui-avatars.com/api/?name=${encodeURIComponent(channel.title)}&background=random&color=fff`}
+                          alt={channel.title}
+                          className="h-11 w-11 flex-none rounded-full object-cover"
+                          onError={(event) => {
+                            event.currentTarget.src = `https://ui-avatars.com/api/?name=${encodeURIComponent(channel.title)}&background=random&color=fff`;
+                          }}
+                        />
+                        <span className="min-w-0 flex-1">
+                          <span className="block truncate font-medium text-gray-900 dark:text-gray-100">
+                            {channel.title}
+                          </span>
+                          {channel.description && (
+                            <span className="line-clamp-1 text-sm text-gray-600 dark:text-gray-400">
+                              {channel.description}
+                            </span>
+                          )}
+                        </span>
+                        {channelInfo?.id === channel.id && <Check className="h-5 w-5 flex-none text-red-500" />}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
 
               {/* Channel preview */}
               {channelInfo && (
@@ -259,7 +375,7 @@ export const AddChannelModal = ({ isOpen, onClose, onAdd }: AddChannelModalProps
               <div className="flex items-center justify-between">
                 <button
                   type="submit"
-                  disabled={isLoading || !parsedInput || parsedInput.type === 'invalid'}
+                  disabled={isLoading || !canSubmit}
                   className="flex items-center gap-2 px-4 py-2 rounded-lg bg-red-600 hover:bg-red-700 text-white disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                 >
                   {isLoading ? (

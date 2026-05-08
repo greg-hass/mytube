@@ -3,11 +3,16 @@
 @tailwind utilities;
 
 @layer base {
+  html {
+    @apply bg-white dark:bg-gray-950;
+  }
+
   body {
-    @apply bg-white dark:bg-[#1c1c1e] text-gray-900 dark:text-[#e5e5ea];
+    @apply bg-white dark:bg-gray-950 text-gray-900 dark:text-[#e5e5ea];
     font-family: 'Inter', system-ui, -apple-system, sans-serif;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
+    min-height: 100dvh;
   }
 }
 
@@ -22,7 +27,15 @@
   }
 
   .glass {
-    @apply bg-white/80 dark:bg-gray-900/80 backdrop-blur-xl;
+    @apply bg-white/80 dark:bg-gray-950/90 backdrop-blur-xl;
+  }
+
+  .app-shell {
+    @apply bg-gray-50 dark:bg-gray-950;
+  }
+
+  .safe-top {
+    padding-top: env(safe-area-inset-top);
   }
 
   .card-hover {
@@ -37,7 +50,7 @@
 }
 
 ::-webkit-scrollbar-track {
-  @apply bg-gray-100 dark:bg-[#1c1c1e];
+  @apply bg-gray-100 dark:bg-gray-950;
 }
 
 ::-webkit-scrollbar-thumb {

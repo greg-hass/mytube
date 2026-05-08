@@ -2,11 +2,15 @@ const express = require('express');
 const cors = require('cors');
 const fs = require('fs').promises;
 const path = require('path');
+const { readJson, writeJsonQueued, updateJsonQueued } = require('./json-store');
+const { mergeIncomingSubscriptions } = require('./sync-utils');
+const { searchChannels } = require('./channel-search');
 
 const app = express();
 const PORT = process.env.PORT || 3001;
 const DATA_FILE = path.join(__dirname, 'data', 'db.json');
 const VIDEOS_FILE = path.join(__dirname, 'data', 'videos.json');
+const DEFAULT_DATA = { subscriptions: [], settings: {}, watchedVideos: [], redirects: {} };
 
 app.use(cors());
 app.use(express.json({ limit: '50mb' })); // Large limit for full data sync
@@ -17,10 +21,9 @@ async function init() {
         await fs.mkdir(path.dirname(DATA_FILE), { recursive: true });
 
         // Load or initialize db.json
-        let data = { subscriptions: [], settings: {}, watchedVideos: [], redirects: {} };
+        let data = DEFAULT_DATA;
         try {
-            const fileContent = await fs.readFile(DATA_FILE, 'utf8');
-            data = JSON.parse(fileContent);
+            data = await readJson(DATA_FILE, DEFAULT_DATA);
         } catch (err) {
             // File doesn't exist, use default
         }
@@ -35,7 +38,7 @@ async function init() {
             console.log('✅ Merged static redirects:', Object.keys(staticRedirects));
 
             // Save back to db.json
-            await fs.writeFile(DATA_FILE, JSON.stringify(data, null, 2));
+            await writeJsonQueued(DATA_FILE, data);
         } catch (err) {
             // No static redirects or error reading, ignore
         }
@@ -50,11 +53,80 @@ init();
 // GET /api/sync - Retrieve all data
 app.get('/api/sync', async (req, res) => {
     try {
-        const data = await fs.readFile(DATA_FILE, 'utf8');
-        res.json(JSON.parse(data));
+        const data = await readJson(DATA_FILE, DEFAULT_DATA);
+        res.json(data);
     } catch (err) {
         console.error('Read error:', err);
         res.status(500).json({ error: 'Failed to read data' });
+    }
+});
+
+// GET /api/channel-thumbnail - Same-origin proxy for YouTube channel thumbnails.
+// Some browsers/extensions intermittently block direct yt3.googleusercontent.com
+// image loads; proxying through localhost makes channel icons deterministic.
+app.get('/api/channel-thumbnail', async (req, res) => {
+    try {
+        const rawUrl = req.query.url;
+        if (!rawUrl || typeof rawUrl !== 'string') {
+            return res.status(400).json({ error: 'Missing thumbnail URL' });
+        }
+
+        let thumbnailUrl;
+        try {
+            thumbnailUrl = new URL(rawUrl);
+        } catch {
+            return res.status(400).json({ error: 'Invalid thumbnail URL' });
+        }
+
+        const allowedHosts = new Set([
+            'yt3.googleusercontent.com',
+            'yt3.ggpht.com',
+            'i.ytimg.com',
+        ]);
+
+        if (thumbnailUrl.protocol !== 'https:' || !allowedHosts.has(thumbnailUrl.hostname)) {
+            return res.status(400).json({ error: 'Unsupported thumbnail host' });
+        }
+
+        const response = await fetch(thumbnailUrl.toString(), {
+            headers: {
+                'User-Agent': 'Mozilla/5.0',
+                'Accept': 'image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8',
+            },
+        });
+
+        if (!response.ok) {
+            return res.status(response.status).json({ error: 'Failed to fetch thumbnail' });
+        }
+
+        const contentType = response.headers.get('content-type') || '';
+        if (!contentType.startsWith('image/')) {
+            return res.status(502).json({ error: 'Thumbnail response was not an image' });
+        }
+
+        const imageBuffer = Buffer.from(await response.arrayBuffer());
+        res.setHeader('Content-Type', contentType);
+        res.setHeader('Cache-Control', 'public, max-age=604800, immutable');
+        res.send(imageBuffer);
+    } catch (err) {
+        console.error('Channel thumbnail proxy error:', err);
+        res.status(500).json({ error: 'Failed to proxy thumbnail' });
+    }
+});
+
+// GET /api/channel-search?q=... - Keyword/fuzzy channel discovery without YouTube Data API.
+app.get('/api/channel-search', async (req, res) => {
+    try {
+        const query = String(req.query.q || '').trim();
+        if (query.length < 2) {
+            return res.json({ results: [] });
+        }
+
+        const results = await searchChannels(query, { limit: 8 });
+        res.json({ results });
+    } catch (err) {
+        console.error('Channel search error:', err);
+        res.status(500).json({ error: 'Failed to search channels' });
     }
 });
 
@@ -71,52 +143,34 @@ app.post('/api/sync', async (req, res) => {
         // Add timestamp
         data.lastSyncedAt = new Date().toISOString();
 
-        // Read existing data to get redirects
-        let existingData = {};
-        try {
-            const fileContent = await fs.readFile(DATA_FILE, 'utf8');
-            existingData = JSON.parse(fileContent);
-        } catch (e) {
-            // ignore if file doesn't exist
-        }
+        const savedData = await updateJsonQueued(DATA_FILE, DEFAULT_DATA, (existingData) => {
+            const redirects = existingData.redirects || {};
 
-        // Apply redirects to incoming subscriptions and always preserve them
-        const redirects = existingData.redirects || {};
+            if (data.subscriptions) {
+                Object.keys(redirects).forEach((sourceId) => {
+                    if (data.subscriptions.some(sub => sub.id === sourceId)) {
+                        console.log(`🔀 Server applying redirect on sync: ${sourceId} -> ${redirects[sourceId]}`);
+                    }
+                });
+                data.subscriptions = mergeIncomingSubscriptions(
+                    data.subscriptions,
+                    existingData.subscriptions || [],
+                    redirects
+                );
+            }
 
-        if (Object.keys(redirects).length > 0 && data.subscriptions) {
-            const seenIds = new Set();
-            const uniqueSubs = [];
+            // ALWAYS preserve redirects from server, never let client overwrite them
+            data.redirects = { ...redirects, ...(data.redirects || {}) };
+            console.log(`💾 Preserving ${Object.keys(data.redirects || {}).length} redirects:`, Object.keys(data.redirects || {}));
 
-            data.subscriptions.forEach(sub => {
-                let finalId = sub.id;
-                // Check if this ID should be redirected
-                if (redirects[sub.id]) {
-                    console.log(`🔀 Server applying redirect on sync: ${sub.id} -> ${redirects[sub.id]}`);
-                    finalId = redirects[sub.id];
-                }
-
-                // Deduplicate
-                if (!seenIds.has(finalId)) {
-                    seenIds.add(finalId);
-                    // Use the redirected ID
-                    uniqueSubs.push({ ...sub, id: finalId });
-                }
-            });
-
-            data.subscriptions = uniqueSubs;
-        }
-
-        // ALWAYS preserve redirects from server, never let client overwrite them
-        data.redirects = { ...redirects, ...(data.redirects || {}) };
-        console.log(`💾 Preserving ${Object.keys(data.redirects || {}).length} redirects:`, Object.keys(data.redirects || {}));
-
-        await fs.writeFile(DATA_FILE, JSON.stringify(data, null, 2));
+            return data;
+        });
 
         // Trigger feed aggregation when subscriptions change
         const { aggregateFeeds } = require('./feed-aggregator');
         aggregateFeeds().catch(err => console.error('Aggregation trigger failed:', err));
 
-        res.json({ success: true, timestamp: data.lastSyncedAt });
+        res.json({ success: true, timestamp: savedData.lastSyncedAt });
     } catch (err) {
         console.error('Write error:', err);
         res.status(500).json({ error: 'Failed to save data' });
@@ -126,8 +180,8 @@ app.post('/api/sync', async (req, res) => {
 // GET /api/videos - Retrieve aggregated videos
 app.get('/api/videos', async (req, res) => {
     try {
-        const data = await fs.readFile(VIDEOS_FILE, 'utf8');
-        res.json(JSON.parse(data));
+        const data = await readJson(VIDEOS_FILE, { videos: [], lastUpdated: null, totalChannels: 0, totalVideos: 0 });
+        res.json(data);
     } catch (err) {
         // If file doesn't exist yet, return empty
         if (err.code === 'ENOENT') {
@@ -139,13 +193,24 @@ app.get('/api/videos', async (req, res) => {
     }
 });
 
+// GET /api/videos/status - Retrieve current aggregation progress
+app.get('/api/videos/status', async (req, res) => {
+    try {
+        const { getAggregationStatus } = require('./feed-aggregator');
+        res.json(getAggregationStatus());
+    } catch (err) {
+        console.error('Read aggregation status error:', err);
+        res.status(500).json({ error: 'Failed to read aggregation status' });
+    }
+});
+
 // POST /api/videos/refresh - Trigger immediate refresh (async)
 app.post('/api/videos/refresh', async (req, res) => {
     try {
         const { aggregateFeeds } = require('./feed-aggregator');
 
         // Trigger aggregation in background (don't await)
-        aggregateFeeds().catch(err => console.error('Background aggregation error:', err));
+        aggregateFeeds({ force: true }).catch(err => console.error('Background aggregation error:', err));
 
         // Return immediately
         res.json({
@@ -238,16 +303,21 @@ app.post('/api/subscriptions/:id/mute', async (req, res) => {
             return res.status(400).json({ error: 'isMuted must be a boolean' });
         }
 
-        const data = JSON.parse(await fs.readFile(DATA_FILE, 'utf8'));
+        let found = false;
+        await updateJsonQueued(DATA_FILE, DEFAULT_DATA, (data) => {
+            const subIndex = data.subscriptions.findIndex(s => s.id === id);
+            if (subIndex === -1) {
+                return data;
+            }
 
-        const subIndex = data.subscriptions.findIndex(s => s.id === id);
-        if (subIndex === -1) {
+            found = true;
+            data.subscriptions[subIndex].isMuted = isMuted;
+            return data;
+        });
+
+        if (!found) {
             return res.status(404).json({ error: 'Subscription not found' });
         }
-
-        data.subscriptions[subIndex].isMuted = isMuted;
-
-        await fs.writeFile(DATA_FILE, JSON.stringify(data, null, 2));
 
         res.json({ success: true, isMuted });
     } catch (err) {

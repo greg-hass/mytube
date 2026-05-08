@@ -303,8 +303,45 @@ export async function findWorkingThumbnail(channelId: string): Promise<string> {
  * Generate a placeholder thumbnail as a data URI
  */
 export function generatePlaceholderThumbnail(label: string): string {
-  const safeLabel = encodeURIComponent(label);
-  return `data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='320' height='180' viewBox='0 0 320 180'%3E%3Crect width='320' height='180' fill='%23333'/%3E%3Ctext x='50%25' y='50%25' dominant-baseline='middle' text-anchor='middle' font-family='Arial' font-size='14' fill='%23666'%3EChannel%20${safeLabel}%3C/text%3E%3C/svg%3E`;
+  const initials = label
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map(word => word[0]?.toUpperCase())
+    .join('') || 'YT';
+  const hue = Array.from(label).reduce((sum, char) => sum + char.charCodeAt(0), 0) % 360;
+  const accent = `hsl(${hue}, 72%, 46%)`;
+  const accentDark = `hsl(${(hue + 38) % 360}, 68%, 28%)`;
+  const svg = `<svg xmlns='http://www.w3.org/2000/svg' width='320' height='180' viewBox='0 0 320 180'><defs><linearGradient id='g' x1='0' y1='0' x2='1' y2='1'><stop offset='0' stop-color='${accent}'/><stop offset='1' stop-color='${accentDark}'/></linearGradient></defs><rect width='320' height='180' fill='url(#g)'/><circle cx='260' cy='30' r='80' fill='rgba(255,255,255,0.16)'/><circle cx='48' cy='150' r='68' fill='rgba(0,0,0,0.14)'/><text x='50%' y='50%' dominant-baseline='middle' text-anchor='middle' font-family='Inter, Arial, sans-serif' font-size='58' font-weight='800' letter-spacing='1' fill='white'>${initials}</text></svg>`;
+
+  return `data:image/svg+xml,${encodeURIComponent(svg)}`;
+}
+
+export function getDisplayThumbnail(thumbnail: string | undefined, label: string): string {
+  if (!thumbnail) {
+    return generatePlaceholderThumbnail(label);
+  }
+
+  if (thumbnail.startsWith('data:') || thumbnail.startsWith('/api/channel-thumbnail')) {
+    return thumbnail;
+  }
+
+  try {
+    const url = new URL(thumbnail);
+    const proxiedHosts = new Set([
+      'yt3.googleusercontent.com',
+      'yt3.ggpht.com',
+      'i.ytimg.com',
+    ]);
+
+    if (proxiedHosts.has(url.hostname)) {
+      return `/api/channel-thumbnail?url=${encodeURIComponent(thumbnail)}`;
+    }
+  } catch {
+    return generatePlaceholderThumbnail(label);
+  }
+
+  return thumbnail;
 }
 
 /**

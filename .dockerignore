@@ -3,6 +3,8 @@ dist
 .vite
 .git
 .github
+server/data
+server/node_modules
 *.log
 npm-debug.log*
 .DS_Store

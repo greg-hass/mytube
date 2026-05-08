@@ -17,6 +17,8 @@ interface OPMLChannel {
   xmlUrl: string;
 }
 
+type ImportFormat = 'opml' | 'csv';
+
 /**
  * OPML outline element structure
  */
@@ -52,6 +54,121 @@ function extractChannelId(xmlUrl: string): string | null {
     return channelId;
   } catch (error) {
     console.warn('Failed to parse XML URL:', xmlUrl, error);
+    return null;
+  }
+}
+
+function parseCSVRows(csv: string): string[][] {
+  const rows: string[][] = [];
+  let row: string[] = [];
+  let field = '';
+  let inQuotes = false;
+
+  for (let i = 0; i < csv.length; i++) {
+    const char = csv[i];
+    const nextChar = csv[i + 1];
+
+    if (char === '"' && inQuotes && nextChar === '"') {
+      field += '"';
+      i++;
+      continue;
+    }
+
+    if (char === '"') {
+      inQuotes = !inQuotes;
+      continue;
+    }
+
+    if (char === ',' && !inQuotes) {
+      row.push(field.trim());
+      field = '';
+      continue;
+    }
+
+    if ((char === '\n' || char === '\r') && !inQuotes) {
+      if (char === '\r' && nextChar === '\n') {
+        i++;
+      }
+      row.push(field.trim());
+      if (row.some((value) => value.length > 0)) {
+        rows.push(row);
+      }
+      row = [];
+      field = '';
+      continue;
+    }
+
+    field += char;
+  }
+
+  row.push(field.trim());
+  if (row.some((value) => value.length > 0)) {
+    rows.push(row);
+  }
+
+  return rows;
+}
+
+function normalizeHeader(value: string): string {
+  return value.toLowerCase().replace(/[^a-z0-9]/g, '');
+}
+
+function extractChannelIdFromText(value: string): string | null {
+  const match = value.match(/UC[a-zA-Z0-9_-]{22}/);
+  return match?.[0] || null;
+}
+
+function parseTakeoutCSV(csv: string): OPMLChannel[] {
+  if (!csv || csv.trim().length === 0) {
+    throw new Error('CSV content is empty');
+  }
+
+  const rows = parseCSVRows(csv);
+  if (rows.length < 2) {
+    throw new Error('No subscriptions found in CSV file');
+  }
+
+  const headers = rows[0].map(normalizeHeader);
+  const idIndex = headers.findIndex((header) => header === 'channelid' || header === 'channel');
+  const urlIndex = headers.findIndex((header) => header === 'channelurl' || header === 'url');
+  const titleIndex = headers.findIndex((header) => header === 'channeltitle' || header === 'title' || header === 'name');
+
+  if (idIndex === -1 && urlIndex === -1) {
+    throw new Error('Invalid CSV: Missing channel ID or channel URL column');
+  }
+
+  const channels: OPMLChannel[] = [];
+  const seen = new Set<string>();
+
+  for (const row of rows.slice(1)) {
+    const idValue = idIndex >= 0 ? row[idIndex] || '' : '';
+    const urlValue = urlIndex >= 0 ? row[urlIndex] || '' : '';
+    const channelId = extractChannelIdFromText(idValue) || extractChannelIdFromText(urlValue);
+
+    if (!channelId || seen.has(channelId)) continue;
+
+    seen.add(channelId);
+    channels.push({
+      title: titleIndex >= 0 && row[titleIndex] ? row[titleIndex] : channelId,
+      channelId,
+      xmlUrl: `https://www.youtube.com/feeds/videos.xml?channel_id=${channelId}`,
+    });
+  }
+
+  if (channels.length === 0) {
+    throw new Error('No YouTube channels found in CSV file');
+  }
+
+  return channels;
+}
+
+function detectImportFormat(content: string): ImportFormat | null {
+  if (isValidOPMLContent(content)) return 'opml';
+
+  try {
+    parseTakeoutCSV(content);
+    return 'csv';
+  } catch {
     return null;
   }
 }
@@ -182,6 +299,20 @@ export function parseOPMLToSubscriptions(opmlXML: string): StoredSubscription[] 
   return channelsToSubscriptions(channels);
 }
 
+export function parseSubscriptionImportToSubscriptions(content: string): StoredSubscription[] {
+  const format = detectImportFormat(content);
+
+  if (format === 'opml') {
+    return parseOPMLToSubscriptions(content);
+  }
+
+  if (format === 'csv') {
+    return channelsToSubscriptions(parseTakeoutCSV(content));
+  }
+
+  throw new Error('Invalid import format. Please upload a Google Takeout subscriptions.csv file or an OPML file.');
+}
+
 /**
  * Validate OPML file content before parsing
  *
@@ -224,6 +355,43 @@ export function getOPMLStats(opmlXML: string): {
     return {
       isValid: true,
       channelCount: channels.length
+    };
+  } catch (error) {
+    return {
+      isValid: false,
+      channelCount: 0,
+      error: error instanceof Error ? error.message : String(error)
+    };
+  }
+}
+
+export function isValidSubscriptionImportContent(content: string): boolean {
+  return detectImportFormat(content) !== null;
+}
+
+export function getSubscriptionImportStats(content: string): {
+  isValid: boolean;
+  channelCount: number;
+  format?: ImportFormat;
+  error?: string;
+} {
+  try {
+    const format = detectImportFormat(content);
+
+    if (format === 'opml') {
+      const channels = parseOPML(content);
+      return { isValid: true, channelCount: channels.length, format };
+    }
+
+    if (format === 'csv') {
+      const channels = parseTakeoutCSV(content);
+      return { isValid: true, channelCount: channels.length, format };
+    }
+
+    return {
+      isValid: false,
+      channelCount: 0,
+      error: 'Invalid import format'
     };
   } catch (error) {
     return {

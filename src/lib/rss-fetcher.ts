@@ -1,6 +1,6 @@
 import { XMLParser } from 'fast-xml-parser';
 import { fetchWithProxy } from './cors-proxies';
-import { resolveTemporaryChannelFromRSS, fetchVideosForChannelsAPI } from './youtube-api';
+import { resolveTemporaryChannelFromRSS } from './youtube-api';
 import type { YouTubeVideo, RSSVideoEntry } from '../types/youtube';
 
 const RSS_BASE_URL = 'https://www.youtube.com/feeds/videos.xml?channel_id=';
@@ -103,23 +103,6 @@ async function rateLimitRSSRequest(): Promise<void> {
  * @returns Promise resolving to object with videos and channel title
  */
 export async function fetchChannelRSSFeed(channelId: string): Promise<{ videos: YouTubeVideo[], title?: string }> {
-  // Use store or env, avoid process.env in browser
-  const { apiKey, useApiForVideos } = await import('../store/useStore').then(m => m.useStore.getState());
-  const effectiveApiKey = apiKey || import.meta.env.VITE_YOUTUBE_API_KEY;
-
-  // Only use API if key exists AND it is enabled in settings
-  if (effectiveApiKey && useApiForVideos) {
-    try {
-      // fetchVideosForChannelsAPI expects an array of channel IDs
-      const videos = await fetchVideosForChannelsAPI([channelId], effectiveApiKey);
-      // API returns videos with channelTitle, so we can extract it from the first video
-      const title = videos.length > 0 ? videos[0].channelTitle : undefined;
-      return { videos, title };
-    } catch (apiError) {
-      console.warn('YouTube API fallback failed, falling back to RSS:', apiError);
-    }
-  }
-
   const feedUrl = `${RSS_BASE_URL}${channelId}`;
 
   // Rate limit RSS requests
@@ -158,19 +141,6 @@ export async function fetchChannelRSSFeed(channelId: string): Promise<{ videos: 
 
     return { videos, title: feedTitle };
   } catch (error) {
-    // Attempt fallback using YouTube Data API if API key is set.
-    const { apiKey, useApiForVideos } = await import('../store/useStore').then(m => m.useStore.getState());
-    const effectiveApiKey = apiKey || import.meta.env.VITE_YOUTUBE_API_KEY;
-
-    if (effectiveApiKey && useApiForVideos) {
-      try {
-        const videos = await fetchVideosForChannelsAPI([channelId], effectiveApiKey);
-        const title = videos.length > 0 ? videos[0].channelTitle : undefined;
-        return { videos, title };
-      } catch (apiError) {
-        console.warn('API fallback failed:', apiError);
-      }
-    }
     throw error;
   }
 }

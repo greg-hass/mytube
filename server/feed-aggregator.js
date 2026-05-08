@@ -1,7 +1,8 @@
 const Parser = require('rss-parser');
 const axios = require('axios');
-const fs = require('fs').promises;
 const path = require('path');
+const { readJson, writeJsonQueued } = require('./json-store');
+const { mergeVideoArchive } = require('./video-archive');
 
 const parser = new Parser({
     timeout: 10000,
@@ -32,7 +33,71 @@ const DATA_FILE = path.join(__dirname, 'data', 'db.json');
 const VIDEOS_FILE = path.join(__dirname, 'data', 'videos.json');
 const BATCH_SIZE = 5;
 const BATCH_DELAY = 2000; // 2 seconds between batches
-const MAX_VIDEOS = 1000;
+const MAX_ARCHIVED_VIDEOS = 5000;
+const API_RESOLVER_DAILY_QUOTA_CAP = 100;
+const STARTUP_CACHE_MAX_AGE_MS = 10 * 60 * 1000;
+const CHANNEL_REFRESH_INTERVAL_MS = 20 * 60 * 1000;
+const DEFAULT_DATA = { subscriptions: [], settings: {}, watchedVideos: [], redirects: {} };
+let aggregationPromise = null;
+let rerunRequested = false;
+let queuedAggregationOptions = {};
+let aggregationStatus = {
+    state: 'idle',
+    current: 0,
+    total: 0,
+    videos: 0,
+    errors: 0,
+    startedAt: null,
+    completedAt: null,
+    lastUpdated: null,
+};
+
+function getCurrentPacificDate() {
+    return new Intl.DateTimeFormat('en-US', {
+        timeZone: 'America/Los_Angeles',
+        year: 'numeric',
+        month: 'numeric',
+        day: 'numeric',
+    }).format(new Date());
+}
+
+function getChannelsDueForRefresh(subscriptions = [], channelRefreshes = {}, options = {}) {
+    const now = options.now ?? Date.now();
+    const force = Boolean(options.force);
+
+    if (force) return subscriptions;
+
+    return subscriptions.filter(sub => {
+        const lastFetchedAt = channelRefreshes[sub.id]?.lastFetchedAt;
+        if (!lastFetchedAt) return true;
+
+        const lastFetchedTime = new Date(lastFetchedAt).getTime();
+        if (!Number.isFinite(lastFetchedTime)) return true;
+
+        return now - lastFetchedTime >= CHANNEL_REFRESH_INTERVAL_MS;
+    });
+}
+
+function mergeChannelRefreshes(existingRefreshes = {}, activeChannelIds = new Set(), fetchedChannels = [], fetchedAt = new Date().toISOString()) {
+    const merged = {};
+
+    for (const [channelId, refreshInfo] of Object.entries(existingRefreshes || {})) {
+        if (activeChannelIds.has(channelId)) {
+            merged[channelId] = refreshInfo;
+        }
+    }
+
+    for (const channel of fetchedChannels) {
+        if (channel?.id && activeChannelIds.has(channel.id)) {
+            merged[channel.id] = {
+                ...(merged[channel.id] || {}),
+                lastFetchedAt: fetchedAt,
+            };
+        }
+    }
+
+    return merged;
+}
 
 async function fetchChannelFeed(channelId) {
     try {
@@ -122,27 +187,35 @@ async function fetchChannelThumbnail(channelId) {
     }
 }
 
-async function aggregateFeeds() {
+async function runAggregation(options = {}) {
     console.log('🔄 Starting feed aggregation...');
 
     try {
         // Read data to get subscriptions and settings
-        const data = await fs.readFile(DATA_FILE, 'utf8');
-        const parsedData = JSON.parse(data);
+        const parsedData = await readJson(DATA_FILE, DEFAULT_DATA);
         const subscriptions = parsedData.subscriptions || [];
+        const existingVideoCache = await readJson(VIDEOS_FILE, { videos: [] });
+        const existingVideos = existingVideoCache.videos || [];
+        let channelRefreshes = existingVideoCache.channelRefreshes || {};
         const apiKey = parsedData.settings?.apiKey;
-        const useApi = parsedData.settings?.useApiForVideos && apiKey;
+        if (!parsedData.settings) parsedData.settings = {};
 
-        if (useApi) console.log('🔑 Using YouTube API for fetching (enabled in settings)');
-        else if (apiKey) console.log('ℹ️ API Key present but API fetching disabled in settings, using RSS');
+        const currentPacificDate = getCurrentPacificDate();
+        if (parsedData.settings.lastQuotaResetDate !== currentPacificDate) {
+            parsedData.settings.quotaUsed = 0;
+            parsedData.settings.lastQuotaResetDate = currentPacificDate;
+        }
+
+        const startingResolverQuota = Number(parsedData.settings?.quotaUsed || 0);
+        let resolverQuotaUsed = startingResolverQuota;
+        const useResolverApi = Boolean(apiKey && resolverQuotaUsed < API_RESOLVER_DAILY_QUOTA_CAP);
+        const useApiForVideoFetching = false;
+
+        if (apiKey && useResolverApi) console.log('🔑 API key available for capped handle resolution only; videos use RSS');
+        else if (apiKey) console.log('ℹ️ API resolver quota cap reached or unavailable; using RSS/public fallbacks only');
 
         const allVideos = [];
         let quotaExceeded = false;
-
-        // Process in batches
-        // If using API, we can fetch up to 50 channels at once!
-        // Reducing to 30 to avoid potential URL length issues or 403s
-        const CURRENT_BATCH_SIZE = useApi ? 30 : BATCH_SIZE;
 
         // Apply existing redirects from db.json (even if API is unavailable)
         // This ensures static redirects work even when quota is exhausted
@@ -178,15 +251,16 @@ async function aggregateFeeds() {
 
         if (hasRedirectUpdates) {
             parsedData.subscriptions = redirectedSubs;
-            await fs.writeFile(DATA_FILE, JSON.stringify(parsedData, null, 2));
+            await writeJsonQueued(DATA_FILE, parsedData);
             console.log('💾 Updated subscriptions with redirects');
             // Update local reference
             subscriptions.length = 0;
             subscriptions.push(...redirectedSubs);
         }
 
-        // Resolve handles/custom URLs to real IDs if API is available
-        if (useApi) {
+        // Resolve handles/custom URLs to real IDs with a small automatic API quota cap.
+        // Routine video fetching stays RSS-only so a free key is not drained by refreshes.
+        if (useResolverApi) {
             let hasUpdates = false;
             const resolvedSubs = [];
             const seenIds = new Set();
@@ -194,6 +268,13 @@ async function aggregateFeeds() {
             for (const sub of subscriptions) {
                 if (sub.id.startsWith('handle_') || sub.id.startsWith('custom_')) {
                     try {
+                        if (resolverQuotaUsed >= API_RESOLVER_DAILY_QUOTA_CAP) {
+                            console.warn('⚠️ API resolver quota cap reached. Remaining unresolved channels will use RSS/public fallbacks.');
+                            resolvedSubs.push(sub);
+                            seenIds.add(sub.id);
+                            continue;
+                        }
+
                         let resolveUrl;
                         let param;
                         if (sub.id.startsWith('handle_')) {
@@ -207,6 +288,10 @@ async function aggregateFeeds() {
                         }
 
                         const res = await axios.get(resolveUrl);
+                        resolverQuotaUsed += 1;
+                        if (!parsedData.settings) parsedData.settings = {};
+                        parsedData.settings.quotaUsed = resolverQuotaUsed;
+
                         if (res.data.items?.[0]) {
                             const realId = res.data.items[0].id;
                             const realTitle = res.data.items[0].snippet.title;
@@ -248,7 +333,7 @@ async function aggregateFeeds() {
 
             if (hasUpdates) {
                 parsedData.subscriptions = resolvedSubs;
-                await fs.writeFile(DATA_FILE, JSON.stringify(parsedData, null, 2));
+                await writeJsonQueued(DATA_FILE, parsedData);
                 console.log('💾 Updated subscriptions with resolved IDs');
                 // Update local reference
                 subscriptions.length = 0;
@@ -256,12 +341,37 @@ async function aggregateFeeds() {
             }
         }
 
-        for (let i = 0; i < subscriptions.length; i += CURRENT_BATCH_SIZE) {
-            const batch = subscriptions.slice(i, i + CURRENT_BATCH_SIZE);
+        const subscriptionsToRefresh = getChannelsDueForRefresh(
+            subscriptions,
+            channelRefreshes,
+            { force: options.force }
+        );
+        const skippedChannels = subscriptions.length - subscriptionsToRefresh.length;
+
+        if (skippedChannels > 0 && !options.force) {
+            console.log(`⚡ RSS cache: skipping ${skippedChannels} recently checked channels; ${subscriptionsToRefresh.length} due`);
+        }
+
+        aggregationStatus = {
+            state: 'running',
+            current: skippedChannels,
+            total: subscriptions.length,
+            videos: existingVideos.length,
+            errors: 0,
+            startedAt: new Date().toISOString(),
+            completedAt: null,
+            lastUpdated: new Date().toISOString(),
+        };
+
+        // Process in batches
+        const CURRENT_BATCH_SIZE = BATCH_SIZE;
+
+        for (let i = 0; i < subscriptionsToRefresh.length; i += CURRENT_BATCH_SIZE) {
+            const batch = subscriptionsToRefresh.slice(i, i + CURRENT_BATCH_SIZE);
 
             let batchVideos = [];
 
-            if (useApi && !quotaExceeded) {
+            if (useApiForVideoFetching && !quotaExceeded) {
                 // Use YouTube API (unless quota was already exceeded in a previous batch)
                 try {
                     // Filter out any non-UC IDs (like handles that failed resolution) to prevent API errors
@@ -483,142 +593,44 @@ async function aggregateFeeds() {
 
             allVideos.push(...batchVideos);
 
-            console.log(`Progress: ${Math.min(i + CURRENT_BATCH_SIZE, subscriptions.length)}/${subscriptions.length}`);
+            const currentVideos = mergeVideoArchive(existingVideos, allVideos, {
+                activeChannelIds: new Set(subscriptions.map(sub => sub.id)),
+                maxVideos: MAX_ARCHIVED_VIDEOS,
+            });
+            channelRefreshes = mergeChannelRefreshes(
+                channelRefreshes,
+                new Set(subscriptions.map(sub => sub.id)),
+                batch,
+                new Date().toISOString()
+            );
+
+            aggregationStatus = {
+                ...aggregationStatus,
+                current: Math.min(skippedChannels + i + CURRENT_BATCH_SIZE, subscriptions.length),
+                videos: currentVideos.length,
+                lastUpdated: new Date().toISOString(),
+            };
+
+            await writeJsonQueued(VIDEOS_FILE, {
+                videos: currentVideos,
+                lastUpdated: new Date().toISOString(),
+                totalChannels: subscriptions.length,
+                totalVideos: currentVideos.length,
+                channelRefreshes
+            });
+
+            console.log(`Progress: ${Math.min(skippedChannels + i + CURRENT_BATCH_SIZE, subscriptions.length)}/${subscriptions.length}`);
 
             // Delay between batches
-            if (i + CURRENT_BATCH_SIZE < subscriptions.length) {
+            if (i + CURRENT_BATCH_SIZE < subscriptionsToRefresh.length) {
                 await new Promise(resolve => setTimeout(resolve, BATCH_DELAY));
             }
         }
 
-        // Update subscriptions with resolved IDs if any changed
-        // This fixes the "duplicate channel" issue where we have both @handle and UC...
-        // We need to map old IDs to new IDs based on what we found in the API response
-        // The API response gave us 'channelId' in the items.
-
-        // We can't easily track which specific sub resolved to which ID in the batch loop above without more complex logic.
-        // BUT, we can look at the videos we fetched.
-        // If we have a video with channelId 'UC...' but our subscription list only has 'handle_@...', we should update it.
-
-        // Actually, a better way is to do it inside the batch loop or right here.
-        // Let's iterate through allVideos and see if we can map handles to IDs.
-
-        let subscriptionsChanged = false;
-        const subMap = new Map(subscriptions.map(s => [s.id, s]));
-
-        // Create a map of resolved IDs from the videos we fetched
-        // We know that for a given video, video.channelId is the REAL ID.
-        // We also know which 'sub.id' we *tried* to fetch (but we lost that context in allVideos list).
-
-        // Wait, the batch loop had the context.
-        // Let's just rely on the fact that if we have a subscription starting with 'handle_' or 'custom_',
-        // and we have videos for a channel that *matches* that handle (by title? no, risky).
-
-        // Correct approach:
-        // In the API fetch block (lines 75-82), we mapped input IDs to resolved IDs.
-        // We should capture that mapping and apply it.
-        // Since I can't easily edit the batch loop without a huge diff, I will add a separate resolution step or rely on the client?
-        // No, server must be authoritative.
-
-        // Let's try to fix it by checking if we have any 'handle_' subs that we can resolve now.
-        // Actually, the API 'channels' call (line 72) returns the ID.
-        // If we passed 'forHandle', we'd get it. But we passed 'id'.
-        // If we passed 'handle_@foo', the API would fail for that ID.
-        // So the current code probably FAILS to fetch for handles via API because it passes 'handle_@foo' as 'id' to YouTube API?
-        // YouTube API 'id' parameter expects UC IDs. It does NOT accept handles there.
-        // So my previous API implementation (line 72) is actually BROKEN for handles!
-        // It tries to fetch `id=handle_@foo`, which returns nothing.
-        // Then it falls back to RSS (line 89).
-        // RSS fetches `feeds/videos.xml?channel_id=handle_@foo` -> This works? No, RSS needs channel_id too?
-        // Actually RSS might work with `?user=` or `?handle=`? No.
-
-        // If the user added a handle, the ID is `handle_@foo`.
-        // The aggregator needs to RESOLVE this handle to a UC ID first.
-        // The client *tries* to resolve it (AddChannelModal), but if it fails (no API key on client), it saves `handle_@foo`.
-
-        // So the server needs to resolve handles.
-        // I will add a resolution step at the start of aggregation.
-
-        const resolvedSubs = [];
-        let hasResolutionUpdates = false;
-
-        for (const sub of subscriptions) {
-            if (sub.id.startsWith('handle_') || sub.id.startsWith('custom_')) {
-                // Try to resolve
-                try {
-                    // We need to use 'forHandle' or 'forUsername' or search
-                    // But we only have 'id' param in the batch call.
-                    // Let's do a quick resolution here if we have an API key.
-                    if (apiKey) {
-                        let resolveUrl;
-                        let param;
-                        if (sub.id.startsWith('handle_')) {
-                            param = sub.id.replace('handle_', '');
-                            resolveUrl = `https://www.googleapis.com/youtube/v3/channels?part=id,snippet&forHandle=${encodeURIComponent(param)}&key=${apiKey}`;
-                        } else {
-                            param = sub.id.replace('custom_', '');
-                            resolveUrl = `https://www.googleapis.com/youtube/v3/channels?part=id,snippet&forUsername=${encodeURIComponent(param)}&key=${apiKey}`;
-                        }
-
-                        const res = await axios.get(resolveUrl);
-                        if (res.data.items?.[0]) {
-                            const realId = res.data.items[0].id;
-                            const realTitle = res.data.items[0].snippet.title;
-                            const realThumb = res.data.items[0].snippet.thumbnails.high?.url;
-
-                            console.log(`✨ Resolved ${sub.id} -> ${realId} (${realTitle})`);
-
-                            // Check if we already have this ID to avoid duplicates
-                            const existing = subscriptions.find(s => s.id === realId);
-                            if (!existing) {
-                                resolvedSubs.push({
-                                    ...sub,
-                                    id: realId,
-                                    title: realTitle || sub.title,
-                                    thumbnail: realThumb || sub.thumbnail
-                                });
-                            } else {
-                                console.log(`  (Merged with existing subscription)`);
-                            }
-                            hasResolutionUpdates = true;
-                            continue; // Skip adding the old handle sub
-                        }
-                    }
-                } catch (err) {
-                    console.error(`Failed to resolve handle ${sub.id}:`, err.message);
-                }
-            }
-            resolvedSubs.push(sub);
-        }
-
-        if (hasResolutionUpdates) {
-            // Update subscriptions in memory and file
-            parsedData.subscriptions = resolvedSubs;
-            await fs.writeFile(DATA_FILE, JSON.stringify(parsedData, null, 2));
-            console.log('💾 Updated subscriptions with resolved IDs');
-            // Update local variable for the rest of the function
-            // subscriptions.length might change, but we are iterating a copy or index?
-            // We need to restart or use the new list.
-            // Since we are about to start the batch loop (wait, I am inserting this AFTER the loop in the replace block? No, I should insert it BEFORE).
-            // Ah, the tool allows me to replace a block.
-            // I will insert this logic BEFORE the batch loop.
-            // But I need to target the right lines.
-            // The current replace block targets the END of the loop.
-            // I should cancel this tool call and make a new one targeting the START.
-        }
-
-        // Deduplicate by video ID
-        const uniqueVideos = Array.from(
-            new Map(allVideos.map(v => [v.id, v])).values()
-        );
-
-        // Sort by publish date (newest first)
-        uniqueVideos.sort((a, b) =>
-            new Date(b.publishedAt).getTime() - new Date(a.publishedAt).getTime()
-        );
-
-        // Keep only the latest MAX_VIDEOS
-        const trimmedVideos = uniqueVideos.slice(0, MAX_VIDEOS);
+        const archivedVideos = mergeVideoArchive(existingVideos, allVideos, {
+            activeChannelIds: new Set(subscriptions.map(sub => sub.id)),
+            maxVideos: MAX_ARCHIVED_VIDEOS,
+        });
 
         // Save updated subscriptions (with metadata from RSS) back to db.json
         // IMPORTANT: Preserve redirects that were merged during init()
@@ -626,22 +638,36 @@ async function aggregateFeeds() {
         if (!parsedData.redirects) {
             parsedData.redirects = {};
         }
-        await fs.writeFile(DATA_FILE, JSON.stringify(parsedData, null, 2));
+        await writeJsonQueued(DATA_FILE, parsedData);
         console.log('💾 Saved updated subscription metadata (preserving', Object.keys(parsedData.redirects).length, 'redirects)');
 
         // Save to file
-        await fs.writeFile(
-            VIDEOS_FILE,
-            JSON.stringify({
-                videos: trimmedVideos,
-                lastUpdated: new Date().toISOString(),
-                totalChannels: subscriptions.length,
-                totalVideos: trimmedVideos.length
-            }, null, 2)
-        );
+        await writeJsonQueued(VIDEOS_FILE, {
+            videos: archivedVideos,
+            lastUpdated: new Date().toISOString(),
+            totalChannels: subscriptions.length,
+            totalVideos: archivedVideos.length,
+            channelRefreshes: mergeChannelRefreshes(
+                channelRefreshes,
+                new Set(subscriptions.map(sub => sub.id)),
+                subscriptionsToRefresh,
+                new Date().toISOString()
+            )
+        });
+
+        aggregationStatus = {
+            state: 'idle',
+            current: subscriptions.length,
+            total: subscriptions.length,
+            videos: archivedVideos.length,
+            errors: 0,
+            startedAt: aggregationStatus.startedAt,
+            completedAt: new Date().toISOString(),
+            lastUpdated: new Date().toISOString(),
+        };
 
         // Update quota usage in db.json if we used API
-        if (useApi) {
+        if (useApiForVideoFetching) {
             // Calculate quota used:
             // 1 unit for channels list
             // 1 unit per playlist fetch (we did 1 fetch per channel that had uploads)
@@ -649,7 +675,7 @@ async function aggregateFeeds() {
             const quotaCost = 1 + subscriptions.length;
 
             // Read fresh data to avoid race conditions (though we are single threaded mostly)
-            const currentData = JSON.parse(await fs.readFile(DATA_FILE, 'utf8'));
+            const currentData = await readJson(DATA_FILE, DEFAULT_DATA);
 
             // Initialize if missing
             if (!currentData.settings) currentData.settings = {};
@@ -677,19 +703,107 @@ async function aggregateFeeds() {
                 console.log(`📊 API Status: ACTIVE. Quota used this run: ${quotaCost}. Total: ${currentData.settings.quotaUsed}`);
             }
 
-            await fs.writeFile(DATA_FILE, JSON.stringify(currentData, null, 2));
+            await writeJsonQueued(DATA_FILE, currentData);
         }
 
-        console.log(`✅ Aggregation complete: ${trimmedVideos.length} videos from ${subscriptions.length} channels`);
+        console.log(`✅ Aggregation complete: ${archivedVideos.length} archived videos from ${subscriptions.length} channels`);
     } catch (error) {
+        aggregationStatus = {
+            ...aggregationStatus,
+            state: 'error',
+            errors: aggregationStatus.errors + 1,
+            completedAt: new Date().toISOString(),
+            lastUpdated: new Date().toISOString(),
+        };
         console.error('❌ Aggregation failed:', error);
     }
 }
 
+async function aggregateFeeds(options = {}) {
+    if (aggregationPromise) {
+        rerunRequested = true;
+        queuedAggregationOptions = {
+            ...queuedAggregationOptions,
+            force: Boolean(queuedAggregationOptions.force || options.force),
+        };
+        aggregationStatus = {
+            ...aggregationStatus,
+            state: 'queued',
+            lastUpdated: new Date().toISOString(),
+        };
+        console.log('⏳ Feed aggregation already running; queued one follow-up refresh.');
+        return aggregationPromise;
+    }
+
+    aggregationPromise = (async () => {
+        try {
+            do {
+                const runOptions = {
+                    ...options,
+                    ...queuedAggregationOptions,
+                    force: Boolean(options.force || queuedAggregationOptions.force),
+                };
+                queuedAggregationOptions = {};
+                rerunRequested = false;
+                await runAggregation(runOptions);
+            } while (rerunRequested);
+        } finally {
+            aggregationPromise = null;
+        }
+    })();
+
+    return aggregationPromise;
+}
+
+function getAggregationStatus() {
+    return aggregationStatus;
+}
+
+async function aggregateOnStartupIfStale() {
+    try {
+        const [data, videoCache] = await Promise.all([
+            readJson(DATA_FILE, DEFAULT_DATA),
+            readJson(VIDEOS_FILE, null),
+        ]);
+
+        const subscriptionCount = data.subscriptions?.length || 0;
+        const cacheAge = videoCache?.lastUpdated
+            ? Date.now() - new Date(videoCache.lastUpdated).getTime()
+            : Infinity;
+        const cacheMatchesSubscriptions = videoCache?.totalChannels === subscriptionCount;
+        const cacheHasVideos = (videoCache?.totalVideos || 0) > 0;
+
+        if (cacheMatchesSubscriptions && cacheHasVideos && cacheAge < STARTUP_CACHE_MAX_AGE_MS) {
+            aggregationStatus = {
+                state: 'idle',
+                current: subscriptionCount,
+                total: subscriptionCount,
+                videos: videoCache.totalVideos,
+                errors: 0,
+                startedAt: null,
+                completedAt: videoCache.lastUpdated,
+                lastUpdated: videoCache.lastUpdated,
+            };
+            console.log(`✅ Using fresh video cache: ${videoCache.totalVideos} videos from ${videoCache.totalChannels} channels`);
+            return;
+        }
+    } catch (err) {
+        console.warn('Could not check startup video cache, refreshing feeds:', err.message);
+    }
+
+    aggregateFeeds();
+}
+
 // Run immediately on start
-aggregateFeeds();
+aggregateOnStartupIfStale();
 
 // Run every 15 minutes
 setInterval(aggregateFeeds, 15 * 60 * 1000);
 
-module.exports = { aggregateFeeds };
+module.exports = {
+    CHANNEL_REFRESH_INTERVAL_MS,
+    aggregateFeeds,
+    getAggregationStatus,
+    getChannelsDueForRefresh,
+    mergeChannelRefreshes
+};

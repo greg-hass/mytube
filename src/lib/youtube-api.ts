@@ -14,6 +14,17 @@ export { fetchChannelInfoFallback };
  * for resolving handles and custom URLs to channel IDs
  */
 const YOUTUBE_API_BASE = 'https://www.googleapis.com/youtube/v3';
+const AUTO_RESOLVER_DAILY_QUOTA_CAP = 100;
+
+function getAutomaticResolverApiKey(providedApiKey?: string): string | null {
+  const state = useStore.getState();
+  const key = providedApiKey || state.apiKey || import.meta.env.VITE_YOUTUBE_API_KEY;
+
+  if (!key) return null;
+  if ((state.quotaUsed || 0) >= AUTO_RESOLVER_DAILY_QUOTA_CAP) return null;
+
+  return key;
+}
 
 /**
  * Fetch channel information from YouTube API
@@ -132,6 +143,59 @@ export async function fetchChannelsBatch(
     return results;
   } catch (error) {
     console.error('Error in batch channel fetch:', error);
+    return [];
+  }
+}
+
+/**
+ * Fetch channel titles and thumbnails without enabling API video fetching.
+ *
+ * The YouTube channels endpoint costs 1 quota unit per batch of up to 50 IDs,
+ * so this is cheap enough for manual icon repair while videos remain RSS-only.
+ */
+export async function fetchChannelIconsBatch(
+  channelIds: string[],
+  apiKey: string
+): Promise<YouTubeChannel[]> {
+  if (channelIds.length === 0 || !apiKey) return [];
+
+  try {
+    const batches = [];
+    for (let i = 0; i < channelIds.length; i += 50) {
+      batches.push(channelIds.slice(i, i + 50));
+    }
+
+    const results: YouTubeChannel[] = [];
+
+    for (const batch of batches) {
+      const ids = batch.join(',');
+      const response = await fetch(
+        `${YOUTUBE_API_BASE}/channels?part=snippet&id=${ids}&key=${apiKey}`
+      );
+      useStore.getState().incrementQuota(1);
+
+      if (!response.ok) {
+        console.error(`Channel icon repair failed: ${response.status}`);
+        continue;
+      }
+
+      const data = await response.json();
+
+      if (data.items) {
+        const channels = data.items.map((channel: any) => ({
+          id: channel.id,
+          title: channel.snippet.title,
+          description: channel.snippet.description,
+          thumbnail: channel.snippet.thumbnails.high?.url || channel.snippet.thumbnails.medium?.url || channel.snippet.thumbnails.default?.url,
+          customUrl: channel.snippet.customUrl,
+        }));
+        results.push(...channels);
+      }
+    }
+
+    return results;
+  } catch (error) {
+    console.error('Error in channel icon repair fetch:', error);
     return [];
   }
 }
@@ -314,22 +378,13 @@ async function resolveChannelId(
 }
 
 /**
- * Try to fetch channel info with API first, then fallback to HTML parsing
+ * Fetch channel info without spending YouTube API quota.
+ * Handle resolution has a separate capped automatic API path in resolveTemporaryChannelFromRSS.
  */
 export async function fetchChannelInfoWithFallback(
   parsedInput: ParsedChannelInput,
-  apiKey?: string
+  _apiKey?: string
 ): Promise<YouTubeChannel | null> {
-  if (apiKey) {
-    try {
-      const result = await fetchChannelInfo(parsedInput, apiKey);
-      if (result) return result;
-    } catch (error) {
-      console.warn('API fetch failed, falling back to local parsing:', error);
-    }
-  }
-
-  // Fallback to HTML parsing
   return fetchChannelInfoFallback(parsedInput);
 }
 
@@ -353,11 +408,7 @@ export async function resolveTemporaryChannelFromRSS(
   console.log(`🔍 Attempting to resolve temporary channel: ${tempChannelId} -> ${searchTerm}`);
 
   try {
-    // Use provided key, or get from store, or fallback to env
-    const { apiKey: storeApiKey, useApiForVideos } = useStore.getState();
-
-    // Only use API key if useApiForVideos is true
-    const effectiveApiKey = (useApiForVideos) ? (apiKey || storeApiKey || import.meta.env.VITE_YOUTUBE_API_KEY) : null;
+    const effectiveApiKey = getAutomaticResolverApiKey(apiKey);
 
     console.log(`🔑 Resolution API Key available: ${!!effectiveApiKey}`);
 
@@ -369,6 +420,8 @@ export async function resolveTemporaryChannelFromRSS(
           const handleForApi = searchTerm.startsWith('@') ? searchTerm : `@${searchTerm}`;
           console.log(`🔍 Fetching handle: ${handleForApi}`);
           const response = await fetch(`${YOUTUBE_API_BASE}/channels?part=snippet&forHandle=${encodeURIComponent(handleForApi)}&key=${effectiveApiKey}`);
+          useStore.getState().incrementQuota(1);
+
           if (!response.ok) {
             const errorData = await response.json().catch(() => ({}));
             console.error('YouTube API Error Details:', JSON.stringify(errorData, null, 2));
@@ -382,31 +435,6 @@ export async function resolveTemporaryChannelFromRSS(
               title: channel.snippet.title,
               thumbnail: channel.snippet.thumbnails?.high?.url || channel.snippet.thumbnails?.medium?.url || channel.snippet.thumbnails?.default?.url
             };
-          }
-        } else {
-          // Resolve custom URL via search similar to resolveChannelId logic
-          const response = await fetch(`${YOUTUBE_API_BASE}/search?part=snippet&q=${encodeURIComponent(searchTerm)}&type=channel&maxResults=5&key=${effectiveApiKey}`);
-          if (!response.ok) {
-            throw new Error(`Custom URL search failed: ${response.status}`);
-          }
-          const data = await response.json();
-          if (data.items && data.items.length > 0) {
-            const channelId = data.items[0].snippet.channelId;
-            // Fetch channel details for title and thumbnail
-            const channelResp = await fetch(`${YOUTUBE_API_BASE}/channels?part=snippet&id=${channelId}&key=${effectiveApiKey}`);
-            if (channelResp.ok) {
-              const chData = await channelResp.json();
-              if (chData.items && chData.items.length > 0) {
-                const ch = chData.items[0];
-                return {
-                  id: ch.id,
-                  title: ch.snippet.title,
-                  thumbnail: ch.snippet.thumbnails?.high?.url || ch.snippet.thumbnails?.medium?.url || ch.snippet.thumbnails?.default?.url
-                };
-              }
-            }
-            // Fallback if details fetch fails
-            return { id: channelId, title: searchTerm, thumbnail: undefined };
           }
         }
       } catch (apiError) {

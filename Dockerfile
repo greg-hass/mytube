@@ -1,38 +1,42 @@
-# Build stage
-FROM node:20-slim AS builder
+# Frontend build stage
+FROM node:20-alpine AS frontend-builder
 
 WORKDIR /app
 
-# Copy package files
 COPY package*.json ./
-
-# Install all dependencies (npm ci is faster and more reliable)
 RUN npm ci
 
-# Copy source code
 COPY . .
-
-# Build the app
 RUN npm run build
 
-# Production stage
-FROM nginx:alpine
+# Backend dependency stage
+FROM node:20-alpine AS backend-deps
 
-# Copy built files from builder
-COPY --from=builder /app/dist /usr/share/nginx/html
+WORKDIR /app/server
 
-# Copy nginx configuration
-COPY nginx.conf /etc/nginx/conf.d/default.conf
+COPY server/package*.json ./
+RUN npm ci --omit=dev
 
-# Expose port 80
-EXPOSE 80
+# Production stage: nginx serves the PWA, Node serves /api behind nginx.
+FROM node:20-alpine
 
-# Install curl for healthcheck
-RUN apk add --no-cache curl
+RUN apk add --no-cache nginx curl
 
-# Health check
+WORKDIR /app
+
+COPY --from=frontend-builder /app/dist /usr/share/nginx/html
+COPY --from=backend-deps /app/server/node_modules /app/server/node_modules
+COPY server /app/server
+COPY nginx.conf /etc/nginx/http.d/default.conf
+COPY docker/start.sh /usr/local/bin/start-youtube-subscriptions
+
+RUN chmod +x /usr/local/bin/start-youtube-subscriptions \
+  && mkdir -p /run/nginx /app/server/data
+
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
-  CMD curl -f http://localhost/ || exit 1
+  CMD curl -fsS http://localhost/api/videos/status >/dev/null || exit 1
 
-# Start nginx
-CMD ["nginx", "-g", "daemon off;"]
+EXPOSE 80
+VOLUME ["/app/server/data"]
+
+CMD ["start-youtube-subscriptions"]

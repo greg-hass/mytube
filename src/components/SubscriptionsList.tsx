@@ -1,7 +1,6 @@
-import { useVirtualizer } from '@tanstack/react-virtual';
-import { useEffect, useRef, useState } from 'react';
+import { useState } from 'react';
 import { motion } from 'framer-motion';
-import { Inbox } from 'lucide-react';
+import { Image, Inbox, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { SubscriptionCard } from './SubscriptionCard';
 import { SkeletonCard } from './SkeletonCard';
@@ -9,48 +8,9 @@ import { useSubscriptionStorage } from '../hooks/useSubscriptionStorage';
 import { useStore } from '../store/useStore';
 
 export const SubscriptionsList = () => {
-  const { subscriptions, rawSubscriptions, isLoading, removeSubscription, addSubscriptions, toggleFavorite, toggleMute } = useSubscriptionStorage();
+  const { subscriptions, rawSubscriptions, isLoading, removeSubscription, addSubscriptions, toggleFavorite, toggleMute, repairChannelIcons } = useSubscriptionStorage();
   const { viewMode } = useStore();
-  const parentRef = useRef<HTMLDivElement>(null);
-  const SCROLL_STORAGE_KEY = 'subscriptions-scroll-top';
-  const [itemsPerRow, setItemsPerRow] = useState(viewMode === 'grid' ? 5 : 1);
-
-  // Update items per row based on container width
-  useEffect(() => {
-    if (viewMode === 'list') {
-      setItemsPerRow(1);
-      return;
-    }
-
-    const updateItemsPerRow = () => {
-      if (!parentRef.current) return;
-      const width = parentRef.current.offsetWidth;
-      // Matches Tailwind breakpoints: sm: 640px, lg: 1024px, xl: 1280px
-      // We subtract some padding/gap to be safe
-      if (width >= 1280) setItemsPerRow(5);
-      else if (width >= 1024) setItemsPerRow(4);
-      else if (width >= 640) setItemsPerRow(3);
-      else setItemsPerRow(2);
-    };
-
-    // Initial check
-    updateItemsPerRow();
-
-    const observer = new ResizeObserver(updateItemsPerRow);
-    if (parentRef.current) {
-      observer.observe(parentRef.current);
-    }
-
-    return () => observer.disconnect();
-  }, [viewMode]);
-
-  // Virtual scrolling for performance with large lists
-  const rowVirtualizer = useVirtualizer({
-    count: Math.ceil(subscriptions.length / itemsPerRow),
-    getScrollElement: () => parentRef.current,
-    estimateSize: () => (viewMode === 'grid' ? 320 : 200),
-    overscan: 10, // Increased for smoother scrolling
-  });
+  const [isRepairingIcons, setIsRepairingIcons] = useState(false);
 
   if (isLoading) {
     return (
@@ -84,70 +44,46 @@ export const SubscriptionsList = () => {
     );
   }
 
-  // Restore and persist scroll position
-  useEffect(() => {
-    const container = parentRef.current;
-    if (!container) return;
-
-    // Restore on mount
-    const saved = sessionStorage.getItem(SCROLL_STORAGE_KEY);
-    if (saved) {
-      const value = Number(saved);
-      if (!Number.isNaN(value)) {
-        container.scrollTop = value;
-      }
-    }
-
-    // Persist on scroll
-    const handleScroll = () => {
-      sessionStorage.setItem(SCROLL_STORAGE_KEY, String(container.scrollTop));
-    };
-
-    container.addEventListener('scroll', handleScroll);
-    return () => {
-      container.removeEventListener('scroll', handleScroll);
-    };
-  }, [SCROLL_STORAGE_KEY, subscriptions.length]);
-
   return (
-    <div ref={parentRef} className="h-[calc(100vh-180px)] overflow-auto px-4">
+    <div data-testid="subscriptions-list" className="px-4 bg-gray-50 dark:bg-gray-950">
+      <div data-testid="repair-icons-toolbar" className="sticky top-[calc(env(safe-area-inset-top)+8.5rem)] z-20 mb-4 flex justify-end bg-gray-50 py-2 dark:bg-gray-950 sm:top-[9rem]">
+        <button
+          disabled={isRepairingIcons}
+          onClick={async () => {
+            setIsRepairingIcons(true);
+            try {
+              const repairedCount = await repairChannelIcons({ useApi: true });
+              toast.success(
+                repairedCount > 0
+                  ? `Updated ${repairedCount} channel icon${repairedCount === 1 ? '' : 's'}`
+                  : 'Channel icons are already up to date'
+              );
+            } catch (error) {
+              toast.error('Could not repair channel icons', {
+                description: error instanceof Error ? error.message : 'Unknown error',
+              });
+            } finally {
+              setIsRepairingIcons(false);
+            }
+          }}
+          className="inline-flex items-center gap-2 rounded-lg bg-gray-800 px-3 py-2 text-sm font-medium text-white transition-colors hover:bg-gray-700 disabled:cursor-not-allowed disabled:opacity-60 dark:bg-gray-700 dark:hover:bg-gray-600"
+        >
+          {isRepairingIcons ? <Loader2 className="h-4 w-4 animate-spin" /> : <Image className="h-4 w-4" />}
+          {isRepairingIcons ? 'Repairing...' : 'Repair icons'}
+        </button>
+      </div>
       <div
-        style={{
-          height: `${rowVirtualizer.getTotalSize()}px`,
-          width: '100%',
-          position: 'relative',
-        }}
+        className={
+          viewMode === 'grid'
+            ? 'grid grid-cols-2 gap-3 pb-8 sm:grid-cols-3 sm:gap-6 lg:grid-cols-4 xl:grid-cols-5'
+            : 'flex flex-col gap-4 pb-8'
+        }
       >
-        {rowVirtualizer.getVirtualItems().map((virtualRow) => {
-          const startIndex = virtualRow.index * itemsPerRow;
-          const rowItems = subscriptions.slice(
-            startIndex,
-            startIndex + itemsPerRow
-          );
-
-          return (
-            <div
-              key={virtualRow.index}
-              style={{
-                position: 'absolute',
-                top: 0,
-                left: 0,
-                width: '100%',
-                transform: `translateY(${virtualRow.start}px)`,
-              }}
-            >
-              <div
-                className={
-                  viewMode === 'grid'
-                    ? 'grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3 sm:gap-6 mb-6'
-                    : 'flex flex-col gap-4 mb-4'
-                }
-              >
-                {rowItems.map((channel, idx) => (
-                  <SubscriptionCard
-                    key={channel.id}
-                    channel={channel}
-                    index={startIndex + idx}
+        {subscriptions.map((channel, index) => (
+          <SubscriptionCard
+            key={channel.id}
+            channel={channel}
+            index={index}
                     onRemove={async (channelId) => {
                       const removedChannel = rawSubscriptions.find(s => s.id === channelId);
                       await removeSubscription(channelId);
@@ -193,12 +129,8 @@ export const SubscriptionsList = () => {
                         );
                       }
                     }}
-                  />
-                ))}
-              </div>
-            </div>
-          );
-        })}
+          />
+        ))}
       </div>
     </div>
   );

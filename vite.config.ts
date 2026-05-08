@@ -3,6 +3,46 @@ import react from '@vitejs/plugin-react';
 import viteCompression from 'vite-plugin-compression';
 import { VitePWA } from 'vite-plugin-pwa';
 
+export const pwaRuntimeCaching = [
+  {
+    urlPattern: /^https:\/\/www\.youtube\.com\/.*/i,
+    handler: 'NetworkFirst' as const,
+    options: {
+      cacheName: 'youtube-cache',
+      expiration: {
+        maxEntries: 50,
+        maxAgeSeconds: 60 * 60 * 24, // 1 day
+      },
+    },
+  },
+  {
+    urlPattern: /^https:\/\/i\.ytimg\.com\/.*/i,
+    handler: 'CacheFirst' as const,
+    options: {
+      cacheName: 'youtube-images',
+      expiration: {
+        maxEntries: 1000,
+        maxAgeSeconds: 60 * 60 * 24 * 30, // 30 days
+      },
+    },
+  },
+  {
+    urlPattern: ({ url }: { url: URL }) => (
+      url.pathname === '/api/channel-thumbnail' ||
+      url.hostname === 'yt3.googleusercontent.com' ||
+      url.hostname === 'yt3.ggpht.com'
+    ),
+    handler: 'CacheFirst' as const,
+    options: {
+      cacheName: 'channel-icons',
+      expiration: {
+        maxEntries: 1000,
+        maxAgeSeconds: 60 * 60 * 24 * 30, // 30 days
+      },
+    },
+  },
+];
+
 // https://vite.dev/config/
 export default defineConfig({
   plugins: [
@@ -20,8 +60,8 @@ export default defineConfig({
         name: 'YouTube Subscriptions',
         short_name: 'YT Subs',
         description: 'Manage your YouTube subscriptions without an account',
-        theme_color: '#dc2626',
-        background_color: '#ffffff',
+        theme_color: '#030712',
+        background_color: '#030712',
         display: 'standalone',
         icons: [
           {
@@ -38,30 +78,7 @@ export default defineConfig({
       },
       workbox: {
         globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2}'],
-        runtimeCaching: [
-          {
-            urlPattern: /^https:\/\/www\.youtube\.com\/.*/i,
-            handler: 'NetworkFirst',
-            options: {
-              cacheName: 'youtube-cache',
-              expiration: {
-                maxEntries: 50,
-                maxAgeSeconds: 60 * 60 * 24, // 1 day
-              },
-            },
-          },
-          {
-            urlPattern: /^https:\/\/i\.ytimg\.com\/.*/i,
-            handler: 'CacheFirst',
-            options: {
-              cacheName: 'youtube-images',
-              expiration: {
-                maxEntries: 100,
-                maxAgeSeconds: 60 * 60 * 24 * 7, // 7 days
-              },
-            },
-          },
-        ],
+        runtimeCaching: pwaRuntimeCaching,
       },
     }),
   ],
@@ -88,6 +105,12 @@ export default defineConfig({
     // Fast HMR
     hmr: {
       overlay: true,
+    },
+    proxy: {
+      '/api': {
+        target: 'http://localhost:3001',
+        changeOrigin: true,
+      },
     },
     // Open browser on start
     open: true,

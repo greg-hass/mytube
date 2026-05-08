@@ -2,14 +2,15 @@ import { useState, useCallback, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Upload, FileText, CheckCircle, XCircle, Loader2, ExternalLink } from 'lucide-react';
 import { useSubscriptionStorage } from '../hooks/useSubscriptionStorage';
-import { isValidOPMLContent, getOPMLStats } from '../lib/opml-parser';
+import { getSubscriptionImportStats, isValidSubscriptionImportContent } from '../lib/opml-parser';
 
 interface OPMLUploadProps {
   onSuccess?: () => void;
   minimal?: boolean;
+  showLabelOnMobile?: boolean;
 }
 
-export const OPMLUpload = ({ onSuccess, minimal = false }: OPMLUploadProps) => {
+export const OPMLUpload = ({ onSuccess, minimal = false, showLabelOnMobile = false }: OPMLUploadProps) => {
   const [isDragging, setIsDragging] = useState(false);
   const [uploadStatus, setUploadStatus] = useState<'idle' | 'processing' | 'success' | 'error'>('idle');
   const [errorMessage, setErrorMessage] = useState<string>('');
@@ -19,9 +20,9 @@ export const OPMLUpload = ({ onSuccess, minimal = false }: OPMLUploadProps) => {
 
   const handleFile = useCallback(async (file: File) => {
     // Validate file type
-    if (!file.name.endsWith('.opml') && !file.name.endsWith('.xml')) {
+    if (!file.name.endsWith('.csv') && !file.name.endsWith('.opml') && !file.name.endsWith('.xml')) {
       setUploadStatus('error');
-      setErrorMessage('Please upload a valid OPML file (.opml or .xml)');
+      setErrorMessage('Please upload subscriptions.csv from Google Takeout, or an OPML/XML file.');
       return;
     }
 
@@ -32,22 +33,22 @@ export const OPMLUpload = ({ onSuccess, minimal = false }: OPMLUploadProps) => {
       // Read file content
       const content = await file.text();
 
-      // Validate OPML content
-      if (!isValidOPMLContent(content)) {
-        throw new Error('Invalid OPML format. Please upload a valid YouTube subscriptions export.');
+      // Validate import content
+      if (!isValidSubscriptionImportContent(content)) {
+        throw new Error('Invalid import format. Please upload Google Takeout subscriptions.csv or a valid OPML file.');
       }
 
       // Get stats before importing
-      const stats = getOPMLStats(content);
+      const stats = getSubscriptionImportStats(content);
       if (!stats.isValid) {
-        throw new Error(stats.error || 'Invalid OPML file');
+        throw new Error(stats.error || 'Invalid import file');
       }
 
       if (stats.channelCount === 0) {
         throw new Error('No subscriptions found in this file');
       }
 
-      // Import OPML
+      // Import subscriptions
       const subscriptions = await importOPML(content);
 
       setImportedCount(subscriptions.length);
@@ -59,8 +60,8 @@ export const OPMLUpload = ({ onSuccess, minimal = false }: OPMLUploadProps) => {
       }, 1500);
     } catch (error) {
       setUploadStatus('error');
-      setErrorMessage(error instanceof Error ? error.message : 'Failed to import OPML file');
-      console.error('OPML import error:', error);
+      setErrorMessage(error instanceof Error ? error.message : 'Failed to import subscriptions file');
+      console.error('Subscription import error:', error);
     }
   }, [importOPML, onSuccess]);
 
@@ -111,7 +112,7 @@ export const OPMLUpload = ({ onSuccess, minimal = false }: OPMLUploadProps) => {
         <input
           ref={fileInputRef}
           type="file"
-          accept=".opml,.xml"
+          accept=".csv,.opml,.xml"
           onChange={handleFileInput}
           className="hidden"
         />
@@ -127,7 +128,7 @@ export const OPMLUpload = ({ onSuccess, minimal = false }: OPMLUploadProps) => {
           ) : (
             <Upload className="w-4 h-4" />
           )}
-          <span className="hidden sm:inline">Import</span>
+          <span className={showLabelOnMobile ? '' : 'hidden sm:inline'}>Import</span>
         </motion.button>
       </>
     );
@@ -135,7 +136,7 @@ export const OPMLUpload = ({ onSuccess, minimal = false }: OPMLUploadProps) => {
 
   // Full upload screen version
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-50 via-white to-gray-50 dark:from-gray-950 dark:via-gray-900 dark:to-gray-950 flex items-center justify-center p-4">
+    <div className="app-shell min-h-screen flex items-center justify-center p-4">
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
@@ -149,7 +150,7 @@ export const OPMLUpload = ({ onSuccess, minimal = false }: OPMLUploadProps) => {
             Import Your Subscriptions
           </h1>
           <p className="text-gray-600 dark:text-gray-400">
-            Get started by uploading your YouTube subscriptions OPML file
+            Get started with your Google Takeout subscriptions.csv file
           </p>
         </div>
 
@@ -164,7 +165,7 @@ export const OPMLUpload = ({ onSuccess, minimal = false }: OPMLUploadProps) => {
               <input
                 ref={fileInputRef}
                 type="file"
-                accept=".opml,.xml"
+                accept=".csv,.opml,.xml"
                 onChange={handleFileInput}
                 className="hidden"
               />
@@ -182,13 +183,13 @@ export const OPMLUpload = ({ onSuccess, minimal = false }: OPMLUploadProps) => {
               >
                 <Upload className={`w-16 h-16 mx-auto mb-4 ${isDragging ? 'text-red-500' : 'text-gray-400'}`} />
                 <h3 className="text-xl font-semibold mb-2">
-                  {isDragging ? 'Drop your OPML file here' : 'Drag and drop your OPML file'}
+                  {isDragging ? 'Drop your subscriptions file here' : 'Drag and drop your subscriptions file'}
                 </h3>
                 <p className="text-gray-600 dark:text-gray-400 mb-4">
                   or click to browse
                 </p>
                 <p className="text-sm text-gray-500">
-                  Accepts .opml and .xml files
+                  Accepts Google Takeout .csv, plus .opml and .xml files
                 </p>
               </div>
 
@@ -198,10 +199,10 @@ export const OPMLUpload = ({ onSuccess, minimal = false }: OPMLUploadProps) => {
                   How to export from YouTube
                 </h4>
                 <ol className="text-sm text-blue-800 dark:text-blue-200 space-y-2 list-decimal list-inside">
-                  <li>Go to <a href="https://www.youtube.com/feed/channels" target="_blank" rel="noopener noreferrer" className="underline font-medium">YouTube Subscriptions</a></li>
-                  <li>Scroll to the bottom and click "Export subscriptions"</li>
-                  <li>Save the .opml file to your computer</li>
-                  <li>Upload it here to get started!</li>
+                  <li>Open <a href="https://takeout.google.com/" target="_blank" rel="noopener noreferrer" className="underline font-medium">Google Takeout</a></li>
+                  <li>Deselect all, then select YouTube and YouTube Music</li>
+                  <li>Under included data, keep only subscriptions selected</li>
+                  <li>Download the export and upload subscriptions.csv from the subscriptions folder</li>
                 </ol>
               </div>
             </motion.div>
