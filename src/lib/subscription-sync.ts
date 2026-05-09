@@ -18,7 +18,7 @@ export function mergeRemoteSubscriptionMetadata(
     const remoteSub = remoteById.get(localSub.id);
     if (!remoteSub) return localSub;
 
-    return {
+    const mergedSub: StoredSubscription = {
       ...localSub,
       title: remoteSub.title || localSub.title,
       description: remoteSub.description || localSub.description,
@@ -26,6 +26,11 @@ export function mergeRemoteSubscriptionMetadata(
         ? remoteSub.thumbnail
         : localSub.thumbnail,
     };
+
+    const group = localSub.group || remoteSub.group;
+    if (group) mergedSub.group = group;
+
+    return mergedSub;
   });
 }
 

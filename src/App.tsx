@@ -3,6 +3,7 @@ import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { Dashboard } from './components/Dashboard';
 import { useStore } from './store/useStore';
 import { useSubscriptionStorage } from './hooks/useSubscriptionStorage';
+import { MobileLandscapeGate } from './components/MobileLandscapeGate';
 import { Toaster } from 'sonner';
 
 const VideoPlayer = lazy(() => import('./components/VideoPlayer').then((module) => ({ default: module.VideoPlayer })));
@@ -59,12 +60,14 @@ function App() {
       <BrowserRouter>
         {hasSubscriptions ? (
           <Suspense fallback={<AppFallback />}>
-            <Routes>
-              <Route path="/" element={<Dashboard />} />
-              <Route path="/video/:videoId" element={<VideoPlayer />} />
-              <Route path="/channel/:channelId" element={<ChannelViewer />} />
-              <Route path="*" element={<Navigate to="/" replace />} />
-            </Routes>
+            <MobileLandscapeGate>
+              <Routes>
+                <Route path="/" element={<Dashboard />} />
+                <Route path="/video/:videoId" element={<VideoPlayer />} />
+                <Route path="/channel/:channelId" element={<ChannelViewer />} />
+                <Route path="*" element={<Navigate to="/" replace />} />
+              </Routes>
+            </MobileLandscapeGate>
           </Suspense>
         ) : (
           <Suspense fallback={<AppFallback />}>

@@ -1,5 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { useMemo } from 'react';
+import { useEffect, useMemo } from 'react';
 import { toast } from 'sonner';
 import type { YouTubeVideo } from '../types/youtube';
 
@@ -11,6 +11,14 @@ export interface SyncStatus {
   errors: number;
   videos: number;
   state: 'idle' | 'running' | 'queued' | 'error';
+  scheduledRefresh?: ScheduledRefreshStatus;
+}
+
+export interface ScheduledRefreshStatus {
+  enabled: boolean;
+  intervalMs: number;
+  nextRunAt: string | null;
+  lastRunAt: string | null;
 }
 
 interface AggregationStatus {
@@ -22,6 +30,7 @@ interface AggregationStatus {
   startedAt: string | null;
   completedAt: string | null;
   lastUpdated: string | null;
+  scheduledRefresh?: ScheduledRefreshStatus;
 }
 
 /**
@@ -68,6 +77,21 @@ export const useRSSVideos = () => {
     refetchInterval: isAggregating ? 5000 : 1000 * 60 * 5,
   });
 
+  useEffect(() => {
+    if (!aggregationStatus?.lastUpdated || !serverData?.lastUpdated) return;
+
+    const statusUpdatedAt = new Date(aggregationStatus.lastUpdated).getTime();
+    const videosUpdatedAt = new Date(serverData.lastUpdated).getTime();
+
+    if (
+      Number.isFinite(statusUpdatedAt) &&
+      Number.isFinite(videosUpdatedAt) &&
+      statusUpdatedAt > videosUpdatedAt
+    ) {
+      queryClient.invalidateQueries({ queryKey: ['server-videos'] });
+    }
+  }, [aggregationStatus?.lastUpdated, queryClient, serverData?.lastUpdated]);
+
   // Trigger server-side refresh
   const triggerServerRefresh = useMutation({
     mutationFn: async () => {
@@ -107,6 +131,7 @@ export const useRSSVideos = () => {
       errors: aggregationStatus?.errors || 0,
       videos: videosCount,
       state,
+      scheduledRefresh: aggregationStatus?.scheduledRefresh,
     };
   }, [aggregationStatus, serverData, triggerServerRefresh.isPending]);
 

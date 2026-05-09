@@ -1,4 +1,4 @@
-import { render, waitFor } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { VideoPlayer } from './VideoPlayer';
@@ -124,5 +124,87 @@ describe('VideoPlayer', () => {
     expect(iframe.getAttribute('allow')).toContain('autoplay');
     expect(iframe.getAttribute('allowfullscreen')).toBe('');
     expect(iframe.getAttribute('webkitallowfullscreen')).toBe('');
+  });
+
+  it('requests 1080p playback quality when the player is ready', async () => {
+    const setPlaybackQuality = vi.fn();
+    let playerVars: Record<string, string | number> | undefined;
+
+    window.YT = {
+      PlayerState: { ENDED: 0 },
+      Player: class {
+        constructor(_element: HTMLElement, options: any) {
+          playerVars = options.playerVars;
+          window.setTimeout(() => options.events.onReady({ target: this }), 0);
+        }
+
+        getCurrentTime = () => 0;
+        getDuration = () => 100;
+        destroy = vi.fn();
+        seekTo = vi.fn();
+        playVideo = vi.fn();
+        setPlaybackQuality = setPlaybackQuality;
+      },
+    };
+
+    render(
+      <MemoryRouter initialEntries={['/video/video-1']}>
+        <Routes>
+          <Route path="/video/:videoId" element={<VideoPlayer />} />
+        </Routes>
+      </MemoryRouter>
+    );
+
+    await waitFor(() => {
+      expect(setPlaybackQuality).toHaveBeenCalledWith('hd1080');
+    });
+    expect(playerVars?.vq).toBe('hd1080');
+  });
+
+  it('shows a direct YouTube fallback when the embedded player rejects playback', async () => {
+    window.YT = {
+      PlayerState: { ENDED: 0 },
+      Player: class {
+        constructor(_element: HTMLElement, options: any) {
+          window.setTimeout(() => options.events.onError({ target: this, data: 150 }), 0);
+        }
+
+        getCurrentTime = () => 0;
+        getDuration = () => 0;
+        destroy = vi.fn();
+        seekTo = vi.fn();
+        playVideo = vi.fn();
+      },
+    };
+
+    render(
+      <MemoryRouter initialEntries={['/video/video-1']}>
+        <Routes>
+          <Route path="/video/:videoId" element={<VideoPlayer />} />
+        </Routes>
+      </MemoryRouter>
+    );
+
+    await waitFor(() => {
+      expect(screen.getByText('This video needs YouTube')).toBeInTheDocument();
+    });
+    expect(screen.getAllByRole('link', { name: 'Open in YouTube' })[0]).toHaveAttribute(
+      'href',
+      'https://www.youtube.com/watch?v=video-1'
+    );
+  });
+
+  it('uses same-tab navigation for the YouTube fallback button', () => {
+    render(
+      <MemoryRouter initialEntries={['/video/video-1']}>
+        <Routes>
+          <Route path="/video/:videoId" element={<VideoPlayer />} />
+        </Routes>
+      </MemoryRouter>
+    );
+
+    const openButton = screen.getByRole('link', { name: 'Open in YouTube' });
+
+    expect(openButton).not.toHaveAttribute('target', '_blank');
   });
 });

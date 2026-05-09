@@ -6,6 +6,7 @@ export interface YouTubeChannel {
   customUrl?: string;
   isFavorite?: boolean;
   isMuted?: boolean;
+  group?: string;
   subscriberCount?: string;
   videoCount?: string;
 }

@@ -1,16 +1,32 @@
-import { useState } from 'react';
 import { motion } from 'framer-motion';
-import { Image, Inbox, Loader2 } from 'lucide-react';
+import { Inbox } from 'lucide-react';
 import { toast } from 'sonner';
 import { SubscriptionCard } from './SubscriptionCard';
 import { SkeletonCard } from './SkeletonCard';
 import { useSubscriptionStorage } from '../hooks/useSubscriptionStorage';
 import { useStore } from '../store/useStore';
 
-export const SubscriptionsList = () => {
-  const { subscriptions, rawSubscriptions, isLoading, removeSubscription, addSubscriptions, toggleFavorite, toggleMute, repairChannelIcons } = useSubscriptionStorage();
+interface SubscriptionsListProps {
+  selectedGroup?: string;
+  groups?: string[];
+}
+
+export const SubscriptionsList = ({
+  selectedGroup = 'all',
+  groups,
+}: SubscriptionsListProps) => {
+  const { subscriptions, rawSubscriptions, isLoading, removeSubscription, addSubscriptions, toggleFavorite, toggleMute, setSubscriptionGroup } = useSubscriptionStorage();
   const { viewMode } = useStore();
-  const [isRepairingIcons, setIsRepairingIcons] = useState(false);
+
+  const subscriptionGroups = groups ?? Array.from(new Set([
+    ...subscriptions
+      .map((channel) => channel.group?.trim())
+      .filter((group): group is string => Boolean(group)),
+  ])).sort((a, b) => a.localeCompare(b));
+
+  const visibleSubscriptions = selectedGroup === 'all'
+    ? subscriptions
+    : subscriptions.filter((channel) => (channel.group || '') === selectedGroup);
 
   if (isLoading) {
     return (
@@ -28,7 +44,7 @@ export const SubscriptionsList = () => {
     );
   }
 
-  if (subscriptions.length === 0) {
+  if (visibleSubscriptions.length === 0 && selectedGroup === 'all') {
     return (
       <motion.div
         initial={{ opacity: 0, y: 20 }}
@@ -46,32 +62,6 @@ export const SubscriptionsList = () => {
 
   return (
     <div data-testid="subscriptions-list" className="px-4 bg-gray-50 dark:bg-gray-950">
-      <div data-testid="repair-icons-toolbar" className="sticky top-[calc(env(safe-area-inset-top)+8.5rem)] z-20 mb-4 flex justify-end bg-gray-50 py-2 dark:bg-gray-950 sm:top-[9rem]">
-        <button
-          disabled={isRepairingIcons}
-          onClick={async () => {
-            setIsRepairingIcons(true);
-            try {
-              const repairedCount = await repairChannelIcons({ useApi: true });
-              toast.success(
-                repairedCount > 0
-                  ? `Updated ${repairedCount} channel icon${repairedCount === 1 ? '' : 's'}`
-                  : 'Channel icons are already up to date'
-              );
-            } catch (error) {
-              toast.error('Could not repair channel icons', {
-                description: error instanceof Error ? error.message : 'Unknown error',
-              });
-            } finally {
-              setIsRepairingIcons(false);
-            }
-          }}
-          className="inline-flex items-center gap-2 rounded-lg bg-gray-800 px-3 py-2 text-sm font-medium text-white transition-colors hover:bg-gray-700 disabled:cursor-not-allowed disabled:opacity-60 dark:bg-gray-700 dark:hover:bg-gray-600"
-        >
-          {isRepairingIcons ? <Loader2 className="h-4 w-4 animate-spin" /> : <Image className="h-4 w-4" />}
-          {isRepairingIcons ? 'Repairing...' : 'Repair icons'}
-        </button>
-      </div>
       <div
         className={
           viewMode === 'grid'
@@ -79,56 +69,66 @@ export const SubscriptionsList = () => {
             : 'flex flex-col gap-4 pb-8'
         }
       >
-        {subscriptions.map((channel, index) => (
+        {visibleSubscriptions.map((channel, index) => (
           <SubscriptionCard
             key={channel.id}
             channel={channel}
             index={index}
-                    onRemove={async (channelId) => {
-                      const removedChannel = rawSubscriptions.find(s => s.id === channelId);
-                      await removeSubscription(channelId);
+            groups={subscriptionGroups}
+            onRemove={async (channelId) => {
+              const removedChannel = rawSubscriptions.find(s => s.id === channelId);
+              await removeSubscription(channelId);
 
-                      if (removedChannel) {
-                        toast.success(`Removed ${removedChannel.title}`, {
-                          description: 'Channel removed from subscriptions',
-                          action: {
-                            label: 'Undo',
-                            onClick: async () => {
-                              await addSubscriptions([removedChannel]);
-                              toast.success('Channel restored');
-                            },
-                          },
-                        });
-                      }
-                    }}
-                    onToggleFavorite={async (channelId) => {
-                      const channel = subscriptions.find(s => s.id === channelId);
-                      const wasFavorite = channel?.isFavorite;
+              if (removedChannel) {
+                toast.success(`Removed ${removedChannel.title}`, {
+                  description: 'Channel removed from subscriptions',
+                  action: {
+                    label: 'Undo',
+                    onClick: async () => {
+                      await addSubscriptions([removedChannel]);
+                      toast.success('Channel restored');
+                    },
+                  },
+                });
+              }
+            }}
+            onToggleFavorite={async (channelId) => {
+              const channel = subscriptions.find(s => s.id === channelId);
+              const wasFavorite = channel?.isFavorite;
 
-                      await toggleFavorite(channelId);
+              await toggleFavorite(channelId);
 
-                      if (channel) {
-                        toast.success(
-                          wasFavorite ? `Removed ${channel.title} from favorites` : `Added ${channel.title} to favorites`
-                        );
-                      }
-                    }}
-                    onToggleMute={async (channelId) => {
-                      const channel = subscriptions.find(s => s.id === channelId);
-                      const wasMuted = channel?.isMuted;
+              if (channel) {
+                toast.success(
+                  wasFavorite ? `Removed ${channel.title} from favorites` : `Added ${channel.title} to favorites`
+                );
+              }
+            }}
+            onToggleMute={async (channelId) => {
+              const channel = subscriptions.find(s => s.id === channelId);
+              const wasMuted = channel?.isMuted;
 
-                      console.log('🔇 Toggling mute for:', channel?.title, 'Current state:', wasMuted);
+              console.log('🔇 Toggling mute for:', channel?.title, 'Current state:', wasMuted);
 
-                      await toggleMute(channelId);
+              await toggleMute(channelId);
 
-                      console.log('✅ Mute toggled successfully');
+              console.log('✅ Mute toggled successfully');
 
-                      if (channel) {
-                        toast.success(
-                          wasMuted ? `Unmuted ${channel.title}` : `Muted ${channel.title}`
-                        );
-                      }
-                    }}
+              if (channel) {
+                toast.success(
+                  wasMuted ? `Unmuted ${channel.title}` : `Muted ${channel.title}`
+                );
+              }
+            }}
+            onSetGroup={async (channelId, group) => {
+              await setSubscriptionGroup(channelId, group);
+              const channel = subscriptions.find(s => s.id === channelId);
+              if (channel) {
+                toast.success(
+                  group ? `Moved ${channel.title} to ${group}` : `Removed ${channel.title} from groups`
+                );
+              }
+            }}
           />
         ))}
       </div>

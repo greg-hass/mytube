@@ -96,4 +96,32 @@ describe('VirtualizedVideoGrid', () => {
         expect(row.style.height).toBe(`${rowHeight}px`);
         expect(row.querySelector('.grid')).toHaveStyle({ height: `${rowHeight - 24}px` });
     });
+
+    it('keeps landscape phone timelines to one column even when the viewport is wider than sm', async () => {
+        Object.defineProperty(window, 'innerWidth', {
+            configurable: true,
+            value: 932,
+        });
+        Object.defineProperty(window, 'innerHeight', {
+            configurable: true,
+            value: 430,
+        });
+        Object.defineProperty(HTMLElement.prototype, 'offsetWidth', {
+            configurable: true,
+            value: 860,
+        });
+
+        render(<VirtualizedVideoGrid videos={videos} columns={4} />);
+
+        const timeline = screen.getByTestId('latest-videos-timeline');
+
+        await waitFor(() => {
+            expect(timeline.querySelector('[data-index]')).toBeTruthy();
+        });
+
+        const firstRow = timeline.querySelector('[data-index]') as HTMLElement;
+
+        expect(firstRow.querySelectorAll('article')).toHaveLength(1);
+        expect(firstRow.querySelector('.grid')?.className).toContain('mobile-landscape-grid');
+    });
 });

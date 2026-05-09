@@ -23,6 +23,12 @@ type MockRSSVideosState = {
     errors: number;
     videos: number;
     state: 'idle' | 'running' | 'queued' | 'error';
+    scheduledRefresh?: {
+      enabled: boolean;
+      intervalMs: number;
+      nextRunAt: string | null;
+      lastRunAt: string | null;
+    };
   };
 };
 
@@ -46,13 +52,17 @@ let mockWatchedVideos = new Set<string>();
 const mockMarkAsWatched = vi.fn((videoId: string) => {
   mockWatchedVideos = new Set([...mockWatchedVideos, videoId]);
 });
+let latestSubscriptionsListProps: { selectedGroup?: string; groups?: string[] } | undefined;
 
 vi.mock('./Header', () => ({
   Header: () => <header>Header</header>,
 }));
 
 vi.mock('./SubscriptionsList', () => ({
-  SubscriptionsList: () => <section>Subscriptions list content</section>,
+  SubscriptionsList: (props: { selectedGroup?: string; groups?: string[] }) => {
+    latestSubscriptionsListProps = props;
+    return <section>Subscriptions list content</section>;
+  },
 }));
 
 vi.mock('./VirtualizedVideoGrid', () => ({
@@ -107,6 +117,7 @@ vi.mock('../hooks/useSubscriptionStorage', () => ({
         title: 'Test Channel',
         description: '',
         thumbnail: '',
+        group: 'Tech',
       },
     ],
     rawSubscriptions: [
@@ -118,6 +129,7 @@ vi.mock('../hooks/useSubscriptionStorage', () => ({
     ],
     addSubscriptions: vi.fn(),
     toggleFavorite: vi.fn(),
+    repairChannelIcons: vi.fn(),
   }),
 }));
 
@@ -132,8 +144,10 @@ vi.mock('../store/useStore', () => ({
 describe('Dashboard', () => {
   beforeEach(() => {
     mockSearchQuery = '';
+    latestSubscriptionsListProps = undefined;
     mockWatchedVideos = new Set<string>();
     mockMarkAsWatched.mockClear();
+    window.history.replaceState(null, '', '/');
     vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback) => {
       callback(0);
       return 0;
@@ -170,6 +184,23 @@ describe('Dashboard', () => {
     expect(screen.queryByText('Subscriptions list content')).not.toBeInTheDocument();
   });
 
+  it('opens the subscriptions tab from the dashboard tab URL', () => {
+    window.history.replaceState(null, '', '/?tab=subscriptions');
+
+    render(<Dashboard />);
+
+    expect(screen.getByText('Subscriptions list content')).toBeInTheDocument();
+    expect(screen.queryByText('No videos found')).not.toBeInTheDocument();
+  });
+
+  it('keeps the selected dashboard tab in the URL for browser back restores', () => {
+    render(<Dashboard />);
+
+    fireEvent.click(screen.getByRole('button', { name: /subs/i }));
+
+    expect(window.location.search).toBe('?tab=subscriptions');
+  });
+
   it('shows feed build progress instead of an empty state while syncing videos', () => {
     mockRSSVideosState = {
       ...mockRSSVideosState,
@@ -191,17 +222,74 @@ describe('Dashboard', () => {
     expect(screen.queryByText('No videos found')).not.toBeInTheDocument();
   });
 
-  it('uses non-scrolling mobile tabs with normal page padding', () => {
+  it('shows the latest refresh age and scheduled interval', () => {
+    vi.spyOn(Date, 'now').mockReturnValue(Date.parse('2026-05-09T10:05:00.000Z'));
+    mockRSSVideosState = {
+      ...mockRSSVideosState,
+      syncStatus: {
+        total: 1,
+        current: 1,
+        isSyncing: false,
+        lastUpdated: Date.parse('2026-05-09T10:00:00.000Z'),
+        errors: 0,
+        videos: 1,
+        state: 'idle',
+        scheduledRefresh: {
+          enabled: true,
+          intervalMs: 15 * 60 * 1000,
+          nextRunAt: '2026-05-09T10:15:00.000Z',
+          lastRunAt: '2026-05-09T10:00:00.000Z',
+        },
+      },
+    };
+
     render(<Dashboard />);
 
+    expect(screen.getByText('Last refreshed 5m ago')).toBeInTheDocument();
+    expect(screen.getByText('Auto 15m')).toBeInTheDocument();
+  });
+
+  it('uses stable app chrome spacing for tabs and latest filters', () => {
+    render(<Dashboard />);
+
+    const pageChrome = screen.getByTestId('dashboard-page-chrome');
     const tabs = screen.getByTestId('dashboard-tabs');
 
+    expect(pageChrome.className).toContain('pt-[var(--app-sticky-gap)]');
+    expect(pageChrome.className).toContain('sm:pt-[var(--app-sticky-gap)]');
     expect(tabs.className).toContain('px-4');
     expect(tabs.className).toContain('sticky');
+    expect(tabs.className).toContain('top-[calc(env(safe-area-inset-top)+var(--app-header-height)+var(--app-sticky-gap))]');
+    expect(tabs.className).toContain('before:bottom-full');
+    expect(tabs.className).toContain('before:h-[var(--app-sticky-gap)]');
+    expect(tabs.className).toContain('before:bg-gray-50');
+    expect(tabs.className).toContain('dark:before:bg-gray-950');
+    expect(tabs.className).not.toContain('sm:mb-8');
     expect(tabs.className).not.toContain('-mx-4');
     expect(tabs.className).not.toContain('overflow-x-auto');
-    expect(tabs.querySelector('.grid')?.className).toContain('grid-cols-4');
+    expect(tabs.querySelector('.grid')?.className).toContain('grid-cols-5');
     expect(tabs.querySelector('.grid')?.className).not.toContain('grid-cols-2');
+  });
+
+  it('keeps subscription group controls inside the same sticky chrome as the tabs', async () => {
+    render(<Dashboard />);
+
+    fireEvent.click(screen.getByRole('button', { name: /subs/i }));
+
+    const tabs = screen.getByTestId('dashboard-tabs');
+    const groupToolbar = screen.getByTestId('subscription-groups-toolbar');
+
+    expect(tabs).toContainElement(groupToolbar);
+    expect(groupToolbar.className).toContain('mt-[var(--app-sticky-gap)]');
+    expect(groupToolbar.className.split(' ')).not.toContain('sticky');
+    expect(groupToolbar.className.split(' ').some((className) => className.startsWith('top-['))).toBe(false);
+    expect(screen.getByLabelText('Filter group')).toBeInTheDocument();
+    await waitFor(() => {
+      expect(latestSubscriptionsListProps).toEqual({
+        selectedGroup: 'all',
+        groups: ['Tech'],
+      });
+    });
   });
 
   it('keeps the latest refresh control out of the mobile chrome', () => {
@@ -237,6 +325,55 @@ describe('Dashboard', () => {
     await waitFor(() => {
       expect(screen.getByText('Persisted favorite video')).toBeInTheDocument();
     });
+  });
+
+  it('shows queued videos in Queue separately from Faves', async () => {
+    localStorage.setItem('queued-video-ids', JSON.stringify(['video-1']));
+    localStorage.setItem('queued-videos', JSON.stringify([
+      {
+        id: 'video-1',
+        title: 'Queued watch later video',
+        description: '',
+        thumbnail: 'https://example.com/video.jpg',
+        channelId: 'UC123',
+        channelTitle: 'Test Channel',
+        publishedAt: new Date().toISOString(),
+      },
+    ]));
+
+    render(<Dashboard />);
+
+    fireEvent.click(screen.getByRole('button', { name: /queue/i }));
+
+    await waitFor(() => {
+      expect(screen.getByText('Queued watch later video')).toBeInTheDocument();
+    });
+    expect(screen.queryByText('No favorite videos yet')).not.toBeInTheDocument();
+  });
+
+  it('removes queued videos once they are watched', async () => {
+    mockWatchedVideos = new Set(['video-1']);
+    localStorage.setItem('queued-video-ids', JSON.stringify(['video-1']));
+    localStorage.setItem('queued-videos', JSON.stringify([
+      {
+        id: 'video-1',
+        title: 'Watched queued video',
+        description: '',
+        thumbnail: 'https://example.com/video.jpg',
+        channelId: 'UC123',
+        channelTitle: 'Test Channel',
+        publishedAt: new Date().toISOString(),
+      },
+    ]));
+
+    render(<Dashboard />);
+
+    fireEvent.click(screen.getByRole('button', { name: /queue/i }));
+
+    await waitFor(() => {
+      expect(screen.getByText('Queue is empty')).toBeInTheDocument();
+    });
+    expect(JSON.parse(localStorage.getItem('queued-video-ids') || '[]')).toEqual([]);
   });
 
   it('shows saved favorite video records even before the feed has rebuilt', async () => {

@@ -8,6 +8,7 @@ import {
   getSubscriptionCount,
   toggleFavorite,
   toggleMute,
+  setSubscriptionGroup as setStoredSubscriptionGroup,
   type StoredSubscription,
 } from '../lib/indexeddb';
 import { parseSubscriptionImportToSubscriptions } from '../lib/opml-parser';
@@ -145,6 +146,7 @@ export const useSubscriptionStorage = () => {
       customUrl: sub.customUrl,
       isFavorite: sub.isFavorite,
       isMuted: sub.isMuted,
+      group: sub.group,
     }));
   }, [subscriptions]);
 
@@ -459,7 +461,10 @@ ${outlines}
               description: channelInfo.description || '',
               thumbnail: channelInfo.thumbnail || '',
               customUrl: channelInfo.customUrl,
-              addedAt: sub.addedAt
+              addedAt: sub.addedAt,
+              isFavorite: sub.isFavorite,
+              isMuted: sub.isMuted,
+              group: sub.group,
             });
           }
         }
@@ -767,6 +772,20 @@ ${outlines}
         queryClient.setQueryData(['subscriptions'], updated);
       }
       // Also invalidate to ensure fresh fetch later
+      queryClient.invalidateQueries({ queryKey: ['subscriptions'] });
+    },
+    setSubscriptionGroup: async (channelId: string, group: string) => {
+      await setStoredSubscriptionGroup(channelId, group);
+      const current = queryClient.getQueryData<any[]>(['subscriptions']);
+      if (current) {
+        const trimmedGroup = group.trim();
+        const updated = current.map((sub) =>
+          sub.id === channelId
+            ? { ...sub, group: trimmedGroup || undefined }
+            : sub
+        );
+        queryClient.setQueryData(['subscriptions'], updated);
+      }
       queryClient.invalidateQueries({ queryKey: ['subscriptions'] });
     },
     exportOPML,

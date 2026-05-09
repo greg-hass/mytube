@@ -3,6 +3,19 @@
 @tailwind utilities;
 
 @layer base {
+  :root {
+    --app-header-height: 4rem;
+    --app-sticky-gap: 0.5rem;
+    --app-tabs-height: 3.75rem;
+  }
+
+  @media (min-width: 640px) {
+    :root {
+      --app-header-height: 4.5rem;
+      --app-tabs-height: 4.5rem;
+    }
+  }
+
   html {
     @apply bg-white dark:bg-gray-950;
   }
@@ -40,6 +53,37 @@
 
   .card-hover {
     @apply transition-all duration-300 hover:scale-105 hover:shadow-2xl;
+  }
+}
+
+@media (orientation: landscape) and (max-height: 500px) and (max-width: 960px) {
+  :root {
+    --app-header-height: 4rem;
+  }
+
+  .desktop-header-controls {
+    display: none !important;
+  }
+
+  .mobile-header-controls {
+    display: flex !important;
+  }
+
+  .mobile-header-search,
+  .mobile-menu-overlay {
+    display: block !important;
+  }
+
+  .mobile-landscape-grid {
+    grid-template-columns: repeat(1, minmax(0, 1fr)) !important;
+  }
+
+  .mobile-landscape-lock {
+    display: flex !important;
+  }
+
+  .mobile-landscape-lock-content {
+    display: none !important;
   }
 }
 

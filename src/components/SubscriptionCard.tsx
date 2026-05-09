@@ -8,12 +8,14 @@ import { getDisplayThumbnail, handleImageLoadError } from '../lib/icon-loader';
 interface Props {
   channel: YouTubeChannel;
   index: number;
+  groups?: string[];
   onRemove?: (channelId: string) => void;
   onToggleFavorite?: (channelId: string) => void;
   onToggleMute?: (channelId: string) => void;
+  onSetGroup?: (channelId: string, group: string) => void;
 }
 
-export const SubscriptionCard = memo(({ channel, onRemove, onToggleFavorite, onToggleMute }: Props) => {
+export const SubscriptionCard = memo(({ channel, groups = [], onRemove, onToggleFavorite, onToggleMute, onSetGroup }: Props) => {
   const [imageLoaded, setImageLoaded] = useState(false);
   const [confirmOpen, setConfirmOpen] = useState(false);
   const navigate = useNavigate();
@@ -175,6 +177,32 @@ export const SubscriptionCard = memo(({ channel, onRemove, onToggleFavorite, onT
         <h3 className="font-semibold text-base sm:text-lg mb-2 line-clamp-1 group-hover:text-red-600 dark:group-hover:text-red-400 transition-colors">
           {channel.title}
         </h3>
+
+        {(channel.group || groups.length > 0 || onSetGroup) && (
+          <div className="mb-3 flex items-center gap-2">
+            <label htmlFor={`group-${channel.id}`} className="sr-only">
+              Group for {channel.title}
+            </label>
+            <select
+              id={`group-${channel.id}`}
+              aria-label={`Group for ${channel.title}`}
+              value={channel.group || ''}
+              onClick={(e) => e.stopPropagation()}
+              onChange={(e) => {
+                e.stopPropagation();
+                onSetGroup?.(channel.id, e.target.value);
+              }}
+              className="min-w-0 flex-1 rounded-lg border border-gray-200 bg-gray-50 px-2 py-1.5 text-xs font-medium text-gray-700 outline-none transition-colors hover:bg-gray-100 focus:border-red-500 dark:border-gray-800 dark:bg-gray-800 dark:text-gray-200 dark:hover:bg-gray-700"
+            >
+              <option value="">Ungrouped</option>
+              {groups.map((group) => (
+                <option key={group} value={group}>
+                  {group}
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
 
         {channel.description && (
           <p className="text-sm text-gray-600 dark:text-gray-400 line-clamp-2 mb-3">

@@ -2,6 +2,7 @@ import { useWindowVirtualizer } from '@tanstack/react-virtual';
 import { useRef, useState, useEffect } from 'react';
 import { VideoCard } from './VideoCard';
 import type { YouTubeVideo } from '../types/youtube';
+import { getCurrentViewportSize, isCompactMobileViewport } from '../lib/mobile-viewport';
 
 interface Props {
     videos: YouTubeVideo[];
@@ -35,7 +36,8 @@ export const VirtualizedVideoGrid = ({ videos, columns = 4, scrollStorageKey, ch
             const calculatedColumns = Math.floor((width + ROW_GAP) / (MIN_CARD_WIDTH + ROW_GAP));
 
             // Clamp between 1 and max columns
-            const newItemsPerRow = Math.max(1, Math.min(calculatedColumns, columns));
+            const maxResponsiveColumns = isCompactMobileViewport(getCurrentViewportSize()) ? 1 : columns;
+            const newItemsPerRow = Math.max(1, Math.min(calculatedColumns, maxResponsiveColumns));
 
             setItemsPerRow(newItemsPerRow);
             setContainerWidth(width);
@@ -129,7 +131,7 @@ export const VirtualizedVideoGrid = ({ videos, columns = 4, scrollStorageKey, ch
                             }}
                         >
                             <div
-                                className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6"
+                                className="mobile-landscape-grid grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6"
                                 style={{ height: `${cardHeight}px` }}
                             >
                                 {rowItems.map((video, idx) => (

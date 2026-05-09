@@ -1,6 +1,6 @@
 import { lazy, Suspense, useState, useEffect, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { TrendingUp, Grid3x3, RefreshCw, Loader2, Activity, Heart, CheckCircle2 } from 'lucide-react';
+import { TrendingUp, Grid3x3, RefreshCw, Loader2, Activity, Heart, CheckCircle2, Image, ListVideo } from 'lucide-react';
 import { toast } from 'sonner';
 import { Header } from './Header';
 import { SubscriptionsList } from './SubscriptionsList';
@@ -10,6 +10,7 @@ import { KeyboardShortcutsHelp } from './KeyboardShortcutsHelp';
 import { useRSSVideos } from '../hooks/useRSSVideos';
 import { useSubscriptionStorage } from '../hooks/useSubscriptionStorage';
 import { useFavoriteVideos } from '../hooks/useFavoriteVideos';
+import { useQueuedVideos } from '../hooks/useQueuedVideos';
 import { useStore } from '../store/useStore';
 import { buildVideoFeedIndex, filterIndexedVideos } from '../lib/video-feed-index';
 import {
@@ -17,21 +18,49 @@ import {
   MOBILE_TIMELINE_INCREMENT,
   MOBILE_TIMELINE_INITIAL_LIMIT,
 } from '../lib/timeline-window';
+import { getCurrentViewportSize, isCompactMobileViewport } from '../lib/mobile-viewport';
 import type { YouTubeChannel } from '../types/youtube';
 
-type Tab = 'subscriptions' | 'latest' | 'activity' | 'favorites';
+type Tab = 'subscriptions' | 'latest' | 'queue' | 'activity' | 'favorites';
+const DASHBOARD_TABS: Tab[] = ['subscriptions', 'latest', 'queue', 'activity', 'favorites'];
+const DEFAULT_TAB: Tab = 'latest';
+
+const isDashboardTab = (value: string | null): value is Tab => {
+  return DASHBOARD_TABS.includes(value as Tab);
+};
+
+const readDashboardTabFromUrl = (): Tab => {
+  if (typeof window === 'undefined') return DEFAULT_TAB;
+
+  const tab = new URLSearchParams(window.location.search).get('tab');
+  return isDashboardTab(tab) ? tab : DEFAULT_TAB;
+};
+
+const writeDashboardTabToUrl = (tab: Tab) => {
+  if (typeof window === 'undefined') return;
+
+  const url = new URL(window.location.href);
+  url.searchParams.set('tab', tab);
+  window.history.replaceState(window.history.state, '', `${url.pathname}${url.search}${url.hash}`);
+};
+
 const AddChannelModal = lazy(() => import('./AddChannelModal').then((module) => ({ default: module.AddChannelModal })));
 
 export const Dashboard = () => {
-  const [activeTab, setActiveTab] = useState<Tab>('latest');
+  const [activeTab, setActiveTab] = useState<Tab>(() => readDashboardTabFromUrl());
   const [isAddChannelModalOpen, setIsAddChannelModalOpen] = useState(false);
   const [showShortcutsHelp, setShowShortcutsHelp] = useState(false);
   const [showShorts, setShowShorts] = useState(true);
   const [hideWatched, setHideWatched] = useState(false);
   const [isMobileTimeline, setIsMobileTimeline] = useState(false);
   const [mobileVideoLimit, setMobileVideoLimit] = useState(MOBILE_TIMELINE_INITIAL_LIMIT);
-  const { allSubscriptions, addSubscriptions, rawSubscriptions } = useSubscriptionStorage();
+  const [selectedSubscriptionGroup, setSelectedSubscriptionGroup] = useState('all');
+  const [newSubscriptionGroupName, setNewSubscriptionGroupName] = useState('');
+  const [customSubscriptionGroups, setCustomSubscriptionGroups] = useState<string[]>([]);
+  const [isRepairingIcons, setIsRepairingIcons] = useState(false);
+  const { allSubscriptions, addSubscriptions, rawSubscriptions, repairChannelIcons } = useSubscriptionStorage();
   const { favoriteVideoIds, favoriteVideos: savedFavoriteVideos } = useFavoriteVideos();
+  const { queuedVideoIds, queuedVideos: savedQueuedVideos, removeQueuedVideo } = useQueuedVideos();
   const { searchQuery, watchedVideos, markAsWatched } = useStore();
 
   // Check if any channels have temporary IDs (can't fetch videos)
@@ -46,6 +75,14 @@ export const Dashboard = () => {
   const channelThumbnails = useMemo(() => {
     return new Map(allSubscriptions.map((channel) => [channel.id, channel.thumbnail]));
   }, [allSubscriptions]);
+  const subscriptionGroups = useMemo(() => {
+    return Array.from(new Set([
+      ...allSubscriptions
+        .map((channel) => channel.group?.trim())
+        .filter((group): group is string => Boolean(group)),
+      ...customSubscriptionGroups,
+    ])).sort((a, b) => a.localeCompare(b));
+  }, [allSubscriptions, customSubscriptionGroups]);
   const videoFeedIndex = useMemo(() => {
     return buildVideoFeedIndex(videos, allSubscriptions);
   }, [videos, allSubscriptions]);
@@ -160,14 +197,73 @@ export const Dashboard = () => {
     );
   }, [videos, favoriteVideoIds, savedFavoriteVideos]);
 
+  const queuedVideos = useMemo(() => {
+    const currentVideosById = new Map(videos.map((video) => [video.id, video]));
+    const queuedById = new Map(savedQueuedVideos.map((video) => [
+      video.id,
+      currentVideosById.get(video.id) ?? video,
+    ]));
+
+    for (const video of videos) {
+      if (queuedVideoIds.has(video.id) && !queuedById.has(video.id)) {
+        queuedById.set(video.id, video);
+      }
+    }
+
+    return Array.from(queuedById.values());
+  }, [videos, queuedVideoIds, savedQueuedVideos]);
+
+  useEffect(() => {
+    for (const videoId of queuedVideoIds) {
+      if (watchedVideos.has(videoId)) {
+        removeQueuedVideo(videoId);
+      }
+    }
+  }, [queuedVideoIds, watchedVideos, removeQueuedVideo]);
+
   const changeTab = (tab: Tab) => {
     setActiveTab(tab);
+    writeDashboardTabToUrl(tab);
 
     if (tab === 'favorites') {
       sessionStorage.removeItem('favorite-videos-scroll');
       requestAnimationFrame(() => {
         window.scrollTo({ top: 0 });
       });
+    }
+
+    if (tab === 'queue') {
+      sessionStorage.removeItem('queued-videos-scroll');
+      requestAnimationFrame(() => {
+        window.scrollTo({ top: 0 });
+      });
+    }
+  };
+
+  const createSubscriptionGroup = () => {
+    const group = newSubscriptionGroupName.trim();
+    if (!group) return;
+
+    setCustomSubscriptionGroups((groups) => Array.from(new Set([...groups, group])).sort((a, b) => a.localeCompare(b)));
+    setNewSubscriptionGroupName('');
+    toast.success(`Created ${group} group`);
+  };
+
+  const handleRepairChannelIcons = async () => {
+    setIsRepairingIcons(true);
+    try {
+      const repairedCount = await repairChannelIcons({ useApi: true });
+      toast.success(
+        repairedCount > 0
+          ? `Updated ${repairedCount} channel icon${repairedCount === 1 ? '' : 's'}`
+          : 'Channel icons are already up to date'
+      );
+    } catch (error) {
+      toast.error('Could not repair channel icons', {
+        description: error instanceof Error ? error.message : 'Unknown error',
+      });
+    } finally {
+      setIsRepairingIcons(false);
     }
   };
 
@@ -179,11 +275,7 @@ export const Dashboard = () => {
 
   useEffect(() => {
     const updateMobileTimeline = () => {
-      setIsMobileTimeline(
-        typeof window.matchMedia === 'function'
-          ? window.matchMedia('(max-width: 639px)').matches
-          : window.innerWidth < 640
-      );
+      setIsMobileTimeline(isCompactMobileViewport(getCurrentViewportSize()));
     };
 
     updateMobileTimeline();
@@ -206,6 +298,19 @@ export const Dashboard = () => {
     if (seconds < 604800) return `${Math.floor(seconds / 86400)}d ago`;
     return date.toLocaleDateString();
   };
+
+  const formatRefreshAge = (timestamp: number) => {
+    const seconds = Math.max(0, Math.floor((Date.now() - timestamp) / 1000));
+
+    if (seconds < 60) return 'just now';
+    if (seconds < 3600) return `${Math.floor(seconds / 60)}m ago`;
+    if (seconds < 86400) return `${Math.floor(seconds / 3600)}h ago`;
+    return `${Math.floor(seconds / 86400)}d ago`;
+  };
+
+  const scheduledRefreshIntervalMinutes = syncStatus.scheduledRefresh?.enabled
+    ? Math.round(syncStatus.scheduledRefresh.intervalMs / 60000)
+    : null;
 
   const handleAddChannel = async (channel: YouTubeChannel) => {
     try {
@@ -233,17 +338,20 @@ export const Dashboard = () => {
     <div className="app-shell min-h-screen">
       <Header
         onAddChannel={() => setIsAddChannelModalOpen(true)}
-        showMobileSearch={activeTab === 'subscriptions' || activeTab === 'latest'}
-        searchPlaceholder={activeTab === 'latest' ? 'Search videos...' : 'Search channels...'}
+        showMobileSearch={activeTab === 'subscriptions' || activeTab === 'latest' || activeTab === 'queue'}
+        searchPlaceholder={activeTab === 'latest' || activeTab === 'queue' ? 'Search videos...' : 'Search channels...'}
       />
 
-      <div className="max-w-7xl mx-auto py-3 sm:py-8">
+      <div
+        data-testid="dashboard-page-chrome"
+        className="max-w-7xl mx-auto pt-[var(--app-sticky-gap)] pb-3 sm:pt-[var(--app-sticky-gap)] sm:pb-8"
+      >
         {/* Tabs */}
         <div
           data-testid="dashboard-tabs"
-          className="sticky top-[calc(env(safe-area-inset-top)+4.25rem)] z-40 px-4 mb-3 pb-2 pt-2 bg-gray-50 dark:bg-gray-950 sm:top-[5rem] sm:mb-8"
+          className="sticky top-[calc(env(safe-area-inset-top)+var(--app-header-height)+var(--app-sticky-gap))] z-40 px-4 mb-[var(--app-sticky-gap)] pb-[var(--app-sticky-gap)] pt-[var(--app-sticky-gap)] bg-gray-50 dark:bg-gray-950 before:absolute before:bottom-full before:left-0 before:right-0 before:h-[var(--app-sticky-gap)] before:bg-gray-50 dark:before:bg-gray-950"
         >
-          <div className="grid grid-cols-4 gap-1 bg-gray-100 dark:bg-gray-900 p-1 rounded-xl shadow-sm sm:flex sm:items-center sm:w-fit sm:gap-2">
+          <div className="grid grid-cols-5 gap-1 bg-gray-100 dark:bg-gray-900 p-1 rounded-xl shadow-sm sm:flex sm:items-center sm:w-fit sm:gap-2">
             <button
               onClick={() => changeTab('subscriptions')}
               className={`flex min-w-0 items-center justify-center gap-1 px-1.5 py-2 rounded-lg text-xs sm:text-base font-medium transition-all sm:gap-2 sm:px-6 sm:py-3 ${activeTab === 'subscriptions'
@@ -281,6 +389,19 @@ export const Dashboard = () => {
               </span>
             </button>
             <button
+              onClick={() => changeTab('queue')}
+              className={`flex min-w-0 items-center justify-center gap-1 px-1.5 py-2 rounded-lg text-xs sm:text-base font-medium transition-all sm:gap-2 sm:px-6 sm:py-3 ${activeTab === 'queue'
+                ? 'bg-white dark:bg-gray-800 shadow-md'
+                : 'hover:bg-gray-200 dark:hover:bg-gray-800'
+                }`}
+            >
+              <ListVideo className="w-4 h-4 sm:w-5 sm:h-5" />
+              <span>Queue</span>
+              <span className="hidden sm:inline-flex text-xs bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 px-2 py-1 rounded-full">
+                {queuedVideos.length}
+              </span>
+            </button>
+            <button
               onClick={() => changeTab('favorites')}
               className={`flex min-w-0 items-center justify-center gap-1 px-1.5 py-2 rounded-lg text-xs sm:text-base font-medium transition-all sm:gap-2 sm:px-6 sm:py-3 ${activeTab === 'favorites'
                 ? 'bg-white dark:bg-gray-800 shadow-md'
@@ -295,8 +416,65 @@ export const Dashboard = () => {
             </button>
           </div>
 
+          {activeTab === 'subscriptions' && (
+            <div
+              data-testid="subscription-groups-toolbar"
+              className="mt-[var(--app-sticky-gap)] flex items-start gap-2 border-b border-gray-200/70 pb-[var(--app-sticky-gap)] dark:border-gray-800/80 sm:items-center"
+            >
+              <div className="mr-auto flex min-w-0 flex-1 flex-wrap items-center gap-2">
+                <label htmlFor="subscription-group-filter" className="sr-only">Filter group</label>
+                <select
+                  id="subscription-group-filter"
+                  aria-label="Filter group"
+                  value={selectedSubscriptionGroup}
+                  onChange={(e) => setSelectedSubscriptionGroup(e.target.value)}
+                  className="h-10 max-w-[11rem] rounded-lg border border-gray-200 bg-white px-3 text-sm font-medium text-gray-700 outline-none focus:border-red-500 dark:border-gray-800 dark:bg-gray-900 dark:text-gray-200"
+                >
+                  <option value="all">All groups</option>
+                  {subscriptionGroups.map((group) => (
+                    <option key={group} value={group}>
+                      {group}
+                    </option>
+                  ))}
+                </select>
+
+                <form
+                  className="flex items-center gap-2"
+                  onSubmit={(event) => {
+                    event.preventDefault();
+                    createSubscriptionGroup();
+                  }}
+                >
+                  <label htmlFor="new-subscription-group" className="sr-only">New group</label>
+                  <input
+                    id="new-subscription-group"
+                    value={newSubscriptionGroupName}
+                    onChange={(e) => setNewSubscriptionGroupName(e.target.value)}
+                    placeholder="New group"
+                    className="h-10 w-28 rounded-lg border border-gray-200 bg-white px-3 text-sm outline-none focus:border-red-500 dark:border-gray-800 dark:bg-gray-900 dark:text-gray-100 sm:w-32"
+                  />
+                  <button
+                    type="submit"
+                    className="h-10 rounded-lg bg-gray-800 px-3 text-sm font-medium text-white hover:bg-gray-700 dark:bg-gray-700 dark:hover:bg-gray-600"
+                  >
+                    Add
+                  </button>
+                </form>
+              </div>
+              <button
+                disabled={isRepairingIcons}
+                onClick={handleRepairChannelIcons}
+                className="inline-flex h-10 w-10 shrink-0 items-center justify-center gap-2 rounded-lg bg-gray-800 px-0 text-sm font-medium text-white transition-colors hover:bg-gray-700 disabled:cursor-not-allowed disabled:opacity-60 dark:bg-gray-700 dark:hover:bg-gray-600 sm:w-auto sm:px-3"
+                title="Repair icons"
+              >
+                {isRepairingIcons ? <Loader2 className="h-4 w-4 animate-spin" /> : <Image className="h-4 w-4" />}
+                <span className="hidden sm:inline">{isRepairingIcons ? 'Repairing...' : 'Repair icons'}</span>
+              </button>
+            </div>
+          )}
+
           {activeTab === 'latest' && (
-            <div className="mt-2 flex items-center justify-between gap-3">
+            <div className="mt-[var(--app-sticky-gap)] flex items-center justify-between gap-3">
               <label className="flex items-center gap-2 cursor-pointer select-none">
                 <div className="relative">
                   <input
@@ -323,6 +501,14 @@ export const Dashboard = () => {
               </label>
 
               <div className="flex items-center gap-2">
+                <div className="hidden items-center gap-2 text-xs font-medium text-gray-500 dark:text-gray-400 sm:flex">
+                  <span>Last refreshed {formatRefreshAge(syncStatus.lastUpdated)}</span>
+                  {scheduledRefreshIntervalMinutes && (
+                    <span className="rounded-full bg-gray-100 px-2 py-1 text-gray-600 dark:bg-gray-800 dark:text-gray-300">
+                      Auto {scheduledRefreshIntervalMinutes}m
+                    </span>
+                  )}
+                </div>
                 {syncStatus?.isSyncing && (
                   <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300 text-sm font-medium animate-in fade-in slide-in-from-left-4">
                     <Loader2 className="w-4 h-4 animate-spin" />
@@ -360,7 +546,7 @@ export const Dashboard = () => {
         </div>
 
         {/* Content */}
-        <AnimatePresence mode="wait">
+        <AnimatePresence mode="wait" initial={false}>
           {activeTab === 'subscriptions' ? (
             <motion.div
               key="subscriptions"
@@ -369,7 +555,10 @@ export const Dashboard = () => {
               exit={{ opacity: 0, x: 20 }}
               transition={{ duration: 0.3 }}
             >
-              <SubscriptionsList />
+              <SubscriptionsList
+                selectedGroup={selectedSubscriptionGroup}
+                groups={subscriptionGroups}
+              />
             </motion.div>
           ) : activeTab === 'latest' ? (
             <motion.div
@@ -466,6 +655,39 @@ export const Dashboard = () => {
                       </button>
                     </div>
                   )}
+                </div>
+              )}
+            </motion.div>
+          ) : activeTab === 'queue' ? (
+            <motion.div
+              key="queue"
+              initial={{ opacity: 0, x: 20 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0, x: -20 }}
+              transition={{ duration: 0.3 }}
+              className="px-4"
+            >
+              {queuedVideos.length === 0 ? (
+                <div className="text-center py-12">
+                  <ListVideo className="w-20 h-20 text-gray-300 dark:text-gray-700 mx-auto mb-4" />
+                  <p className="text-gray-600 dark:text-gray-400 text-lg mb-2">
+                    Queue is empty
+                  </p>
+                  <p className="text-sm text-gray-500">
+                    Add videos from Latest to watch them later
+                  </p>
+                </div>
+              ) : (
+                <div>
+                  <p className="hidden sm:block text-sm text-gray-500 dark:text-gray-400 mb-4">
+                    {queuedVideos.length} video{queuedVideos.length !== 1 ? 's' : ''} queued
+                  </p>
+                  <VirtualizedVideoGrid
+                    videos={queuedVideos}
+                    columns={4}
+                    scrollStorageKey="queued-videos-scroll"
+                    channelThumbnails={channelThumbnails}
+                  />
                 </div>
               )}
             </motion.div>

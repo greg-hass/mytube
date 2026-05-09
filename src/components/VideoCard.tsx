@@ -1,10 +1,12 @@
-import { Play, Clock, Heart, CheckCircle2 } from 'lucide-react';
+import { Play, Clock, Heart, CheckCircle2, ListPlus } from 'lucide-react';
 import type { YouTubeVideo } from '../types/youtube';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import type { MouseEvent } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { getDisplayThumbnail } from '../lib/icon-loader';
+import { getHighResolutionVideoThumbnail, getNextVideoThumbnailFallback } from '../lib/video-thumbnails';
 import { useFavoriteVideos } from '../hooks/useFavoriteVideos';
+import { useQueuedVideos } from '../hooks/useQueuedVideos';
 import { getVideoProgressPercent } from '../lib/video-progress';
 import { useStore } from '../store/useStore';
 
@@ -14,16 +16,39 @@ interface Props {
   channelThumbnail?: string;
 }
 
+const getDashboardScrollStorageKey = (search: string) => {
+  const tab = new URLSearchParams(search).get('tab');
+
+  if (tab === 'queue') return 'queued-videos-scroll';
+  if (tab === 'favorites') return 'favorite-videos-scroll';
+  return 'latest-videos-scroll';
+};
+
 export const VideoCard = ({ video, channelThumbnail }: Props) => {
   const [imageLoaded, setImageLoaded] = useState(false);
+  const [thumbnailSrc, setThumbnailSrc] = useState(() => getHighResolutionVideoThumbnail(video.thumbnail));
   const navigate = useNavigate();
+  const location = useLocation();
   const { isFavoriteVideo, toggleFavoriteVideo } = useFavoriteVideos();
+  const { isQueuedVideo, toggleQueuedVideo } = useQueuedVideos();
   const { watchedVideos, markAsWatched, markAsUnwatched } = useStore();
   const isFavorite = isFavoriteVideo(video.id);
+  const isQueued = isQueuedVideo(video.id);
+  const [isQueueButtonActive, setIsQueueButtonActive] = useState(isQueued);
   const isWatched = watchedVideos.has(video.id);
   const progressPercent = getVideoProgressPercent(video.id);
 
+  useEffect(() => {
+    setImageLoaded(false);
+    setThumbnailSrc(getHighResolutionVideoThumbnail(video.thumbnail));
+  }, [video.thumbnail]);
+
+  useEffect(() => {
+    setIsQueueButtonActive(isQueued);
+  }, [isQueued, video.id]);
+
   const openVideo = () => {
+    sessionStorage.setItem(getDashboardScrollStorageKey(location.search), String(Math.round(window.scrollY)));
     navigate(`/video/${video.id}`);
   };
 
@@ -39,6 +64,12 @@ export const VideoCard = ({ video, channelThumbnail }: Props) => {
     } else {
       markAsWatched(video.id);
     }
+  };
+
+  const handleQueueClick = (event: MouseEvent<HTMLButtonElement>) => {
+    event.stopPropagation();
+    setIsQueueButtonActive((isActive) => !isActive);
+    toggleQueuedVideo(video);
   };
 
   const formatDate = (dateString: string) => {
@@ -66,9 +97,15 @@ export const VideoCard = ({ video, channelThumbnail }: Props) => {
           <div className="absolute inset-0 animate-pulse bg-gradient-to-r from-gray-200 via-gray-300 to-gray-200 dark:from-gray-800 dark:via-gray-700 dark:to-gray-800" />
         )}
         <img
-          src={video.thumbnail}
+          src={thumbnailSrc}
           alt={video.title}
           loading="lazy"
+          onError={() => {
+            const fallback = getNextVideoThumbnailFallback(thumbnailSrc);
+            if (fallback) {
+              setThumbnailSrc(fallback);
+            }
+          }}
           onLoad={() => setImageLoaded(true)}
           className={`w-full h-full object-cover transition-all duration-300 ${imageLoaded ? 'opacity-100' : 'opacity-0'
             }`}
@@ -113,7 +150,7 @@ export const VideoCard = ({ video, channelThumbnail }: Props) => {
           </p>
         </div>
 
-        <div className="mt-auto flex items-center gap-2 pr-24 text-xs text-gray-500">
+        <div className="mt-auto flex items-center gap-2 pr-36 text-xs text-gray-500">
           <div className="flex items-center gap-2">
             <Clock className="w-3 h-3" />
             <span>{formatDate(video.publishedAt)}</span>
@@ -122,12 +159,23 @@ export const VideoCard = ({ video, channelThumbnail }: Props) => {
             type="button"
             onClick={handleWatchedClick}
             aria-label={isWatched ? 'Mark video as unwatched' : 'Mark video as watched'}
-            className={`absolute bottom-3 right-14 flex h-9 w-9 flex-none items-center justify-center rounded-full transition-colors ${isWatched
+            className={`absolute bottom-3 right-24 flex h-9 w-9 flex-none items-center justify-center rounded-full transition-colors ${isWatched
               ? 'bg-emerald-600/10 text-emerald-500 dark:bg-emerald-500/15 dark:text-emerald-400'
               : 'text-gray-400 hover:bg-gray-100 hover:text-emerald-500 dark:text-gray-500 dark:hover:bg-gray-800 dark:hover:text-emerald-400'
               }`}
           >
             <CheckCircle2 className={`h-5 w-5 ${isWatched ? 'fill-current' : ''}`} />
+          </button>
+          <button
+            type="button"
+            onClick={handleQueueClick}
+            aria-label={isQueueButtonActive ? 'Remove video from queue' : 'Add video to queue'}
+            className={`absolute bottom-3 right-14 flex h-9 w-9 flex-none items-center justify-center rounded-full transition-colors ${isQueueButtonActive
+              ? 'bg-blue-600/10 text-blue-500 dark:bg-blue-500/15 dark:text-blue-400'
+              : 'text-gray-400 hover:bg-gray-100 hover:text-blue-500 dark:text-gray-500 dark:hover:bg-gray-800 dark:hover:text-blue-400'
+              }`}
+          >
+            <ListPlus className={`h-5 w-5 ${isQueueButtonActive ? 'stroke-[2.5]' : ''}`} />
           </button>
           <button
             type="button"

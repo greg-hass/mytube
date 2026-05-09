@@ -25,6 +25,7 @@ export interface StoredSubscription {
   description?: string;    // Channel description
   isFavorite?: boolean;    // Whether channel is marked as favorite
   isMuted?: boolean;       // Whether channel is muted from latest feed
+  group?: string;          // Optional user-defined channel group
 }
 
 /**
@@ -263,7 +264,21 @@ export async function toggleMute(channelId: string): Promise<void> {
   }
 }
 
-
+/**
+ * Assign a channel to a user-defined group.
+ */
+export async function setSubscriptionGroup(channelId: string, group: string): Promise<void> {
+  const subscription = await getSubscription(channelId);
+  if (subscription) {
+    const trimmedGroup = group.trim();
+    if (trimmedGroup) {
+      subscription.group = trimmedGroup;
+    } else {
+      delete subscription.group;
+    }
+    await updateSubscription(subscription);
+  }
+}
 
 /**
  * Get all favorite channels
