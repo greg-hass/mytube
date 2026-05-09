@@ -13,6 +13,7 @@ interface YouTubePlayer {
   seekTo: (seconds: number, allowSeekAhead: boolean) => void;
   playVideo: () => void;
   getIframe?: () => HTMLIFrameElement;
+  setPlaybackQuality?: (suggestedQuality: string) => void;
 }
 
 interface YouTubePlayerEvent {
@@ -26,6 +27,7 @@ interface YouTubePlayerOptions {
   events: {
     onReady: (event: YouTubePlayerEvent) => void;
     onStateChange: (event: YouTubePlayerEvent) => void;
+    onError: (event: YouTubePlayerEvent) => void;
   };
 }
 
@@ -101,6 +103,7 @@ export const VideoPlayer = () => {
   const saveIntervalRef = useRef<ReturnType<typeof window.setInterval> | null>(null);
   const resumeInfoRef = useRef<{ videoId: string; seconds: number } | null>(null);
   const [playerProgressPercent, setPlayerProgressPercent] = useState(0);
+  const [playerErrorCode, setPlayerErrorCode] = useState<number | null>(null);
   const markAsWatched = useStore((state) => state.markAsWatched);
 
   if (!videoId) {
@@ -117,9 +120,11 @@ export const VideoPlayer = () => {
   }
 
   const resumeFromSeconds = resumeInfoRef.current.seconds;
+  const youtubeWatchUrl = `https://www.youtube.com/watch?v=${videoId}`;
 
   useEffect(() => {
     window.scrollTo({ top: 0 });
+    setPlayerErrorCode(null);
   }, [videoId, markAsWatched]);
 
   useEffect(() => {
@@ -151,10 +156,12 @@ export const VideoPlayer = () => {
           playsinline: 1,
           rel: 0,
           start: resumeFromSeconds,
+          vq: 'hd1080',
         },
         events: {
           onReady: (event) => {
             allowEnhancedMediaPlayback(event.target);
+            event.target.setPlaybackQuality?.('hd1080');
             if (resumeFromSeconds > 0) {
               event.target.seekTo(resumeFromSeconds, true);
             }
@@ -168,6 +175,9 @@ export const VideoPlayer = () => {
             } else {
               persistCurrentProgress();
             }
+          },
+          onError: (event) => {
+            setPlayerErrorCode(event.data ?? -1);
           },
         },
       });
@@ -193,10 +203,6 @@ export const VideoPlayer = () => {
       playerRef.current = null;
     };
   }, [videoId]);
-
-  const openInYouTube = () => {
-    window.open(`https://youtube.com/watch?v=${videoId}`, '_blank');
-  };
 
   return (
     <div className="app-shell min-h-screen">
@@ -235,6 +241,23 @@ export const VideoPlayer = () => {
                 />
               </div>
             )}
+            {playerErrorCode !== null && (
+              <div className="absolute inset-0 flex flex-col items-center justify-center gap-4 bg-gray-950/90 p-6 text-center">
+                <div>
+                  <p className="text-lg font-semibold text-white">This video needs YouTube</p>
+                  <p className="mt-2 text-sm text-gray-300">
+                    The embedded mobile player was blocked for this video.
+                  </p>
+                </div>
+                <a
+                  href={youtubeWatchUrl}
+                  className="inline-flex items-center gap-2 rounded-lg bg-red-600 px-4 py-2 font-medium text-white transition-colors hover:bg-red-700"
+                >
+                  <ExternalLink className="h-4 w-4" />
+                  <span>Open in YouTube</span>
+                </a>
+              </div>
+            )}
           </div>
 
           {/* Open in YouTube Button */}
@@ -248,13 +271,13 @@ export const VideoPlayer = () => {
                 Progress is saved automatically while you watch
               </p>
             )}
-            <button
-              onClick={openInYouTube}
+            <a
+              href={youtubeWatchUrl}
               className="flex items-center gap-2 px-4 py-2 rounded-lg bg-red-600 hover:bg-red-700 text-white transition-colors"
             >
               <ExternalLink className="w-4 h-4" />
               <span>Open in YouTube</span>
-            </button>
+            </a>
           </div>
         </motion.div>
 

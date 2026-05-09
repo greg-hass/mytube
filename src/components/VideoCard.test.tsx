@@ -1,5 +1,5 @@
 import { fireEvent, render, screen } from '@testing-library/react';
-import { MemoryRouter } from 'react-router-dom';
+import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { VideoCard } from './VideoCard';
 import type { YouTubeVideo } from '../types/youtube';
@@ -23,6 +23,11 @@ const video: YouTubeVideo = {
   channelTitle: 'Useful Channel',
   publishedAt: new Date().toISOString(),
 };
+
+function LocationProbe() {
+  const location = useLocation();
+  return <p data-testid="location">{location.pathname}</p>;
+}
 
 describe('VideoCard', () => {
   beforeEach(() => {
@@ -56,6 +61,28 @@ describe('VideoCard', () => {
     expect(channelIcon.compareDocumentPosition(channelTitle) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });
 
+  it('uses max resolution YouTube thumbnails with fallback', () => {
+    render(
+      <MemoryRouter>
+        <VideoCard
+          video={{
+            ...video,
+            thumbnail: 'https://i.ytimg.com/vi/video-1/hqdefault.jpg',
+          }}
+          index={0}
+        />
+      </MemoryRouter>
+    );
+
+    const thumbnail = screen.getByAltText('A useful video');
+
+    expect(thumbnail).toHaveAttribute('src', 'https://i.ytimg.com/vi/video-1/maxresdefault.jpg');
+
+    fireEvent.error(thumbnail);
+
+    expect(thumbnail).toHaveAttribute('src', 'https://i.ytimg.com/vi/video-1/sddefault.jpg');
+  });
+
   it('does not add index-based render animation to dense timeline cards', () => {
     const { container } = render(
       <MemoryRouter>
@@ -67,6 +94,32 @@ describe('VideoCard', () => {
 
     expect(card).toBeInTheDocument();
     expect(card?.className).not.toContain('transition-all');
+  });
+
+  it('saves the latest timeline scroll before opening a video', () => {
+    vi.stubGlobal('scrollY', 432);
+
+    render(
+      <MemoryRouter initialEntries={['/?tab=latest']}>
+        <Routes>
+          <Route
+            path="/"
+            element={(
+              <>
+                <VideoCard video={video} index={0} />
+                <LocationProbe />
+              </>
+            )}
+          />
+          <Route path="/video/:videoId" element={<LocationProbe />} />
+        </Routes>
+      </MemoryRouter>
+    );
+
+    fireEvent.click(screen.getByText('A useful video'));
+
+    expect(sessionStorage.getItem('latest-videos-scroll')).toBe('432');
+    expect(screen.getByTestId('location')).toHaveTextContent('/video/video-1');
   });
 
   it('can favorite a video without opening it', () => {
@@ -94,6 +147,40 @@ describe('VideoCard', () => {
     expect(mockStore.markAsWatched).toHaveBeenCalledWith('video-1');
   });
 
+  it('can queue a video without favoriting it', () => {
+    render(
+      <MemoryRouter>
+        <VideoCard video={video} index={0} />
+      </MemoryRouter>
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Add video to queue' }));
+
+    expect(JSON.parse(localStorage.getItem('queued-video-ids') || '[]')).toEqual(['video-1']);
+    expect(JSON.parse(localStorage.getItem('favorite-video-ids') || '[]')).toEqual([]);
+    expect(screen.getByRole('button', { name: 'Remove video from queue' })).toBeInTheDocument();
+  });
+
+  it('visually deselects the queue button on the second tap', () => {
+    render(
+      <MemoryRouter>
+        <VideoCard video={video} index={0} />
+      </MemoryRouter>
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Add video to queue' }));
+    const queuedButton = screen.getByRole('button', { name: 'Remove video from queue' });
+
+    expect(queuedButton.className).toContain('text-blue-500');
+
+    fireEvent.click(queuedButton);
+
+    const unqueuedButton = screen.getByRole('button', { name: 'Add video to queue' });
+    expect(unqueuedButton.className).toContain('text-gray-400');
+    expect(unqueuedButton.className).not.toContain('bg-blue-600/10');
+    expect(JSON.parse(localStorage.getItem('queued-video-ids') || '[]')).toEqual([]);
+  });
+
   it('places the favorite button at the bottom right of the details area', () => {
     render(
       <MemoryRouter>
@@ -102,10 +189,13 @@ describe('VideoCard', () => {
     );
 
     const favoriteButton = screen.getByRole('button', { name: 'Add video to favorites' });
+    const queueButton = screen.getByRole('button', { name: 'Add video to queue' });
     expect(screen.getByTestId('video-card-info')).toContainElement(favoriteButton);
+    expect(screen.getByTestId('video-card-info')).toContainElement(queueButton);
     expect(favoriteButton.className).toContain('absolute');
     expect(favoriteButton.className).toContain('bottom-3');
     expect(favoriteButton.className).toContain('right-3');
+    expect(queueButton.className).toContain('right-14');
     expect(favoriteButton.className).not.toContain('-mb-');
     expect(favoriteButton.className).not.toContain('-mr-');
   });

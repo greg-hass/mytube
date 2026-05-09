@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { describe, expect, it, vi } from 'vitest';
 import { SubscriptionCard } from './SubscriptionCard';
@@ -35,5 +35,32 @@ describe('SubscriptionCard', () => {
 
     expect(screen.getByText('Fast Channel')).toBeInTheDocument();
     expect(motionProps[0].transition).toEqual({ duration: 0.16 });
+  });
+
+  it('lets a channel be assigned to a group without opening it', () => {
+    const onSetGroup = vi.fn();
+
+    render(
+      <MemoryRouter>
+        <SubscriptionCard
+          index={0}
+          channel={{
+            id: 'UC123',
+            title: 'Fast Channel',
+            description: '',
+            thumbnail: 'https://example.com/thumb.jpg',
+            group: 'Tech',
+          }}
+          groups={['News', 'Tech']}
+          onSetGroup={onSetGroup}
+        />
+      </MemoryRouter>
+    );
+
+    fireEvent.change(screen.getByLabelText('Group for Fast Channel'), {
+      target: { value: 'News' },
+    });
+
+    expect(onSetGroup).toHaveBeenCalledWith('UC123', 'News');
   });
 });

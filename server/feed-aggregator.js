@@ -846,8 +846,9 @@ function stopScheduledRefresh() {
     };
 }
 
-function startScheduledRefresh(config = getScheduledRefreshConfig()) {
+function startScheduledRefresh(config = getScheduledRefreshConfig(), deps = {}) {
     stopScheduledRefresh();
+    const runRefresh = deps.aggregateFeeds || aggregateFeeds;
 
     scheduledRefreshStatus = {
         enabled: config.enabled,
@@ -861,6 +862,7 @@ function startScheduledRefresh(config = getScheduledRefreshConfig()) {
         return scheduledRefreshStatus;
     }
 
+    let scheduledRunPromise = null;
     const scheduleNext = () => {
         const nextRunTime = Date.now() + config.intervalMs;
         scheduledRefreshStatus = {
@@ -871,12 +873,21 @@ function startScheduledRefresh(config = getScheduledRefreshConfig()) {
         };
 
         scheduledRefreshTimer = setTimeout(() => {
+            if (scheduledRunPromise) {
+                scheduleNext();
+                return;
+            }
+
             scheduledRefreshStatus = {
                 ...scheduledRefreshStatus,
                 lastRunAt: new Date().toISOString(),
                 nextRunAt: null,
             };
-            aggregateFeeds().catch(err => console.error('Scheduled aggregation failed:', err));
+            scheduledRunPromise = runRefresh({ force: true, reason: 'scheduled' })
+                .catch(err => console.error('Scheduled aggregation failed:', err))
+                .finally(() => {
+                    scheduledRunPromise = null;
+                });
             scheduleNext();
         }, config.intervalMs);
 

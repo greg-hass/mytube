@@ -59,11 +59,14 @@ describe('Header', () => {
     render(<Header onAddChannel={vi.fn()} />);
 
     const menuButton = screen.getByTestId('mobile-menu-button');
+    const mobileControls = menuButton.closest('.mobile-header-controls');
 
     expect(menuButton).toBeInTheDocument();
+    expect(mobileControls).toBeInTheDocument();
     expect(screen.getByTestId('mobile-add-channel-button')).toBeInTheDocument();
     expect(screen.getByTestId('mobile-refresh-button')).toBeInTheDocument();
     expect(screen.queryByTestId('mobile-toolbar')).not.toBeInTheDocument();
+    expect(document.querySelectorAll('.desktop-header-controls')).toHaveLength(2);
   });
 
   it('opens add channel from the mobile header plus button', () => {

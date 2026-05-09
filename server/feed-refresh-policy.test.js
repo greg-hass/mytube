@@ -1,5 +1,5 @@
 import { createRequire } from 'node:module';
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 const require = createRequire(import.meta.url);
 const {
@@ -8,9 +8,16 @@ const {
     getScheduledRefreshConfig,
     getChannelsDueForRefresh,
     mergeChannelRefreshes,
+    startScheduledRefresh,
+    stopScheduledRefresh,
 } = require('./feed-aggregator');
 
 describe('feed refresh policy', () => {
+    afterEach(() => {
+        vi.useRealTimers();
+        stopScheduledRefresh();
+    });
+
     it('only refreshes channels whose RSS cache is due during automatic runs', () => {
         const now = Date.parse('2026-05-06T20:00:00.000Z');
         const subscriptions = [
@@ -90,5 +97,45 @@ describe('feed refresh policy', () => {
             .toBe(DEFAULT_SCHEDULED_REFRESH_INTERVAL_MS);
         expect(getScheduledRefreshConfig({ FEED_REFRESH_INTERVAL_MINUTES: 'not-a-number' }).intervalMs)
             .toBe(DEFAULT_SCHEDULED_REFRESH_INTERVAL_MS);
+    });
+
+    it('forces scheduled refreshes so every subscribed channel is checked every interval', async () => {
+        vi.useFakeTimers();
+        const aggregateFeeds = vi.fn().mockResolvedValue(undefined);
+
+        startScheduledRefresh({
+            enabled: true,
+            refreshOnStartup: true,
+            intervalMs: 100,
+        }, { aggregateFeeds });
+
+        await vi.advanceTimersByTimeAsync(100);
+
+        expect(aggregateFeeds).toHaveBeenCalledWith({ force: true, reason: 'scheduled' });
+    });
+
+    it('does not start a second scheduled refresh while the previous one is still running', async () => {
+        vi.useFakeTimers();
+        let finishRefresh;
+        const aggregateFeeds = vi.fn(() => new Promise(resolve => {
+            finishRefresh = resolve;
+        }));
+
+        startScheduledRefresh({
+            enabled: true,
+            refreshOnStartup: true,
+            intervalMs: 100,
+        }, { aggregateFeeds });
+
+        await vi.advanceTimersByTimeAsync(100);
+        await vi.advanceTimersByTimeAsync(100);
+
+        expect(aggregateFeeds).toHaveBeenCalledTimes(1);
+
+        finishRefresh();
+        await Promise.resolve();
+        await vi.advanceTimersByTimeAsync(100);
+
+        expect(aggregateFeeds).toHaveBeenCalledTimes(2);
     });
 });

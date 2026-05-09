@@ -20,7 +20,7 @@ function mergeIncomingSubscriptions(incomingSubscriptions = [], existingSubscrip
         const incomingThumbnail = incomingSub.thumbnail;
         const existingThumbnail = existingSub?.thumbnail;
 
-        merged.push({
+        const mergedSub = {
             ...incomingSub,
             id: finalId,
             title: incomingSub.title || existingSub?.title || finalId,
@@ -28,7 +28,12 @@ function mergeIncomingSubscriptions(incomingSubscriptions = [], existingSubscrip
             thumbnail: isUsefulThumbnail(incomingThumbnail)
                 ? incomingThumbnail
                 : existingThumbnail || incomingThumbnail || '',
-        });
+        };
+
+        const group = incomingSub.group || existingSub?.group;
+        if (group) mergedSub.group = group;
+
+        merged.push(mergedSub);
         seenIds.add(finalId);
     }
 
