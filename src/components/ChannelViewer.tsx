@@ -36,6 +36,9 @@ export const ChannelViewer = () => {
   const videos = useMemo(() => {
     return channelVideos.filter((video) => !hideWatched || !watchedVideos.has(video.id));
   }, [channelVideos, hideWatched, watchedVideos]);
+  const unwatchedChannelVideos = useMemo(() => {
+    return channelVideos.filter((video) => !watchedVideos.has(video.id));
+  }, [channelVideos, watchedVideos]);
 
   // If channel info is missing (e.g. ID changed after resolution), try to get it from videos
   const resolvedChannelInfo = channelInfo || (channelVideos.length > 0 ? {
@@ -183,14 +186,15 @@ export const ChannelViewer = () => {
                     <RefreshCw className={`w-4 h-4 ${isLoading ? 'animate-spin' : ''}`} />
                     <span>Refresh</span>
                   </button>
-                  {videos.length > 0 && (
+                  {unwatchedChannelVideos.length > 0 && (
                     <button
                       type="button"
-                      onClick={() => videos.forEach((video) => markAsWatched(video.id))}
-                      className="hidden sm:flex items-center gap-2 px-4 py-2 rounded-lg font-medium bg-gray-100 text-gray-800 hover:bg-gray-200 dark:bg-gray-800 dark:text-gray-100 dark:hover:bg-gray-700 transition-all"
+                      onClick={() => unwatchedChannelVideos.forEach((video) => markAsWatched(video.id))}
+                      aria-label="Mark channel watched"
+                      className="flex items-center gap-2 rounded-lg bg-gray-100 px-3 py-2 text-sm font-medium text-gray-800 transition-all hover:bg-gray-200 dark:bg-gray-800 dark:text-gray-100 dark:hover:bg-gray-700 sm:px-4"
                     >
                       <CheckCircle2 className="w-4 h-4" />
-                      <span>Mark shown watched</span>
+                      <span>Mark watched</span>
                     </button>
                   )}
                 </div>

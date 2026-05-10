@@ -1,6 +1,6 @@
 import { lazy, Suspense, useState, useEffect, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { TrendingUp, Grid3x3, RefreshCw, Loader2, Activity, Heart, CheckCircle2, Image, ListVideo } from 'lucide-react';
+import { TrendingUp, Grid3x3, RefreshCw, Loader2, Activity, Heart, CheckCircle2, Image, ListVideo, SlidersHorizontal, X } from 'lucide-react';
 import { toast } from 'sonner';
 import { Header } from './Header';
 import { SubscriptionsList } from './SubscriptionsList';
@@ -12,7 +12,7 @@ import { useSubscriptionStorage } from '../hooks/useSubscriptionStorage';
 import { useFavoriteVideos } from '../hooks/useFavoriteVideos';
 import { useQueuedVideos } from '../hooks/useQueuedVideos';
 import { useStore } from '../store/useStore';
-import { buildVideoFeedIndex, filterIndexedVideos } from '../lib/video-feed-index';
+import { buildVideoFeedIndex, filterIndexedVideos, type DurationFilter } from '../lib/video-feed-index';
 import {
   getVisibleTimelineVideos,
   MOBILE_TIMELINE_INCREMENT,
@@ -24,6 +24,47 @@ import type { YouTubeChannel } from '../types/youtube';
 type Tab = 'subscriptions' | 'latest' | 'queue' | 'activity' | 'favorites';
 const DASHBOARD_TABS: Tab[] = ['subscriptions', 'latest', 'queue', 'activity', 'favorites'];
 const DEFAULT_TAB: Tab = 'latest';
+const DURATION_FILTER_OPTIONS: Array<{ value: DurationFilter; label: string }> = [
+  { value: 'any', label: 'Any' },
+  { value: 'under-10', label: 'Under 10 min' },
+  { value: '10-30', label: '10-30 min' },
+  { value: '30-plus', label: '30+ min' },
+];
+const QUALITY_FILTERS_STORAGE_KEY = 'feed-quality-filters';
+
+type PersistedQualityFilters = {
+  durationFilter?: DurationFilter;
+  hideLiveReplays?: boolean;
+  hidePremieres?: boolean;
+  hideDuplicateTitles?: boolean;
+  mutedKeywordText?: string;
+  boostedKeywordText?: string;
+};
+
+const isDurationFilter = (value: unknown): value is DurationFilter => {
+  return value === 'any' || value === 'under-10' || value === '10-30' || value === '30-plus';
+};
+
+const readPersistedQualityFilters = (): PersistedQualityFilters => {
+  if (typeof window === 'undefined') return {};
+
+  try {
+    const rawFilters = window.localStorage.getItem(QUALITY_FILTERS_STORAGE_KEY);
+    if (!rawFilters) return {};
+    const parsedFilters = JSON.parse(rawFilters) as PersistedQualityFilters;
+
+    return {
+      durationFilter: isDurationFilter(parsedFilters.durationFilter) ? parsedFilters.durationFilter : undefined,
+      hideLiveReplays: Boolean(parsedFilters.hideLiveReplays),
+      hidePremieres: Boolean(parsedFilters.hidePremieres),
+      hideDuplicateTitles: Boolean(parsedFilters.hideDuplicateTitles),
+      mutedKeywordText: typeof parsedFilters.mutedKeywordText === 'string' ? parsedFilters.mutedKeywordText : '',
+      boostedKeywordText: typeof parsedFilters.boostedKeywordText === 'string' ? parsedFilters.boostedKeywordText : '',
+    };
+  } catch {
+    return {};
+  }
+};
 
 const isDashboardTab = (value: string | null): value is Tab => {
   return DASHBOARD_TABS.includes(value as Tab);
@@ -47,11 +88,19 @@ const writeDashboardTabToUrl = (tab: Tab) => {
 const AddChannelModal = lazy(() => import('./AddChannelModal').then((module) => ({ default: module.AddChannelModal })));
 
 export const Dashboard = () => {
+  const persistedQualityFilters = useMemo(() => readPersistedQualityFilters(), []);
   const [activeTab, setActiveTab] = useState<Tab>(() => readDashboardTabFromUrl());
   const [isAddChannelModalOpen, setIsAddChannelModalOpen] = useState(false);
   const [showShortcutsHelp, setShowShortcutsHelp] = useState(false);
   const [showShorts, setShowShorts] = useState(true);
   const [hideWatched, setHideWatched] = useState(false);
+  const [durationFilter, setDurationFilter] = useState<DurationFilter>(persistedQualityFilters.durationFilter || 'any');
+  const [hideLiveReplays, setHideLiveReplays] = useState(Boolean(persistedQualityFilters.hideLiveReplays));
+  const [hidePremieres, setHidePremieres] = useState(Boolean(persistedQualityFilters.hidePremieres));
+  const [hideDuplicateTitles, setHideDuplicateTitles] = useState(Boolean(persistedQualityFilters.hideDuplicateTitles));
+  const [mutedKeywordText, setMutedKeywordText] = useState(persistedQualityFilters.mutedKeywordText || '');
+  const [boostedKeywordText, setBoostedKeywordText] = useState(persistedQualityFilters.boostedKeywordText || '');
+  const [isQualityFiltersOpen, setIsQualityFiltersOpen] = useState(false);
   const [isMobileTimeline, setIsMobileTimeline] = useState(false);
   const [mobileVideoLimit, setMobileVideoLimit] = useState(MOBILE_TIMELINE_INITIAL_LIMIT);
   const [selectedSubscriptionGroup, setSelectedSubscriptionGroup] = useState('all');
@@ -86,12 +135,27 @@ export const Dashboard = () => {
   const videoFeedIndex = useMemo(() => {
     return buildVideoFeedIndex(videos, allSubscriptions);
   }, [videos, allSubscriptions]);
+  const mutedKeywords = useMemo(() => {
+    return mutedKeywordText.split(',').map((keyword) => keyword.trim()).filter(Boolean);
+  }, [mutedKeywordText]);
+  const boostedKeywords = useMemo(() => {
+    return boostedKeywordText.split(',').map((keyword) => keyword.trim()).filter(Boolean);
+  }, [boostedKeywordText]);
 
   const filteredVideos = useMemo(() => {
-    return filterIndexedVideos(videoFeedIndex, { searchQuery, showShorts })
+    return filterIndexedVideos(videoFeedIndex, {
+      searchQuery,
+      showShorts,
+      durationFilter,
+      hideLiveReplays,
+      hidePremieres,
+      hideDuplicateTitles,
+      mutedKeywords,
+      boostedKeywords,
+    })
       .map((item) => item.video)
       .filter((video) => !hideWatched || !watchedVideos.has(video.id));
-  }, [videoFeedIndex, showShorts, searchQuery, hideWatched, watchedVideos]);
+  }, [videoFeedIndex, showShorts, durationFilter, hideLiveReplays, hidePremieres, hideDuplicateTitles, mutedKeywords, boostedKeywords, searchQuery, hideWatched, watchedVideos]);
 
   const visibleLatestVideos = useMemo(() => {
     return getVisibleTimelineVideos(filteredVideos, {
@@ -286,7 +350,33 @@ export const Dashboard = () => {
 
   useEffect(() => {
     setMobileVideoLimit(MOBILE_TIMELINE_INITIAL_LIMIT);
-  }, [searchQuery, showShorts, hideWatched]);
+  }, [searchQuery, showShorts, hideWatched, durationFilter, hideLiveReplays, hidePremieres, hideDuplicateTitles, mutedKeywordText, boostedKeywordText]);
+
+  useEffect(() => {
+    window.localStorage.setItem(QUALITY_FILTERS_STORAGE_KEY, JSON.stringify({
+      durationFilter,
+      hideLiveReplays,
+      hidePremieres,
+      hideDuplicateTitles,
+      mutedKeywordText,
+      boostedKeywordText,
+    }));
+  }, [durationFilter, hideLiveReplays, hidePremieres, hideDuplicateTitles, mutedKeywordText, boostedKeywordText]);
+
+  const activeQualityFilterCount = (durationFilter !== 'any' ? 1 : 0)
+    + (hideLiveReplays ? 1 : 0)
+    + (hidePremieres ? 1 : 0)
+    + (hideDuplicateTitles ? 1 : 0)
+    + (mutedKeywords.length > 0 ? 1 : 0)
+    + (boostedKeywords.length > 0 ? 1 : 0);
+  const clearQualityFilters = () => {
+    setDurationFilter('any');
+    setHideLiveReplays(false);
+    setHidePremieres(false);
+    setHideDuplicateTitles(false);
+    setMutedKeywordText('');
+    setBoostedKeywordText('');
+  };
 
   // Helper function to format time ago
   const formatTimeAgo = (date: Date) => {
@@ -474,33 +564,56 @@ export const Dashboard = () => {
           )}
 
           {activeTab === 'latest' && (
-            <div className="mt-[var(--app-sticky-gap)] flex items-center justify-between gap-3">
-              <label className="flex items-center gap-2 cursor-pointer select-none">
-                <div className="relative">
-                  <input
-                    type="checkbox"
-                    checked={showShorts}
-                    onChange={(e) => setShowShorts(e.target.checked)}
-                    className="sr-only peer"
-                  />
-                  <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-red-300 dark:peer-focus:ring-red-800 rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-gray-600 peer-checked:bg-red-600"></div>
-                </div>
-                <span className="text-sm font-medium text-gray-700 dark:text-gray-300">Shorts</span>
-              </label>
-              <label className="flex items-center gap-2 cursor-pointer select-none">
-                <div className="relative">
-                  <input
-                    type="checkbox"
-                    checked={hideWatched}
-                    onChange={(e) => setHideWatched(e.target.checked)}
-                    className="sr-only peer"
-                  />
-                  <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-emerald-300 dark:peer-focus:ring-emerald-800 rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-gray-600 peer-checked:bg-emerald-600"></div>
-                </div>
-                <span className="text-sm font-medium text-gray-700 dark:text-gray-300">Hide watched</span>
-              </label>
+            <div className="mt-[var(--app-sticky-gap)] flex items-center justify-between gap-2">
+              <div className="flex min-w-0 items-center gap-3">
+                <label className="flex items-center gap-2 cursor-pointer select-none">
+                  <div className="relative">
+                    <input
+                      type="checkbox"
+                      checked={showShorts}
+                      onChange={(e) => setShowShorts(e.target.checked)}
+                      className="sr-only peer"
+                    />
+                    <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-red-300 dark:peer-focus:ring-red-800 rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-gray-600 peer-checked:bg-red-600"></div>
+                  </div>
+                  <span className="text-sm font-medium text-gray-700 dark:text-gray-300">Shorts</span>
+                </label>
+                <label className="flex items-center gap-2 cursor-pointer select-none">
+                  <div className="relative">
+                    <input
+                      type="checkbox"
+                      checked={hideWatched}
+                      onChange={(e) => setHideWatched(e.target.checked)}
+                      className="sr-only peer"
+                    />
+                    <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-emerald-300 dark:peer-focus:ring-emerald-800 rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-gray-600 peer-checked:bg-emerald-600"></div>
+                  </div>
+                  <span className="text-sm font-medium text-gray-700 dark:text-gray-300">Hide watched</span>
+                </label>
+              </div>
 
-              <div className="flex items-center gap-2">
+              <div className="ml-auto flex shrink-0 items-center gap-2">
+                <button
+                  type="button"
+                  aria-label="Feed filters"
+                  onClick={() => setIsQualityFiltersOpen(true)}
+                  className={`inline-flex h-10 w-10 shrink-0 items-center justify-center gap-2 rounded-lg px-0 text-sm font-medium transition-colors sm:w-auto sm:px-3 ${activeQualityFilterCount
+                    ? 'bg-red-600 text-white hover:bg-red-700'
+                    : 'bg-gray-100 text-gray-800 hover:bg-gray-200 dark:bg-gray-800 dark:text-gray-100 dark:hover:bg-gray-700'
+                    }`}
+                >
+                  <SlidersHorizontal className="h-4 w-4" />
+                  <span className="hidden sm:inline">Filters</span>
+                  {activeQualityFilterCount > 0 && (
+                    <span className={`hidden h-5 min-w-5 items-center justify-center rounded-full px-1.5 text-xs sm:inline-flex ${activeQualityFilterCount
+                      ? 'bg-white text-red-700'
+                      : 'bg-gray-200 text-gray-700 dark:bg-gray-700 dark:text-gray-200'
+                      }`}
+                    >
+                      {activeQualityFilterCount}
+                    </span>
+                  )}
+                </button>
                 <div className="hidden items-center gap-2 text-xs font-medium text-gray-500 dark:text-gray-400 sm:flex">
                   <span>Last refreshed {formatRefreshAge(syncStatus.lastUpdated)}</span>
                   {scheduledRefreshIntervalMinutes && (
@@ -800,6 +913,131 @@ export const Dashboard = () => {
           onAdd={handleAddChannel}
         />
       </Suspense>
+
+      {isQualityFiltersOpen && (
+        <div className="fixed inset-0 z-[120]">
+          <button
+            type="button"
+            aria-label="Close feed filters"
+            className="absolute inset-0 bg-gray-950/60"
+            onClick={() => setIsQualityFiltersOpen(false)}
+          />
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="feed-filters-title"
+            className="absolute bottom-0 left-0 right-0 rounded-t-2xl border-t border-gray-200 bg-white p-4 shadow-2xl dark:border-gray-800 dark:bg-gray-900 sm:bottom-auto sm:left-1/2 sm:right-auto sm:top-28 sm:w-96 sm:-translate-x-1/2 sm:rounded-xl sm:border"
+          >
+            <div className="mb-4 flex items-center justify-between gap-3">
+              <h2 id="feed-filters-title" className="text-lg font-semibold text-gray-900 dark:text-gray-100">
+                Feed filters
+              </h2>
+              <button
+                type="button"
+                aria-label="Close feed filters"
+                onClick={() => setIsQualityFiltersOpen(false)}
+                className="inline-flex h-10 w-10 items-center justify-center rounded-lg bg-gray-100 text-gray-700 hover:bg-gray-200 dark:bg-gray-800 dark:text-gray-200 dark:hover:bg-gray-700"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            <div className="space-y-5">
+              <div>
+                <p className="mb-2 text-sm font-medium text-gray-700 dark:text-gray-300">Duration</p>
+                <div className="grid grid-cols-2 gap-2">
+                  {DURATION_FILTER_OPTIONS.map((option) => (
+                    <button
+                      key={option.value}
+                      type="button"
+                      onClick={() => setDurationFilter(option.value)}
+                      className={`h-10 rounded-lg px-3 text-sm font-medium transition-colors ${durationFilter === option.value
+                        ? 'bg-red-600 text-white'
+                        : 'bg-gray-100 text-gray-800 hover:bg-gray-200 dark:bg-gray-800 dark:text-gray-100 dark:hover:bg-gray-700'
+                        }`}
+                    >
+                      {option.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <label className="flex items-center justify-between gap-4 rounded-lg bg-gray-100 px-3 py-3 dark:bg-gray-800">
+                <span className="text-sm font-medium text-gray-800 dark:text-gray-100">Hide livestream replays</span>
+                <input
+                  type="checkbox"
+                  aria-label="Hide livestream replays"
+                  checked={hideLiveReplays}
+                  onChange={(event) => setHideLiveReplays(event.target.checked)}
+                  className="h-5 w-5 rounded border-gray-300 text-red-600 focus:ring-red-500 dark:border-gray-700 dark:bg-gray-900"
+                />
+              </label>
+
+              <label className="flex items-center justify-between gap-4 rounded-lg bg-gray-100 px-3 py-3 dark:bg-gray-800">
+                <span className="text-sm font-medium text-gray-800 dark:text-gray-100">Hide premieres</span>
+                <input
+                  type="checkbox"
+                  aria-label="Hide premieres"
+                  checked={hidePremieres}
+                  onChange={(event) => setHidePremieres(event.target.checked)}
+                  className="h-5 w-5 rounded border-gray-300 text-red-600 focus:ring-red-500 dark:border-gray-700 dark:bg-gray-900"
+                />
+              </label>
+
+              <label className="flex items-center justify-between gap-4 rounded-lg bg-gray-100 px-3 py-3 dark:bg-gray-800">
+                <span className="text-sm font-medium text-gray-800 dark:text-gray-100">Hide duplicate titles</span>
+                <input
+                  type="checkbox"
+                  aria-label="Hide duplicate titles"
+                  checked={hideDuplicateTitles}
+                  onChange={(event) => setHideDuplicateTitles(event.target.checked)}
+                  className="h-5 w-5 rounded border-gray-300 text-red-600 focus:ring-red-500 dark:border-gray-700 dark:bg-gray-900"
+                />
+              </label>
+
+              <div className="space-y-3">
+                <label className="block">
+                  <span className="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300">Mute keywords</span>
+                  <input
+                    type="text"
+                    value={mutedKeywordText}
+                    onChange={(event) => setMutedKeywordText(event.target.value)}
+                    placeholder="rumor, spoiler"
+                    className="h-10 w-full rounded-lg border border-gray-200 bg-white px-3 text-sm text-gray-900 outline-none focus:border-red-500 dark:border-gray-800 dark:bg-gray-950 dark:text-gray-100"
+                  />
+                </label>
+                <label className="block">
+                  <span className="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300">Boost keywords</span>
+                  <input
+                    type="text"
+                    value={boostedKeywordText}
+                    onChange={(event) => setBoostedKeywordText(event.target.value)}
+                    placeholder="linux, tactics"
+                    className="h-10 w-full rounded-lg border border-gray-200 bg-white px-3 text-sm text-gray-900 outline-none focus:border-red-500 dark:border-gray-800 dark:bg-gray-950 dark:text-gray-100"
+                  />
+                </label>
+              </div>
+
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={clearQualityFilters}
+                  className="h-10 flex-1 rounded-lg bg-gray-100 px-3 text-sm font-medium text-gray-800 hover:bg-gray-200 dark:bg-gray-800 dark:text-gray-100 dark:hover:bg-gray-700"
+                >
+                  Clear
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setIsQualityFiltersOpen(false)}
+                  className="h-10 flex-1 rounded-lg bg-red-600 px-3 text-sm font-medium text-white hover:bg-red-700"
+                >
+                  Done
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Keyboard Shortcuts Help */}
       <KeyboardShortcutsHelp

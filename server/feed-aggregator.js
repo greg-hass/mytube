@@ -55,10 +55,21 @@ let aggregationStatus = {
     total: 0,
     videos: 0,
     errors: 0,
+    failedChannels: [],
     startedAt: null,
     completedAt: null,
     lastUpdated: null,
 };
+
+function summarizeFailedChannels(results = []) {
+    return results
+        .filter(result => result.expected && (!result.channelMetadata && (!result.videos || result.videos.length === 0)))
+        .map(result => ({
+            id: result.id,
+            title: result.title || result.id,
+            reason: 'No RSS videos or metadata returned',
+        }));
+}
 
 function getCurrentPacificDate() {
     return new Intl.DateTimeFormat('en-US', {
@@ -245,6 +256,7 @@ async function runAggregation(options = {}) {
         else if (apiKey) console.log('ℹ️ API resolver quota cap reached or unavailable; using RSS/public fallbacks only');
 
         const allVideos = [];
+        let failedChannels = [];
         let quotaExceeded = false;
 
         // Apply existing redirects from db.json (even if API is unavailable)
@@ -388,6 +400,7 @@ async function runAggregation(options = {}) {
             total: subscriptions.length,
             videos: existingVideos.length,
             errors: 0,
+            failedChannels: [],
             startedAt: new Date().toISOString(),
             completedAt: null,
             lastUpdated: new Date().toISOString(),
@@ -522,6 +535,7 @@ async function runAggregation(options = {}) {
                     // Fallback to RSS with delay to avoid 429s
                     for (const sub of batch) {
                         const { videos, channelMetadata } = await fetchChannelFeed(sub.id);
+                        failedChannels.push(...summarizeFailedChannels([{ ...sub, expected: true, videos, channelMetadata }]));
                         batchVideos.push(...videos);
 
                         // Update subscription metadata if we got it from RSS
@@ -566,6 +580,7 @@ async function runAggregation(options = {}) {
                 console.log(`  📡 RSS Mode: Fetching ${batch.length} channels (quota exhausted)`);
                 for (const sub of batch) {
                     const { videos, channelMetadata } = await fetchChannelFeed(sub.id);
+                    failedChannels.push(...summarizeFailedChannels([{ ...sub, expected: true, videos, channelMetadata }]));
                     batchVideos.push(...videos);
 
                     // Update subscription metadata if we got it from RSS
@@ -594,6 +609,7 @@ async function runAggregation(options = {}) {
                 // RSS Only
                 const batchPromises = batch.map(async sub => {
                     const { videos, channelMetadata } = await fetchChannelFeed(sub.id);
+                    failedChannels.push(...summarizeFailedChannels([{ ...sub, expected: true, videos, channelMetadata }]));
 
                     // Update subscription metadata if we got it from RSS
                     if (channelMetadata && channelMetadata.title) {
@@ -638,6 +654,8 @@ async function runAggregation(options = {}) {
                 ...aggregationStatus,
                 current: Math.min(skippedChannels + i + CURRENT_BATCH_SIZE, subscriptions.length),
                 videos: currentVideos.length,
+                errors: failedChannels.length,
+                failedChannels,
                 lastUpdated: new Date().toISOString(),
             };
 
@@ -690,7 +708,8 @@ async function runAggregation(options = {}) {
             current: subscriptions.length,
             total: subscriptions.length,
             videos: archivedVideos.length,
-            errors: 0,
+            errors: failedChannels.length,
+            failedChannels,
             startedAt: aggregationStatus.startedAt,
             completedAt: new Date().toISOString(),
             lastUpdated: new Date().toISOString(),
@@ -742,6 +761,7 @@ async function runAggregation(options = {}) {
             ...aggregationStatus,
             state: 'error',
             errors: aggregationStatus.errors + 1,
+            failedChannels: aggregationStatus.failedChannels || [],
             completedAt: new Date().toISOString(),
             lastUpdated: new Date().toISOString(),
         };
@@ -912,5 +932,6 @@ module.exports = {
     getScheduledRefreshConfig,
     startScheduledRefresh,
     stopScheduledRefresh,
-    mergeChannelRefreshes
+    mergeChannelRefreshes,
+    summarizeFailedChannels
 };

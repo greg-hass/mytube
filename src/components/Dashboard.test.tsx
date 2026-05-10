@@ -567,6 +567,223 @@ describe('Dashboard', () => {
     expect(screen.getByText('Fresh unwatched upload')).toBeInTheDocument();
   });
 
+  it('filters latest videos by duration from the quality filters sheet', () => {
+    mockRSSVideosState = {
+      ...mockRSSVideosState,
+      videos: [
+        {
+          id: 'video-1',
+          title: 'Quick update',
+          description: '',
+          thumbnail: 'https://example.com/quick.jpg',
+          channelId: 'UC123',
+          channelTitle: 'Test Channel',
+          publishedAt: new Date().toISOString(),
+          duration: 8 * 60,
+        },
+        {
+          id: 'video-2',
+          title: 'Deep dive',
+          description: '',
+          thumbnail: 'https://example.com/deep.jpg',
+          channelId: 'UC123',
+          channelTitle: 'Test Channel',
+          publishedAt: new Date().toISOString(),
+          duration: 22 * 60,
+        },
+      ],
+    };
+
+    render(<Dashboard />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Feed filters' }));
+    fireEvent.click(screen.getByRole('button', { name: '10-30 min' }));
+
+    expect(screen.queryByText('Quick update')).not.toBeInTheDocument();
+    expect(screen.getByText('Deep dive')).toBeInTheDocument();
+  });
+
+  it('can hide livestream replays from Latest', () => {
+    mockRSSVideosState = {
+      ...mockRSSVideosState,
+      videos: [
+        {
+          id: 'video-1',
+          title: 'Normal upload',
+          description: '',
+          thumbnail: 'https://example.com/normal.jpg',
+          channelId: 'UC123',
+          channelTitle: 'Test Channel',
+          publishedAt: new Date().toISOString(),
+          duration: 12 * 60,
+        },
+        {
+          id: 'video-2',
+          title: 'Match livestream replay',
+          description: '',
+          thumbnail: 'https://example.com/live.jpg',
+          channelId: 'UC123',
+          channelTitle: 'Test Channel',
+          publishedAt: new Date().toISOString(),
+          duration: 2 * 60 * 60,
+        },
+      ],
+    };
+
+    render(<Dashboard />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Feed filters' }));
+    fireEvent.click(screen.getByLabelText('Hide livestream replays'));
+
+    expect(screen.getByText('Normal upload')).toBeInTheDocument();
+    expect(screen.queryByText('Match livestream replay')).not.toBeInTheDocument();
+  });
+
+  it('can mute latest videos by keyword from the quality filters sheet', () => {
+    mockRSSVideosState = {
+      ...mockRSSVideosState,
+      videos: [
+        {
+          id: 'video-1',
+          title: 'Transfer rumor roundup',
+          description: '',
+          thumbnail: 'https://example.com/rumor.jpg',
+          channelId: 'UC123',
+          channelTitle: 'Test Channel',
+          publishedAt: new Date().toISOString(),
+        },
+        {
+          id: 'video-2',
+          title: 'Clean tactical analysis',
+          description: '',
+          thumbnail: 'https://example.com/tactics.jpg',
+          channelId: 'UC123',
+          channelTitle: 'Test Channel',
+          publishedAt: new Date().toISOString(),
+        },
+      ],
+    };
+
+    render(<Dashboard />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Feed filters' }));
+    fireEvent.change(screen.getByLabelText('Mute keywords'), { target: { value: 'rumor' } });
+
+    expect(screen.queryByText('Transfer rumor roundup')).not.toBeInTheDocument();
+    expect(screen.getByText('Clean tactical analysis')).toBeInTheDocument();
+  });
+
+  it('can boost latest videos by keyword from the quality filters sheet', () => {
+    mockRSSVideosState = {
+      ...mockRSSVideosState,
+      videos: [
+        {
+          id: 'video-1',
+          title: 'Regular upload',
+          description: '',
+          thumbnail: 'https://example.com/regular.jpg',
+          channelId: 'UC123',
+          channelTitle: 'Test Channel',
+          publishedAt: new Date().toISOString(),
+        },
+        {
+          id: 'video-2',
+          title: 'Linux deep dive',
+          description: '',
+          thumbnail: 'https://example.com/linux.jpg',
+          channelId: 'UC123',
+          channelTitle: 'Test Channel',
+          publishedAt: new Date().toISOString(),
+        },
+      ],
+    };
+
+    render(<Dashboard />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Feed filters' }));
+    fireEvent.change(screen.getByLabelText('Boost keywords'), { target: { value: 'linux' } });
+
+    const renderedText = document.body.textContent || '';
+    expect(renderedText.indexOf('Linux deep dive')).toBeLessThan(renderedText.indexOf('Regular upload'));
+  });
+
+  it('can hide premieres and duplicate titles from the quality filters sheet', () => {
+    mockRSSVideosState = {
+      ...mockRSSVideosState,
+      videos: [
+        {
+          id: 'video-1',
+          title: 'Normal upload',
+          description: '',
+          thumbnail: 'https://example.com/normal.jpg',
+          channelId: 'UC123',
+          channelTitle: 'Test Channel',
+          publishedAt: new Date().toISOString(),
+        },
+        {
+          id: 'video-2',
+          title: 'Product launch premiere',
+          description: '',
+          thumbnail: 'https://example.com/premiere.jpg',
+          channelId: 'UC123',
+          channelTitle: 'Test Channel',
+          publishedAt: new Date().toISOString(),
+        },
+        {
+          id: 'video-3',
+          title: 'Same News Story!',
+          description: '',
+          thumbnail: 'https://example.com/same-a.jpg',
+          channelId: 'UC123',
+          channelTitle: 'Test Channel',
+          publishedAt: new Date().toISOString(),
+        },
+        {
+          id: 'video-4',
+          title: 'Same news story',
+          description: '',
+          thumbnail: 'https://example.com/same-b.jpg',
+          channelId: 'UC123',
+          channelTitle: 'Test Channel',
+          publishedAt: new Date().toISOString(),
+        },
+      ],
+    };
+
+    render(<Dashboard />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Feed filters' }));
+    fireEvent.click(screen.getByLabelText('Hide premieres'));
+    fireEvent.click(screen.getByLabelText('Hide duplicate titles'));
+
+    expect(screen.getByText('Normal upload')).toBeInTheDocument();
+    expect(screen.queryByText('Product launch premiere')).not.toBeInTheDocument();
+    expect(screen.getByText('Same News Story!')).toBeInTheDocument();
+    expect(screen.queryByText('Same news story')).not.toBeInTheDocument();
+  });
+
+  it('persists quality filter settings across reloads', () => {
+    localStorage.setItem('feed-quality-filters', JSON.stringify({
+      durationFilter: '10-30',
+      hideLiveReplays: true,
+      hidePremieres: true,
+      hideDuplicateTitles: true,
+      mutedKeywordText: 'rumor',
+      boostedKeywordText: 'linux',
+    }));
+
+    render(<Dashboard />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Feed filters' }));
+
+    expect(screen.getByRole('button', { name: '10-30 min' }).className).toContain('bg-red-600');
+    expect(screen.getByLabelText('Hide livestream replays')).toBeChecked();
+    expect(screen.getByLabelText('Hide premieres')).toBeChecked();
+    expect(screen.getByLabelText('Hide duplicate titles')).toBeChecked();
+    expect(screen.getByLabelText('Mute keywords')).toHaveValue('rumor');
+    expect(screen.getByLabelText('Boost keywords')).toHaveValue('linux');
+  });
+
   it('filters latest videos by video title and channel name', () => {
     mockSearchQuery = 'linux';
     mockRSSVideosState = {
