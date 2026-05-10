@@ -6,7 +6,19 @@ const { readJson, writeJsonQueued, updateJsonQueued } = require('./json-store');
 const { mergeIncomingSubscriptions } = require('./sync-utils');
 const { searchChannels } = require('./channel-search');
 const serverPackage = require('./package.json');
-const appPackage = require('../package.json');
+
+function readPackageMetadata(packagePath, fallback) {
+    try {
+        return require(packagePath);
+    } catch (error) {
+        if (error && error.code === 'MODULE_NOT_FOUND') {
+            return fallback;
+        }
+        throw error;
+    }
+}
+
+const appPackage = readPackageMetadata('../package.json', { version: 'unknown' });
 
 const app = express();
 const PORT = process.env.PORT || 3001;
