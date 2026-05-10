@@ -37,3 +37,22 @@ export function mergeRemoteSubscriptionMetadata(
 export function hasPlaceholderThumbnail(subscription: StoredSubscription): boolean {
   return !isUsefulThumbnail(subscription.thumbnail);
 }
+
+export function resolveWatchedVideoSync(
+  localWatched: string[],
+  remoteWatched: string[],
+  { importRemote }: { importRemote: boolean }
+) {
+  if (!importRemote) {
+    return Array.from(new Set(localWatched));
+  }
+
+  return Array.from(new Set([...localWatched, ...remoteWatched]));
+}
+
+export function areStringSetsEqual(left: string[], right: string[]) {
+  if (left.length !== right.length) return false;
+
+  const rightSet = new Set(right);
+  return left.every((value) => rightSet.has(value));
+}

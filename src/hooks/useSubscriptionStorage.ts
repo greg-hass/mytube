@@ -1,5 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { useEffect, useMemo } from 'react';
+import { useEffect, useMemo, useRef } from 'react';
 import {
   getAllSubscriptions,
   addSubscriptions,
@@ -13,7 +13,12 @@ import {
 } from '../lib/indexeddb';
 import { parseSubscriptionImportToSubscriptions } from '../lib/opml-parser';
 import { resolveChannelThumbnail } from '../lib/icon-loader';
-import { hasPlaceholderThumbnail, mergeRemoteSubscriptionMetadata } from '../lib/subscription-sync';
+import {
+  areStringSetsEqual,
+  hasPlaceholderThumbnail,
+  mergeRemoteSubscriptionMetadata,
+  resolveWatchedVideoSync,
+} from '../lib/subscription-sync';
 import { useStore } from '../store/useStore';
 import type { YouTubeChannel } from '../types/youtube';
 import { toast } from 'sonner';
@@ -25,6 +30,7 @@ import { toast } from 'sonner';
 export const useSubscriptionStorage = () => {
   const queryClient = useQueryClient();
   const { searchQuery, sortBy, apiKey, watchedVideos } = useStore();
+  const hasCompletedInitialSyncRef = useRef(false);
 
   const getSubscriptionsWithServerMetadata = async () => {
     const localSubs = await getAllSubscriptions();
@@ -514,7 +520,7 @@ ${outlines}
     }
   };
 
-  const syncWithBackend = async () => {
+  const syncWithBackend = async ({ importRemoteWatched = false }: { importRemoteWatched?: boolean } = {}) => {
     try {
       // 1. Fetch Remote Data
       const response = await fetch(`/api/sync?t=${Date.now()}`);
@@ -587,7 +593,9 @@ ${outlines}
 
       // Merge Watched Videos
       const localWatched = Array.from(useStore.getState().watchedVideos);
-      const mergedWatched = new Set([...localWatched, ...remoteWatched]);
+      const mergedWatched = resolveWatchedVideoSync(localWatched, remoteWatched, {
+        importRemote: importRemoteWatched,
+      });
 
       // 3. Update Local if needed
       // We should update local if there are ANY differences, or just always update to be safe and ensure metadata sync.
@@ -611,9 +619,9 @@ ${outlines}
         updatedLocal = true;
       }
 
-      if (mergedWatched.size > localWatched.length) {
-        console.log(`📥 Importing ${mergedWatched.size - localWatched.length} watched videos from server...`);
-        useStore.getState().setWatchedVideos(Array.from(mergedWatched));
+      if (importRemoteWatched && !areStringSetsEqual(mergedWatched, localWatched)) {
+        console.log(`📥 Importing ${mergedWatched.length - localWatched.length} watched videos from server...`);
+        useStore.getState().setWatchedVideos(mergedWatched);
         updatedLocal = true;
       }
 
@@ -682,7 +690,7 @@ ${outlines}
 
       // We need a 'forcePush' option for syncWithBackend to skip the fetch/merge and just overwrite server.
 
-      if (mergedSubs.length !== remoteSubs.length || mergedWatched.size !== remoteWatched.length) {
+      if (mergedSubs.length !== remoteSubs.length || !areStringSetsEqual(mergedWatched, remoteWatched)) {
         // We push the MERGED list to server, so server becomes the union too.
         const { searchQuery, sortBy, apiKey, quotaUsed } = useStore.getState();
 
@@ -697,7 +705,7 @@ ${outlines}
               apiKey,
               quotaUsed // Send local quota too
             },
-            watchedVideos: Array.from(mergedWatched)
+            watchedVideos: mergedWatched
             // NOTE: We intentionally don't send 'redirects' - those are server-only
           })
         });
@@ -709,6 +717,10 @@ ${outlines}
         }
       }
 
+      if (importRemoteWatched) {
+        hasCompletedInitialSyncRef.current = true;
+      }
+
     } catch (err) {
       console.error('Sync failed:', err);
     }
@@ -716,7 +728,7 @@ ${outlines}
 
   // Run sync on mount
   useEffect(() => {
-    syncWithBackend();
+    syncWithBackend({ importRemoteWatched: true });
   }, []);
 
   useEffect(() => {
@@ -735,6 +747,7 @@ ${outlines}
   useEffect(() => {
     if (!isLoading && subscriptions) {
       const timer = setTimeout(() => {
+        if (!hasCompletedInitialSyncRef.current) return;
         syncWithBackend();
       }, 2000); // Debounce 2s
       return () => clearTimeout(timer);

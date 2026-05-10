@@ -1,7 +1,7 @@
 import { Play, Clock, Heart, CheckCircle2, ListPlus } from 'lucide-react';
 import type { YouTubeVideo } from '../types/youtube';
-import { useEffect, useState } from 'react';
-import type { MouseEvent } from 'react';
+import { useEffect, useRef, useState } from 'react';
+import type { MouseEvent, PointerEvent } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { getDisplayThumbnail } from '../lib/icon-loader';
 import { getHighResolutionVideoThumbnail, getNextVideoThumbnailFallback } from '../lib/video-thumbnails';
@@ -24,9 +24,15 @@ const getDashboardScrollStorageKey = (search: string) => {
   return 'latest-videos-scroll';
 };
 
+const SWIPE_TO_WATCHED_THRESHOLD = 80;
+const SWIPE_VERTICAL_CANCEL_THRESHOLD = 48;
+
 export const VideoCard = ({ video, channelThumbnail }: Props) => {
   const [imageLoaded, setImageLoaded] = useState(false);
   const [thumbnailSrc, setThumbnailSrc] = useState(() => getHighResolutionVideoThumbnail(video.thumbnail));
+  const [dragOffsetX, setDragOffsetX] = useState(0);
+  const pointerStartRef = useRef<{ x: number; y: number; pointerId: number } | null>(null);
+  const suppressNextClickRef = useRef(false);
   const navigate = useNavigate();
   const location = useLocation();
   const { isFavoriteVideo, toggleFavoriteVideo } = useFavoriteVideos();
@@ -48,8 +54,65 @@ export const VideoCard = ({ video, channelThumbnail }: Props) => {
   }, [isQueued, video.id]);
 
   const openVideo = () => {
+    if (suppressNextClickRef.current) {
+      suppressNextClickRef.current = false;
+      return;
+    }
+
     sessionStorage.setItem(getDashboardScrollStorageKey(location.search), String(Math.round(window.scrollY)));
     navigate(`/video/${video.id}`);
+  };
+
+  const handlePointerDown = (event: PointerEvent<HTMLDivElement>) => {
+    if (event.pointerType === 'mouse') return;
+
+    pointerStartRef.current = {
+      x: event.clientX,
+      y: event.clientY,
+      pointerId: event.pointerId,
+    };
+    event.currentTarget.setPointerCapture?.(event.pointerId);
+  };
+
+  const handlePointerMove = (event: PointerEvent<HTMLDivElement>) => {
+    const pointerStart = pointerStartRef.current;
+    if (!pointerStart || pointerStart.pointerId !== event.pointerId) return;
+
+    const deltaX = event.clientX - pointerStart.x;
+    const deltaY = event.clientY - pointerStart.y;
+
+    if (Math.abs(deltaY) > SWIPE_VERTICAL_CANCEL_THRESHOLD && Math.abs(deltaY) > Math.abs(deltaX)) {
+      pointerStartRef.current = null;
+      setDragOffsetX(0);
+      return;
+    }
+
+    if (Math.abs(deltaX) > 12) {
+      setDragOffsetX(Math.max(-120, Math.min(120, deltaX)));
+    }
+  };
+
+  const handlePointerEnd = (event: PointerEvent<HTMLDivElement>) => {
+    const pointerStart = pointerStartRef.current;
+    if (!pointerStart || pointerStart.pointerId !== event.pointerId) return;
+
+    const deltaX = event.clientX - pointerStart.x;
+    const shouldMarkWatched = Math.abs(deltaX) >= SWIPE_TO_WATCHED_THRESHOLD;
+
+    pointerStartRef.current = null;
+    setDragOffsetX(0);
+
+    if (shouldMarkWatched) {
+      suppressNextClickRef.current = true;
+      if (!isWatched) {
+        markAsWatched(video.id);
+      }
+    }
+  };
+
+  const handlePointerCancel = () => {
+    pointerStartRef.current = null;
+    setDragOffsetX(0);
   };
 
   const handleFavoriteClick = (event: MouseEvent<HTMLButtonElement>) => {
@@ -88,9 +151,21 @@ export const VideoCard = ({ video, channelThumbnail }: Props) => {
 
   return (
     <div
+      data-testid="video-card"
       onClick={openVideo}
-      className="group relative flex h-full cursor-pointer flex-col overflow-hidden rounded-xl border border-gray-200 bg-white shadow-md transition-colors duration-200 hover:border-gray-300 dark:border-gray-800 dark:bg-gray-900 dark:hover:border-gray-700 sm:hover:shadow-xl"
+      onPointerDown={handlePointerDown}
+      onPointerMove={handlePointerMove}
+      onPointerUp={handlePointerEnd}
+      onPointerCancel={handlePointerCancel}
+      style={{ transform: `translateX(${dragOffsetX}px)` }}
+      className="group relative flex h-full touch-pan-y cursor-pointer flex-col overflow-hidden rounded-xl border border-gray-200 bg-white shadow-md transition-colors duration-200 hover:border-gray-300 dark:border-gray-800 dark:bg-gray-900 dark:hover:border-gray-700 sm:hover:shadow-xl"
     >
+      {Math.abs(dragOffsetX) > 12 && (
+        <div className="pointer-events-none absolute inset-0 z-20 flex items-center justify-center bg-emerald-600/15 text-sm font-semibold text-emerald-700 dark:text-emerald-200">
+          <CheckCircle2 className="mr-2 h-5 w-5" />
+          <span>{isWatched ? 'Watched' : 'Mark watched'}</span>
+        </div>
+      )}
       {/* Thumbnail */}
       <div className="relative aspect-video bg-gray-200 dark:bg-gray-800 overflow-hidden">
         {!imageLoaded && (
