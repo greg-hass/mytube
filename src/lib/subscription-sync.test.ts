@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { mergeRemoteSubscriptionMetadata } from './subscription-sync';
+import { areStringSetsEqual, mergeRemoteSubscriptionMetadata, resolveWatchedVideoSync } from './subscription-sync';
 import type { StoredSubscription } from './indexeddb';
 
 describe('mergeRemoteSubscriptionMetadata', () => {
@@ -90,5 +90,25 @@ describe('mergeRemoteSubscriptionMetadata', () => {
         group: 'News',
       },
     ]);
+  });
+});
+
+describe('resolveWatchedVideoSync', () => {
+  it('imports remote watched videos during initial sync', () => {
+    expect(resolveWatchedVideoSync(['local-1'], ['remote-1'], { importRemote: true }).sort()).toEqual([
+      'local-1',
+      'remote-1',
+    ]);
+  });
+
+  it('keeps local watched state authoritative after initial sync so unwatch is not re-added', () => {
+    expect(resolveWatchedVideoSync([], ['accidentally-watched'], { importRemote: false })).toEqual([]);
+  });
+});
+
+describe('areStringSetsEqual', () => {
+  it('compares watched ids without depending on order', () => {
+    expect(areStringSetsEqual(['one', 'two'], ['two', 'one'])).toBe(true);
+    expect(areStringSetsEqual(['one'], ['one', 'two'])).toBe(false);
   });
 });

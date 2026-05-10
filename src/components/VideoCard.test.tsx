@@ -147,6 +147,84 @@ describe('VideoCard', () => {
     expect(mockStore.markAsWatched).toHaveBeenCalledWith('video-1');
   });
 
+  it('marks a video watched when swiped on touch without opening it', () => {
+    render(
+      <MemoryRouter initialEntries={['/?tab=latest']}>
+        <Routes>
+          <Route
+            path="/"
+            element={(
+              <>
+                <VideoCard video={video} index={0} />
+                <LocationProbe />
+              </>
+            )}
+          />
+          <Route path="/video/:videoId" element={<LocationProbe />} />
+        </Routes>
+      </MemoryRouter>
+    );
+
+    const card = screen.getByTestId('video-card');
+
+    fireEvent.pointerDown(card, {
+      pointerId: 1,
+      pointerType: 'touch',
+      clientX: 12,
+      clientY: 20,
+    });
+    fireEvent.pointerMove(card, {
+      pointerId: 1,
+      pointerType: 'touch',
+      clientX: 112,
+      clientY: 22,
+    });
+
+    expect(screen.getByText('Mark watched')).toBeInTheDocument();
+
+    fireEvent.pointerUp(card, {
+      pointerId: 1,
+      pointerType: 'touch',
+      clientX: 112,
+      clientY: 22,
+    });
+    fireEvent.click(card);
+
+    expect(mockStore.markAsWatched).toHaveBeenCalledWith('video-1');
+    expect(screen.getByTestId('location')).toHaveTextContent('/');
+  });
+
+  it('does not treat vertical scrolling as a watched swipe', () => {
+    render(
+      <MemoryRouter>
+        <VideoCard video={video} index={0} />
+      </MemoryRouter>
+    );
+
+    const card = screen.getByTestId('video-card');
+
+    fireEvent.pointerDown(card, {
+      pointerId: 1,
+      pointerType: 'touch',
+      clientX: 12,
+      clientY: 20,
+    });
+    fireEvent.pointerMove(card, {
+      pointerId: 1,
+      pointerType: 'touch',
+      clientX: 24,
+      clientY: 90,
+    });
+    fireEvent.pointerUp(card, {
+      pointerId: 1,
+      pointerType: 'touch',
+      clientX: 24,
+      clientY: 90,
+    });
+
+    expect(mockStore.markAsWatched).not.toHaveBeenCalled();
+  });
+
   it('can queue a video without favoriting it', () => {
     render(
       <MemoryRouter>
