@@ -5,6 +5,8 @@ const path = require('path');
 const { readJson, writeJsonQueued, updateJsonQueued } = require('./json-store');
 const { mergeIncomingSubscriptions } = require('./sync-utils');
 const { searchChannels } = require('./channel-search');
+const serverPackage = require('./package.json');
+const appPackage = require('../package.json');
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -49,6 +51,39 @@ async function init() {
 }
 
 init();
+
+// GET /api/health - Lightweight service and data health summary
+app.get('/api/health', async (req, res) => {
+    try {
+        const [data, videoCache] = await Promise.all([
+            readJson(DATA_FILE, DEFAULT_DATA),
+            readJson(VIDEOS_FILE, { videos: [], lastUpdated: null, totalChannels: 0, totalVideos: 0 })
+        ]);
+
+        res.json({
+            status: 'ok',
+            subscriptions: data.subscriptions?.length || 0,
+            watchedVideos: data.watchedVideos?.length || 0,
+            videos: videoCache.totalVideos || videoCache.videos?.length || 0,
+            lastUpdated: videoCache.lastUpdated || null,
+            uptime: process.uptime()
+        });
+    } catch (err) {
+        console.error('Health check error:', err);
+        res.status(500).json({ status: 'error', error: 'Health check failed' });
+    }
+});
+
+// GET /api/version - App and server version metadata
+app.get('/api/version', (req, res) => {
+    res.json({
+        name: serverPackage.name,
+        version: serverPackage.version,
+        appVersion: appPackage.version,
+        node: process.version,
+        buildDate: process.env.BUILD_DATE || null,
+    });
+});
 
 // GET /api/sync - Retrieve all data
 app.get('/api/sync', async (req, res) => {
@@ -220,6 +255,24 @@ app.post('/api/videos/refresh', async (req, res) => {
     } catch (err) {
         console.error('Refresh trigger error:', err);
         res.status(500).json({ error: 'Failed to trigger refresh' });
+    }
+});
+
+// POST /api/videos/cache/reset - Clear aggregated video cache without touching subscriptions
+app.post('/api/videos/cache/reset', async (req, res) => {
+    try {
+        await writeJsonQueued(VIDEOS_FILE, {
+            videos: [],
+            lastUpdated: null,
+            totalChannels: 0,
+            totalVideos: 0,
+            channelRefreshes: {}
+        });
+
+        res.json({ success: true });
+    } catch (err) {
+        console.error('Video cache reset error:', err);
+        res.status(500).json({ error: 'Failed to reset video cache' });
     }
 });
 

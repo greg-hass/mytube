@@ -1,10 +1,27 @@
 import { useEffect, useRef, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { ArrowLeft, ExternalLink } from 'lucide-react';
+import {
+  ArrowLeft,
+  CheckCircle2,
+  Clock,
+  ExternalLink,
+  Heart,
+  ListPlus,
+  SkipBack,
+  SkipForward,
+  UserCircle2,
+} from 'lucide-react';
 import { motion } from 'framer-motion';
 import { Header } from './Header';
+import { useFavoriteVideos } from '../hooks/useFavoriteVideos';
+import { useQueuedVideos } from '../hooks/useQueuedVideos';
+import { useRSSVideos } from '../hooks/useRSSVideos';
+import { useSubscriptionStorage } from '../hooks/useSubscriptionStorage';
+import { getDisplayThumbnail } from '../lib/icon-loader';
+import { getHighResolutionVideoThumbnail } from '../lib/video-thumbnails';
 import { clearVideoProgress, getVideoProgress, saveVideoProgress } from '../lib/video-progress';
 import { useStore } from '../store/useStore';
+import type { YouTubeVideo } from '../types/youtube';
 
 interface YouTubePlayer {
   getCurrentTime: () => number;
@@ -75,6 +92,29 @@ function formatResumeTime(seconds: number) {
   return `${minutes}:${remainingSeconds}`;
 }
 
+function formatPublishedAt(dateString: string) {
+  const date = new Date(dateString);
+  if (Number.isNaN(date.getTime())) return '';
+
+  return new Intl.DateTimeFormat(undefined, {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+  }).format(date);
+}
+
+function getVideoDurationLabel(duration: YouTubeVideo['duration']) {
+  if (!duration) return '';
+
+  if (typeof duration === 'string') {
+    return duration;
+  }
+
+  const minutes = Math.floor(duration / 60);
+  const seconds = Math.floor(duration % 60).toString().padStart(2, '0');
+  return `${minutes}:${seconds}`;
+}
+
 function allowEnhancedMediaPlayback(player: YouTubePlayer) {
   const iframe = player.getIframe?.();
   if (!iframe) return;
@@ -104,7 +144,15 @@ export const VideoPlayer = () => {
   const resumeInfoRef = useRef<{ videoId: string; seconds: number } | null>(null);
   const [playerProgressPercent, setPlayerProgressPercent] = useState(0);
   const [playerErrorCode, setPlayerErrorCode] = useState<number | null>(null);
-  const markAsWatched = useStore((state) => state.markAsWatched);
+  const { watchedVideos, markAsWatched, markAsUnwatched } = useStore((state) => ({
+    watchedVideos: state.watchedVideos,
+    markAsWatched: state.markAsWatched,
+    markAsUnwatched: state.markAsUnwatched,
+  }));
+  const { videos } = useRSSVideos();
+  const { allSubscriptions } = useSubscriptionStorage();
+  const { favoriteVideos, isFavoriteVideo, toggleFavoriteVideo } = useFavoriteVideos();
+  const { queuedVideos, isQueuedVideo, toggleQueuedVideo } = useQueuedVideos();
 
   if (!videoId) {
     navigate('/');
@@ -121,6 +169,38 @@ export const VideoPlayer = () => {
 
   const resumeFromSeconds = resumeInfoRef.current.seconds;
   const youtubeWatchUrl = `https://www.youtube.com/watch?v=${videoId}`;
+  const savedVideosById = new Map([
+    ...favoriteVideos.map((video) => [video.id, video] as const),
+    ...queuedVideos.map((video) => [video.id, video] as const),
+  ]);
+  const currentVideo = videos.find((video) => video.id === videoId) ?? savedVideosById.get(videoId);
+  const currentVideoIndex = videos.findIndex((video) => video.id === videoId);
+  const previousVideo = currentVideoIndex > 0 ? videos[currentVideoIndex - 1] : null;
+  const nextVideo = currentVideoIndex >= 0 && currentVideoIndex < videos.length - 1 ? videos[currentVideoIndex + 1] : null;
+  const currentChannel = currentVideo
+    ? allSubscriptions.find((channel) => channel.id === currentVideo.channelId)
+    : null;
+  const channelThumbnail = currentChannel?.thumbnail;
+  const isWatched = watchedVideos.has(videoId);
+  const isFavorite = isFavoriteVideo(videoId);
+  const isQueued = isQueuedVideo(videoId);
+  const relatedVideos = currentVideo
+    ? videos
+      .filter((video) => video.channelId === currentVideo.channelId && video.id !== currentVideo.id)
+      .slice(0, 4)
+    : [];
+
+  const navigateToVideo = (targetVideoId: string) => {
+    navigate(`/video/${targetVideoId}`);
+  };
+
+  const handleWatchedClick = () => {
+    if (isWatched) {
+      markAsUnwatched(videoId);
+    } else {
+      markAsWatched(videoId);
+    }
+  };
 
   useEffect(() => {
     window.scrollTo({ top: 0 });
@@ -220,7 +300,6 @@ export const VideoPlayer = () => {
           <span className="font-medium">Back</span>
         </motion.button>
 
-        {/* Video Player */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
@@ -281,7 +360,146 @@ export const VideoPlayer = () => {
           </div>
         </motion.div>
 
-        {/* Info Box */}
+        {currentVideo && (
+          <motion.section
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.15 }}
+            className="mt-6 space-y-5"
+          >
+            <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+              <div className="min-w-0">
+                <h1 className="text-2xl font-bold leading-tight text-gray-950 dark:text-gray-50 sm:text-3xl">
+                  {currentVideo.title}
+                </h1>
+                <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-2 text-sm text-gray-600 dark:text-gray-400">
+                  <div className="flex min-w-0 items-center gap-2">
+                    {channelThumbnail ? (
+                      <img
+                        src={getDisplayThumbnail(channelThumbnail, currentVideo.channelTitle)}
+                        alt={`${currentVideo.channelTitle} icon`}
+                        className="h-7 w-7 flex-none rounded-full object-cover"
+                      />
+                    ) : (
+                      <UserCircle2 className="h-7 w-7 flex-none text-gray-400" />
+                    )}
+                    <span className="truncate font-medium text-gray-800 dark:text-gray-200">
+                      {currentVideo.channelTitle}
+                    </span>
+                  </div>
+                  {formatPublishedAt(currentVideo.publishedAt) && (
+                    <span>{formatPublishedAt(currentVideo.publishedAt)}</span>
+                  )}
+                  {getVideoDurationLabel(currentVideo.duration) && (
+                    <span>{getVideoDurationLabel(currentVideo.duration)}</span>
+                  )}
+                </div>
+              </div>
+
+              <div className="grid grid-cols-3 gap-2 sm:flex sm:flex-wrap sm:justify-end">
+                <button
+                  type="button"
+                  onClick={handleWatchedClick}
+                  className={`inline-flex items-center justify-center gap-2 rounded-lg px-3 py-2 text-sm font-medium transition-colors ${isWatched
+                    ? 'bg-emerald-600/10 text-emerald-600 dark:bg-emerald-500/15 dark:text-emerald-300'
+                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200 dark:bg-gray-800 dark:text-gray-200 dark:hover:bg-gray-700'
+                    }`}
+                >
+                  <CheckCircle2 className={`h-4 w-4 ${isWatched ? 'fill-current' : ''}`} />
+                  <span>{isWatched ? 'Watched' : 'Watch'}</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => toggleQueuedVideo(currentVideo)}
+                  className={`inline-flex items-center justify-center gap-2 rounded-lg px-3 py-2 text-sm font-medium transition-colors ${isQueued
+                    ? 'bg-blue-600/10 text-blue-600 dark:bg-blue-500/15 dark:text-blue-300'
+                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200 dark:bg-gray-800 dark:text-gray-200 dark:hover:bg-gray-700'
+                    }`}
+                >
+                  <ListPlus className="h-4 w-4" />
+                  <span>{isQueued ? 'Queued' : 'Queue'}</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => toggleFavoriteVideo(currentVideo)}
+                  className={`inline-flex items-center justify-center gap-2 rounded-lg px-3 py-2 text-sm font-medium transition-colors ${isFavorite
+                    ? 'bg-red-600/10 text-red-600 dark:bg-red-500/15 dark:text-red-300'
+                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200 dark:bg-gray-800 dark:text-gray-200 dark:hover:bg-gray-700'
+                    }`}
+                >
+                  <Heart className={`h-4 w-4 ${isFavorite ? 'fill-current' : ''}`} />
+                  <span>{isFavorite ? 'Saved' : 'Save'}</span>
+                </button>
+              </div>
+            </div>
+
+            {(previousVideo || nextVideo) && (
+              <div className="grid gap-3 sm:grid-cols-2">
+                <button
+                  type="button"
+                  disabled={!previousVideo}
+                  onClick={() => previousVideo && navigateToVideo(previousVideo.id)}
+                  className="flex min-h-16 items-center gap-3 rounded-lg border border-gray-200 bg-white p-3 text-left transition-colors enabled:hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50 dark:border-gray-800 dark:bg-gray-900 dark:enabled:hover:bg-gray-800"
+                >
+                  <SkipBack className="h-5 w-5 flex-none text-gray-500" />
+                  <span className="min-w-0">
+                    <span className="block text-xs uppercase text-gray-500">Previous</span>
+                    <span className="line-clamp-1 text-sm font-medium">{previousVideo?.title || 'No previous video'}</span>
+                  </span>
+                </button>
+                <button
+                  type="button"
+                  disabled={!nextVideo}
+                  onClick={() => nextVideo && navigateToVideo(nextVideo.id)}
+                  className="flex min-h-16 items-center gap-3 rounded-lg border border-gray-200 bg-white p-3 text-left transition-colors enabled:hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50 dark:border-gray-800 dark:bg-gray-900 dark:enabled:hover:bg-gray-800"
+                >
+                  <SkipForward className="h-5 w-5 flex-none text-gray-500" />
+                  <span className="min-w-0">
+                    <span className="block text-xs uppercase text-gray-500">Next</span>
+                    <span className="line-clamp-1 text-sm font-medium">{nextVideo?.title || 'No next video'}</span>
+                  </span>
+                </button>
+              </div>
+            )}
+
+            {relatedVideos.length > 0 && (
+              <div>
+                <h2 className="mb-3 text-lg font-semibold text-gray-950 dark:text-gray-50">
+                  More from {currentVideo.channelTitle}
+                </h2>
+                <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                  {relatedVideos.map((video) => (
+                    <button
+                      key={video.id}
+                      type="button"
+                      onClick={() => navigateToVideo(video.id)}
+                      className="overflow-hidden rounded-lg border border-gray-200 bg-white text-left transition-colors hover:bg-gray-50 dark:border-gray-800 dark:bg-gray-900 dark:hover:bg-gray-800"
+                    >
+                      <div className="aspect-video bg-gray-200 dark:bg-gray-800">
+                        <img
+                          src={getHighResolutionVideoThumbnail(video.thumbnail)}
+                          alt=""
+                          className="h-full w-full object-cover"
+                          loading="lazy"
+                        />
+                      </div>
+                      <div className="space-y-2 p-3">
+                        <p className="line-clamp-2 text-sm font-medium text-gray-950 dark:text-gray-50">
+                          {video.title}
+                        </p>
+                        <p className="flex items-center gap-1 text-xs text-gray-500">
+                          <Clock className="h-3 w-3" />
+                          <span>{formatPublishedAt(video.publishedAt)}</span>
+                        </p>
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+          </motion.section>
+        )}
+
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}

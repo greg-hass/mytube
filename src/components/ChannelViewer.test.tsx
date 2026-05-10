@@ -189,4 +189,41 @@ describe('ChannelViewer', () => {
     expect(screen.queryByText('Already watched channel upload')).not.toBeInTheDocument();
     expect(screen.getByText('Fresh channel upload')).toBeInTheDocument();
   });
+
+  it('marks every unwatched channel video watched from the channel toolbar', () => {
+    mockWatchedVideos = new Set(['video-1']);
+    mockVideos = [
+      {
+        id: 'video-1',
+        title: 'Already watched channel upload',
+        description: '',
+        thumbnail: 'https://example.com/watched.jpg',
+        channelId: 'UC123',
+        channelTitle: 'Test Channel',
+        publishedAt: '2026-05-07T10:00:00.000Z',
+      },
+      {
+        id: 'video-2',
+        title: 'Fresh channel upload',
+        description: '',
+        thumbnail: 'https://example.com/fresh.jpg',
+        channelId: 'UC123',
+        channelTitle: 'Test Channel',
+        publishedAt: '2026-05-07T11:00:00.000Z',
+      },
+    ];
+
+    render(
+      <MemoryRouter initialEntries={['/channel/UC123']}>
+        <Routes>
+          <Route path="/channel/:channelId" element={<ChannelViewer />} />
+        </Routes>
+      </MemoryRouter>
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Mark channel watched' }));
+
+    expect(mockMarkAsWatched).toHaveBeenCalledTimes(1);
+    expect(mockMarkAsWatched).toHaveBeenCalledWith('video-2');
+  });
 });

@@ -8,6 +8,7 @@ const {
     getScheduledRefreshConfig,
     getChannelsDueForRefresh,
     mergeChannelRefreshes,
+    summarizeFailedChannels,
     startScheduledRefresh,
     stopScheduledRefresh,
 } = require('./feed-aggregator');
@@ -72,6 +73,22 @@ describe('feed refresh policy', () => {
             UC_KEEP: { lastFetchedAt: '2026-05-06T18:00:00.000Z' },
             UC_NEW: { lastFetchedAt: '2026-05-06T20:00:00.000Z' },
         });
+    });
+
+    it('summarizes failed channel refreshes for status output', () => {
+        const failedChannels = summarizeFailedChannels([
+            { id: 'UC_OK', title: 'OK', expected: true, videos: [{ id: 'video-1' }], channelMetadata: { title: 'OK' } },
+            { id: 'UC_BAD', title: 'Bad Channel', expected: true, videos: [], channelMetadata: null },
+            { id: 'UC_SKIPPED', title: 'Skipped', expected: false, videos: [], channelMetadata: null },
+        ]);
+
+        expect(failedChannels).toEqual([
+            {
+                id: 'UC_BAD',
+                title: 'Bad Channel',
+                reason: 'No RSS videos or metadata returned',
+            },
+        ]);
     });
 
     it('uses a visible scheduled refresh config with safe Docker env overrides', () => {

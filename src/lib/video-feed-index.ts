@@ -1,13 +1,22 @@
 import type { YouTubeChannel, YouTubeVideo } from '../types/youtube';
 
 const SHORTS_TEXT_PATTERN = /#shorts?\b|\bshorts\b|youtube\.com\/shorts\//i;
+const LIVE_REPLAY_TEXT_PATTERN = /\b(live\s*stream|livestream|watchalong|replay|full\s+stream)\b/i;
+const PREMIERE_TEXT_PATTERN = /\bpremieres?\b|\bpremiering\b/i;
+const TEN_MINUTES_SECONDS = 10 * 60;
+const THIRTY_MINUTES_SECONDS = 30 * 60;
 
 type VideoWithNullableDuration = YouTubeVideo & { duration?: number | null };
+export type DurationFilter = 'any' | 'under-10' | '10-30' | '30-plus';
 
 export interface IndexedVideo {
   video: YouTubeVideo;
   searchText: string;
+  keywordText: string;
+  normalizedTitle: string;
   isShort: boolean;
+  isLiveReplay: boolean;
+  isPremiere: boolean;
 }
 
 export interface VideoFeedIndex {
@@ -19,6 +28,12 @@ export interface VideoFeedIndex {
 export interface VideoFilterOptions {
   searchQuery: string;
   showShorts: boolean;
+  durationFilter?: DurationFilter;
+  hideLiveReplays?: boolean;
+  hidePremieres?: boolean;
+  hideDuplicateTitles?: boolean;
+  mutedKeywords?: string[];
+  boostedKeywords?: string[];
 }
 
 export function isShortVideo(video: Pick<VideoWithNullableDuration, 'title' | 'description' | 'duration'>) {
@@ -33,6 +48,47 @@ function buildSearchText(video: YouTubeVideo) {
   return `${video.title} ${video.channelTitle}`.toLowerCase();
 }
 
+function buildKeywordText(video: YouTubeVideo) {
+  return `${video.title} ${video.channelTitle} ${video.description || ''}`.toLowerCase();
+}
+
+function normalizeTitle(title: string) {
+  return title
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, ' ')
+    .trim()
+    .replace(/\s+/g, ' ');
+}
+
+function normalizeKeywords(keywords: string[] = []) {
+  return keywords
+    .map((keyword) => keyword.trim().toLowerCase())
+    .filter(Boolean);
+}
+
+function matchesAnyKeyword(text: string, keywords: string[]) {
+  return keywords.some((keyword) => text.includes(keyword));
+}
+
+export function isLiveReplayVideo(video: Pick<YouTubeVideo, 'title' | 'description'>) {
+  return LIVE_REPLAY_TEXT_PATTERN.test(`${video.title || ''} ${video.description || ''}`);
+}
+
+export function isPremiereVideo(video: Pick<YouTubeVideo, 'title' | 'description'>) {
+  return PREMIERE_TEXT_PATTERN.test(`${video.title || ''} ${video.description || ''}`);
+}
+
+function matchesDurationFilter(video: VideoWithNullableDuration, durationFilter: DurationFilter = 'any') {
+  if (durationFilter === 'any') return true;
+
+  const duration = video.duration;
+  if (!duration || duration <= 0) return false;
+
+  if (durationFilter === 'under-10') return duration < TEN_MINUTES_SECONDS;
+  if (durationFilter === '10-30') return duration >= TEN_MINUTES_SECONDS && duration < THIRTY_MINUTES_SECONDS;
+  return duration >= THIRTY_MINUTES_SECONDS;
+}
+
 export function buildVideoFeedIndex(videos: YouTubeVideo[], channels: YouTubeChannel[]): VideoFeedIndex {
   const mutedChannelIds = new Set(
     channels
@@ -42,7 +98,11 @@ export function buildVideoFeedIndex(videos: YouTubeVideo[], channels: YouTubeCha
   const items = videos.map((video) => ({
     video,
     searchText: buildSearchText(video),
+    keywordText: buildKeywordText(video),
+    normalizedTitle: normalizeTitle(video.title),
     isShort: isShortVideo(video),
+    isLiveReplay: isLiveReplayVideo(video),
+    isPremiere: isPremiereVideo(video),
   }));
 
   return {
@@ -54,12 +114,32 @@ export function buildVideoFeedIndex(videos: YouTubeVideo[], channels: YouTubeCha
 
 export function filterIndexedVideos(index: VideoFeedIndex, options: VideoFilterOptions) {
   const normalizedSearch = options.searchQuery.trim().toLowerCase();
+  const mutedKeywords = normalizeKeywords(options.mutedKeywords);
+  const boostedKeywords = normalizeKeywords(options.boostedKeywords);
 
-  return index.items.filter((item) => {
+  const filteredItems = index.items.filter((item) => {
     if (index.mutedChannelIds.has(item.video.channelId)) return false;
     if (!options.showShorts && item.isShort) return false;
+    if (options.hideLiveReplays && item.isLiveReplay) return false;
+    if (options.hidePremieres && item.isPremiere) return false;
+    if (!matchesDurationFilter(item.video, options.durationFilter)) return false;
+    if (matchesAnyKeyword(item.keywordText, mutedKeywords)) return false;
     if (normalizedSearch && !item.searchText.includes(normalizedSearch)) return false;
 
     return true;
   });
+
+  const dedupedItems = options.hideDuplicateTitles
+    ? filteredItems.filter((item, index, items) => {
+      if (!item.normalizedTitle) return true;
+      return items.findIndex((candidate) => candidate.normalizedTitle === item.normalizedTitle) === index;
+    })
+    : filteredItems;
+
+  if (boostedKeywords.length === 0) return dedupedItems;
+
+  return [
+    ...dedupedItems.filter((item) => matchesAnyKeyword(item.keywordText, boostedKeywords)),
+    ...dedupedItems.filter((item) => !matchesAnyKeyword(item.keywordText, boostedKeywords)),
+  ];
 }
