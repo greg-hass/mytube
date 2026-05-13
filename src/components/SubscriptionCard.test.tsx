@@ -63,4 +63,54 @@ describe('SubscriptionCard', () => {
 
     expect(onSetGroup).toHaveBeenCalledWith('UC123', 'News');
   });
+
+  it('lets a new group be created and assigned from the card', () => {
+    const onSetGroup = vi.fn();
+
+    render(
+      <MemoryRouter>
+        <SubscriptionCard
+          index={0}
+          channel={{
+            id: 'UC123',
+            title: 'Fast Channel',
+            description: '',
+            thumbnail: 'https://example.com/thumb.jpg',
+          }}
+          groups={[]}
+          onSetGroup={onSetGroup}
+        />
+      </MemoryRouter>
+    );
+
+    fireEvent.change(screen.getByLabelText('New group for Fast Channel'), {
+      target: { value: 'News' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Add group for Fast Channel' }));
+
+    expect(onSetGroup).toHaveBeenCalledWith('UC123', 'News');
+  });
+
+  it('toggles favorite channels from the star button', () => {
+    const onToggleFavorite = vi.fn();
+
+    render(
+      <MemoryRouter>
+        <SubscriptionCard
+          index={0}
+          channel={{
+            id: 'UC123',
+            title: 'Fast Channel',
+            description: '',
+            thumbnail: 'https://example.com/thumb.jpg',
+          }}
+          onToggleFavorite={onToggleFavorite}
+        />
+      </MemoryRouter>
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Add Fast Channel to favorite channels' }));
+
+    expect(onToggleFavorite).toHaveBeenCalledWith('UC123');
+  });
 });

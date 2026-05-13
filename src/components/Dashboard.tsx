@@ -4,6 +4,7 @@ import { TrendingUp, Grid3x3, RefreshCw, Loader2, Activity, Heart, CheckCircle2,
 import { toast } from 'sonner';
 import { Header } from './Header';
 import { SubscriptionsList } from './SubscriptionsList';
+import { SubscriptionCard } from './SubscriptionCard';
 import { VirtualizedVideoGrid } from './VirtualizedVideoGrid';
 import { useKeyboardShortcuts } from '../hooks/useKeyboardShortcuts';
 import { KeyboardShortcutsHelp } from './KeyboardShortcutsHelp';
@@ -107,7 +108,7 @@ export const Dashboard = () => {
   const [newSubscriptionGroupName, setNewSubscriptionGroupName] = useState('');
   const [customSubscriptionGroups, setCustomSubscriptionGroups] = useState<string[]>([]);
   const [isRepairingIcons, setIsRepairingIcons] = useState(false);
-  const { allSubscriptions, addSubscriptions, rawSubscriptions, repairChannelIcons } = useSubscriptionStorage();
+  const { allSubscriptions, addSubscriptions, rawSubscriptions, repairChannelIcons, toggleFavorite: toggleChannelFavorite } = useSubscriptionStorage();
   const { favoriteVideoIds, favoriteVideos: savedFavoriteVideos } = useFavoriteVideos();
   const { queuedVideoIds, queuedVideos: savedQueuedVideos, removeQueuedVideo } = useQueuedVideos();
   const { searchQuery, watchedVideos, markAsWatched } = useStore();
@@ -260,6 +261,9 @@ export const Dashboard = () => {
       (a, b) => new Date(b.publishedAt).getTime() - new Date(a.publishedAt).getTime()
     );
   }, [videos, favoriteVideoIds, savedFavoriteVideos]);
+  const favoriteChannels = useMemo(() => {
+    return allSubscriptions.filter((channel) => channel.isFavorite);
+  }, [allSubscriptions]);
 
   const queuedVideos = useMemo(() => {
     const currentVideosById = new Map(videos.map((video) => [video.id, video]));
@@ -501,7 +505,7 @@ export const Dashboard = () => {
               <Heart className="w-4 h-4 sm:w-5 sm:h-5" />
               <span>Faves</span>
               <span className="hidden sm:inline-flex text-xs bg-pink-100 dark:bg-pink-900/30 text-pink-600 dark:text-pink-400 px-2 py-1 rounded-full">
-                {favoriteVideos.length}
+                {favoriteChannels.length + favoriteVideos.length}
               </span>
             </button>
           </div>
@@ -813,27 +817,66 @@ export const Dashboard = () => {
               transition={{ duration: 0.3 }}
               className="px-4"
             >
-              {favoriteVideos.length === 0 ? (
+              {favoriteChannels.length === 0 && favoriteVideos.length === 0 ? (
                 <div className="text-center py-12">
                   <Heart className="w-20 h-20 text-gray-300 dark:text-gray-700 mx-auto mb-4" />
                   <p className="text-gray-600 dark:text-gray-400 text-lg mb-2">
-                    No favorite videos yet
+                    No favorites yet
                   </p>
                   <p className="text-sm text-gray-500">
-                    Tap the heart on any video to save it here
+                    Star channels or save videos to collect them here
                   </p>
                 </div>
               ) : (
-                <div>
-                  <p className="hidden sm:block text-sm text-gray-500 dark:text-gray-400 mb-4">
-                    Showing {favoriteVideos.length} favorite video{favoriteVideos.length !== 1 ? 's' : ''}
-                  </p>
-                  <VirtualizedVideoGrid
-                    videos={favoriteVideos}
-                    columns={4}
-                    scrollStorageKey="favorite-videos-scroll"
-                    channelThumbnails={channelThumbnails}
-                  />
+                <div className="space-y-8">
+                  {favoriteChannels.length > 0 && (
+                    <section>
+                      <div className="mb-4 flex items-center justify-between gap-3">
+                        <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100">
+                          Channels
+                        </h2>
+                        <span className="text-sm text-gray-500 dark:text-gray-400">
+                          {favoriteChannels.length}
+                        </span>
+                      </div>
+                      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 sm:gap-6 lg:grid-cols-4 xl:grid-cols-5">
+                        {favoriteChannels.map((channel, index) => (
+                          <SubscriptionCard
+                            key={channel.id}
+                            channel={channel}
+                            index={index}
+                            groups={subscriptionGroups}
+                            onToggleFavorite={async (channelId) => {
+                              const channel = allSubscriptions.find(s => s.id === channelId);
+                              await toggleChannelFavorite(channelId);
+                              if (channel) {
+                                toast.success(`Removed ${channel.title} from favorites`);
+                              }
+                            }}
+                          />
+                        ))}
+                      </div>
+                    </section>
+                  )}
+
+                  {favoriteVideos.length > 0 && (
+                    <section>
+                      <div className="mb-4 flex items-center justify-between gap-3">
+                        <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100">
+                          Videos
+                        </h2>
+                        <span className="text-sm text-gray-500 dark:text-gray-400">
+                          {favoriteVideos.length}
+                        </span>
+                      </div>
+                      <VirtualizedVideoGrid
+                        videos={favoriteVideos}
+                        columns={4}
+                        scrollStorageKey="favorite-videos-scroll"
+                        channelThumbnails={channelThumbnails}
+                      />
+                    </section>
+                  )}
                 </div>
               )}
             </motion.div>

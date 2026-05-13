@@ -85,6 +85,20 @@ describe('video feed index', () => {
     expect(index.mutedChannelIds.has('muted-channel')).toBe(true);
   });
 
+  it('trusts explicit Shorts metadata even when duration and text are missing', () => {
+    expect(isShortVideo({
+      title: 'Quick football clip',
+      description: '',
+      isShort: true,
+    })).toBe(true);
+
+    expect(isShortVideo({
+      title: 'Quick football clip #shorts',
+      description: '',
+      isShort: false,
+    })).toBe(false);
+  });
+
   it('treats square and vertical videos up to three minutes as Shorts when dimensions are known', () => {
     expect(isShortVideo({
       title: 'Vertical quick explainer',

@@ -38,6 +38,7 @@ const API_RESOLVER_DAILY_QUOTA_CAP = 100;
 const STARTUP_CACHE_MAX_AGE_MS = 10 * 60 * 1000;
 const CHANNEL_REFRESH_INTERVAL_MS = 20 * 60 * 1000;
 const DEFAULT_SCHEDULED_REFRESH_INTERVAL_MS = 15 * 60 * 1000;
+const SHORTS_STATUS_CONCURRENCY = 8;
 const DEFAULT_DATA = { subscriptions: [], settings: {}, watchedVideos: [], redirects: {} };
 let aggregationPromise = null;
 let rerunRequested = false;
@@ -157,8 +158,9 @@ function buildVideoFromFeedItem(item, { channelId, channelTitle }) {
     const mediaThumbnailUrl = getMediaAttribute(mediaGroup['media:thumbnail'], 'url');
     const durationSeconds = getMediaAttribute(mediaGroup['yt:duration'], 'seconds');
     const duration = durationSeconds ? parseInt(durationSeconds, 10) : null;
+    const looksLikeShort = /#shorts?\b|\bshorts\b|youtube\.com\/shorts\//i.test(`${item.title || ''} ${mediaDescription || ''}`);
 
-    return {
+    const video = {
         id: videoId,
         title: item.title,
         channelId: channelId,
@@ -171,6 +173,58 @@ function buildVideoFromFeedItem(item, { channelId, channelTitle }) {
         description: item.contentSnippet || item.content || mediaDescription || '',
         duration: Number.isFinite(duration) ? duration : null,
     };
+
+    if (looksLikeShort) {
+        video.isShort = true;
+    }
+
+    return video;
+}
+
+async function resolveYouTubeShortsStatus(videoId, httpClient = axios) {
+    if (!videoId) return undefined;
+
+    try {
+        const response = await httpClient.get(`https://www.youtube.com/shorts/${encodeURIComponent(videoId)}`, {
+            headers: { 'User-Agent': 'Mozilla/5.0' },
+            maxRedirects: 0,
+            timeout: 3000,
+            validateStatus: () => true,
+        });
+
+        if (response.status === 200) return true;
+        if (response.status >= 300 && response.status < 400) return false;
+
+        return undefined;
+    } catch (error) {
+        return undefined;
+    }
+}
+
+async function enrichVideosWithShortsStatus(videos = [], shortsStatusById = {}) {
+    const queue = videos.filter((video) => video?.id && typeof shortsStatusById[video.id] !== 'boolean');
+    let cursor = 0;
+
+    const workers = Array.from({ length: Math.min(SHORTS_STATUS_CONCURRENCY, queue.length) }, async () => {
+        while (cursor < queue.length) {
+            const video = queue[cursor];
+            cursor += 1;
+            const status = await resolveYouTubeShortsStatus(video.id);
+            if (typeof status === 'boolean') {
+                shortsStatusById[video.id] = status;
+            }
+        }
+    });
+
+    await Promise.all(workers);
+
+    for (const video of videos) {
+        if (video?.id && typeof shortsStatusById[video.id] === 'boolean') {
+            video.isShort = shortsStatusById[video.id];
+        }
+    }
+
+    return shortsStatusById;
 }
 
 async function fetchChannelFeed(channelId) {
@@ -234,6 +288,7 @@ async function runAggregation(options = {}) {
         const subscriptions = parsedData.subscriptions || [];
         const existingVideoCache = await readJson(VIDEOS_FILE, { videos: [] });
         const existingVideos = existingVideoCache.videos || [];
+        const shortsStatusById = existingVideoCache.shortsStatusById || {};
         let channelRefreshes = existingVideoCache.channelRefreshes || {};
         const apiKey = parsedData.settings?.apiKey;
         if (!parsedData.settings) parsedData.settings = {};
@@ -638,6 +693,7 @@ async function runAggregation(options = {}) {
                 await Promise.all(thumbnailPromises);
             }
 
+            await enrichVideosWithShortsStatus(batchVideos, shortsStatusById);
             allVideos.push(...batchVideos);
 
             const currentVideos = mergeVideoArchive(existingVideos, allVideos, {
@@ -665,7 +721,8 @@ async function runAggregation(options = {}) {
                 lastUpdated: new Date().toISOString(),
                 totalChannels: subscriptions.length,
                 totalVideos: currentVideos.length,
-                channelRefreshes
+                channelRefreshes,
+                shortsStatusById
             });
 
             console.log(`Progress: ${Math.min(skippedChannels + i + CURRENT_BATCH_SIZE, subscriptions.length)}/${subscriptions.length}`);
@@ -696,6 +753,7 @@ async function runAggregation(options = {}) {
             lastUpdated: new Date().toISOString(),
             totalChannels: subscriptions.length,
             totalVideos: archivedVideos.length,
+            shortsStatusById,
             channelRefreshes: mergeChannelRefreshes(
                 channelRefreshes,
                 new Set(subscriptions.map(sub => sub.id)),
@@ -935,5 +993,7 @@ module.exports = {
     stopScheduledRefresh,
     mergeChannelRefreshes,
     summarizeFailedChannels,
-    buildVideoFromFeedItem
+    buildVideoFromFeedItem,
+    resolveYouTubeShortsStatus,
+    enrichVideosWithShortsStatus
 };

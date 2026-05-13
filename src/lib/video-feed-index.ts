@@ -45,7 +45,11 @@ function isSquareOrVerticalVideo(video: Pick<YouTubeVideo, 'videoWidth' | 'video
   return Boolean(width && height && width > 0 && height > 0 && height >= width);
 }
 
-export function isShortVideo(video: Pick<VideoWithNullableDuration, 'title' | 'description' | 'duration' | 'videoWidth' | 'videoHeight'>) {
+export function isShortVideo(video: Pick<VideoWithNullableDuration, 'title' | 'description' | 'duration' | 'videoWidth' | 'videoHeight' | 'isShort'>) {
+  if (typeof video.isShort === 'boolean') {
+    return video.isShort;
+  }
+
   const duration = video.duration;
 
   if (!duration || duration <= 0) {

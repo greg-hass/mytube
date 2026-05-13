@@ -772,6 +772,13 @@ ${outlines}
     clearAll: clearAllMutation.mutateAsync,
     toggleFavorite: async (channelId: string) => {
       await toggleFavorite(channelId);
+      const current = queryClient.getQueryData<any[]>(['subscriptions']);
+      if (current) {
+        const updated = current.map((sub) =>
+          sub.id === channelId ? { ...sub, isFavorite: !sub.isFavorite } : sub
+        );
+        queryClient.setQueryData(['subscriptions'], updated);
+      }
       queryClient.invalidateQueries({ queryKey: ['subscriptions'] });
     },
     toggleMute: async (channelId: string) => {
