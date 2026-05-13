@@ -834,7 +834,7 @@ export const Dashboard = () => {
                 </div>
               ) : (
                 <div className="space-y-8">
-                  {favoriteChannels.length > 0 && favoriteVideos.length > 0 && (
+                  {(favoriteChannels.length > 0 || favoriteVideos.length > 0) && (
                     <div
                       data-testid="favorite-section-switcher"
                       className="grid grid-cols-2 gap-1 rounded-xl bg-gray-100 p-1 dark:bg-gray-900 sm:hidden"
@@ -848,7 +848,7 @@ export const Dashboard = () => {
                           : 'text-gray-600 dark:text-gray-300'
                           }`}
                       >
-                        Channels
+                        Channels ({favoriteChannels.length})
                       </button>
                       <button
                         type="button"
@@ -859,24 +859,28 @@ export const Dashboard = () => {
                           : 'text-gray-600 dark:text-gray-300'
                           }`}
                       >
-                        Videos
+                        Videos ({favoriteVideos.length})
                       </button>
                     </div>
                   )}
 
-                  {favoriteChannels.length > 0 && (
-                    <section
-                      data-testid="favorite-channels-section"
-                      className={visibleFavoriteSection === 'channels' ? 'block' : 'hidden sm:block'}
-                    >
-                      <div className="mb-4 flex items-center justify-between gap-3">
-                        <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100">
-                          Channels
-                        </h2>
-                        <span className="text-sm text-gray-500 dark:text-gray-400">
-                          {favoriteChannels.length}
-                        </span>
+                  <section
+                    data-testid="favorite-channels-section"
+                    className={`${visibleFavoriteSection === 'channels' ? 'block' : 'hidden sm:block'} ${favoriteChannels.length === 0 ? 'sm:hidden' : ''}`}
+                  >
+                    <div className="mb-4 flex items-center justify-between gap-3">
+                      <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100">
+                        Channels
+                      </h2>
+                      <span className="text-sm text-gray-500 dark:text-gray-400">
+                        {favoriteChannels.length}
+                      </span>
+                    </div>
+                    {favoriteChannels.length === 0 ? (
+                      <div className="rounded-xl border border-dashed border-gray-200 p-6 text-center text-sm text-gray-500 dark:border-gray-800 dark:text-gray-400">
+                        No favorite channels yet
                       </div>
+                    ) : (
                       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 sm:gap-6 lg:grid-cols-4 xl:grid-cols-5">
                         {favoriteChannels.map((channel, index) => (
                           <SubscriptionCard
@@ -894,30 +898,34 @@ export const Dashboard = () => {
                           />
                         ))}
                       </div>
-                    </section>
-                  )}
+                    )}
+                  </section>
 
-                  {favoriteVideos.length > 0 && (
-                    <section
-                      data-testid="favorite-videos-section"
-                      className={visibleFavoriteSection === 'videos' ? 'block' : 'hidden sm:block'}
-                    >
-                      <div className="mb-4 flex items-center justify-between gap-3">
-                        <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100">
-                          Videos
-                        </h2>
-                        <span className="text-sm text-gray-500 dark:text-gray-400">
-                          {favoriteVideos.length}
-                        </span>
+                  <section
+                    data-testid="favorite-videos-section"
+                    className={`${visibleFavoriteSection === 'videos' ? 'block' : 'hidden sm:block'} ${favoriteVideos.length === 0 ? 'sm:hidden' : ''}`}
+                  >
+                    <div className="mb-4 flex items-center justify-between gap-3">
+                      <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100">
+                        Videos
+                      </h2>
+                      <span className="text-sm text-gray-500 dark:text-gray-400">
+                        {favoriteVideos.length}
+                      </span>
+                    </div>
+                    {favoriteVideos.length === 0 ? (
+                      <div className="rounded-xl border border-dashed border-gray-200 p-6 text-center text-sm text-gray-500 dark:border-gray-800 dark:text-gray-400">
+                        No favorite videos yet
                       </div>
+                    ) : (
                       <VirtualizedVideoGrid
                         videos={favoriteVideos}
                         columns={4}
                         scrollStorageKey="favorite-videos-scroll"
                         channelThumbnails={channelThumbnails}
                       />
-                    </section>
-                  )}
+                    )}
+                  </section>
                 </div>
               )}
             </motion.div>
