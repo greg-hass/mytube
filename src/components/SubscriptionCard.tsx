@@ -1,5 +1,5 @@
 import { motion } from 'framer-motion';
-import { ExternalLink, Users, Video, Trash2, Star, Volume2, VolumeX } from 'lucide-react';
+import { ExternalLink, Users, Video, Trash2, Heart, Volume2, VolumeX } from 'lucide-react';
 import type { YouTubeChannel } from '../types/youtube';
 import { useState, memo } from 'react';
 import { useNavigate } from 'react-router-dom';
@@ -81,9 +81,9 @@ export const SubscriptionCard = memo(({ channel, groups = [], onRemove, onToggle
                 }`}
               title={channel.isFavorite ? 'Remove from favorites' : 'Add to favorites'}
             >
-              <Star
+              <Heart
                 className={`w-5 h-5 transition-all ${channel.isFavorite
-                  ? 'fill-yellow-400 text-yellow-400'
+                  ? 'fill-red-400 text-red-400'
                   : 'text-white'
                   }`}
               />
