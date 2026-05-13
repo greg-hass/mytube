@@ -311,6 +311,30 @@ describe('Dashboard', () => {
     });
   });
 
+  it('creates subscription groups from a single toolbar dialog', async () => {
+    render(<Dashboard />);
+
+    fireEvent.click(screen.getByRole('button', { name: /subs/i }));
+
+    expect(screen.queryByLabelText('Group name')).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Add group' }));
+
+    expect(screen.getByRole('dialog', { name: 'New group' })).toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText('Group name'), {
+      target: { value: 'Linux' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Create group' }));
+
+    await waitFor(() => {
+      expect(screen.queryByRole('dialog', { name: 'New group' })).not.toBeInTheDocument();
+      expect(latestSubscriptionsListProps).toEqual({
+        selectedGroup: 'all',
+        groups: ['Linux', 'Tech'],
+      });
+    });
+  });
+
   it('keeps the latest refresh control out of the mobile chrome', () => {
     render(<Dashboard />);
 

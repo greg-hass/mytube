@@ -64,7 +64,7 @@ describe('SubscriptionCard', () => {
     expect(onSetGroup).toHaveBeenCalledWith('UC123', 'News');
   });
 
-  it('lets a new group be created and assigned from the card', () => {
+  it('does not render per-card new group controls', () => {
     const onSetGroup = vi.fn();
 
     render(
@@ -83,12 +83,8 @@ describe('SubscriptionCard', () => {
       </MemoryRouter>
     );
 
-    fireEvent.change(screen.getByLabelText('New group for Fast Channel'), {
-      target: { value: 'News' },
-    });
-    fireEvent.click(screen.getByRole('button', { name: 'Add group for Fast Channel' }));
-
-    expect(onSetGroup).toHaveBeenCalledWith('UC123', 'News');
+    expect(screen.queryByLabelText('New group for Fast Channel')).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Add group for Fast Channel' })).not.toBeInTheDocument();
   });
 
   it('toggles favorite channels from the star button', () => {
