@@ -20,6 +20,8 @@ export interface YouTubeVideo {
   channelTitle: string;
   publishedAt: string;
   duration?: number;
+  videoWidth?: number;
+  videoHeight?: number;
   viewCount?: string;
 }
 

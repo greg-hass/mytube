@@ -140,51 +140,48 @@ function mergeChannelRefreshes(existingRefreshes = {}, activeChannelIds = new Se
     return merged;
 }
 
+function getFirstMediaValue(value) {
+    if (Array.isArray(value)) return value[0];
+    return value;
+}
+
+function getMediaAttribute(value, attributeName) {
+    const entry = getFirstMediaValue(value);
+    return entry?.$?.[attributeName] || entry?.[attributeName];
+}
+
+function buildVideoFromFeedItem(item, { channelId, channelTitle }) {
+    const videoId = item.id?.split(':').pop() || item.guid;
+    const mediaGroup = item.mediaGroup || item['media:group'] || {};
+    const mediaDescription = getFirstMediaValue(mediaGroup['media:description']);
+    const mediaThumbnailUrl = getMediaAttribute(mediaGroup['media:thumbnail'], 'url');
+    const durationSeconds = getMediaAttribute(mediaGroup['yt:duration'], 'seconds');
+    const duration = durationSeconds ? parseInt(durationSeconds, 10) : null;
+
+    return {
+        id: videoId,
+        title: item.title,
+        channelId: channelId,
+        channelTitle,
+        publishedAt: item.pubDate || item.isoDate,
+        thumbnail: item.media?.thumbnail?.[0]?.url
+            || mediaThumbnailUrl
+            || item.enclosure?.url
+            || `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`,
+        description: item.contentSnippet || item.content || mediaDescription || '',
+        duration: Number.isFinite(duration) ? duration : null,
+    };
+}
+
 async function fetchChannelFeed(channelId) {
     try {
         const feedUrl = `https://www.youtube.com/feeds/videos.xml?channel_id=${channelId}`;
         const feed = await parser.parseURL(feedUrl);
 
-        const videos = feed.items.map((item, idx) => {
-            // Extract duration from media:group
-            let duration = null; // null means "unknown", not "0 seconds"
-            try {
-                // YouTube RSS has <yt:duration seconds="123"/> inside <media:group>
-                const durationSeconds = item.mediaGroup?.['yt:duration']?.[0]?.$.seconds;
-
-                // Debug: Log first video's structure
-                if (idx === 0) {
-                    console.log('📺 Sample RSS item structure:', {
-                        hasMediaGroup: !!item.mediaGroup,
-                        mediaGroupKeys: item.mediaGroup ? Object.keys(item.mediaGroup) : [],
-                        ytDuration: item.mediaGroup?.['yt:duration'],
-                        durationSeconds: durationSeconds
-                    });
-                }
-
-                if (durationSeconds) {
-                    duration = parseInt(durationSeconds, 10);
-                }
-            } catch (e) {
-                // If parsing fails, leave as null
-                console.error('Duration parsing error:', e.message);
-                duration = null;
-            }
-
-            return {
-                id: item.id?.split(':').pop() || item.guid,
-                title: item.title,
-                channelId: channelId,
-                channelTitle: feed.title || item.author || 'Unknown',
-                publishedAt: item.pubDate || item.isoDate,
-                thumbnail: item.media?.thumbnail?.[0]?.url
-                    || item['media:group']?.['media:thumbnail']?.[0]?.$.url
-                    || item.enclosure?.url
-                    || `https://i.ytimg.com/vi/${item.id?.split(':').pop() || item.guid}/hqdefault.jpg`,
-                description: item.contentSnippet || item.content || '',
-                duration: duration,
-            };
-        });
+        const videos = feed.items.map((item) => buildVideoFromFeedItem(item, {
+            channelId,
+            channelTitle: feed.title || item.author || 'Unknown',
+        }));
 
         // Extract channel metadata from feed
         const channelMetadata = {
@@ -933,5 +930,6 @@ module.exports = {
     startScheduledRefresh,
     stopScheduledRefresh,
     mergeChannelRefreshes,
-    summarizeFailedChannels
+    summarizeFailedChannels,
+    buildVideoFromFeedItem
 };

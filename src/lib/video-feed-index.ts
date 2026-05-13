@@ -3,6 +3,8 @@ import type { YouTubeChannel, YouTubeVideo } from '../types/youtube';
 const SHORTS_TEXT_PATTERN = /#shorts?\b|\bshorts\b|youtube\.com\/shorts\//i;
 const LIVE_REPLAY_TEXT_PATTERN = /\b(live\s*stream|livestream|watchalong|replay|full\s+stream)\b/i;
 const PREMIERE_TEXT_PATTERN = /\bpremieres?\b|\bpremiering\b/i;
+const LEGACY_SHORTS_MAX_SECONDS = 60;
+const DIMENSION_BASED_SHORTS_MAX_SECONDS = 3 * 60;
 const TEN_MINUTES_SECONDS = 10 * 60;
 const THIRTY_MINUTES_SECONDS = 30 * 60;
 
@@ -36,8 +38,25 @@ export interface VideoFilterOptions {
   boostedKeywords?: string[];
 }
 
-export function isShortVideo(video: Pick<VideoWithNullableDuration, 'title' | 'description' | 'duration'>) {
-  if (video.duration !== undefined && video.duration !== null && video.duration > 0 && video.duration <= 60) {
+function isSquareOrVerticalVideo(video: Pick<YouTubeVideo, 'videoWidth' | 'videoHeight'>) {
+  const width = video.videoWidth;
+  const height = video.videoHeight;
+
+  return Boolean(width && height && width > 0 && height > 0 && height >= width);
+}
+
+export function isShortVideo(video: Pick<VideoWithNullableDuration, 'title' | 'description' | 'duration' | 'videoWidth' | 'videoHeight'>) {
+  const duration = video.duration;
+
+  if (!duration || duration <= 0) {
+    return SHORTS_TEXT_PATTERN.test(`${video.title || ''} ${video.description || ''}`);
+  }
+
+  if (duration <= LEGACY_SHORTS_MAX_SECONDS) {
+    return true;
+  }
+
+  if (duration <= DIMENSION_BASED_SHORTS_MAX_SECONDS && isSquareOrVerticalVideo(video)) {
     return true;
   }
 
