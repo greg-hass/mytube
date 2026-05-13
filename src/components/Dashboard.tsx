@@ -108,6 +108,7 @@ export const Dashboard = () => {
   const [mobileVideoLimit, setMobileVideoLimit] = useState(MOBILE_TIMELINE_INITIAL_LIMIT);
   const [selectedSubscriptionGroup, setSelectedSubscriptionGroup] = useState('all');
   const [newSubscriptionGroupName, setNewSubscriptionGroupName] = useState('');
+  const [isNewGroupModalOpen, setIsNewGroupModalOpen] = useState(false);
   const [customSubscriptionGroups, setCustomSubscriptionGroups] = useState<string[]>([]);
   const [isRepairingIcons, setIsRepairingIcons] = useState(false);
   const { allSubscriptions, addSubscriptions, rawSubscriptions, repairChannelIcons, toggleFavorite: toggleChannelFavorite } = useSubscriptionStorage();
@@ -319,6 +320,7 @@ export const Dashboard = () => {
 
     setCustomSubscriptionGroups((groups) => Array.from(new Set([...groups, group])).sort((a, b) => a.localeCompare(b)));
     setNewSubscriptionGroupName('');
+    setIsNewGroupModalOpen(false);
     toast.success(`Created ${group} group`);
   };
 
@@ -537,28 +539,13 @@ export const Dashboard = () => {
                   ))}
                 </select>
 
-                <form
-                  className="flex items-center gap-2"
-                  onSubmit={(event) => {
-                    event.preventDefault();
-                    createSubscriptionGroup();
-                  }}
+                <button
+                  type="button"
+                  onClick={() => setIsNewGroupModalOpen(true)}
+                  className="h-10 rounded-lg bg-gray-800 px-3 text-sm font-medium text-white hover:bg-gray-700 dark:bg-gray-700 dark:hover:bg-gray-600"
                 >
-                  <label htmlFor="new-subscription-group" className="sr-only">New group</label>
-                  <input
-                    id="new-subscription-group"
-                    value={newSubscriptionGroupName}
-                    onChange={(e) => setNewSubscriptionGroupName(e.target.value)}
-                    placeholder="New group"
-                    className="h-10 w-28 rounded-lg border border-gray-200 bg-white px-3 text-sm outline-none focus:border-red-500 dark:border-gray-800 dark:bg-gray-900 dark:text-gray-100 sm:w-32"
-                  />
-                  <button
-                    type="submit"
-                    className="h-10 rounded-lg bg-gray-800 px-3 text-sm font-medium text-white hover:bg-gray-700 dark:bg-gray-700 dark:hover:bg-gray-600"
-                  >
-                    Add
-                  </button>
-                </form>
+                  Add group
+                </button>
               </div>
               <button
                 disabled={isRepairingIcons}
@@ -1005,6 +992,78 @@ export const Dashboard = () => {
           onAdd={handleAddChannel}
         />
       </Suspense>
+
+      {isNewGroupModalOpen && (
+        <div className="fixed inset-0 z-[120]">
+          <button
+            type="button"
+            aria-label="Close new group dialog"
+            className="absolute inset-0 bg-gray-950/60"
+            onClick={() => {
+              setIsNewGroupModalOpen(false);
+              setNewSubscriptionGroupName('');
+            }}
+          />
+          <form
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="new-group-title"
+            className="absolute bottom-0 left-0 right-0 rounded-t-2xl border-t border-gray-200 bg-white p-4 shadow-2xl dark:border-gray-800 dark:bg-gray-900 sm:bottom-auto sm:left-1/2 sm:right-auto sm:top-28 sm:w-96 sm:-translate-x-1/2 sm:rounded-xl sm:border"
+            onSubmit={(event) => {
+              event.preventDefault();
+              createSubscriptionGroup();
+            }}
+          >
+            <div className="mb-4 flex items-center justify-between gap-3">
+              <h2 id="new-group-title" className="text-lg font-semibold text-gray-900 dark:text-gray-100">
+                New group
+              </h2>
+              <button
+                type="button"
+                aria-label="Close new group dialog"
+                onClick={() => {
+                  setIsNewGroupModalOpen(false);
+                  setNewSubscriptionGroupName('');
+                }}
+                className="inline-flex h-10 w-10 items-center justify-center rounded-lg bg-gray-100 text-gray-700 hover:bg-gray-200 dark:bg-gray-800 dark:text-gray-200 dark:hover:bg-gray-700"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            <label htmlFor="new-subscription-group" className="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300">
+              Group name
+            </label>
+            <input
+              id="new-subscription-group"
+              autoFocus
+              value={newSubscriptionGroupName}
+              onChange={(e) => setNewSubscriptionGroupName(e.target.value)}
+              placeholder="Linux, News, Apple..."
+              className="h-11 w-full rounded-lg border border-gray-200 bg-white px-3 text-base text-gray-900 outline-none focus:border-red-500 dark:border-gray-800 dark:bg-gray-950 dark:text-gray-100"
+            />
+
+            <div className="mt-5 flex gap-2">
+              <button
+                type="button"
+                onClick={() => {
+                  setIsNewGroupModalOpen(false);
+                  setNewSubscriptionGroupName('');
+                }}
+                className="h-10 flex-1 rounded-lg bg-gray-100 px-3 text-sm font-medium text-gray-800 hover:bg-gray-200 dark:bg-gray-800 dark:text-gray-100 dark:hover:bg-gray-700"
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                className="h-10 flex-1 rounded-lg bg-red-600 px-3 text-sm font-medium text-white hover:bg-red-700"
+              >
+                Create group
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
 
       {isQualityFiltersOpen && (
         <div className="fixed inset-0 z-[120]">
