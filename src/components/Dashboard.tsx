@@ -23,6 +23,7 @@ import { getCurrentViewportSize, isCompactMobileViewport } from '../lib/mobile-v
 import type { YouTubeChannel } from '../types/youtube';
 
 type Tab = 'subscriptions' | 'latest' | 'queue' | 'activity' | 'favorites';
+type FavoriteSection = 'channels' | 'videos';
 const DASHBOARD_TABS: Tab[] = ['subscriptions', 'latest', 'queue', 'activity', 'favorites'];
 const DEFAULT_TAB: Tab = 'latest';
 const DURATION_FILTER_OPTIONS: Array<{ value: DurationFilter; label: string }> = [
@@ -102,6 +103,7 @@ export const Dashboard = () => {
   const [mutedKeywordText, setMutedKeywordText] = useState(persistedQualityFilters.mutedKeywordText || '');
   const [boostedKeywordText, setBoostedKeywordText] = useState(persistedQualityFilters.boostedKeywordText || '');
   const [isQualityFiltersOpen, setIsQualityFiltersOpen] = useState(false);
+  const [activeFavoriteSection, setActiveFavoriteSection] = useState<FavoriteSection>('channels');
   const [isMobileTimeline, setIsMobileTimeline] = useState(false);
   const [mobileVideoLimit, setMobileVideoLimit] = useState(MOBILE_TIMELINE_INITIAL_LIMIT);
   const [selectedSubscriptionGroup, setSelectedSubscriptionGroup] = useState('all');
@@ -264,6 +266,9 @@ export const Dashboard = () => {
   const favoriteChannels = useMemo(() => {
     return allSubscriptions.filter((channel) => channel.isFavorite);
   }, [allSubscriptions]);
+  const visibleFavoriteSection = favoriteChannels.length > 0 || favoriteVideos.length === 0
+    ? activeFavoriteSection
+    : 'videos';
 
   const queuedVideos = useMemo(() => {
     const currentVideosById = new Map(videos.map((video) => [video.id, video]));
@@ -829,8 +834,41 @@ export const Dashboard = () => {
                 </div>
               ) : (
                 <div className="space-y-8">
+                  {favoriteChannels.length > 0 && favoriteVideos.length > 0 && (
+                    <div
+                      data-testid="favorite-section-switcher"
+                      className="grid grid-cols-2 gap-1 rounded-xl bg-gray-100 p-1 dark:bg-gray-900 sm:hidden"
+                    >
+                      <button
+                        type="button"
+                        aria-pressed={visibleFavoriteSection === 'channels'}
+                        onClick={() => setActiveFavoriteSection('channels')}
+                        className={`rounded-lg px-3 py-2 text-sm font-medium transition-colors ${visibleFavoriteSection === 'channels'
+                          ? 'bg-white text-gray-950 shadow-sm dark:bg-gray-800 dark:text-gray-50'
+                          : 'text-gray-600 dark:text-gray-300'
+                          }`}
+                      >
+                        Channels
+                      </button>
+                      <button
+                        type="button"
+                        aria-pressed={visibleFavoriteSection === 'videos'}
+                        onClick={() => setActiveFavoriteSection('videos')}
+                        className={`rounded-lg px-3 py-2 text-sm font-medium transition-colors ${visibleFavoriteSection === 'videos'
+                          ? 'bg-white text-gray-950 shadow-sm dark:bg-gray-800 dark:text-gray-50'
+                          : 'text-gray-600 dark:text-gray-300'
+                          }`}
+                      >
+                        Videos
+                      </button>
+                    </div>
+                  )}
+
                   {favoriteChannels.length > 0 && (
-                    <section>
+                    <section
+                      data-testid="favorite-channels-section"
+                      className={visibleFavoriteSection === 'channels' ? 'block' : 'hidden sm:block'}
+                    >
                       <div className="mb-4 flex items-center justify-between gap-3">
                         <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100">
                           Channels
@@ -860,7 +898,10 @@ export const Dashboard = () => {
                   )}
 
                   {favoriteVideos.length > 0 && (
-                    <section>
+                    <section
+                      data-testid="favorite-videos-section"
+                      className={visibleFavoriteSection === 'videos' ? 'block' : 'hidden sm:block'}
+                    >
                       <div className="mb-4 flex items-center justify-between gap-3">
                         <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100">
                           Videos
