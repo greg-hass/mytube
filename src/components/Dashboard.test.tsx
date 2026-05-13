@@ -12,6 +12,7 @@ type MockRSSVideosState = {
     channelTitle: string;
     publishedAt: string;
     duration?: number | null;
+    isShort?: boolean;
   }>;
   isLoading: boolean;
   refresh: ReturnType<typeof vi.fn>;
@@ -52,6 +53,17 @@ let mockWatchedVideos = new Set<string>();
 const mockMarkAsWatched = vi.fn((videoId: string) => {
   mockWatchedVideos = new Set([...mockWatchedVideos, videoId]);
 });
+let mockAllSubscriptions = [
+  {
+    id: 'UC123',
+    title: 'Test Channel',
+    description: '',
+    thumbnail: '',
+    group: 'Tech',
+    isFavorite: false,
+  },
+];
+const mockToggleChannelFavorite = vi.fn();
 let latestSubscriptionsListProps: { selectedGroup?: string; groups?: string[] } | undefined;
 
 vi.mock('./Header', () => ({
@@ -93,6 +105,10 @@ vi.mock('./VideoCard', () => ({
   VideoCard: ({ video }: { video: { title: string } }) => <article>{video.title}</article>,
 }));
 
+vi.mock('./SubscriptionCard', () => ({
+  SubscriptionCard: ({ channel }: { channel: { title: string } }) => <article>{channel.title}</article>,
+}));
+
 vi.mock('./AddChannelModal', () => ({
   AddChannelModal: () => null,
 }));
@@ -111,15 +127,7 @@ vi.mock('../hooks/useRSSVideos', () => ({
 
 vi.mock('../hooks/useSubscriptionStorage', () => ({
   useSubscriptionStorage: () => ({
-    allSubscriptions: [
-      {
-        id: 'UC123',
-        title: 'Test Channel',
-        description: '',
-        thumbnail: '',
-        group: 'Tech',
-      },
-    ],
+    allSubscriptions: mockAllSubscriptions,
     rawSubscriptions: [
       {
         id: 'UC123',
@@ -128,7 +136,7 @@ vi.mock('../hooks/useSubscriptionStorage', () => ({
       },
     ],
     addSubscriptions: vi.fn(),
-    toggleFavorite: vi.fn(),
+    toggleFavorite: mockToggleChannelFavorite,
     repairChannelIcons: vi.fn(),
   }),
 }));
@@ -147,6 +155,17 @@ describe('Dashboard', () => {
     latestSubscriptionsListProps = undefined;
     mockWatchedVideos = new Set<string>();
     mockMarkAsWatched.mockClear();
+    mockToggleChannelFavorite.mockClear();
+    mockAllSubscriptions = [
+      {
+        id: 'UC123',
+        title: 'Test Channel',
+        description: '',
+        thumbnail: '',
+        group: 'Tech',
+        isFavorite: false,
+      },
+    ];
     window.history.replaceState(null, '', '/');
     vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback) => {
       callback(0);
@@ -324,6 +343,42 @@ describe('Dashboard', () => {
 
     await waitFor(() => {
       expect(screen.getByText('Persisted favorite video')).toBeInTheDocument();
+    });
+  });
+
+  it('splits Faves into favorite channels and favorite videos', async () => {
+    mockAllSubscriptions = [
+      {
+        id: 'UC123',
+        title: 'Favorite Channel',
+        description: '',
+        thumbnail: '',
+        group: 'Tech',
+        isFavorite: true,
+      },
+    ];
+    localStorage.setItem('favorite-video-ids', JSON.stringify(['video-1']));
+    localStorage.setItem('favorite-videos', JSON.stringify([
+      {
+        id: 'video-1',
+        title: 'Favorite Video',
+        description: '',
+        thumbnail: 'https://example.com/video.jpg',
+        channelId: 'UC123',
+        channelTitle: 'Favorite Channel',
+        publishedAt: new Date().toISOString(),
+      },
+    ]));
+
+    render(<Dashboard />);
+
+    fireEvent.click(screen.getByRole('button', { name: /faves/i }));
+
+    await waitFor(() => {
+      expect(screen.getByText('Channels')).toBeInTheDocument();
+      expect(screen.getByText('Favorite Channel')).toBeInTheDocument();
+      expect(screen.getByText('Videos')).toBeInTheDocument();
+      expect(screen.getByText('Favorite Video')).toBeInTheDocument();
     });
   });
 
@@ -528,6 +583,42 @@ describe('Dashboard', () => {
 
     expect(screen.getByText('Normal upload')).toBeInTheDocument();
     expect(screen.queryByText('Quick tip AJ#shorts')).not.toBeInTheDocument();
+  });
+
+  it('hides videos marked as Shorts even when the title has no Shorts text', () => {
+    mockRSSVideosState = {
+      ...mockRSSVideosState,
+      videos: [
+        {
+          id: 'video-1',
+          title: 'Normal upload',
+          description: '',
+          thumbnail: 'https://example.com/video.jpg',
+          channelId: 'UC123',
+          channelTitle: 'Test Channel',
+          publishedAt: new Date().toISOString(),
+        },
+        {
+          id: 'video-2',
+          title: 'Harry Maguire Said NO',
+          description: '',
+          thumbnail: 'https://example.com/short.jpg',
+          channelId: 'UC123',
+          channelTitle: 'Test Channel',
+          publishedAt: new Date().toISOString(),
+          isShort: true,
+        },
+      ],
+    };
+
+    render(<Dashboard />);
+
+    expect(screen.getByText('Harry Maguire Said NO')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByLabelText('Shorts'));
+
+    expect(screen.getByText('Normal upload')).toBeInTheDocument();
+    expect(screen.queryByText('Harry Maguire Said NO')).not.toBeInTheDocument();
   });
 
   it('can hide watched videos from Latest', () => {

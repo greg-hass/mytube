@@ -18,6 +18,7 @@ interface Props {
 export const SubscriptionCard = memo(({ channel, groups = [], onRemove, onToggleFavorite, onToggleMute, onSetGroup }: Props) => {
   const [imageLoaded, setImageLoaded] = useState(false);
   const [confirmOpen, setConfirmOpen] = useState(false);
+  const [newGroupName, setNewGroupName] = useState('');
   const navigate = useNavigate();
 
   const openChannel = () => {
@@ -70,11 +71,14 @@ export const SubscriptionCard = memo(({ channel, groups = [], onRemove, onToggle
         <div className="absolute top-2 left-2 flex gap-2 z-10">
           {onToggleFavorite && (
             <button
+              type="button"
+              aria-label={channel.isFavorite ? `Remove ${channel.title} from favorite channels` : `Add ${channel.title} to favorite channels`}
               onClick={(e) => {
                 e.stopPropagation();
                 onToggleFavorite(channel.id);
               }}
-              className="p-2 rounded-full bg-black/50 hover:bg-black/70 backdrop-blur-sm transition-all opacity-0 group-hover:opacity-100"
+              className={`p-2 rounded-full bg-black/50 hover:bg-black/70 backdrop-blur-sm transition-all group-hover:opacity-100 ${channel.isFavorite ? 'opacity-100' : 'opacity-100 sm:opacity-0'
+                }`}
               title={channel.isFavorite ? 'Remove from favorites' : 'Add to favorites'}
             >
               <Star
@@ -87,6 +91,7 @@ export const SubscriptionCard = memo(({ channel, groups = [], onRemove, onToggle
           )}
           {onToggleMute && (
             <button
+              type="button"
               onClick={(e) => {
                 e.stopPropagation();
                 onToggleMute(channel.id);
@@ -119,6 +124,7 @@ export const SubscriptionCard = memo(({ channel, groups = [], onRemove, onToggle
         {/* Unsubscribe button (hover only) */}
         {onRemove && (
           <button
+            type="button"
             onClick={(e) => {
               e.stopPropagation();
               setConfirmOpen(true);
@@ -178,8 +184,8 @@ export const SubscriptionCard = memo(({ channel, groups = [], onRemove, onToggle
           {channel.title}
         </h3>
 
-        {(channel.group || groups.length > 0 || onSetGroup) && (
-          <div className="mb-3 flex items-center gap-2">
+        {onSetGroup && (
+          <div className="mb-3 space-y-2">
             <label htmlFor={`group-${channel.id}`} className="sr-only">
               Group for {channel.title}
             </label>
@@ -201,6 +207,38 @@ export const SubscriptionCard = memo(({ channel, groups = [], onRemove, onToggle
                 </option>
               ))}
             </select>
+            <form
+              className="flex items-center gap-2"
+              onClick={(e) => e.stopPropagation()}
+              onSubmit={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                const group = newGroupName.trim();
+                if (!group) return;
+                onSetGroup(channel.id, group);
+                setNewGroupName('');
+              }}
+            >
+              <label htmlFor={`new-group-${channel.id}`} className="sr-only">
+                New group for {channel.title}
+              </label>
+              <input
+                id={`new-group-${channel.id}`}
+                aria-label={`New group for ${channel.title}`}
+                value={newGroupName}
+                onClick={(e) => e.stopPropagation()}
+                onChange={(e) => setNewGroupName(e.target.value)}
+                placeholder="New group"
+                className="h-8 min-w-0 flex-1 rounded-lg border border-gray-200 bg-white px-2 text-xs text-gray-800 outline-none focus:border-red-500 dark:border-gray-800 dark:bg-gray-950 dark:text-gray-100"
+              />
+              <button
+                type="submit"
+                aria-label={`Add group for ${channel.title}`}
+                className="h-8 rounded-lg bg-gray-800 px-2 text-xs font-medium text-white hover:bg-gray-700 dark:bg-gray-700 dark:hover:bg-gray-600"
+              >
+                Add
+              </button>
+            </form>
           </div>
         )}
 

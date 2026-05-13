@@ -12,6 +12,7 @@ const {
     startScheduledRefresh,
     stopScheduledRefresh,
     buildVideoFromFeedItem,
+    resolveYouTubeShortsStatus,
 } = require('./feed-aggregator');
 
 describe('feed refresh policy', () => {
@@ -115,6 +116,19 @@ describe('feed refresh policy', () => {
             description: 'A clipped segment #shorts',
             duration: null,
         });
+    });
+
+    it('resolves Shorts status from the canonical YouTube Shorts URL', async () => {
+        await expect(resolveYouTubeShortsStatus('short-video', {
+            get: vi.fn().mockResolvedValue({ status: 200, headers: {} }),
+        })).resolves.toBe(true);
+
+        await expect(resolveYouTubeShortsStatus('normal-video', {
+            get: vi.fn().mockResolvedValue({
+                status: 303,
+                headers: { location: 'https://www.youtube.com/watch?v=normal-video' },
+            }),
+        })).resolves.toBe(false);
     });
 
     it('uses a visible scheduled refresh config with safe Docker env overrides', () => {
