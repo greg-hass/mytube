@@ -375,11 +375,20 @@ describe('Dashboard', () => {
     fireEvent.click(screen.getByRole('button', { name: /faves/i }));
 
     await waitFor(() => {
-      expect(screen.getByText('Channels')).toBeInTheDocument();
       expect(screen.getByText('Favorite Channel')).toBeInTheDocument();
-      expect(screen.getByText('Videos')).toBeInTheDocument();
       expect(screen.getByText('Favorite Video')).toBeInTheDocument();
     });
+
+    expect(screen.getByTestId('favorite-section-switcher')).toHaveClass('sm:hidden');
+    expect(screen.getByRole('button', { name: 'Channels' })).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByTestId('favorite-channels-section')).toHaveClass('block');
+    expect(screen.getByTestId('favorite-videos-section')).toHaveClass('hidden');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Videos' }));
+
+    expect(screen.getByRole('button', { name: 'Videos' })).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByTestId('favorite-channels-section')).toHaveClass('hidden');
+    expect(screen.getByTestId('favorite-videos-section')).toHaveClass('block');
   });
 
   it('shows queued videos in Queue separately from Faves', async () => {
