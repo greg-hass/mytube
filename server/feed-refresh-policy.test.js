@@ -11,6 +11,7 @@ const {
     summarizeFailedChannels,
     startScheduledRefresh,
     stopScheduledRefresh,
+    buildVideoFromFeedItem,
 } = require('./feed-aggregator');
 
 describe('feed refresh policy', () => {
@@ -89,6 +90,31 @@ describe('feed refresh policy', () => {
                 reason: 'No RSS videos or metadata returned',
             },
         ]);
+    });
+
+    it('maps RSS media descriptions onto cached videos so Shorts hashtags are filterable', () => {
+        const video = buildVideoFromFeedItem({
+            id: 'yt:video:short-video',
+            title: 'Quick clip',
+            pubDate: '2026-05-13T12:00:00.000Z',
+            mediaGroup: {
+                'media:thumbnail': [{ $: { url: 'https://example.com/thumb.jpg' } }],
+                'media:description': ['A clipped segment #shorts'],
+            },
+        }, {
+            channelId: 'UC123',
+            channelTitle: 'Test Channel',
+        });
+
+        expect(video).toMatchObject({
+            id: 'short-video',
+            title: 'Quick clip',
+            channelId: 'UC123',
+            channelTitle: 'Test Channel',
+            thumbnail: 'https://example.com/thumb.jpg',
+            description: 'A clipped segment #shorts',
+            duration: null,
+        });
     });
 
     it('uses a visible scheduled refresh config with safe Docker env overrides', () => {

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { buildVideoFeedIndex, filterIndexedVideos } from './video-feed-index';
+import { buildVideoFeedIndex, filterIndexedVideos, isShortVideo } from './video-feed-index';
 import type { YouTubeChannel, YouTubeVideo } from '../types/youtube';
 
 const videos: YouTubeVideo[] = [
@@ -83,6 +83,46 @@ describe('video feed index', () => {
     expect(index.videosById.get('channel-match')?.searchText).toContain('linux news');
     expect(index.videosById.get('short')?.isShort).toBe(true);
     expect(index.mutedChannelIds.has('muted-channel')).toBe(true);
+  });
+
+  it('treats square and vertical videos up to three minutes as Shorts when dimensions are known', () => {
+    expect(isShortVideo({
+      title: 'Vertical quick explainer',
+      description: '',
+      duration: 179,
+      videoWidth: 1080,
+      videoHeight: 1920,
+    })).toBe(true);
+
+    expect(isShortVideo({
+      title: 'Square quick explainer',
+      description: '',
+      duration: 180,
+      videoWidth: 1080,
+      videoHeight: 1080,
+    })).toBe(true);
+
+    expect(isShortVideo({
+      title: 'Horizontal quick explainer',
+      description: '',
+      duration: 179,
+      videoWidth: 1920,
+      videoHeight: 1080,
+    })).toBe(false);
+  });
+
+  it('keeps the legacy one-minute Shorts cutoff when dimensions are missing', () => {
+    expect(isShortVideo({
+      title: 'Unlabelled short upload',
+      description: '',
+      duration: 60,
+    })).toBe(true);
+
+    expect(isShortVideo({
+      title: 'Unlabelled two minute upload',
+      description: '',
+      duration: 120,
+    })).toBe(false);
   });
 
   it('filters with the precomputed index', () => {
