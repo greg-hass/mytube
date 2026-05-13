@@ -475,6 +475,8 @@ async function runAggregation(options = {}) {
                                     item.snippet.thumbnails.medium?.url ||
                                     `https://i.ytimg.com/vi/${item.contentDetails.videoId}/hqdefault.jpg`,
                                 description: item.snippet.description,
+                                liveBroadcastContent: item.snippet.liveBroadcastContent,
+                                isLive: item.snippet.liveBroadcastContent === 'live',
                                 duration: null // We'd need another call for duration, skip for now or add later
                             }));
                         } catch (err) {
@@ -498,13 +500,15 @@ async function runAggregation(options = {}) {
                             const chunkSize = 50;
                             for (let k = 0; k < videoIds.length; k += chunkSize) {
                                 const chunkIds = videoIds.slice(k, k + chunkSize);
-                                const videosUrl = `https://www.googleapis.com/youtube/v3/videos?part=contentDetails&id=${chunkIds.join(',')}&key=${apiKey}`;
+                                const videosUrl = `https://www.googleapis.com/youtube/v3/videos?part=contentDetails,snippet&id=${chunkIds.join(',')}&key=${apiKey}`;
                                 const videosRes = await axios.get(videosUrl);
 
                                 videosRes.data.items?.forEach(item => {
                                     const video = batchVideos.find(v => v.id === item.id);
                                     if (video) {
                                         video.duration = parseDuration(item.contentDetails.duration);
+                                        video.liveBroadcastContent = item.snippet?.liveBroadcastContent || video.liveBroadcastContent;
+                                        video.isLive = video.liveBroadcastContent === 'live';
                                     }
                                 });
                             }

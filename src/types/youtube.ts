@@ -22,6 +22,8 @@ export interface YouTubeVideo {
   duration?: number;
   videoWidth?: number;
   videoHeight?: number;
+  isLive?: boolean;
+  liveBroadcastContent?: 'live' | 'upcoming' | 'none';
   viewCount?: string;
 }
 
