@@ -58,8 +58,8 @@ function App() {
     <>
       <Toaster
         position="top-right"
-        offset={{ top: 'calc(env(safe-area-inset-top) + 1rem)', right: '1rem' }}
-        mobileOffset={{ top: 'calc(env(safe-area-inset-top) + 1rem)', right: '0.75rem', left: '0.75rem' }}
+        offset={{ top: 'max(4.5rem, calc(env(safe-area-inset-top) + 1rem))', right: '1rem' }}
+        mobileOffset={{ top: 'max(4.5rem, calc(env(safe-area-inset-top) + 1rem))', right: '0.75rem', left: '0.75rem' }}
         richColors
         closeButton
       />

@@ -380,15 +380,46 @@ describe('Dashboard', () => {
     });
 
     expect(screen.getByTestId('favorite-section-switcher')).toHaveClass('sm:hidden');
-    expect(screen.getByRole('button', { name: 'Channels' })).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByRole('button', { name: 'Channels (1)' })).toHaveAttribute('aria-pressed', 'true');
     expect(screen.getByTestId('favorite-channels-section')).toHaveClass('block');
     expect(screen.getByTestId('favorite-videos-section')).toHaveClass('hidden');
 
-    fireEvent.click(screen.getByRole('button', { name: 'Videos' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Videos (1)' }));
 
-    expect(screen.getByRole('button', { name: 'Videos' })).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByRole('button', { name: 'Videos (1)' })).toHaveAttribute('aria-pressed', 'true');
     expect(screen.getByTestId('favorite-channels-section')).toHaveClass('hidden');
     expect(screen.getByTestId('favorite-videos-section')).toHaveClass('block');
+  });
+
+  it('shows the mobile Faves splitter even when only channels are favorited', async () => {
+    mockAllSubscriptions = [
+      {
+        id: 'UC123',
+        title: 'Favorite Channel',
+        description: '',
+        thumbnail: '',
+        group: 'Tech',
+        isFavorite: true,
+      },
+    ];
+
+    render(<Dashboard />);
+
+    fireEvent.click(screen.getByRole('button', { name: /faves/i }));
+
+    await waitFor(() => {
+      expect(screen.getByText('Favorite Channel')).toBeInTheDocument();
+    });
+
+    expect(screen.getByTestId('favorite-section-switcher')).toHaveClass('sm:hidden');
+    expect(screen.getByRole('button', { name: 'Channels (1)' })).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByRole('button', { name: 'Videos (0)' })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Videos (0)' }));
+
+    expect(screen.getByTestId('favorite-channels-section')).toHaveClass('hidden');
+    expect(screen.getByTestId('favorite-videos-section')).toHaveClass('block');
+    expect(screen.getByText('No favorite videos yet')).toBeInTheDocument();
   });
 
   it('shows queued videos in Queue separately from Faves', async () => {
