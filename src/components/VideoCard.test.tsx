@@ -298,4 +298,38 @@ describe('VideoCard', () => {
     expect(progressBar).toBeInTheDocument();
     expect(progressBar).toHaveStyle({ width: '25%' });
   });
+
+  it('shows a red LIVE overlay for live videos', () => {
+    render(
+      <MemoryRouter>
+        <VideoCard
+          video={{
+            ...video,
+            title: 'LIVE: Breaking news',
+            liveBroadcastContent: 'live',
+          }}
+          index={0}
+        />
+      </MemoryRouter>
+    );
+
+    expect(screen.getByText('LIVE')).toBeInTheDocument();
+  });
+
+  it('does not show the LIVE overlay for livestream replays', () => {
+    render(
+      <MemoryRouter>
+        <VideoCard
+          video={{
+            ...video,
+            title: 'Match livestream replay',
+            description: 'Recorded earlier',
+          }}
+          index={0}
+        />
+      </MemoryRouter>
+    );
+
+    expect(screen.queryByText('LIVE')).not.toBeInTheDocument();
+  });
 });

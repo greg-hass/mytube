@@ -9,6 +9,7 @@ import { useFavoriteVideos } from '../hooks/useFavoriteVideos';
 import { useQueuedVideos } from '../hooks/useQueuedVideos';
 import { getVideoProgressPercent } from '../lib/video-progress';
 import { useStore } from '../store/useStore';
+import { isLiveVideo } from '../lib/video-live';
 
 interface Props {
   video: YouTubeVideo;
@@ -42,6 +43,7 @@ export const VideoCard = ({ video, channelThumbnail }: Props) => {
   const isQueued = isQueuedVideo(video.id);
   const [isQueueButtonActive, setIsQueueButtonActive] = useState(isQueued);
   const isWatched = watchedVideos.has(video.id);
+  const isLive = isLiveVideo(video);
   const progressPercent = getVideoProgressPercent(video.id);
 
   useEffect(() => {
@@ -194,6 +196,12 @@ export const VideoCard = ({ video, channelThumbnail }: Props) => {
             </div>
           </div>
         </div>
+
+        {isLive && (
+          <div className="absolute left-2 top-2 rounded bg-red-600 px-2 py-1 text-[11px] font-bold uppercase tracking-wide text-white shadow-sm">
+            LIVE
+          </div>
+        )}
 
         {video.duration && (
           <div className="absolute bottom-2 right-2 bg-black/80 px-2 py-1 rounded text-xs text-white font-medium">
