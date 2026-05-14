@@ -36,6 +36,12 @@ type MockRSSVideosState = {
       lastRunAt: string | null;
     };
   };
+  cacheStatus: {
+    hasCache: boolean;
+    isStale: boolean;
+    age: number;
+    videoCount: number;
+  };
 };
 
 let mockRSSVideosState: MockRSSVideosState = {
@@ -50,6 +56,12 @@ let mockRSSVideosState: MockRSSVideosState = {
     errors: 0,
     videos: 0,
     state: 'idle',
+  },
+  cacheStatus: {
+    hasCache: false,
+    isStale: false,
+    age: 0,
+    videoCount: 0,
   },
 };
 
@@ -201,6 +213,12 @@ describe('Dashboard', () => {
         errors: 0,
         videos: 0,
         state: 'idle',
+      },
+      cacheStatus: {
+        hasCache: false,
+        isStale: false,
+        age: 0,
+        videoCount: 0,
       },
     };
   });
