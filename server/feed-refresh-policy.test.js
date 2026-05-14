@@ -13,6 +13,9 @@ const {
     stopScheduledRefresh,
     buildVideoFromFeedItem,
     resolveYouTubeShortsStatus,
+    enrichVideosWithShortsStatus,
+    backfillArchivedShortsStatus,
+    applyLocalShortsMetadata,
 } = require('./feed-aggregator');
 
 describe('feed refresh policy', () => {
@@ -115,7 +118,74 @@ describe('feed refresh policy', () => {
             thumbnail: 'https://example.com/thumb.jpg',
             description: 'A clipped segment #shorts',
             duration: null,
+            isShort: true,
         });
+    });
+
+    it('marks obvious archived Shorts from local metadata without probing YouTube', () => {
+        const videos = [
+            {
+                id: 'tagged-short',
+                title: 'Quick clip #shorts',
+                description: '',
+                duration: null,
+            },
+            {
+                id: 'duration-short',
+                title: 'Quick clip',
+                description: '',
+                duration: 45,
+            },
+        ];
+        const shortsStatusById = {};
+
+        applyLocalShortsMetadata(videos, shortsStatusById);
+
+        expect(shortsStatusById).toEqual({
+            'tagged-short': true,
+            'duration-short': true,
+        });
+        expect(videos.every((video) => video.isShort === true)).toBe(true);
+    });
+
+    it('does not call YouTube for videos that local metadata already identifies as Shorts', async () => {
+        const httpClient = {
+            get: vi.fn(),
+        };
+        const videos = [
+            {
+                id: 'tagged-short',
+                title: 'Quick clip #shorts',
+                description: '',
+                duration: null,
+            },
+        ];
+
+        await enrichVideosWithShortsStatus(videos, {}, httpClient);
+
+        expect(httpClient.get).not.toHaveBeenCalled();
+        expect(videos[0].isShort).toBe(true);
+    });
+
+    it('backfills archived Shorts status in bounded batches', async () => {
+        const shortsStatusById = {};
+        const videos = Array.from({ length: 300 }, (_, index) => ({
+            id: `video-${index}`,
+            title: `Video ${index}`,
+            description: '',
+            duration: null,
+        }));
+
+        await backfillArchivedShortsStatus(videos, shortsStatusById, {
+            get: vi.fn().mockResolvedValue({
+                status: 303,
+                headers: { location: 'https://www.youtube.com/watch?v=normal-video' },
+            }),
+        });
+
+        expect(Object.keys(shortsStatusById)).toHaveLength(250);
+        expect(shortsStatusById['video-249']).toBe(false);
+        expect(shortsStatusById['video-250']).toBeUndefined();
     });
 
     it('resolves Shorts status from the canonical YouTube Shorts URL', async () => {
