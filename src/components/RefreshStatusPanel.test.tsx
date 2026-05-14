@@ -55,4 +55,30 @@ describe('RefreshStatusPanel', () => {
     fireEvent.click(screen.getByRole('button', { name: /retry failed/i }));
     expect(retry).toHaveBeenCalledTimes(1);
   });
+
+  it('shows channel backoff timing when a failed feed is being cooled down', () => {
+    render(
+      <RefreshStatusPanel
+        status={{
+          total: 1,
+          current: 1,
+          isSyncing: false,
+          lastUpdated: Date.now(),
+          errors: 1,
+          videos: 10,
+          state: 'error',
+          failedChannels: [{
+            id: 'UC_FAIL',
+            title: 'Broken Channel',
+            reason: 'RSS feed failed with HTTP 404',
+            backoffUntil: '2026-05-14T18:00:00.000Z',
+          }],
+        }}
+        cacheStatus={{ hasCache: true, isStale: true, age: 60 * 60 * 1000, videoCount: 10 }}
+        onRetryFailed={vi.fn()}
+      />
+    );
+
+    expect(screen.getByText(/Backoff until/i)).toBeInTheDocument();
+  });
 });

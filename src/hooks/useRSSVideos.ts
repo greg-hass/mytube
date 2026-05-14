@@ -19,6 +19,10 @@ export interface FailedChannelRefresh {
   id: string;
   title: string;
   reason: string;
+  lastSuccessfulFetchAt?: string;
+  lastFailedFetchAt?: string;
+  consecutiveFailures?: number;
+  backoffUntil?: string | null;
 }
 
 export interface ScheduledRefreshStatus {
