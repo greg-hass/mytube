@@ -7,6 +7,7 @@ import { SubscriptionsList } from './SubscriptionsList';
 import { SubscriptionCard } from './SubscriptionCard';
 import { VirtualizedVideoGrid } from './VirtualizedVideoGrid';
 import { RefreshStatusPanel } from './RefreshStatusPanel';
+import { EmptyState } from './EmptyState';
 import { useKeyboardShortcuts } from '../hooks/useKeyboardShortcuts';
 import { KeyboardShortcutsHelp } from './KeyboardShortcutsHelp';
 import { useRSSVideos } from '../hooks/useRSSVideos';
@@ -744,6 +745,9 @@ export const Dashboard = () => {
                           <p className="text-gray-800 dark:text-gray-200 text-lg font-semibold">
                             Building your feed
                           </p>
+                          <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">
+                            Your feeds are refreshing. This can take a minute after import.
+                          </p>
                           <p className="text-sm text-gray-500 dark:text-gray-500 mt-2">
                             {syncStatus.current} / {syncStatus.total} channels checked
                           </p>
@@ -814,15 +818,10 @@ export const Dashboard = () => {
               className="px-4"
             >
               {queuedVideos.length === 0 ? (
-                <div className="text-center py-12">
-                  <ListVideo className="w-20 h-20 text-gray-300 dark:text-gray-700 mx-auto mb-4" />
-                  <p className="text-gray-600 dark:text-gray-400 text-lg mb-2">
-                    Queue is empty
-                  </p>
-                  <p className="text-sm text-gray-500">
-                    Add videos from Latest to watch them later
-                  </p>
-                </div>
+                <EmptyState
+                  title="Your queue is empty"
+                  detail="Add videos with the queue button on any video."
+                />
               ) : (
                 <div>
                   <p className="hidden sm:block text-sm text-gray-500 dark:text-gray-400 mb-4">
