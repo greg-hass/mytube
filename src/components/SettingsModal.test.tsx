@@ -4,6 +4,13 @@ import { SettingsModal } from './SettingsModal';
 
 const invalidateQueries = vi.fn();
 const clearAllCachedVideos = vi.fn();
+const storeMocks = vi.hoisted(() => ({
+  setApiKey: vi.fn(),
+  setWatchedVideos: vi.fn(),
+}));
+const subscriptionMocks = vi.hoisted(() => ({
+  addSubscriptions: vi.fn(),
+}));
 
 vi.mock('@tanstack/react-query', () => ({
   useQueryClient: () => ({
@@ -30,9 +37,9 @@ vi.mock('framer-motion', () => ({
 vi.mock('../store/useStore', () => ({
   useStore: () => ({
     apiKey: 'key',
-    setApiKey: vi.fn(),
+    setApiKey: storeMocks.setApiKey,
     watchedVideos: new Set(['watched-1', 'watched-2']),
-    setWatchedVideos: vi.fn(),
+    setWatchedVideos: storeMocks.setWatchedVideos,
   }),
 }));
 
@@ -43,7 +50,7 @@ vi.mock('../hooks/useSubscriptionStorage', () => ({
       { id: 'UC2', title: 'Two', addedAt: 2 },
       { id: 'UC3', title: 'Three', addedAt: 3 },
     ],
-    addSubscriptions: vi.fn(),
+    addSubscriptions: subscriptionMocks.addSubscriptions,
   }),
 }));
 
@@ -51,6 +58,9 @@ describe('SettingsModal', () => {
   beforeEach(() => {
     invalidateQueries.mockClear();
     clearAllCachedVideos.mockReset().mockResolvedValue(undefined);
+    storeMocks.setApiKey.mockClear();
+    storeMocks.setWatchedVideos.mockClear();
+    subscriptionMocks.addSubscriptions.mockReset().mockResolvedValue(undefined);
     vi.stubGlobal('fetch', vi.fn((url: string) => {
       if (url === '/api/health') {
         return Promise.resolve({
@@ -60,6 +70,10 @@ describe('SettingsModal', () => {
             subscriptions: 3,
             videos: 42,
             lastUpdated: '2026-05-09T20:00:00.000Z',
+            dataIntegrity: [
+              { file: '/data/db.json', status: 'ok', backupFile: null },
+              { file: '/data/videos.json', status: 'ok', backupFile: null },
+            ],
           }),
         });
       }
@@ -109,6 +123,77 @@ describe('SettingsModal', () => {
     expect(screen.getByText('2 queued')).toBeInTheDocument();
     expect(screen.getByText('1 favorite')).toBeInTheDocument();
     expect(screen.getByText('2 feed filters')).toBeInTheDocument();
+  });
+
+  it('explains that backups include all user-owned app data and shows storage health', async () => {
+    render(<SettingsModal isOpen onClose={vi.fn()} />);
+
+    expect(await screen.findByText('Online')).toBeInTheDocument();
+    expect(screen.getByText(/Subscriptions, watched videos, favorites, queue, feed filters, groups, and settings/i)).toBeInTheDocument();
+    expect(screen.getByText('Storage healthy')).toBeInTheDocument();
+  });
+
+  it('shows when storage was recovered from a startup backup', async () => {
+    vi.mocked(fetch).mockImplementation((input: URL | RequestInfo) => {
+      const url = String(input);
+      if (url === '/api/health') {
+        return Promise.resolve({
+          ok: true,
+          json: async () => ({
+            status: 'ok',
+            subscriptions: 3,
+            videos: 42,
+            lastUpdated: '2026-05-09T20:00:00.000Z',
+            dataIntegrity: [
+              { file: '/data/db.json', status: 'restored', backupFile: '/data/backups/db.bak.json' },
+            ],
+          }),
+        } as Response);
+      }
+      if (url === '/api/version') {
+        return Promise.resolve({
+          ok: true,
+          json: async () => ({
+            name: 'youtube-subscriptions-api',
+            version: '1.0.0',
+            appVersion: '0.0.0',
+          }),
+        } as Response);
+      }
+      if (url === '/api/videos/status') {
+        return Promise.resolve({ ok: true, json: async () => ({ failedChannels: [] }) } as Response);
+      }
+      return Promise.resolve({ ok: true, json: async () => ({ success: true }) } as Response);
+    });
+
+    render(<SettingsModal isOpen onClose={vi.fn()} />);
+
+    expect(await screen.findByText('Recovered from backup on startup')).toBeInTheDocument();
+  });
+
+  it('reports restored subscription and watched counts after importing a backup', async () => {
+    const { container } = render(<SettingsModal isOpen onClose={vi.fn()} />);
+    const input = container.querySelector('input[type="file"]') as HTMLInputElement;
+    const backup = {
+      version: 2,
+      exportedAt: '2026-05-14T12:00:00.000Z',
+      subscriptions: [{ id: 'UC_RESTORE', title: 'Restored Channel' }],
+      settings: { apiKey: 'restored-key' },
+      watchedVideos: ['watched-a', 'watched-b'],
+      favorites: { videoIds: [], videos: [] },
+      queue: { videoIds: [], videos: [] },
+      feedQualityFilters: {},
+    };
+
+    fireEvent.change(input, {
+      target: {
+        files: [{ text: () => Promise.resolve(JSON.stringify(backup)) }],
+      },
+    });
+
+    await waitFor(() => {
+      expect(screen.getByText('Backup restored: 1 subscription and 2 watched videos')).toBeInTheDocument();
+    });
   });
 
   it('resets feed cache without clearing saved user data', async () => {
