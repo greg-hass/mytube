@@ -1,6 +1,6 @@
 import { lazy, Suspense, useState, useEffect, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { TrendingUp, Grid3x3, RefreshCw, Loader2, Activity, Heart, CheckCircle2, Image, ListVideo, SlidersHorizontal, X } from 'lucide-react';
+import { AlertTriangle, TrendingUp, Grid3x3, RefreshCw, Loader2, Activity, Heart, CheckCircle2, Image, ListVideo, SlidersHorizontal, X } from 'lucide-react';
 import { toast } from 'sonner';
 import { Header } from './Header';
 import { SubscriptionsList } from './SubscriptionsList';
@@ -88,6 +88,7 @@ const writeDashboardTabToUrl = (tab: Tab) => {
 };
 
 const AddChannelModal = lazy(() => import('./AddChannelModal').then((module) => ({ default: module.AddChannelModal })));
+const OPMLUpload = lazy(() => import('./OPMLUpload').then((module) => ({ default: module.OPMLUpload })));
 
 export const Dashboard = () => {
   const persistedQualityFilters = useMemo(() => readPersistedQualityFilters(), []);
@@ -122,6 +123,8 @@ export const Dashboard = () => {
   );
 
   const { videos, isLoading: videosLoading, refresh: refetchVideos, syncStatus } = useRSSVideos();
+  const failedRefreshChannels = syncStatus.failedChannels || [];
+  const hasNoSubscriptions = allSubscriptions.length === 0;
   const feedProgressPercent = syncStatus?.total
     ? Math.round((syncStatus.current / syncStatus.total) * 100)
     : 0;
@@ -678,7 +681,55 @@ export const Dashboard = () => {
               transition={{ duration: 0.3 }}
               className="px-4"
             >
-              {videos.length === 0 ? (
+              {hasNoSubscriptions ? (
+                <div className="mx-auto max-w-3xl py-10">
+                  <div className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm dark:border-gray-800 dark:bg-gray-900 sm:p-6">
+                    <div className="mb-5">
+                      <p className="text-sm font-semibold uppercase tracking-wide text-red-600 dark:text-red-400">
+                        First run
+                      </p>
+                      <h2 className="mt-1 text-2xl font-bold text-gray-950 dark:text-gray-50">
+                        Start with your subscriptions
+                      </h2>
+                      <p className="mt-2 max-w-2xl text-sm text-gray-600 dark:text-gray-300">
+                        Import your YouTube subscriptions file or add a channel manually. The feed starts refreshing as soon as channels are available.
+                      </p>
+                    </div>
+
+                    <div className="grid gap-3 sm:grid-cols-2">
+                      <div className="rounded-lg border border-gray-200 p-4 dark:border-gray-800">
+                        <h3 className="font-semibold text-gray-900 dark:text-gray-100">
+                          Import a list
+                        </h3>
+                        <p className="mt-1 min-h-10 text-sm text-gray-500 dark:text-gray-400">
+                          Use Google Takeout CSV or OPML/XML from another reader.
+                        </p>
+                        <div className="mt-4">
+                          <Suspense fallback={null}>
+                            <OPMLUpload minimal showLabelOnMobile />
+                          </Suspense>
+                        </div>
+                      </div>
+
+                      <div className="rounded-lg border border-gray-200 p-4 dark:border-gray-800">
+                        <h3 className="font-semibold text-gray-900 dark:text-gray-100">
+                          Add one channel
+                        </h3>
+                        <p className="mt-1 min-h-10 text-sm text-gray-500 dark:text-gray-400">
+                          Paste a channel URL, handle, or channel ID to try the app with one source.
+                        </p>
+                        <button
+                          type="button"
+                          onClick={() => setIsAddChannelModalOpen(true)}
+                          className="mt-4 inline-flex h-10 items-center justify-center rounded-lg bg-gray-900 px-4 text-sm font-medium text-white transition-colors hover:bg-gray-800 dark:bg-gray-100 dark:text-gray-950 dark:hover:bg-white"
+                        >
+                          Add one channel
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              ) : videos.length === 0 ? (
                 <div className="text-center py-12">
                   {syncStatus?.isSyncing ? (
                     <>
@@ -721,6 +772,25 @@ export const Dashboard = () => {
                 </div>
               ) : (
                 <div>
+                  {failedRefreshChannels.length > 0 && (
+                    <div className="mb-4 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 dark:border-amber-900/60 dark:bg-amber-950/30">
+                      <div className="flex items-start gap-3">
+                        <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-amber-600 dark:text-amber-300" />
+                        <div className="min-w-0 flex-1">
+                          <p className="text-sm font-semibold text-amber-950 dark:text-amber-100">
+                            {failedRefreshChannels.length} channel{failedRefreshChannels.length === 1 ? '' : 's'} need{failedRefreshChannels.length === 1 ? 's' : ''} attention
+                          </p>
+                          <div className="mt-2 space-y-1">
+                            {failedRefreshChannels.slice(0, 3).map((channel) => (
+                              <p key={channel.id} className="text-xs text-amber-800 dark:text-amber-200">
+                                <span className="font-medium">{channel.title}</span>: {channel.reason}
+                              </p>
+                            ))}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  )}
                   {syncStatus?.isSyncing && (
                     <div className="mb-4 rounded-lg border border-blue-200 dark:border-blue-900/60 bg-blue-50 dark:bg-blue-950/30 px-4 py-3">
                       <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">

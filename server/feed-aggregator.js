@@ -1,33 +1,32 @@
-const Parser = require('rss-parser');
 const axios = require('axios');
 const path = require('path');
 const { readJson, writeJsonQueued } = require('./json-store');
 const { mergeVideoArchive } = require('./video-archive');
-
-const parser = new Parser({
-    timeout: 10000,
-    headers: {
-        'User-Agent': 'Mozilla/5.0 (compatible; RSS Reader/1.0)'
-    },
-    customFields: {
-        item: [
-            ['media:group', 'mediaGroup'],
-            ['yt:videoId', 'ytVideoId'],
-            ['yt:channelId', 'ytChannelId']
-        ]
-    }
-});
-
-// Helper to parse ISO 8601 duration to seconds
-function parseDuration(duration) {
-    if (!duration) return 0;
-    const match = duration.match(/PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?/);
-    if (!match) return 0;
-    const hours = (parseInt(match[1]) || 0);
-    const minutes = (parseInt(match[2]) || 0);
-    const seconds = (parseInt(match[3]) || 0);
-    return hours * 3600 + minutes * 60 + seconds;
-}
+const {
+    buildVideoFromFeedItem,
+    fetchChannelFeed,
+    fetchChannelThumbnail,
+    parseDuration,
+} = require('./feed-fetcher');
+const {
+    CHANNEL_REFRESH_INTERVAL_MS,
+    DEFAULT_SCHEDULED_REFRESH_INTERVAL_MS,
+    getChannelsDueForRefresh,
+    getScheduledRefreshConfig,
+    mergeChannelRefreshes,
+    summarizeFailedChannels,
+} = require('./feed-refresh-policy');
+const {
+    applyLocalShortsMetadata,
+    backfillArchivedShortsStatus,
+    enrichVideosWithShortsStatus,
+    looksLikeShortByLocalMetadata,
+    resolveYouTubeShortsStatus,
+} = require('./shorts-status');
+const {
+    applySubscriptionRedirects,
+    resolveTemporarySubscriptions,
+} = require('./subscription-resolver');
 
 const DATA_FILE = path.join(__dirname, 'data', 'db.json');
 const VIDEOS_FILE = path.join(__dirname, 'data', 'videos.json');
@@ -36,12 +35,6 @@ const BATCH_DELAY = 2000; // 2 seconds between batches
 const MAX_ARCHIVED_VIDEOS = 5000;
 const API_RESOLVER_DAILY_QUOTA_CAP = 100;
 const STARTUP_CACHE_MAX_AGE_MS = 10 * 60 * 1000;
-const CHANNEL_REFRESH_INTERVAL_MS = 20 * 60 * 1000;
-const DEFAULT_SCHEDULED_REFRESH_INTERVAL_MS = 15 * 60 * 1000;
-const SHORTS_STATUS_CONCURRENCY = 8;
-const ARCHIVED_SHORTS_STATUS_BACKFILL_LIMIT = 250;
-const FEED_FETCH_RETRY_STATUSES = new Set([408, 429, 500, 502, 503, 504]);
-const FEED_FETCH_MAX_ATTEMPTS = 3;
 const DEFAULT_DATA = { subscriptions: [], settings: {}, watchedVideos: [], redirects: {} };
 let aggregationPromise = null;
 let rerunRequested = false;
@@ -65,31 +58,6 @@ let aggregationStatus = {
     lastUpdated: null,
 };
 
-function summarizeFailedChannels(results = []) {
-    return results
-        .filter(result => result.expected && (!result.channelMetadata && (!result.videos || result.videos.length === 0)))
-        .map(result => ({
-            id: result.id,
-            title: result.title || result.id,
-            reason: result.errorStatus
-                ? `RSS feed failed with HTTP ${result.errorStatus}`
-                : result.errorMessage || 'No RSS videos or metadata returned',
-        }));
-}
-
-function sleep(ms) {
-    return new Promise(resolve => setTimeout(resolve, ms));
-}
-
-function getHttpStatusFromError(error) {
-    if (Number.isInteger(error?.statusCode)) return error.statusCode;
-    if (Number.isInteger(error?.status)) return error.status;
-    if (Number.isInteger(error?.response?.status)) return error.response.status;
-
-    const match = String(error?.message || '').match(/\bstatus code\s+(\d{3})\b/i);
-    return match ? Number(match[1]) : null;
-}
-
 function getCurrentPacificDate() {
     return new Intl.DateTimeFormat('en-US', {
         timeZone: 'America/Los_Angeles',
@@ -97,265 +65,6 @@ function getCurrentPacificDate() {
         month: 'numeric',
         day: 'numeric',
     }).format(new Date());
-}
-
-function getChannelsDueForRefresh(subscriptions = [], channelRefreshes = {}, options = {}) {
-    const now = options.now ?? Date.now();
-    const force = Boolean(options.force);
-
-    if (force) return subscriptions;
-
-    return subscriptions.filter(sub => {
-        const lastFetchedAt = channelRefreshes[sub.id]?.lastFetchedAt;
-        if (!lastFetchedAt) return true;
-
-        const lastFetchedTime = new Date(lastFetchedAt).getTime();
-        if (!Number.isFinite(lastFetchedTime)) return true;
-
-        return now - lastFetchedTime >= CHANNEL_REFRESH_INTERVAL_MS;
-    });
-}
-
-function parseBooleanEnv(value, defaultValue = true) {
-    if (value === undefined || value === null || value === '') return defaultValue;
-    return !['0', 'false', 'no', 'off'].includes(String(value).trim().toLowerCase());
-}
-
-function parseRefreshIntervalMs(value) {
-    const minutes = Number(value);
-    if (!Number.isFinite(minutes) || minutes <= 0) {
-        return DEFAULT_SCHEDULED_REFRESH_INTERVAL_MS;
-    }
-
-    return Math.round(minutes * 60 * 1000);
-}
-
-function getScheduledRefreshConfig(env = process.env) {
-    return {
-        enabled: parseBooleanEnv(env.FEED_REFRESH_ENABLED, true),
-        refreshOnStartup: parseBooleanEnv(env.FEED_REFRESH_ON_START, true),
-        intervalMs: parseRefreshIntervalMs(env.FEED_REFRESH_INTERVAL_MINUTES),
-    };
-}
-
-function mergeChannelRefreshes(existingRefreshes = {}, activeChannelIds = new Set(), fetchedChannels = [], fetchedAt = new Date().toISOString()) {
-    const merged = {};
-
-    for (const [channelId, refreshInfo] of Object.entries(existingRefreshes || {})) {
-        if (activeChannelIds.has(channelId)) {
-            merged[channelId] = refreshInfo;
-        }
-    }
-
-    for (const channel of fetchedChannels) {
-        if (channel?.id && activeChannelIds.has(channel.id)) {
-            merged[channel.id] = {
-                ...(merged[channel.id] || {}),
-                lastFetchedAt: fetchedAt,
-            };
-        }
-    }
-
-    return merged;
-}
-
-function getFirstMediaValue(value) {
-    if (Array.isArray(value)) return value[0];
-    return value;
-}
-
-function getMediaAttribute(value, attributeName) {
-    const entry = getFirstMediaValue(value);
-    return entry?.$?.[attributeName] || entry?.[attributeName];
-}
-
-function looksLikeShortByLocalMetadata(video = {}) {
-    const text = `${video.title || ''} ${video.description || ''}`;
-    if (/#shorts?\b|\bshorts\b|youtube\.com\/shorts\//i.test(text)) return true;
-    return Number.isFinite(video.duration) && video.duration > 0 && video.duration <= 60;
-}
-
-function applyLocalShortsMetadata(videos = [], shortsStatusById = {}) {
-    for (const video of videos) {
-        if (!video?.id) continue;
-
-        if (looksLikeShortByLocalMetadata(video)) {
-            shortsStatusById[video.id] = true;
-            video.isShort = true;
-        } else if (typeof shortsStatusById[video.id] === 'boolean') {
-            video.isShort = shortsStatusById[video.id];
-        }
-    }
-
-    return shortsStatusById;
-}
-
-function buildVideoFromFeedItem(item, { channelId, channelTitle }) {
-    const videoId = item.id?.split(':').pop() || item.guid;
-    const mediaGroup = item.mediaGroup || item['media:group'] || {};
-    const mediaDescription = getFirstMediaValue(mediaGroup['media:description']);
-    const mediaThumbnailUrl = getMediaAttribute(mediaGroup['media:thumbnail'], 'url');
-    const durationSeconds = getMediaAttribute(mediaGroup['yt:duration'], 'seconds');
-    const duration = durationSeconds ? parseInt(durationSeconds, 10) : null;
-    const looksLikeShort = /#shorts?\b|\bshorts\b|youtube\.com\/shorts\//i.test(`${item.title || ''} ${mediaDescription || ''}`);
-
-    const video = {
-        id: videoId,
-        title: item.title,
-        channelId: channelId,
-        channelTitle,
-        publishedAt: item.pubDate || item.isoDate,
-        thumbnail: item.media?.thumbnail?.[0]?.url
-            || mediaThumbnailUrl
-            || item.enclosure?.url
-            || `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`,
-        description: item.contentSnippet || item.content || mediaDescription || '',
-        duration: Number.isFinite(duration) ? duration : null,
-    };
-
-    if (looksLikeShort) {
-        video.isShort = true;
-    }
-
-    return video;
-}
-
-async function resolveYouTubeShortsStatus(videoId, httpClient = axios) {
-    if (!videoId) return undefined;
-
-    try {
-        const response = await httpClient.get(`https://www.youtube.com/shorts/${encodeURIComponent(videoId)}`, {
-            headers: { 'User-Agent': 'Mozilla/5.0' },
-            maxRedirects: 0,
-            timeout: 3000,
-            validateStatus: () => true,
-        });
-
-        if (response.status === 200) return true;
-        if (response.status >= 300 && response.status < 400) return false;
-
-        return undefined;
-    } catch (error) {
-        return undefined;
-    }
-}
-
-async function enrichVideosWithShortsStatus(videos = [], shortsStatusById = {}, httpClient = axios) {
-    applyLocalShortsMetadata(videos, shortsStatusById);
-    const queue = videos.filter((video) => video?.id && typeof shortsStatusById[video.id] !== 'boolean');
-    let cursor = 0;
-
-    const workers = Array.from({ length: Math.min(SHORTS_STATUS_CONCURRENCY, queue.length) }, async () => {
-        while (cursor < queue.length) {
-            const video = queue[cursor];
-            cursor += 1;
-            const status = await resolveYouTubeShortsStatus(video.id, httpClient);
-            if (typeof status === 'boolean') {
-                shortsStatusById[video.id] = status;
-            }
-        }
-    });
-
-    await Promise.all(workers);
-
-    for (const video of videos) {
-        if (video?.id && typeof shortsStatusById[video.id] === 'boolean') {
-            video.isShort = shortsStatusById[video.id];
-        }
-    }
-
-    return shortsStatusById;
-}
-
-async function backfillArchivedShortsStatus(existingVideos = [], shortsStatusById = {}, httpClient = axios) {
-    const candidates = existingVideos
-        .filter((video) => video?.id && typeof shortsStatusById[video.id] !== 'boolean')
-        .slice(0, ARCHIVED_SHORTS_STATUS_BACKFILL_LIMIT);
-
-    if (candidates.length === 0) return shortsStatusById;
-
-    console.log(`🩳 Backfilling Shorts status for ${candidates.length} archived videos`);
-    return enrichVideosWithShortsStatus(candidates, shortsStatusById, httpClient);
-}
-
-async function fetchChannelFeed(channelId, feedParser = parser, options = {}) {
-    const maxAttempts = options.maxAttempts || FEED_FETCH_MAX_ATTEMPTS;
-    let lastError = null;
-
-    for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
-        try {
-            const feedUrl = `https://www.youtube.com/feeds/videos.xml?channel_id=${channelId}`;
-            const feed = await feedParser.parseURL(feedUrl);
-
-            const videos = feed.items.map((item) => buildVideoFromFeedItem(item, {
-                channelId,
-                channelTitle: feed.title || item.author || 'Unknown',
-            }));
-
-            // Extract channel metadata from feed
-            const channelMetadata = {
-                title: feed.title || 'Unknown Channel',
-                thumbnail: null // Will be fetched separately
-            };
-
-            return { videos, channelMetadata };
-        } catch (error) {
-            lastError = error;
-            const status = getHttpStatusFromError(error);
-            const shouldRetry = FEED_FETCH_RETRY_STATUSES.has(status) && attempt < maxAttempts;
-
-            if (!shouldRetry) {
-                console.error(`Failed to fetch feed for ${channelId}:`, error.message);
-                return {
-                    videos: [],
-                    channelMetadata: null,
-                    errorStatus: status,
-                    errorMessage: error.message,
-                    transient: FEED_FETCH_RETRY_STATUSES.has(status),
-                };
-            }
-
-            console.warn(`Retrying feed for ${channelId} after HTTP ${status} (${attempt}/${maxAttempts})`);
-            await sleep(options.retryDelayMs ?? attempt * 750);
-        }
-    }
-
-    return {
-        videos: [],
-        channelMetadata: null,
-        errorStatus: getHttpStatusFromError(lastError),
-        errorMessage: lastError?.message || 'Failed to fetch feed',
-        transient: true,
-    };
-}
-
-// Fetch real channel thumbnail by scraping the channel page
-async function fetchChannelThumbnail(channelId) {
-    try {
-        const url = `https://www.youtube.com/channel/${channelId}`;
-        const response = await axios.get(url, {
-            headers: { 'User-Agent': 'Mozilla/5.0' }
-        });
-
-        const html = response.data;
-
-        // Look for channel avatar in meta tags
-        const avatarMatch = html.match(/<meta property="og:image" content="([^"]+)"/);
-        if (avatarMatch) {
-            return avatarMatch[1];
-        }
-
-        // Alternative: Look for profile image in JSON-LD
-        const jsonMatch = html.match(/"avatar":\s*{\s*"thumbnails":\s*\[\s*{\s*"url":\s*"([^"]+)"/);
-        if (jsonMatch) {
-            return jsonMatch[1].replace(/\\u0026/g, '&');
-        }
-
-        return null;
-    } catch (error) {
-        console.error(`Failed to fetch thumbnail for ${channelId}:`, error.message);
-        return null;
-    }
 }
 
 async function runAggregation(options = {}) {
@@ -396,127 +105,32 @@ async function runAggregation(options = {}) {
         let failedChannels = [];
         let quotaExceeded = false;
 
-        // Apply existing redirects from db.json (even if API is unavailable)
-        // This ensures static redirects work even when quota is exhausted
-        let hasRedirectUpdates = false;
-        const redirectedSubs = [];
-        const seenIds = new Set();
-
-        for (const sub of subscriptions) {
-            let finalId = sub.id;
-            let finalTitle = sub.title;
-            let finalThumb = sub.thumbnail;
-
-            // Check if this subscription has a redirect
-            if (parsedData.redirects && parsedData.redirects[sub.id]) {
-                finalId = parsedData.redirects[sub.id];
-                console.log(`🔀 Applying redirect: ${sub.id} -> ${finalId}`);
-                hasRedirectUpdates = true;
-            }
-
-            // Deduplicate
-            if (!seenIds.has(finalId)) {
-                seenIds.add(finalId);
-                redirectedSubs.push({
-                    ...sub,
-                    id: finalId,
-                    title: finalTitle,
-                    thumbnail: finalThumb
-                });
-            } else {
-                console.log(`  (Skipping duplicate: ${finalId})`);
-            }
-        }
-
-        if (hasRedirectUpdates) {
-            parsedData.subscriptions = redirectedSubs;
+        const redirectResult = applySubscriptionRedirects(subscriptions, parsedData.redirects || {});
+        if (redirectResult.changed) {
+            parsedData.subscriptions = redirectResult.subscriptions;
             await writeJsonQueued(DATA_FILE, parsedData);
             console.log('💾 Updated subscriptions with redirects');
-            // Update local reference
             subscriptions.length = 0;
-            subscriptions.push(...redirectedSubs);
+            subscriptions.push(...redirectResult.subscriptions);
         }
 
-        // Resolve handles/custom URLs to real IDs with a small automatic API quota cap.
-        // Routine video fetching stays RSS-only so a free key is not drained by refreshes.
         if (useResolverApi) {
-            let hasUpdates = false;
-            const resolvedSubs = [];
-            const seenIds = new Set();
+            if (!parsedData.redirects) parsedData.redirects = {};
+            const resolveResult = await resolveTemporarySubscriptions(subscriptions, {
+                apiKey,
+                redirects: parsedData.redirects,
+                resolverQuotaUsed,
+                quotaCap: API_RESOLVER_DAILY_QUOTA_CAP,
+            });
+            resolverQuotaUsed = resolveResult.resolverQuotaUsed;
+            parsedData.settings.quotaUsed = resolverQuotaUsed;
 
-            for (const sub of subscriptions) {
-                if (sub.id.startsWith('handle_') || sub.id.startsWith('custom_')) {
-                    try {
-                        if (resolverQuotaUsed >= API_RESOLVER_DAILY_QUOTA_CAP) {
-                            console.warn('⚠️ API resolver quota cap reached. Remaining unresolved channels will use RSS/public fallbacks.');
-                            resolvedSubs.push(sub);
-                            seenIds.add(sub.id);
-                            continue;
-                        }
-
-                        let resolveUrl;
-                        let param;
-                        if (sub.id.startsWith('handle_')) {
-                            param = sub.id.replace('handle_', '');
-                            // Handles must include @
-                            if (!param.startsWith('@')) param = '@' + param;
-                            resolveUrl = `https://www.googleapis.com/youtube/v3/channels?part=id,snippet&forHandle=${encodeURIComponent(param)}&key=${apiKey}`;
-                        } else {
-                            param = sub.id.replace('custom_', '');
-                            resolveUrl = `https://www.googleapis.com/youtube/v3/channels?part=id,snippet&forUsername=${encodeURIComponent(param)}&key=${apiKey}`;
-                        }
-
-                        const res = await axios.get(resolveUrl);
-                        resolverQuotaUsed += 1;
-                        if (!parsedData.settings) parsedData.settings = {};
-                        parsedData.settings.quotaUsed = resolverQuotaUsed;
-
-                        if (res.data.items?.[0]) {
-                            const realId = res.data.items[0].id;
-                            const realTitle = res.data.items[0].snippet.title;
-                            const realThumb = res.data.items[0].snippet.thumbnails.high?.url;
-
-                            console.log(`✨ Resolved ${sub.id} -> ${realId} (${realTitle})`);
-
-                            // Save redirect so clients can update too
-                            if (!parsedData.redirects) parsedData.redirects = {};
-                            parsedData.redirects[sub.id] = realId;
-
-                            // Check if we already have this ID (either in original list or resolved list)
-                            // We need to check against the *future* list we are building
-                            if (!seenIds.has(realId)) {
-                                resolvedSubs.push({
-                                    ...sub,
-                                    id: realId,
-                                    title: realTitle || sub.title,
-                                    thumbnail: realThumb || sub.thumbnail
-                                });
-                                seenIds.add(realId);
-                            } else {
-                                console.log(`  (Merged with existing subscription)`);
-                            }
-                            hasUpdates = true;
-                            continue;
-                        }
-                    } catch (err) {
-                        console.error(`Failed to resolve handle ${sub.id}:`, err.message);
-                    }
-                }
-
-                // Keep existing valid sub if not duplicate
-                if (!seenIds.has(sub.id)) {
-                    resolvedSubs.push(sub);
-                    seenIds.add(sub.id);
-                }
-            }
-
-            if (hasUpdates) {
-                parsedData.subscriptions = resolvedSubs;
+            if (resolveResult.changed) {
+                parsedData.subscriptions = resolveResult.subscriptions;
                 await writeJsonQueued(DATA_FILE, parsedData);
                 console.log('💾 Updated subscriptions with resolved IDs');
-                // Update local reference
                 subscriptions.length = 0;
-                subscriptions.push(...resolvedSubs);
+                subscriptions.push(...resolveResult.subscriptions);
             }
         }
 

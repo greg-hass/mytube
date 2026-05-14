@@ -11,7 +11,14 @@ export interface SyncStatus {
   errors: number;
   videos: number;
   state: 'idle' | 'running' | 'queued' | 'error';
+  failedChannels: FailedChannelRefresh[];
   scheduledRefresh?: ScheduledRefreshStatus;
+}
+
+export interface FailedChannelRefresh {
+  id: string;
+  title: string;
+  reason: string;
 }
 
 export interface ScheduledRefreshStatus {
@@ -30,6 +37,7 @@ interface AggregationStatus {
   startedAt: string | null;
   completedAt: string | null;
   lastUpdated: string | null;
+  failedChannels?: FailedChannelRefresh[];
   scheduledRefresh?: ScheduledRefreshStatus;
 }
 
@@ -131,6 +139,7 @@ export const useRSSVideos = () => {
       errors: aggregationStatus?.errors || 0,
       videos: videosCount,
       state,
+      failedChannels: aggregationStatus?.failedChannels || [],
       scheduledRefresh: aggregationStatus?.scheduledRefresh,
     };
   }, [aggregationStatus, serverData, triggerServerRefresh.isPending]);

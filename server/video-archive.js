@@ -17,6 +17,18 @@ function mergeVideoArchive(existingVideos = [], fetchedVideos = [], options = {}
     for (const video of fetchedVideos) {
         if (!video?.id) continue;
         if (activeChannelIds && !activeChannelIds.has(video.channelId)) continue;
+        if (video.fetchedVia === 'youtube-page-fallback' && byId.has(video.id)) {
+            const existing = byId.get(video.id);
+            byId.set(video.id, {
+                ...existing,
+                ...video,
+                publishedAt: existing.publishedAt || video.publishedAt,
+                description: existing.description || video.description,
+                duration: existing.duration ?? video.duration,
+                isShort: existing.isShort ?? video.isShort,
+            });
+            continue;
+        }
         byId.set(video.id, video);
     }
 

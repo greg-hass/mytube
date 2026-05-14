@@ -99,7 +99,7 @@ export const Header = ({
             </div>
             <div>
               <h1 className="text-lg md:text-xl font-bold bg-gradient-to-r from-red-600 to-red-500 bg-clip-text text-transparent">
-                Subscriptions
+                YouTube RSS
               </h1>
               <p className="text-xs text-gray-500 dark:text-gray-400">
                 {count} channels
