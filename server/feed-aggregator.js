@@ -39,6 +39,7 @@ const STARTUP_CACHE_MAX_AGE_MS = 10 * 60 * 1000;
 const CHANNEL_REFRESH_INTERVAL_MS = 20 * 60 * 1000;
 const DEFAULT_SCHEDULED_REFRESH_INTERVAL_MS = 15 * 60 * 1000;
 const SHORTS_STATUS_CONCURRENCY = 8;
+const ARCHIVED_SHORTS_STATUS_BACKFILL_LIMIT = 250;
 const DEFAULT_DATA = { subscriptions: [], settings: {}, watchedVideos: [], redirects: {} };
 let aggregationPromise = null;
 let rerunRequested = false;
@@ -151,6 +152,27 @@ function getMediaAttribute(value, attributeName) {
     return entry?.$?.[attributeName] || entry?.[attributeName];
 }
 
+function looksLikeShortByLocalMetadata(video = {}) {
+    const text = `${video.title || ''} ${video.description || ''}`;
+    if (/#shorts?\b|\bshorts\b|youtube\.com\/shorts\//i.test(text)) return true;
+    return Number.isFinite(video.duration) && video.duration > 0 && video.duration <= 60;
+}
+
+function applyLocalShortsMetadata(videos = [], shortsStatusById = {}) {
+    for (const video of videos) {
+        if (!video?.id) continue;
+
+        if (looksLikeShortByLocalMetadata(video)) {
+            shortsStatusById[video.id] = true;
+            video.isShort = true;
+        } else if (typeof shortsStatusById[video.id] === 'boolean') {
+            video.isShort = shortsStatusById[video.id];
+        }
+    }
+
+    return shortsStatusById;
+}
+
 function buildVideoFromFeedItem(item, { channelId, channelTitle }) {
     const videoId = item.id?.split(':').pop() || item.guid;
     const mediaGroup = item.mediaGroup || item['media:group'] || {};
@@ -201,7 +223,8 @@ async function resolveYouTubeShortsStatus(videoId, httpClient = axios) {
     }
 }
 
-async function enrichVideosWithShortsStatus(videos = [], shortsStatusById = {}) {
+async function enrichVideosWithShortsStatus(videos = [], shortsStatusById = {}, httpClient = axios) {
+    applyLocalShortsMetadata(videos, shortsStatusById);
     const queue = videos.filter((video) => video?.id && typeof shortsStatusById[video.id] !== 'boolean');
     let cursor = 0;
 
@@ -209,7 +232,7 @@ async function enrichVideosWithShortsStatus(videos = [], shortsStatusById = {}) 
         while (cursor < queue.length) {
             const video = queue[cursor];
             cursor += 1;
-            const status = await resolveYouTubeShortsStatus(video.id);
+            const status = await resolveYouTubeShortsStatus(video.id, httpClient);
             if (typeof status === 'boolean') {
                 shortsStatusById[video.id] = status;
             }
@@ -225,6 +248,17 @@ async function enrichVideosWithShortsStatus(videos = [], shortsStatusById = {}) 
     }
 
     return shortsStatusById;
+}
+
+async function backfillArchivedShortsStatus(existingVideos = [], shortsStatusById = {}, httpClient = axios) {
+    const candidates = existingVideos
+        .filter((video) => video?.id && typeof shortsStatusById[video.id] !== 'boolean')
+        .slice(0, ARCHIVED_SHORTS_STATUS_BACKFILL_LIMIT);
+
+    if (candidates.length === 0) return shortsStatusById;
+
+    console.log(`🩳 Backfilling Shorts status for ${candidates.length} archived videos`);
+    return enrichVideosWithShortsStatus(candidates, shortsStatusById, httpClient);
 }
 
 async function fetchChannelFeed(channelId) {
@@ -287,8 +321,15 @@ async function runAggregation(options = {}) {
         const parsedData = await readJson(DATA_FILE, DEFAULT_DATA);
         const subscriptions = parsedData.subscriptions || [];
         const existingVideoCache = await readJson(VIDEOS_FILE, { videos: [] });
-        const existingVideos = existingVideoCache.videos || [];
+        let existingVideos = existingVideoCache.videos || [];
         const shortsStatusById = existingVideoCache.shortsStatusById || {};
+        applyLocalShortsMetadata(existingVideos, shortsStatusById);
+        await backfillArchivedShortsStatus(existingVideos, shortsStatusById);
+        existingVideos = existingVideos.map((video) => (
+            video?.id && typeof shortsStatusById[video.id] === 'boolean'
+                ? { ...video, isShort: shortsStatusById[video.id] }
+                : video
+        ));
         let channelRefreshes = existingVideoCache.channelRefreshes || {};
         const apiKey = parsedData.settings?.apiKey;
         if (!parsedData.settings) parsedData.settings = {};
@@ -890,8 +931,9 @@ async function aggregateOnStartupIfStale() {
             : Infinity;
         const cacheMatchesSubscriptions = videoCache?.totalChannels === subscriptionCount;
         const cacheHasVideos = (videoCache?.totalVideos || 0) > 0;
+        const cacheHasShortsMetadata = Object.keys(videoCache?.shortsStatusById || {}).length > 0;
 
-        if (cacheMatchesSubscriptions && cacheHasVideos && cacheAge < STARTUP_CACHE_MAX_AGE_MS) {
+        if (cacheMatchesSubscriptions && cacheHasVideos && cacheHasShortsMetadata && cacheAge < STARTUP_CACHE_MAX_AGE_MS) {
             aggregationStatus = {
                 state: 'idle',
                 current: subscriptionCount,
@@ -904,6 +946,10 @@ async function aggregateOnStartupIfStale() {
             };
             console.log(`✅ Using fresh video cache: ${videoCache.totalVideos} videos from ${videoCache.totalChannels} channels`);
             return;
+        }
+
+        if (cacheMatchesSubscriptions && cacheHasVideos && !cacheHasShortsMetadata) {
+            console.log('🩳 Video cache is missing Shorts metadata; refreshing to backfill Shorts filter data');
         }
     } catch (err) {
         console.warn('Could not check startup video cache, refreshing feeds:', err.message);
@@ -995,5 +1041,8 @@ module.exports = {
     summarizeFailedChannels,
     buildVideoFromFeedItem,
     resolveYouTubeShortsStatus,
-    enrichVideosWithShortsStatus
+    enrichVideosWithShortsStatus,
+    backfillArchivedShortsStatus,
+    applyLocalShortsMetadata,
+    looksLikeShortByLocalMetadata
 };
