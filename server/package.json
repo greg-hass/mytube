@@ -1,7 +1,7 @@
 {
     "name": "youtube-subscriptions-api",
     "version": "1.0.0",
-    "description": "Simple JSON storage API for YouTube Subscriptions",
+    "description": "RSS-first API for a self-hosted YouTube subscription feed reader",
     "main": "index.js",
     "scripts": {
         "start": "node index.js",

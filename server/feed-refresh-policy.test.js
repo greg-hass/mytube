@@ -133,9 +133,111 @@ describe('feed refresh policy', () => {
         const result = await fetchChannelFeed('UC_MISSING', feedParser, {
             maxAttempts: 3,
             retryDelayMs: 0,
+            fallbackToUploadsPage: false,
         });
 
         expect(feedParser.parseURL).toHaveBeenCalledTimes(1);
+        expect(result).toMatchObject({
+            videos: [],
+            channelMetadata: null,
+            errorStatus: 404,
+            transient: false,
+        });
+    });
+
+    it('falls back to the uploads playlist page when RSS returns no feed', async () => {
+        const feedParser = {
+            parseURL: vi.fn().mockRejectedValue(new Error('Status code 404')),
+        };
+        const httpClient = {
+            get: vi.fn().mockResolvedValue({
+                status: 200,
+                data: `
+                    <script>
+                    var ytInitialData = {
+                        "metadata": {
+                            "playlistMetadataRenderer": {
+                                "title": "Fallback Channel - Videos"
+                            }
+                        },
+                        "contents": {
+                            "twoColumnBrowseResultsRenderer": {
+                                "tabs": [{
+                                    "tabRenderer": {
+                                        "content": {
+                                            "sectionListRenderer": {
+                                                "contents": [{
+                                                    "itemSectionRenderer": {
+                                                        "contents": [{
+                                                            "playlistVideoListRenderer": {
+                                                                "contents": [{
+                                                                    "playlistVideoRenderer": {
+                                                                        "videoId": "fallback-video",
+                                                                        "title": { "runs": [{ "text": "Fallback video" }] },
+                                                                        "thumbnail": { "thumbnails": [{ "url": "https://i.ytimg.com/vi/fallback-video/hqdefault.jpg" }] },
+                                                                        "publishedTimeText": { "simpleText": "2 hours ago" }
+                                                                    }
+                                                                }]
+                                                            }
+                                                        }]
+                                                    }
+                                                }]
+                                            }
+                                        }
+                                    }
+                                }]
+                            }
+                        }
+                    };
+                    </script>
+                `,
+            }),
+        };
+
+        const result = await fetchChannelFeed('UC_FALLBACK', feedParser, {
+            maxAttempts: 1,
+            httpClient,
+            now: Date.parse('2026-05-14T12:00:00.000Z'),
+        });
+
+        expect(httpClient.get).toHaveBeenCalledWith(
+            'https://www.youtube.com/playlist?list=UU_FALLBACK',
+            expect.objectContaining({
+                headers: expect.objectContaining({
+                    'User-Agent': expect.stringContaining('Mozilla'),
+                }),
+            })
+        );
+        expect(result).toMatchObject({
+            channelMetadata: { title: 'Fallback Channel', thumbnail: null },
+            usedFallback: true,
+            videos: [{
+                id: 'fallback-video',
+                title: 'Fallback video',
+                channelId: 'UC_FALLBACK',
+                channelTitle: 'Fallback Channel',
+                thumbnail: 'https://i.ytimg.com/vi/fallback-video/hqdefault.jpg',
+                publishedAt: '2026-05-14T10:00:00.000Z',
+            }],
+        });
+    });
+
+    it('keeps the original RSS failure when the uploads playlist fallback is empty', async () => {
+        const feedParser = {
+            parseURL: vi.fn().mockRejectedValue(new Error('Status code 404')),
+        };
+        const httpClient = {
+            get: vi.fn().mockResolvedValue({
+                status: 200,
+                data: '<script>var ytInitialData = {"contents": {}};</script>',
+            }),
+        };
+
+        const result = await fetchChannelFeed('UC_EMPTY', feedParser, {
+            maxAttempts: 1,
+            httpClient,
+        });
+
         expect(result).toMatchObject({
             videos: [],
             channelMetadata: null,

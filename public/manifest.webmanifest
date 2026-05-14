@@ -1,7 +1,7 @@
 {
-    "name": "YouTube Subscriptions",
-    "short_name": "YT Subs",
-    "description": "Beautiful, fast YouTube subscriptions manager",
+    "name": "YouTube RSS Subscriptions",
+    "short_name": "YT RSS",
+    "description": "RSS-first self-hosted YouTube subscription feed reader",
     "theme_color": "#030712",
     "background_color": "#030712",
     "display": "standalone",

@@ -2,6 +2,7 @@ const fs = require('fs').promises;
 const path = require('path');
 
 const writeQueues = new Map();
+const MAX_BACKUPS_PER_FILE = 10;
 
 async function readJson(file, fallback) {
     try {
@@ -17,10 +18,43 @@ async function readJson(file, fallback) {
 
 async function writeJson(file, data) {
     await fs.mkdir(path.dirname(file), { recursive: true });
+    await backupExistingJson(file);
     const tmpFile = `${file}.${process.pid}.${Date.now()}.${Math.random().toString(16).slice(2)}.tmp`;
 
     await fs.writeFile(tmpFile, JSON.stringify(data, null, 2));
     await fs.rename(tmpFile, file);
+}
+
+async function backupExistingJson(file) {
+    try {
+        await fs.access(file);
+    } catch (err) {
+        if (err.code === 'ENOENT') return;
+        throw err;
+    }
+
+    const backupDir = path.join(path.dirname(file), 'backups');
+    await fs.mkdir(backupDir, { recursive: true });
+
+    const parsedPath = path.parse(file);
+    const timestamp = new Date().toISOString().replace(/:/g, '-');
+    const backupFile = path.join(backupDir, `${parsedPath.name}.${timestamp}.bak.json`);
+    await fs.copyFile(file, backupFile);
+    await pruneBackups(backupDir, parsedPath.name);
+}
+
+async function pruneBackups(backupDir, basename) {
+    const entries = await fs.readdir(backupDir);
+    const backups = entries
+        .filter((entry) => entry.startsWith(`${basename}.`) && entry.endsWith('.bak.json'))
+        .sort();
+
+    const excess = backups.length - MAX_BACKUPS_PER_FILE;
+    if (excess <= 0) return;
+
+    await Promise.all(
+        backups.slice(0, excess).map((entry) => fs.rm(path.join(backupDir, entry), { force: true }))
+    );
 }
 
 function enqueueWrite(file, task) {

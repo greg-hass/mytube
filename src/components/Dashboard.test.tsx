@@ -24,6 +24,11 @@ type MockRSSVideosState = {
     errors: number;
     videos: number;
     state: 'idle' | 'running' | 'queued' | 'error';
+    failedChannels?: Array<{
+      id: string;
+      title: string;
+      reason: string;
+    }>;
     scheduledRefresh?: {
       enabled: boolean;
       intervalMs: number;
@@ -111,6 +116,10 @@ vi.mock('./SubscriptionCard', () => ({
 
 vi.mock('./AddChannelModal', () => ({
   AddChannelModal: () => null,
+}));
+
+vi.mock('./OPMLUpload', () => ({
+  OPMLUpload: () => <button>Import subscriptions</button>,
 }));
 
 vi.mock('./KeyboardShortcutsHelp', () => ({
@@ -203,6 +212,16 @@ describe('Dashboard', () => {
     expect(screen.queryByText('Subscriptions list content')).not.toBeInTheDocument();
   });
 
+  it('shows first-run onboarding when no subscriptions have been added', async () => {
+    mockAllSubscriptions = [];
+
+    render(<Dashboard />);
+
+    expect(screen.getByText('Start with your subscriptions')).toBeInTheDocument();
+    expect(await screen.findByText('Import subscriptions')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Add one channel' })).toBeInTheDocument();
+  });
+
   it('opens the subscriptions tab from the dashboard tab URL', () => {
     window.history.replaceState(null, '', '/?tab=subscriptions');
 
@@ -239,6 +258,36 @@ describe('Dashboard', () => {
     expect(screen.getByText('Building your feed')).toBeInTheDocument();
     expect(screen.getByText('70 / 261 channels checked')).toBeInTheDocument();
     expect(screen.queryByText('No videos found')).not.toBeInTheDocument();
+  });
+
+  it('surfaces failed channel refreshes on the latest feed', () => {
+    mockRSSVideosState = {
+      ...mockRSSVideosState,
+      videos: [{
+        id: 'video-1',
+        title: 'Visible video',
+        description: '',
+        thumbnail: '',
+        channelId: 'UC123',
+        channelTitle: 'Test Channel',
+        publishedAt: new Date().toISOString(),
+      }],
+      syncStatus: {
+        ...mockRSSVideosState.syncStatus,
+        errors: 1,
+        failedChannels: [{
+          id: 'UC_BAD',
+          title: 'Broken Channel',
+          reason: 'RSS feed failed with HTTP 404',
+        }],
+      },
+    };
+
+    render(<Dashboard />);
+
+    expect(screen.getByText('1 channel needs attention')).toBeInTheDocument();
+    expect(screen.getByText('Broken Channel')).toBeInTheDocument();
+    expect(screen.getByText(/RSS feed failed with HTTP 404/)).toBeInTheDocument();
   });
 
   it('shows the latest refresh age and scheduled interval', () => {

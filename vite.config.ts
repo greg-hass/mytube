@@ -57,9 +57,9 @@ export default defineConfig({
       registerType: 'autoUpdate',
       includeAssets: ['favicon.ico', 'robots.txt', 'apple-touch-icon.png'],
       manifest: {
-        name: 'YouTube Subscriptions',
-        short_name: 'YT Subs',
-        description: 'Manage your YouTube subscriptions without an account',
+        name: 'YouTube RSS Subscriptions',
+        short_name: 'YT RSS',
+        description: 'RSS-first self-hosted YouTube subscription feed reader',
         theme_color: '#030712',
         background_color: '#030712',
         display: 'standalone',
