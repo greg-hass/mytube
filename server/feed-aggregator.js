@@ -40,6 +40,8 @@ const CHANNEL_REFRESH_INTERVAL_MS = 20 * 60 * 1000;
 const DEFAULT_SCHEDULED_REFRESH_INTERVAL_MS = 15 * 60 * 1000;
 const SHORTS_STATUS_CONCURRENCY = 8;
 const ARCHIVED_SHORTS_STATUS_BACKFILL_LIMIT = 250;
+const FEED_FETCH_RETRY_STATUSES = new Set([408, 429, 500, 502, 503, 504]);
+const FEED_FETCH_MAX_ATTEMPTS = 3;
 const DEFAULT_DATA = { subscriptions: [], settings: {}, watchedVideos: [], redirects: {} };
 let aggregationPromise = null;
 let rerunRequested = false;
@@ -69,8 +71,23 @@ function summarizeFailedChannels(results = []) {
         .map(result => ({
             id: result.id,
             title: result.title || result.id,
-            reason: 'No RSS videos or metadata returned',
+            reason: result.errorStatus
+                ? `RSS feed failed with HTTP ${result.errorStatus}`
+                : result.errorMessage || 'No RSS videos or metadata returned',
         }));
+}
+
+function sleep(ms) {
+    return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+function getHttpStatusFromError(error) {
+    if (Number.isInteger(error?.statusCode)) return error.statusCode;
+    if (Number.isInteger(error?.status)) return error.status;
+    if (Number.isInteger(error?.response?.status)) return error.response.status;
+
+    const match = String(error?.message || '').match(/\bstatus code\s+(\d{3})\b/i);
+    return match ? Number(match[1]) : null;
 }
 
 function getCurrentPacificDate() {
@@ -261,27 +278,55 @@ async function backfillArchivedShortsStatus(existingVideos = [], shortsStatusByI
     return enrichVideosWithShortsStatus(candidates, shortsStatusById, httpClient);
 }
 
-async function fetchChannelFeed(channelId) {
-    try {
-        const feedUrl = `https://www.youtube.com/feeds/videos.xml?channel_id=${channelId}`;
-        const feed = await parser.parseURL(feedUrl);
+async function fetchChannelFeed(channelId, feedParser = parser, options = {}) {
+    const maxAttempts = options.maxAttempts || FEED_FETCH_MAX_ATTEMPTS;
+    let lastError = null;
 
-        const videos = feed.items.map((item) => buildVideoFromFeedItem(item, {
-            channelId,
-            channelTitle: feed.title || item.author || 'Unknown',
-        }));
+    for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+        try {
+            const feedUrl = `https://www.youtube.com/feeds/videos.xml?channel_id=${channelId}`;
+            const feed = await feedParser.parseURL(feedUrl);
 
-        // Extract channel metadata from feed
-        const channelMetadata = {
-            title: feed.title || 'Unknown Channel',
-            thumbnail: null // Will be fetched separately
-        };
+            const videos = feed.items.map((item) => buildVideoFromFeedItem(item, {
+                channelId,
+                channelTitle: feed.title || item.author || 'Unknown',
+            }));
 
-        return { videos, channelMetadata };
-    } catch (error) {
-        console.error(`Failed to fetch feed for ${channelId}:`, error.message);
-        return { videos: [], channelMetadata: null };
+            // Extract channel metadata from feed
+            const channelMetadata = {
+                title: feed.title || 'Unknown Channel',
+                thumbnail: null // Will be fetched separately
+            };
+
+            return { videos, channelMetadata };
+        } catch (error) {
+            lastError = error;
+            const status = getHttpStatusFromError(error);
+            const shouldRetry = FEED_FETCH_RETRY_STATUSES.has(status) && attempt < maxAttempts;
+
+            if (!shouldRetry) {
+                console.error(`Failed to fetch feed for ${channelId}:`, error.message);
+                return {
+                    videos: [],
+                    channelMetadata: null,
+                    errorStatus: status,
+                    errorMessage: error.message,
+                    transient: FEED_FETCH_RETRY_STATUSES.has(status),
+                };
+            }
+
+            console.warn(`Retrying feed for ${channelId} after HTTP ${status} (${attempt}/${maxAttempts})`);
+            await sleep(options.retryDelayMs ?? attempt * 750);
+        }
     }
+
+    return {
+        videos: [],
+        channelMetadata: null,
+        errorStatus: getHttpStatusFromError(lastError),
+        errorMessage: lastError?.message || 'Failed to fetch feed',
+        transient: true,
+    };
 }
 
 // Fetch real channel thumbnail by scraping the channel page
@@ -324,7 +369,6 @@ async function runAggregation(options = {}) {
         let existingVideos = existingVideoCache.videos || [];
         const shortsStatusById = existingVideoCache.shortsStatusById || {};
         applyLocalShortsMetadata(existingVideos, shortsStatusById);
-        await backfillArchivedShortsStatus(existingVideos, shortsStatusById);
         existingVideos = existingVideos.map((video) => (
             video?.id && typeof shortsStatusById[video.id] === 'boolean'
                 ? { ...video, isShort: shortsStatusById[video.id] }
@@ -631,8 +675,9 @@ async function runAggregation(options = {}) {
 
                     // Fallback to RSS with delay to avoid 429s
                     for (const sub of batch) {
-                        const { videos, channelMetadata } = await fetchChannelFeed(sub.id);
-                        failedChannels.push(...summarizeFailedChannels([{ ...sub, expected: true, videos, channelMetadata }]));
+                        const feedResult = await fetchChannelFeed(sub.id);
+                        const { videos, channelMetadata } = feedResult;
+                        failedChannels.push(...summarizeFailedChannels([{ ...sub, expected: true, ...feedResult }]));
                         batchVideos.push(...videos);
 
                         // Update subscription metadata if we got it from RSS
@@ -676,8 +721,9 @@ async function runAggregation(options = {}) {
                 // Quota was exceeded in a previous batch, use RSS for remaining batches
                 console.log(`  📡 RSS Mode: Fetching ${batch.length} channels (quota exhausted)`);
                 for (const sub of batch) {
-                    const { videos, channelMetadata } = await fetchChannelFeed(sub.id);
-                    failedChannels.push(...summarizeFailedChannels([{ ...sub, expected: true, videos, channelMetadata }]));
+                    const feedResult = await fetchChannelFeed(sub.id);
+                    const { videos, channelMetadata } = feedResult;
+                    failedChannels.push(...summarizeFailedChannels([{ ...sub, expected: true, ...feedResult }]));
                     batchVideos.push(...videos);
 
                     // Update subscription metadata if we got it from RSS
@@ -705,8 +751,9 @@ async function runAggregation(options = {}) {
             } else {
                 // RSS Only
                 const batchPromises = batch.map(async sub => {
-                    const { videos, channelMetadata } = await fetchChannelFeed(sub.id);
-                    failedChannels.push(...summarizeFailedChannels([{ ...sub, expected: true, videos, channelMetadata }]));
+                    const feedResult = await fetchChannelFeed(sub.id);
+                    const { videos, channelMetadata } = feedResult;
+                    failedChannels.push(...summarizeFailedChannels([{ ...sub, expected: true, ...feedResult }]));
 
                     // Update subscription metadata if we got it from RSS
                     if (channelMetadata && channelMetadata.title) {
@@ -778,6 +825,12 @@ async function runAggregation(options = {}) {
             activeChannelIds: new Set(subscriptions.map(sub => sub.id)),
             maxVideos: MAX_ARCHIVED_VIDEOS,
         });
+        await backfillArchivedShortsStatus(archivedVideos, shortsStatusById);
+        const archivedVideosWithShortsStatus = archivedVideos.map((video) => (
+            video?.id && typeof shortsStatusById[video.id] === 'boolean'
+                ? { ...video, isShort: shortsStatusById[video.id] }
+                : video
+        ));
 
         // Save updated subscriptions (with metadata from RSS) back to db.json
         // IMPORTANT: Preserve redirects that were merged during init()
@@ -790,10 +843,10 @@ async function runAggregation(options = {}) {
 
         // Save to file
         await writeJsonQueued(VIDEOS_FILE, {
-            videos: archivedVideos,
+            videos: archivedVideosWithShortsStatus,
             lastUpdated: new Date().toISOString(),
             totalChannels: subscriptions.length,
-            totalVideos: archivedVideos.length,
+            totalVideos: archivedVideosWithShortsStatus.length,
             shortsStatusById,
             channelRefreshes: mergeChannelRefreshes(
                 channelRefreshes,
@@ -807,7 +860,7 @@ async function runAggregation(options = {}) {
             state: 'idle',
             current: subscriptions.length,
             total: subscriptions.length,
-            videos: archivedVideos.length,
+            videos: archivedVideosWithShortsStatus.length,
             errors: failedChannels.length,
             failedChannels,
             startedAt: aggregationStatus.startedAt,
@@ -855,7 +908,7 @@ async function runAggregation(options = {}) {
             await writeJsonQueued(DATA_FILE, currentData);
         }
 
-        console.log(`✅ Aggregation complete: ${archivedVideos.length} archived videos from ${subscriptions.length} channels`);
+        console.log(`✅ Aggregation complete: ${archivedVideosWithShortsStatus.length} archived videos from ${subscriptions.length} channels`);
     } catch (error) {
         aggregationStatus = {
             ...aggregationStatus,
@@ -1040,6 +1093,7 @@ module.exports = {
     mergeChannelRefreshes,
     summarizeFailedChannels,
     buildVideoFromFeedItem,
+    fetchChannelFeed,
     resolveYouTubeShortsStatus,
     enrichVideosWithShortsStatus,
     backfillArchivedShortsStatus,

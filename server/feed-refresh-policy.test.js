@@ -12,6 +12,7 @@ const {
     startScheduledRefresh,
     stopScheduledRefresh,
     buildVideoFromFeedItem,
+    fetchChannelFeed,
     resolveYouTubeShortsStatus,
     enrichVideosWithShortsStatus,
     backfillArchivedShortsStatus,
@@ -83,7 +84,7 @@ describe('feed refresh policy', () => {
     it('summarizes failed channel refreshes for status output', () => {
         const failedChannels = summarizeFailedChannels([
             { id: 'UC_OK', title: 'OK', expected: true, videos: [{ id: 'video-1' }], channelMetadata: { title: 'OK' } },
-            { id: 'UC_BAD', title: 'Bad Channel', expected: true, videos: [], channelMetadata: null },
+            { id: 'UC_BAD', title: 'Bad Channel', expected: true, videos: [], channelMetadata: null, errorStatus: 404 },
             { id: 'UC_SKIPPED', title: 'Skipped', expected: false, videos: [], channelMetadata: null },
         ]);
 
@@ -91,9 +92,56 @@ describe('feed refresh policy', () => {
             {
                 id: 'UC_BAD',
                 title: 'Bad Channel',
-                reason: 'No RSS videos or metadata returned',
+                reason: 'RSS feed failed with HTTP 404',
             },
         ]);
+    });
+
+    it('retries transient RSS feed failures before returning videos', async () => {
+        const feedParser = {
+            parseURL: vi.fn()
+                .mockRejectedValueOnce(new Error('Status code 500'))
+                .mockResolvedValueOnce({
+                    title: 'Recovered Channel',
+                    items: [
+                        {
+                            id: 'yt:video:video-1',
+                            title: 'Recovered video',
+                            pubDate: '2026-05-14T12:00:00.000Z',
+                            mediaGroup: {},
+                        },
+                    ],
+                }),
+        };
+
+        const result = await fetchChannelFeed('UC_RECOVERED', feedParser, {
+            maxAttempts: 2,
+            retryDelayMs: 0,
+        });
+
+        expect(feedParser.parseURL).toHaveBeenCalledTimes(2);
+        expect(result.channelMetadata).toEqual({ title: 'Recovered Channel', thumbnail: null });
+        expect(result.videos).toHaveLength(1);
+        expect(result.errorStatus).toBeUndefined();
+    });
+
+    it('does not retry permanent 404 RSS feed failures', async () => {
+        const feedParser = {
+            parseURL: vi.fn().mockRejectedValue(new Error('Status code 404')),
+        };
+
+        const result = await fetchChannelFeed('UC_MISSING', feedParser, {
+            maxAttempts: 3,
+            retryDelayMs: 0,
+        });
+
+        expect(feedParser.parseURL).toHaveBeenCalledTimes(1);
+        expect(result).toMatchObject({
+            videos: [],
+            channelMetadata: null,
+            errorStatus: 404,
+            transient: false,
+        });
     });
 
     it('maps RSS media descriptions onto cached videos so Shorts hashtags are filterable', () => {
