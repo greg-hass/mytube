@@ -274,6 +274,7 @@ describe('Dashboard', () => {
     render(<Dashboard />);
 
     expect(screen.getByText('Building your feed')).toBeInTheDocument();
+    expect(screen.getByText(/Your feeds are refreshing/i)).toBeInTheDocument();
     expect(screen.getByText('70 / 261 channels checked')).toBeInTheDocument();
     expect(screen.queryByText('No videos found')).not.toBeInTheDocument();
   });
@@ -557,7 +558,7 @@ describe('Dashboard', () => {
     fireEvent.click(screen.getByRole('button', { name: /queue/i }));
 
     await waitFor(() => {
-      expect(screen.getByText('Queue is empty')).toBeInTheDocument();
+      expect(screen.getByText('Your queue is empty')).toBeInTheDocument();
     });
     expect(JSON.parse(localStorage.getItem('queued-video-ids') || '[]')).toEqual([]);
   });
