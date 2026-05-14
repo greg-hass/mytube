@@ -1,40 +1,24 @@
 # YouTube RSS Subscriptions
 
-A self-hosted, RSS-first feed reader for YouTube subscriptions.
+YouTube's subscription feed is algorithmically curated and can hide videos. FreshRSS reads feeds but does not understand YouTube. YouTube RSS Subscriptions is a YouTube-native feed reader that tracks watched state, filters Shorts, queues videos for later, and stays RSS-first so routine refreshes do not burn YouTube API quota.
 
-YouTube's subscription feed is algorithmically curated and can hide videos. General RSS readers can read YouTube feeds, but they do not understand YouTube-specific habits like watched state, Shorts filtering, queues, favorites, durations, and embedded playback. This app gives you a chronological YouTube-native feed without relying on YouTube's algorithm or routine API quota.
+It is a feed reader, not a video archive. Videos still play through YouTube, so deleted, private, age-restricted, or region-blocked videos may become unavailable.
 
-It is a feed reader, not a video archive. Videos still play through YouTube, so deleted, private, or region-blocked videos may become unavailable.
+## Why This Exists
 
-## What It Does
+YouTube already has subscriptions, but the feed is not a clean chronological inbox. General RSS readers solve chronology, but miss YouTube-specific workflow: watched state, Shorts detection, duration filters, channel health, embedded playback, favorites, and a watch-later queue.
 
-- Builds the video feed from YouTube RSS feeds by default
-- Keeps subscriptions, watched videos, favorites, queue, and settings on your server
-- Imports and exports YouTube subscriptions as OPML
-- Finds channels by search without requiring the YouTube Data API
-- Refreshes feeds in the background and keeps a local video metadata cache warm
-- Supports dark/light theme, mobile layouts, swipe actions, and PWA install
-- Filters by duration, Shorts, live replays, premieres, muted keywords, and boosted keywords
-- Resumes embedded playback position for videos you have started
-
-## What It Is Not
-
-- It does not download or host videos
-- It does not replace TubeArchivist, yt-dlp, or a media server
-- It does not need a Google login for normal use
-- It does not need a YouTube API key for routine RSS video fetching
-
-## Tech Stack
-
-| Area | Technology |
-| --- | --- |
-| Frontend | React 19, TypeScript, Vite |
-| Styling | Tailwind CSS, Framer Motion, lucide-react |
-| State/data | React Query, Zustand, TanStack Virtual |
-| Server | Express, rss-parser, JSON file storage |
-| Deployment | Docker, nginx |
+This app sits in the middle: self-hosted, chronological, YouTube-aware, and deliberately not recommendation-driven.
 
 ## Quick Start
+
+### Docker
+
+```bash
+docker compose up -d
+```
+
+The included compose file runs `ghcr.io/greg-hass/youtube-subscriptions:latest`, serves the app on `http://localhost:5173`, and stores user data in `./server/data`.
 
 ### Local Development
 
@@ -44,7 +28,7 @@ cd server && npm install && cd ..
 npm run dev
 ```
 
-In another terminal, run the API server:
+In another terminal:
 
 ```bash
 cd server
@@ -53,26 +37,67 @@ npm run dev
 
 The frontend runs at `http://localhost:5173`.
 
-### Docker
+## What It Does
 
-```bash
-docker compose up -d
-```
+- Builds a chronological feed from YouTube RSS feeds by default
+- Keeps subscriptions, watched videos, favorites, queue, filters, and settings under your control
+- Imports OPML and Google Takeout subscription exports
+- Finds channels by search without requiring the YouTube Data API
+- Refreshes feeds in the background and shows refresh health in the UI
+- Tracks failed channels, retries manually, and backs off repeated RSS failures
+- Filters by duration, Shorts, live replays, premieres, muted keywords, and boosted keywords
+- Resumes embedded playback position for videos you have started
+- Supports dark/light theme, mobile layouts, swipe actions, and PWA install
+- Writes JSON data atomically, keeps rotating backups, and recovers from corrupt startup data when a valid backup exists
 
-The app stores server data under the Docker volume configured in `docker-compose.yml`.
+## Screenshots
 
-## Import Subscriptions
+Screenshots and GIFs should show the product in use, not an empty install. See [docs/screenshots/README.md](docs/screenshots/README.md) for the capture checklist.
 
-1. Export your YouTube subscriptions as OPML.
-2. Open the app.
-3. Use the import control to upload the OPML file.
-4. The server will begin refreshing RSS feeds in the background.
+Suggested first set:
 
-You can also add channels manually from the UI.
+- Main feed with mixed channels, durations, queue/favorite controls, and refresh status
+- Mobile swipe-to-watch interaction
+- Settings data safety and backup/restore section
+- Failed channel health state with retry
+
+## How It Compares
+
+| Capability | YouTube RSS Subscriptions | FreshRSS/Miniflux | YouTube Native |
+| --- | --- | --- | --- |
+| Chronological subscriptions | Yes | Yes | Not reliably |
+| YouTube watched state | Yes | No | Yes |
+| Shorts filtering | Yes | No | Limited |
+| Queue/favorites | Yes | Generic only | Algorithm-coupled |
+| Duration and replay filters | Yes | No | Limited |
+| RSS-first/no routine API quota | Yes | Yes | No |
+| Self-hosted data | Yes | Yes | No |
+| Embedded YouTube playback | Yes | Link-out centric | Yes |
+
+## Data Safety
+
+The server stores application data as JSON files:
+
+- `server/data/db.json` for subscriptions, settings, watched state, redirects, and related user data
+- `server/data/videos.json` for cached feed metadata, Shorts metadata, and refresh state
+
+Writes use a temporary file followed by rename, and existing JSON files are backed up before replacement. On startup, the server validates data files and restores the newest valid backup if the primary file is corrupt.
+
+The Settings screen includes a full app backup export for subscriptions, watched videos, favorites, queue, feed filters, groups, and settings.
+
+This is intended for a personal, self-hosted deployment. If you want multiple users, stronger querying, or heavier concurrency, SQLite would be the next natural storage step.
+
+## Configuration
+
+| Environment variable | Default | Purpose |
+| --- | --- | --- |
+| `FEED_REFRESH_ENABLED` | `true` | Enables scheduled background feed refreshes |
+| `FEED_REFRESH_ON_START` | `true` | Refreshes on server startup when the cache is stale |
+| `FEED_REFRESH_INTERVAL_MINUTES` | `15` | Scheduled refresh interval |
 
 ## Optional YouTube API Key
 
-An API key is optional. The app only uses it as a capped fallback for resolving channel handles/custom URLs to canonical channel IDs. Routine video refreshes stay RSS-first to avoid draining YouTube Data API quota.
+An API key is optional. The app only uses it as a capped fallback for resolving channel handles/custom URLs to canonical channel IDs. Routine video refreshes stay RSS-first.
 
 If you want the fallback:
 
@@ -82,24 +107,7 @@ If you want the fallback:
 
 OAuth is not required.
 
-## Server Configuration
-
-| Environment variable | Default | Purpose |
-| --- | --- | --- |
-| `FEED_REFRESH_ENABLED` | `true` | Enables scheduled background feed refreshes |
-| `FEED_REFRESH_ON_START` | `true` | Refreshes on server startup when the cache is stale |
-| `FEED_REFRESH_INTERVAL_MINUTES` | `15` | Scheduled refresh interval |
-
-## Data Storage
-
-The server stores application data as JSON files:
-
-- `server/data/db.json` for subscriptions, settings, watched state, redirects, and related user data
-- `server/data/videos.json` for cached feed metadata and refresh state
-
-This is intended for a personal, self-hosted deployment. If you want multiple users, stronger querying, or heavier concurrency, SQLite would be the next natural storage step.
-
-## Development Commands
+## Development
 
 ```bash
 npm run dev
@@ -120,8 +128,9 @@ npm run dev
 ### No videos appear
 
 - Confirm subscriptions have been imported or added.
+- Check the refresh status panel for current progress or failed channels.
 - Trigger a manual refresh from the app.
-- Check the server logs for RSS fetch failures or channel ID redirects.
+- Check server logs for RSS fetch failures or channel ID redirects.
 
 ### A channel handle does not resolve
 
