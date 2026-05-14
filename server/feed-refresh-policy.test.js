@@ -64,6 +64,35 @@ describe('feed refresh policy', () => {
         expect(due.map(channel => channel.id)).toEqual(['UC_FRESH', 'UC_DUE']);
     });
 
+    it('backs off channels with repeated failures during automatic refreshes', () => {
+        const now = new Date('2026-05-14T12:00:00.000Z').getTime();
+        const subscriptions = [{ id: 'UC_FAIL' }, { id: 'UC_OK' }];
+        const channelRefreshes = {
+            UC_FAIL: {
+                lastFetchedAt: '2026-05-14T11:30:00.000Z',
+                consecutiveFailures: 3,
+                backoffUntil: '2026-05-14T18:00:00.000Z',
+            },
+            UC_OK: {
+                lastFetchedAt: '2026-05-14T11:30:00.000Z',
+            },
+        };
+
+        expect(getChannelsDueForRefresh(subscriptions, channelRefreshes, { now }).map((channel) => channel.id)).toEqual(['UC_OK']);
+    });
+
+    it('manual refresh bypasses repeated failure backoff', () => {
+        const subscriptions = [{ id: 'UC_FAIL' }];
+        const channelRefreshes = {
+            UC_FAIL: {
+                consecutiveFailures: 3,
+                backoffUntil: '2026-05-14T18:00:00.000Z',
+            },
+        };
+
+        expect(getChannelsDueForRefresh(subscriptions, channelRefreshes, { force: true }).map((channel) => channel.id)).toEqual(['UC_FAIL']);
+    });
+
     it('keeps refresh metadata only for subscribed channels and updates fetched channels', () => {
         const merged = mergeChannelRefreshes(
             {
@@ -77,8 +106,44 @@ describe('feed refresh policy', () => {
 
         expect(merged).toEqual({
             UC_KEEP: { lastFetchedAt: '2026-05-06T18:00:00.000Z' },
-            UC_NEW: { lastFetchedAt: '2026-05-06T20:00:00.000Z' },
+            UC_NEW: {
+                lastFetchedAt: '2026-05-06T20:00:00.000Z',
+                lastSuccessfulFetchAt: '2026-05-06T20:00:00.000Z',
+                consecutiveFailures: 0,
+                backoffUntil: null,
+                lastError: null,
+                source: 'rss',
+            },
         });
+    });
+
+    it('tracks failed refresh metadata and opens a backoff after repeated failures', () => {
+        const merged = mergeChannelRefreshes(
+            {
+                UC_FAIL: {
+                    lastFetchedAt: '2026-05-06T18:00:00.000Z',
+                    consecutiveFailures: 2,
+                },
+            },
+            new Set(['UC_FAIL']),
+            [{
+                id: 'UC_FAIL',
+                expected: true,
+                videos: [],
+                channelMetadata: null,
+                errorStatus: 404,
+            }],
+            '2026-05-06T20:00:00.000Z'
+        );
+
+        expect(merged.UC_FAIL).toMatchObject({
+            lastFetchedAt: '2026-05-06T20:00:00.000Z',
+            lastFailedFetchAt: '2026-05-06T20:00:00.000Z',
+            lastError: 'RSS feed failed with HTTP 404',
+            consecutiveFailures: 3,
+            source: 'rss',
+        });
+        expect(merged.UC_FAIL.backoffUntil).toBe('2026-05-07T02:00:00.000Z');
     });
 
     it('summarizes failed channel refreshes for status output', () => {

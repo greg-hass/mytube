@@ -17,6 +17,11 @@ type ServerHealth = {
     subscriptions: number;
     videos: number;
     lastUpdated: string | null;
+    dataIntegrity?: Array<{
+        file: string;
+        status: 'ok' | 'initialized' | 'restored';
+        backupFile: string | null;
+    }>;
 };
 
 type ServerVersion = {
@@ -48,6 +53,9 @@ export const SettingsModal = ({ isOpen, onClose }: SettingsModalProps) => {
         if (typeof value === 'string') return value.trim().length > 0 && value !== 'any';
         return false;
     }).length;
+    const storageHealthLabel = serverHealth?.dataIntegrity?.some((event) => event.status === 'restored')
+        ? 'Recovered from backup on startup'
+        : 'Storage healthy';
 
     const handleSave = () => {
         setApiKey(inputKey);
@@ -137,7 +145,9 @@ export const SettingsModal = ({ isOpen, onClose }: SettingsModalProps) => {
                 setApiKey(restored.settings.apiKey);
                 setInputKey(restored.settings.apiKey);
             }
-            setBackupStatus('Backup restored');
+            setBackupStatus(
+                `Backup restored: ${restored.subscriptions.length} subscription${restored.subscriptions.length === 1 ? '' : 's'} and ${restored.watchedVideoIds.length} watched video${restored.watchedVideoIds.length === 1 ? '' : 's'}`
+            );
         } catch (error) {
             setBackupStatus(error instanceof Error ? error.message : 'Restore failed');
         } finally {
@@ -262,6 +272,9 @@ export const SettingsModal = ({ isOpen, onClose }: SettingsModalProps) => {
                                 </div>
 
                                 <div className="bg-gray-50 dark:bg-gray-800/50 rounded-xl p-5 border border-gray-100 dark:border-gray-800 space-y-3">
+                                    <p className="text-sm text-gray-600 dark:text-gray-300">
+                                        Subscriptions, watched videos, favorites, queue, feed filters, groups, and settings.
+                                    </p>
                                     <input
                                         ref={restoreInputRef}
                                         type="file"
@@ -311,6 +324,7 @@ export const SettingsModal = ({ isOpen, onClose }: SettingsModalProps) => {
                                         `${localBackupData.queuedVideoIds?.length || 0} queued`,
                                         `${localBackupData.favoriteVideoIds?.length || 0} favorite${(localBackupData.favoriteVideoIds?.length || 0) === 1 ? '' : 's'}`,
                                         `${activeFeedFilterCount} feed filter${activeFeedFilterCount === 1 ? '' : 's'}`,
+                                        storageHealthLabel,
                                     ].map((item) => (
                                         <div
                                             key={item}

@@ -16,13 +16,23 @@ async function readJson(file, fallback) {
     }
 }
 
-async function writeJson(file, data) {
+async function writeJson(file, data, options = {}) {
     await fs.mkdir(path.dirname(file), { recursive: true });
-    await backupExistingJson(file);
+    if (!options.skipBackup) {
+        await backupExistingJson(file);
+    }
     const tmpFile = `${file}.${process.pid}.${Date.now()}.${Math.random().toString(16).slice(2)}.tmp`;
 
-    await fs.writeFile(tmpFile, JSON.stringify(data, null, 2));
+    const handle = await fs.open(tmpFile, 'w');
+    try {
+        await handle.writeFile(JSON.stringify(data, null, 2));
+        await handle.sync();
+    } finally {
+        await handle.close();
+    }
+
     await fs.rename(tmpFile, file);
+    await syncDirectory(path.dirname(file));
 }
 
 async function backupExistingJson(file) {
@@ -57,6 +67,99 @@ async function pruneBackups(backupDir, basename) {
     );
 }
 
+async function recoverJsonFile(file, options = {}) {
+    try {
+        await fs.access(file);
+    } catch (err) {
+        if (err.code === 'ENOENT' && options.fallback !== undefined) {
+            await writeJson(file, options.fallback, { skipBackup: true });
+            return { file, status: 'initialized', backupFile: null };
+        }
+        throw err;
+    }
+
+    try {
+        await readJson(file);
+        await removeOrphanTempFiles(file);
+        return { file, status: 'ok', backupFile: null };
+    } catch (err) {
+        const backupFile = await findNewestValidBackup(file);
+        if (!backupFile) {
+            throw new Error(`No valid backup found for ${file}`);
+        }
+
+        const backupData = await readJson(backupFile);
+        await writeJson(file, backupData, { skipBackup: true });
+        await removeOrphanTempFiles(file);
+        return { file, status: 'restored', backupFile };
+    }
+}
+
+async function findNewestValidBackup(file) {
+    const backupDir = path.join(path.dirname(file), 'backups');
+    const parsedPath = path.parse(file);
+
+    let entries;
+    try {
+        entries = await fs.readdir(backupDir);
+    } catch (err) {
+        if (err.code === 'ENOENT') return null;
+        throw err;
+    }
+
+    const backups = entries
+        .filter((entry) => entry.startsWith(`${parsedPath.name}.`) && entry.endsWith('.bak.json'))
+        .sort()
+        .reverse();
+
+    for (const entry of backups) {
+        const backupFile = path.join(backupDir, entry);
+        try {
+            await readJson(backupFile);
+            return backupFile;
+        } catch {
+            // Keep scanning older backups.
+        }
+    }
+
+    return null;
+}
+
+async function removeOrphanTempFiles(file) {
+    const dir = path.dirname(file);
+    const basename = path.basename(file);
+
+    let entries;
+    try {
+        entries = await fs.readdir(dir);
+    } catch (err) {
+        if (err.code === 'ENOENT') return;
+        throw err;
+    }
+
+    await Promise.all(
+        entries
+            .filter((entry) => entry.startsWith(`${basename}.`) && entry.endsWith('.tmp'))
+            .map((entry) => fs.rm(path.join(dir, entry), { force: true }))
+    );
+}
+
+async function syncDirectory(dir) {
+    let handle;
+    try {
+        handle = await fs.open(dir, 'r');
+        await handle.sync();
+    } catch (err) {
+        if (!['EINVAL', 'EPERM', 'EISDIR'].includes(err.code)) {
+            throw err;
+        }
+    } finally {
+        if (handle) {
+            await handle.close();
+        }
+    }
+}
+
 function enqueueWrite(file, task) {
     const previous = writeQueues.get(file) || Promise.resolve();
     const next = previous.then(task, task).finally(() => {
@@ -86,6 +189,7 @@ function updateJsonQueued(file, fallback, updater) {
 
 module.exports = {
     readJson,
+    recoverJsonFile,
     writeJsonQueued,
     updateJsonQueued,
 };
