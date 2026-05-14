@@ -83,6 +83,26 @@ describe('VideoCard', () => {
     expect(thumbnail).toHaveAttribute('src', 'https://i.ytimg.com/vi/video-1/sddefault.jpg');
   });
 
+  it('fits Shorts thumbnails inside the video frame instead of cropping vertically', () => {
+    render(
+      <MemoryRouter>
+        <VideoCard
+          video={{
+            ...video,
+            isShort: true,
+            thumbnail: 'https://i.ytimg.com/vi/video-1/hqdefault.jpg',
+          }}
+          index={0}
+        />
+      </MemoryRouter>
+    );
+
+    const thumbnail = screen.getByAltText('A useful video');
+
+    expect(thumbnail.className).toContain('object-contain');
+    expect(thumbnail.className).not.toContain('object-cover');
+  });
+
   it('does not add index-based render animation to dense timeline cards', () => {
     const { container } = render(
       <MemoryRouter>

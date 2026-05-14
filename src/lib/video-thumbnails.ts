@@ -1,9 +1,9 @@
 const YOUTUBE_THUMBNAIL_QUALITY_ORDER = [
-  'maxresdefault.jpg',
-  'sddefault.jpg',
-  'hqdefault.jpg',
-  'mqdefault.jpg',
-  'default.jpg',
+  'maxresdefault',
+  'sddefault',
+  'hqdefault',
+  'mqdefault',
+  'default',
 ];
 
 export function getHighResolutionVideoThumbnail(thumbnail: string): string {
@@ -11,7 +11,9 @@ export function getHighResolutionVideoThumbnail(thumbnail: string): string {
 }
 
 export function getNextVideoThumbnailFallback(currentThumbnail: string): string | null {
-  const currentQualityIndex = YOUTUBE_THUMBNAIL_QUALITY_ORDER.findIndex((quality) => currentThumbnail.includes(`/${quality}`));
+  const currentQualityIndex = YOUTUBE_THUMBNAIL_QUALITY_ORDER.findIndex((quality) => {
+    return new RegExp(`/${quality}\\.(?:jpg|webp)(?:\\?|$)`, 'i').test(currentThumbnail);
+  });
 
   if (currentQualityIndex === -1 || currentQualityIndex === YOUTUBE_THUMBNAIL_QUALITY_ORDER.length - 1) {
     return null;
@@ -26,8 +28,8 @@ function getVideoThumbnailCandidate(thumbnail: string, qualityIndex: number): st
   }
 
   return thumbnail.replace(
-    /\/(?:maxresdefault|sddefault|hqdefault|mqdefault|default)\.jpg(?:\?.*)?$/i,
-    `/${YOUTUBE_THUMBNAIL_QUALITY_ORDER[qualityIndex]}`
+    /\/(?:maxresdefault|sddefault|hqdefault|mqdefault|default)\.(jpg|webp)(\?.*)?$/i,
+    `/${YOUTUBE_THUMBNAIL_QUALITY_ORDER[qualityIndex]}.$1$2`
   );
 }
 
@@ -36,7 +38,7 @@ function isYouTubeVideoThumbnail(thumbnail: string): boolean {
     const url = new URL(thumbnail);
     return (
       (url.hostname === 'i.ytimg.com' || url.hostname === 'img.youtube.com') &&
-      /\/vi\/[^/]+\/(?:maxresdefault|sddefault|hqdefault|mqdefault|default)\.jpg(?:\?.*)?$/i.test(url.pathname)
+      /\/(?:vi|vi_webp)\/[^/]+\/(?:maxresdefault|sddefault|hqdefault|mqdefault|default)\.(?:jpg|webp)$/i.test(url.pathname)
     );
   } catch {
     return false;

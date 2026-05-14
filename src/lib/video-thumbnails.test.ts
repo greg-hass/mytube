@@ -8,6 +8,12 @@ describe('video thumbnails', () => {
     );
   });
 
+  it('upgrades YouTube webp thumbnails and preserves query strings', () => {
+    expect(getHighResolutionVideoThumbnail('https://i.ytimg.com/vi_webp/abc123/hqdefault.webp?sqp=-oaymw')).toBe(
+      'https://i.ytimg.com/vi_webp/abc123/maxresdefault.webp?sqp=-oaymw'
+    );
+  });
+
   it('falls back through lower quality YouTube thumbnail sizes', () => {
     expect(getNextVideoThumbnailFallback('https://i.ytimg.com/vi/abc123/maxresdefault.jpg')).toBe(
       'https://i.ytimg.com/vi/abc123/sddefault.jpg'
