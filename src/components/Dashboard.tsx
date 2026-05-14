@@ -1,11 +1,13 @@
 import { lazy, Suspense, useState, useEffect, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { AlertTriangle, TrendingUp, Grid3x3, RefreshCw, Loader2, Activity, Heart, CheckCircle2, Image, ListVideo, SlidersHorizontal, X } from 'lucide-react';
+import { TrendingUp, Grid3x3, RefreshCw, Loader2, Activity, Heart, CheckCircle2, Image, ListVideo, SlidersHorizontal, X } from 'lucide-react';
 import { toast } from 'sonner';
 import { Header } from './Header';
 import { SubscriptionsList } from './SubscriptionsList';
 import { SubscriptionCard } from './SubscriptionCard';
 import { VirtualizedVideoGrid } from './VirtualizedVideoGrid';
+import { RefreshStatusPanel } from './RefreshStatusPanel';
+import { EmptyState } from './EmptyState';
 import { useKeyboardShortcuts } from '../hooks/useKeyboardShortcuts';
 import { KeyboardShortcutsHelp } from './KeyboardShortcutsHelp';
 import { useRSSVideos } from '../hooks/useRSSVideos';
@@ -122,8 +124,7 @@ export const Dashboard = () => {
     sub.id.startsWith('handle_') || sub.id.startsWith('custom_')
   );
 
-  const { videos, isLoading: videosLoading, refresh: refetchVideos, syncStatus } = useRSSVideos();
-  const failedRefreshChannels = syncStatus.failedChannels || [];
+  const { videos, isLoading: videosLoading, refresh: refetchVideos, syncStatus, cacheStatus } = useRSSVideos();
   const hasNoSubscriptions = allSubscriptions.length === 0;
   const feedProgressPercent = syncStatus?.total
     ? Math.round((syncStatus.current / syncStatus.total) * 100)
@@ -729,112 +730,82 @@ export const Dashboard = () => {
                     </div>
                   </div>
                 </div>
-              ) : videos.length === 0 ? (
-                <div className="text-center py-12">
-                  {syncStatus?.isSyncing ? (
-                    <>
-                      <div className="inline-block w-8 h-8 border-4 border-red-600 border-t-transparent rounded-full animate-spin mb-4" />
-                      <p className="text-gray-800 dark:text-gray-200 text-lg font-semibold">
-                        Building your feed
-                      </p>
-                      <p className="text-sm text-gray-500 dark:text-gray-500 mt-2">
-                        {syncStatus.current} / {syncStatus.total} channels checked
-                      </p>
-                      <div className="w-full max-w-sm h-2 bg-gray-200 dark:bg-gray-800 rounded-full overflow-hidden mx-auto mt-4">
-                        <div
-                          className="h-full bg-red-600 rounded-full transition-all"
-                          style={{ width: `${feedProgressPercent}%` }}
-                        />
-                      </div>
-                      <p className="text-xs text-gray-500 dark:text-gray-500 mt-3">
-                        {syncStatus.videos} videos found so far
-                      </p>
-                    </>
-                  ) : hasTemporaryChannels ? (
-                    <>
-                      <p className="text-gray-600 dark:text-gray-400 text-lg mb-2">
-                        Some channels need channel IDs to fetch videos
-                      </p>
-                      <p className="text-sm text-gray-500">
-                        Channels added with handles or custom names will be updated automatically when videos are discovered
-                      </p>
-                    </>
-                  ) : (
-                    <>
-                      <p className="text-gray-600 dark:text-gray-400 text-lg mb-2">
-                        No videos found
-                      </p>
-                      <p className="text-sm text-gray-500">
-                        Make sure you have subscriptions with recent uploads
-                      </p>
-                    </>
-                  )}
-                </div>
               ) : (
-                <div>
-                  {failedRefreshChannels.length > 0 && (
-                    <div className="mb-4 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 dark:border-amber-900/60 dark:bg-amber-950/30">
-                      <div className="flex items-start gap-3">
-                        <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-amber-600 dark:text-amber-300" />
-                        <div className="min-w-0 flex-1">
-                          <p className="text-sm font-semibold text-amber-950 dark:text-amber-100">
-                            {failedRefreshChannels.length} channel{failedRefreshChannels.length === 1 ? '' : 's'} need{failedRefreshChannels.length === 1 ? 's' : ''} attention
-                          </p>
-                          <div className="mt-2 space-y-1">
-                            {failedRefreshChannels.slice(0, 3).map((channel) => (
-                              <p key={channel.id} className="text-xs text-amber-800 dark:text-amber-200">
-                                <span className="font-medium">{channel.title}</span>: {channel.reason}
-                              </p>
-                            ))}
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  )}
-                  {syncStatus?.isSyncing && (
-                    <div className="mb-4 rounded-lg border border-blue-200 dark:border-blue-900/60 bg-blue-50 dark:bg-blue-950/30 px-4 py-3">
-                      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-                        <div>
-                          <p className="text-sm font-semibold text-blue-900 dark:text-blue-100">
+                <>
+                  <RefreshStatusPanel
+                    status={syncStatus}
+                    cacheStatus={cacheStatus}
+                    onRetryFailed={refetchVideos}
+                  />
+                  {videos.length === 0 ? (
+                    <div className="text-center py-12">
+                      {syncStatus?.isSyncing ? (
+                        <>
+                          <div className="inline-block w-8 h-8 border-4 border-red-600 border-t-transparent rounded-full animate-spin mb-4" />
+                          <p className="text-gray-800 dark:text-gray-200 text-lg font-semibold">
                             Building your feed
                           </p>
-                          <p className="text-xs text-blue-700 dark:text-blue-300">
-                            {syncStatus.current} / {syncStatus.total} channels checked, {syncStatus.videos} videos found
+                          <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">
+                            Your feeds are refreshing. This can take a minute after import.
                           </p>
+                          <p className="text-sm text-gray-500 dark:text-gray-500 mt-2">
+                            {syncStatus.current} / {syncStatus.total} channels checked
+                          </p>
+                          <div className="w-full max-w-sm h-2 bg-gray-200 dark:bg-gray-800 rounded-full overflow-hidden mx-auto mt-4">
+                            <div
+                              className="h-full bg-red-600 rounded-full transition-all"
+                              style={{ width: `${feedProgressPercent}%` }}
+                            />
+                          </div>
+                          <p className="text-xs text-gray-500 dark:text-gray-500 mt-3">
+                            {syncStatus.videos} videos found so far
+                          </p>
+                        </>
+                      ) : hasTemporaryChannels ? (
+                        <>
+                          <p className="text-gray-600 dark:text-gray-400 text-lg mb-2">
+                            Some channels need channel IDs to fetch videos
+                          </p>
+                          <p className="text-sm text-gray-500">
+                            Channels added with handles or custom names will be updated automatically when videos are discovered
+                          </p>
+                        </>
+                      ) : (
+                        <>
+                          <p className="text-gray-600 dark:text-gray-400 text-lg mb-2">
+                            No videos found
+                          </p>
+                          <p className="text-sm text-gray-500">
+                            Make sure you have subscriptions with recent uploads
+                          </p>
+                        </>
+                      )}
+                    </div>
+                  ) : (
+                    <div>
+                      <p className="hidden sm:block text-sm text-gray-500 dark:text-gray-400 mb-4">
+                        Showing {filteredVideos.length} recent videos
+                      </p>
+                      <VirtualizedVideoGrid
+                        videos={visibleLatestVideos}
+                        columns={4}
+                        scrollStorageKey="latest-videos-scroll"
+                        channelThumbnails={channelThumbnails}
+                      />
+                      {visibleLatestVideos.length < filteredVideos.length && (
+                        <div className="mt-4 flex justify-center pb-8 sm:hidden">
+                          <button
+                            type="button"
+                            onClick={() => setMobileVideoLimit((count) => count + MOBILE_TIMELINE_INCREMENT)}
+                            className="rounded-lg bg-gray-800 px-4 py-2 text-sm font-medium text-white dark:bg-gray-700"
+                          >
+                            Show older videos
+                          </button>
                         </div>
-                        <span className="text-xs font-medium text-blue-700 dark:text-blue-300">
-                          {feedProgressPercent}%
-                        </span>
-                      </div>
-                      <div className="mt-3 h-2 bg-blue-100 dark:bg-blue-900 rounded-full overflow-hidden">
-                        <div
-                          className="h-full bg-blue-600 rounded-full transition-all"
-                          style={{ width: `${feedProgressPercent}%` }}
-                        />
-                      </div>
+                      )}
                     </div>
                   )}
-                  <p className="hidden sm:block text-sm text-gray-500 dark:text-gray-400 mb-4">
-                    Showing {filteredVideos.length} recent videos
-                  </p>
-                  <VirtualizedVideoGrid
-                    videos={visibleLatestVideos}
-                    columns={4}
-                    scrollStorageKey="latest-videos-scroll"
-                    channelThumbnails={channelThumbnails}
-                  />
-                  {visibleLatestVideos.length < filteredVideos.length && (
-                    <div className="mt-4 flex justify-center pb-8 sm:hidden">
-                      <button
-                        type="button"
-                        onClick={() => setMobileVideoLimit((count) => count + MOBILE_TIMELINE_INCREMENT)}
-                        className="rounded-lg bg-gray-800 px-4 py-2 text-sm font-medium text-white dark:bg-gray-700"
-                      >
-                        Show older videos
-                      </button>
-                    </div>
-                  )}
-                </div>
+                </>
               )}
             </motion.div>
           ) : activeTab === 'queue' ? (
@@ -847,15 +818,10 @@ export const Dashboard = () => {
               className="px-4"
             >
               {queuedVideos.length === 0 ? (
-                <div className="text-center py-12">
-                  <ListVideo className="w-20 h-20 text-gray-300 dark:text-gray-700 mx-auto mb-4" />
-                  <p className="text-gray-600 dark:text-gray-400 text-lg mb-2">
-                    Queue is empty
-                  </p>
-                  <p className="text-sm text-gray-500">
-                    Add videos from Latest to watch them later
-                  </p>
-                </div>
+                <EmptyState
+                  title="Your queue is empty"
+                  detail="Add videos with the queue button on any video."
+                />
               ) : (
                 <div>
                   <p className="hidden sm:block text-sm text-gray-500 dark:text-gray-400 mb-4">

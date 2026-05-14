@@ -1,16 +1,33 @@
 const CHANNEL_REFRESH_INTERVAL_MS = 20 * 60 * 1000;
 const DEFAULT_SCHEDULED_REFRESH_INTERVAL_MS = 15 * 60 * 1000;
+const CHANNEL_FAILURE_BACKOFF_MS = 6 * 60 * 60 * 1000;
+const CHANNEL_FAILURE_BACKOFF_THRESHOLD = 3;
 
-function summarizeFailedChannels(results = []) {
+function getFailureReason(result) {
+    return result.errorStatus
+        ? `RSS feed failed with HTTP ${result.errorStatus}`
+        : result.errorMessage || 'No RSS videos or metadata returned';
+}
+
+function isFailedRefreshResult(result) {
+    return result.expected && (!result.channelMetadata && (!result.videos || result.videos.length === 0));
+}
+
+function summarizeFailedChannels(results = [], channelRefreshes = {}) {
     return results
-        .filter(result => result.expected && (!result.channelMetadata && (!result.videos || result.videos.length === 0)))
-        .map(result => ({
-            id: result.id,
-            title: result.title || result.id,
-            reason: result.errorStatus
-                ? `RSS feed failed with HTTP ${result.errorStatus}`
-                : result.errorMessage || 'No RSS videos or metadata returned',
-        }));
+        .filter(isFailedRefreshResult)
+        .map(result => {
+            const refreshInfo = channelRefreshes[result.id] || {};
+            return {
+                id: result.id,
+                title: result.title || result.id,
+                reason: refreshInfo.lastError || getFailureReason(result),
+                lastSuccessfulFetchAt: refreshInfo.lastSuccessfulFetchAt,
+                lastFailedFetchAt: refreshInfo.lastFailedFetchAt,
+                consecutiveFailures: refreshInfo.consecutiveFailures,
+                backoffUntil: refreshInfo.backoffUntil,
+            };
+        });
 }
 
 function getChannelsDueForRefresh(subscriptions = [], channelRefreshes = {}, options = {}) {
@@ -20,7 +37,15 @@ function getChannelsDueForRefresh(subscriptions = [], channelRefreshes = {}, opt
     if (force) return subscriptions;
 
     return subscriptions.filter(sub => {
-        const lastFetchedAt = channelRefreshes[sub.id]?.lastFetchedAt;
+        const refreshInfo = channelRefreshes[sub.id];
+        const backoffUntil = refreshInfo?.backoffUntil;
+
+        if (backoffUntil) {
+            const backoffTime = new Date(backoffUntil).getTime();
+            if (Number.isFinite(backoffTime) && now < backoffTime) return false;
+        }
+
+        const lastFetchedAt = refreshInfo?.lastFetchedAt;
         if (!lastFetchedAt) return true;
 
         const lastFetchedTime = new Date(lastFetchedAt).getTime();
@@ -54,6 +79,7 @@ function getScheduledRefreshConfig(env = process.env) {
 
 function mergeChannelRefreshes(existingRefreshes = {}, activeChannelIds = new Set(), fetchedChannels = [], fetchedAt = new Date().toISOString()) {
     const merged = {};
+    const fetchedTime = new Date(fetchedAt).getTime();
 
     for (const [channelId, refreshInfo] of Object.entries(existingRefreshes || {})) {
         if (activeChannelIds.has(channelId)) {
@@ -63,9 +89,36 @@ function mergeChannelRefreshes(existingRefreshes = {}, activeChannelIds = new Se
 
     for (const channel of fetchedChannels) {
         if (channel?.id && activeChannelIds.has(channel.id)) {
+            const previous = merged[channel.id] || {};
+            const failed = isFailedRefreshResult(channel);
+            const source = channel.source || 'rss';
+
+            if (failed) {
+                const consecutiveFailures = (previous.consecutiveFailures || 0) + 1;
+                const shouldBackoff = consecutiveFailures >= CHANNEL_FAILURE_BACKOFF_THRESHOLD && Number.isFinite(fetchedTime);
+
+                merged[channel.id] = {
+                    ...previous,
+                    lastFetchedAt: fetchedAt,
+                    lastFailedFetchAt: fetchedAt,
+                    lastError: getFailureReason(channel),
+                    consecutiveFailures,
+                    backoffUntil: shouldBackoff
+                        ? new Date(fetchedTime + CHANNEL_FAILURE_BACKOFF_MS).toISOString()
+                        : previous.backoffUntil || null,
+                    source,
+                };
+                continue;
+            }
+
             merged[channel.id] = {
-                ...(merged[channel.id] || {}),
+                ...previous,
                 lastFetchedAt: fetchedAt,
+                lastSuccessfulFetchAt: fetchedAt,
+                consecutiveFailures: 0,
+                backoffUntil: null,
+                lastError: null,
+                source,
             };
         }
     }
@@ -75,6 +128,8 @@ function mergeChannelRefreshes(existingRefreshes = {}, activeChannelIds = new Se
 
 module.exports = {
     CHANNEL_REFRESH_INTERVAL_MS,
+    CHANNEL_FAILURE_BACKOFF_MS,
+    CHANNEL_FAILURE_BACKOFF_THRESHOLD,
     DEFAULT_SCHEDULED_REFRESH_INTERVAL_MS,
     getChannelsDueForRefresh,
     getScheduledRefreshConfig,
