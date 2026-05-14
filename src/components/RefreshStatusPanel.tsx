@@ -78,7 +78,7 @@ export function RefreshStatusPanel({ status, cacheStatus, onRetryFailed }: Props
               </p>
               {failedChannels.slice(0, 5).map((channel) => (
                 <p key={channel.id} className="text-xs text-amber-800 dark:text-amber-200">
-                  <span className="font-medium">{channel.title}</span>: {channel.reason}
+                  <span className="font-medium">{channel.title}</span>: {channel.backoffUntil ? `Backoff until ${formatDateTime(channel.backoffUntil)}` : channel.reason}
                 </p>
               ))}
               {failedChannels.length > 5 && (

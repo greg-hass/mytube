@@ -103,6 +103,7 @@ async function runAggregation(options = {}) {
 
         const allVideos = [];
         let failedChannels = [];
+        const fetchedChannelResults = [];
         let quotaExceeded = false;
 
         const redirectResult = applySubscriptionRedirects(subscriptions, parsedData.redirects || {});
@@ -164,6 +165,7 @@ async function runAggregation(options = {}) {
             const batch = subscriptionsToRefresh.slice(i, i + CURRENT_BATCH_SIZE);
 
             let batchVideos = [];
+            const batchRefreshResults = [];
 
             if (useApiForVideoFetching && !quotaExceeded) {
                 // Use YouTube API (unless quota was already exceeded in a previous batch)
@@ -291,7 +293,9 @@ async function runAggregation(options = {}) {
                     for (const sub of batch) {
                         const feedResult = await fetchChannelFeed(sub.id);
                         const { videos, channelMetadata } = feedResult;
-                        failedChannels.push(...summarizeFailedChannels([{ ...sub, expected: true, ...feedResult }]));
+                        const refreshResult = { ...sub, expected: true, source: 'rss', ...feedResult };
+                        batchRefreshResults.push(refreshResult);
+                        fetchedChannelResults.push(refreshResult);
                         batchVideos.push(...videos);
 
                         // Update subscription metadata if we got it from RSS
@@ -337,7 +341,9 @@ async function runAggregation(options = {}) {
                 for (const sub of batch) {
                     const feedResult = await fetchChannelFeed(sub.id);
                     const { videos, channelMetadata } = feedResult;
-                    failedChannels.push(...summarizeFailedChannels([{ ...sub, expected: true, ...feedResult }]));
+                    const refreshResult = { ...sub, expected: true, source: 'rss', ...feedResult };
+                    batchRefreshResults.push(refreshResult);
+                    fetchedChannelResults.push(refreshResult);
                     batchVideos.push(...videos);
 
                     // Update subscription metadata if we got it from RSS
@@ -367,7 +373,9 @@ async function runAggregation(options = {}) {
                 const batchPromises = batch.map(async sub => {
                     const feedResult = await fetchChannelFeed(sub.id);
                     const { videos, channelMetadata } = feedResult;
-                    failedChannels.push(...summarizeFailedChannels([{ ...sub, expected: true, ...feedResult }]));
+                    const refreshResult = { ...sub, expected: true, source: 'rss', ...feedResult };
+                    batchRefreshResults.push(refreshResult);
+                    fetchedChannelResults.push(refreshResult);
 
                     // Update subscription metadata if we got it from RSS
                     if (channelMetadata && channelMetadata.title) {
@@ -405,9 +413,10 @@ async function runAggregation(options = {}) {
             channelRefreshes = mergeChannelRefreshes(
                 channelRefreshes,
                 new Set(subscriptions.map(sub => sub.id)),
-                batch,
+                batchRefreshResults.length > 0 ? batchRefreshResults : batch,
                 new Date().toISOString()
             );
+            failedChannels = summarizeFailedChannels(fetchedChannelResults, channelRefreshes);
 
             aggregationStatus = {
                 ...aggregationStatus,
@@ -465,7 +474,7 @@ async function runAggregation(options = {}) {
             channelRefreshes: mergeChannelRefreshes(
                 channelRefreshes,
                 new Set(subscriptions.map(sub => sub.id)),
-                subscriptionsToRefresh,
+                [],
                 new Date().toISOString()
             )
         });
