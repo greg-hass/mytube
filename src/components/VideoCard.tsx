@@ -44,6 +44,7 @@ export const VideoCard = ({ video, channelThumbnail }: Props) => {
   const [isQueueButtonActive, setIsQueueButtonActive] = useState(isQueued);
   const isWatched = watchedVideos.has(video.id);
   const isLive = isLiveVideo(video);
+  const shouldFitThumbnail = video.isShort === true;
   const progressPercent = getVideoProgressPercent(video.id);
 
   useEffect(() => {
@@ -184,7 +185,7 @@ export const VideoCard = ({ video, channelThumbnail }: Props) => {
             }
           }}
           onLoad={() => setImageLoaded(true)}
-          className={`w-full h-full object-cover transition-all duration-300 ${imageLoaded ? 'opacity-100' : 'opacity-0'
+          className={`w-full h-full ${shouldFitThumbnail ? 'object-contain bg-black' : 'object-cover'} transition-all duration-300 ${imageLoaded ? 'opacity-100' : 'opacity-0'
             }`}
         />
 

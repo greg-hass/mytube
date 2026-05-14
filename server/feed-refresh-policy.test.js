@@ -338,6 +338,24 @@ describe('feed refresh policy', () => {
         expect(shortsStatusById['video-250']).toBeUndefined();
     });
 
+    it('rechecks cached non-Short statuses so longer Shorts can be corrected', async () => {
+        const shortsStatusById = {
+            'longer-short': false,
+        };
+        const videos = [{
+            id: 'longer-short',
+            title: 'A longer vertical Short',
+            description: '',
+            duration: 90,
+        }];
+
+        await backfillArchivedShortsStatus(videos, shortsStatusById, {
+            get: vi.fn().mockResolvedValue({ status: 200, headers: {} }),
+        });
+
+        expect(shortsStatusById['longer-short']).toBe(true);
+    });
+
     it('resolves Shorts status from the canonical YouTube Shorts URL', async () => {
         await expect(resolveYouTubeShortsStatus('short-video', {
             get: vi.fn().mockResolvedValue({ status: 200, headers: {} }),

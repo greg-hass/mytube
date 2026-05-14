@@ -73,12 +73,18 @@ async function enrichVideosWithShortsStatus(videos = [], shortsStatusById = {}, 
 
 async function backfillArchivedShortsStatus(existingVideos = [], shortsStatusById = {}, httpClient = axios) {
     const candidates = existingVideos
-        .filter((video) => video?.id && typeof shortsStatusById[video.id] !== 'boolean')
+        .filter((video) => video?.id && shortsStatusById[video.id] !== true)
         .slice(0, ARCHIVED_SHORTS_STATUS_BACKFILL_LIMIT);
 
     if (candidates.length === 0) return shortsStatusById;
 
     console.log(`🩳 Backfilling Shorts status for ${candidates.length} archived videos`);
+    for (const video of candidates) {
+        if (video?.id && shortsStatusById[video.id] === false) {
+            delete shortsStatusById[video.id];
+        }
+    }
+
     return enrichVideosWithShortsStatus(candidates, shortsStatusById, httpClient);
 }
 
