@@ -3,6 +3,7 @@ const cors = require('cors');
 const fs = require('fs').promises;
 const path = require('path');
 const { readJson, writeJsonQueued, updateJsonQueued } = require('./json-store');
+const { recoverDataFiles } = require('./data-integrity');
 const { mergeIncomingSubscriptions } = require('./sync-utils');
 const { searchChannels } = require('./channel-search');
 const serverPackage = require('./package.json');
@@ -25,6 +26,8 @@ const PORT = process.env.PORT || 3001;
 const DATA_FILE = path.join(__dirname, 'data', 'db.json');
 const VIDEOS_FILE = path.join(__dirname, 'data', 'videos.json');
 const DEFAULT_DATA = { subscriptions: [], settings: {}, watchedVideos: [], redirects: {} };
+const DEFAULT_VIDEO_CACHE = { videos: [], lastUpdated: null, totalChannels: 0, totalVideos: 0, channelRefreshes: {} };
+let dataIntegrityEvents = [];
 
 app.use(cors());
 app.use(express.json({ limit: '50mb' })); // Large limit for full data sync
@@ -33,14 +36,13 @@ app.use(express.json({ limit: '50mb' })); // Large limit for full data sync
 async function init() {
     try {
         await fs.mkdir(path.dirname(DATA_FILE), { recursive: true });
+        dataIntegrityEvents = await recoverDataFiles([
+            { file: DATA_FILE, fallback: DEFAULT_DATA },
+            { file: VIDEOS_FILE, fallback: DEFAULT_VIDEO_CACHE },
+        ]);
 
         // Load or initialize db.json
-        let data = DEFAULT_DATA;
-        try {
-            data = await readJson(DATA_FILE, DEFAULT_DATA);
-        } catch (err) {
-            // File doesn't exist, use default
-        }
+        let data = await readJson(DATA_FILE, DEFAULT_DATA);
 
         // Merge static redirects from redirects.json if it exists
         try {
@@ -78,7 +80,8 @@ app.get('/api/health', async (req, res) => {
             watchedVideos: data.watchedVideos?.length || 0,
             videos: videoCache.totalVideos || videoCache.videos?.length || 0,
             lastUpdated: videoCache.lastUpdated || null,
-            uptime: process.uptime()
+            uptime: process.uptime(),
+            dataIntegrity: dataIntegrityEvents,
         });
     } catch (err) {
         console.error('Health check error:', err);
