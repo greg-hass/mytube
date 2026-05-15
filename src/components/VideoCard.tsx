@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from 'react';
 import type { MouseEvent, PointerEvent } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { getDisplayThumbnail } from '../lib/icon-loader';
-import { getHighResolutionVideoThumbnail, getNextVideoThumbnailFallback } from '../lib/video-thumbnails';
+import { getHighResolutionVideoThumbnail, getNextVideoThumbnailFallback, isPortraitVideoThumbnail } from '../lib/video-thumbnails';
 import { useFavoriteVideos } from '../hooks/useFavoriteVideos';
 import { useQueuedVideos } from '../hooks/useQueuedVideos';
 import { getVideoProgressPercent } from '../lib/video-progress';
@@ -30,10 +30,11 @@ const SWIPE_TO_WATCHED_THRESHOLD = 80;
 const SWIPE_VERTICAL_CANCEL_THRESHOLD = 48;
 
 export const VideoCard = ({ video, channelThumbnail }: Props) => {
-  const shouldFitThumbnail = isShortVideo(video);
+  const isLikelyShort = video.isShort === true || isShortVideo({ ...video, isShort: undefined });
+  const shouldProbeShortsThumbnail = !isLikelyShort;
   const [imageLoaded, setImageLoaded] = useState(false);
   const [thumbnailSrc, setThumbnailSrc] = useState(() => (
-    getHighResolutionVideoThumbnail(video.thumbnail, { isShort: shouldFitThumbnail })
+    getHighResolutionVideoThumbnail(video.thumbnail, { isShort: isLikelyShort, probeShorts: shouldProbeShortsThumbnail })
   ));
   const [dragOffsetX, setDragOffsetX] = useState(0);
   const pointerStartRef = useRef<{ x: number; y: number; pointerId: number } | null>(null);
@@ -52,8 +53,8 @@ export const VideoCard = ({ video, channelThumbnail }: Props) => {
 
   useEffect(() => {
     setImageLoaded(false);
-    setThumbnailSrc(getHighResolutionVideoThumbnail(video.thumbnail, { isShort: shouldFitThumbnail }));
-  }, [video.thumbnail, shouldFitThumbnail]);
+    setThumbnailSrc(getHighResolutionVideoThumbnail(video.thumbnail, { isShort: isLikelyShort, probeShorts: shouldProbeShortsThumbnail }));
+  }, [video.thumbnail, isLikelyShort, shouldProbeShortsThumbnail]);
 
   useEffect(() => {
     setIsQueueButtonActive(isQueued);
@@ -182,13 +183,13 @@ export const VideoCard = ({ video, channelThumbnail }: Props) => {
           alt={video.title}
           loading="lazy"
           onError={() => {
-            const fallback = getNextVideoThumbnailFallback(thumbnailSrc);
+            const fallback = getNextVideoThumbnailFallback(thumbnailSrc, { probeShorts: shouldProbeShortsThumbnail });
             if (fallback) {
               setThumbnailSrc(fallback);
             }
           }}
           onLoad={() => setImageLoaded(true)}
-          className={`w-full h-full ${shouldFitThumbnail ? 'object-contain bg-black' : 'object-cover'} transition-all duration-300 ${imageLoaded ? 'opacity-100' : 'opacity-0'
+          className={`w-full h-full ${isLikelyShort || isPortraitVideoThumbnail(thumbnailSrc) ? 'object-contain bg-black' : 'object-cover'} transition-all duration-300 ${imageLoaded ? 'opacity-100' : 'opacity-0'
             }`}
         />
 

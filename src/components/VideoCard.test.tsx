@@ -76,6 +76,10 @@ describe('VideoCard', () => {
 
     const thumbnail = screen.getByAltText('A useful video');
 
+    expect(thumbnail).toHaveAttribute('src', 'https://i.ytimg.com/vi/video-1/oar2.jpg');
+
+    fireEvent.error(thumbnail);
+
     expect(thumbnail).toHaveAttribute('src', 'https://i.ytimg.com/vi/video-1/maxresdefault.jpg');
 
     fireEvent.error(thumbnail);
@@ -123,6 +127,49 @@ describe('VideoCard', () => {
     expect(thumbnail).toHaveAttribute('src', 'https://i.ytimg.com/vi/video-1/oar2.jpg');
     expect(thumbnail.className).toContain('object-contain');
     expect(thumbnail.className).not.toContain('object-cover');
+  });
+
+  it('probes portrait thumbnails for untagged Shorts and displays them uncropped when available', () => {
+    render(
+      <MemoryRouter>
+        <VideoCard
+          video={{
+            ...video,
+            title: 'Harry Maguire Said NO!',
+            thumbnail: 'https://i.ytimg.com/vi/l3GdJvnYRaU/hqdefault.jpg',
+          }}
+          index={0}
+        />
+      </MemoryRouter>
+    );
+
+    const thumbnail = screen.getByAltText('Harry Maguire Said NO!');
+
+    expect(thumbnail).toHaveAttribute('src', 'https://i.ytimg.com/vi/l3GdJvnYRaU/oar2.jpg');
+    expect(thumbnail.className).toContain('object-contain');
+    expect(thumbnail.className).not.toContain('object-cover');
+  });
+
+  it('falls back from a missing portrait probe to max resolution landscape thumbnails', () => {
+    render(
+      <MemoryRouter>
+        <VideoCard
+          video={{
+            ...video,
+            thumbnail: 'https://i.ytimg.com/vi/video-1/hqdefault.jpg',
+          }}
+          index={0}
+        />
+      </MemoryRouter>
+    );
+
+    const thumbnail = screen.getByAltText('A useful video');
+
+    fireEvent.error(thumbnail);
+
+    expect(thumbnail).toHaveAttribute('src', 'https://i.ytimg.com/vi/video-1/maxresdefault.jpg');
+    expect(thumbnail.className).toContain('object-cover');
+    expect(thumbnail.className).not.toContain('object-contain');
   });
 
   it('does not add index-based render animation to dense timeline cards', () => {
