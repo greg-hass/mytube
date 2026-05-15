@@ -4,7 +4,7 @@ const axios = require('axios');
 const FEED_FETCH_RETRY_STATUSES = new Set([408, 429, 500, 502, 503, 504]);
 const FEED_FETCH_MAX_ATTEMPTS = 3;
 const UPLOADS_PLAYLIST_FETCH_LIMIT = 15;
-const YOUTUBE_VIDEO_THUMBNAIL_PATTERN = /\/(?:vi|vi_webp)\/([^/]+)\/(?:maxresdefault|sddefault|hqdefault|mqdefault|default|0|1|2|3)\.(jpg|webp)(\?.*)?$/i;
+const YOUTUBE_VIDEO_THUMBNAIL_PATTERN = /\/(?:vi|vi_webp)\/([^/]+)\/(?:maxresdefault|hq720|sddefault|hqdefault|mqdefault|default|oar2|maxres2|hq2|frame0|0|1|2|3)\.(jpg|webp)(\?.*)?$/i;
 
 const parser = new Parser({
     timeout: 10000,
@@ -71,14 +71,15 @@ function getBestThumbnailUrl(thumbnails = []) {
     return url.replace(/\\u0026/g, '&');
 }
 
-function getHighResolutionVideoThumbnail(thumbnail, videoId) {
+function getHighResolutionVideoThumbnail(thumbnail, videoId, options = {}) {
     const fallback = videoId ? `https://i.ytimg.com/vi/${videoId}/maxresdefault.jpg` : '';
     const source = String(thumbnail || fallback);
+    const preferredThumbnailName = options.isShort ? 'oar2' : 'maxresdefault';
 
     try {
         const url = new URL(source);
         if ((url.hostname === 'i.ytimg.com' || url.hostname === 'img.youtube.com') && YOUTUBE_VIDEO_THUMBNAIL_PATTERN.test(url.pathname)) {
-            url.pathname = url.pathname.replace(YOUTUBE_VIDEO_THUMBNAIL_PATTERN, '/vi/$1/maxresdefault.$2');
+            url.pathname = url.pathname.replace(YOUTUBE_VIDEO_THUMBNAIL_PATTERN, `/vi/$1/${preferredThumbnailName}.$2`);
             return url.toString();
         }
     } catch {
@@ -235,7 +236,8 @@ function buildVideoFromFeedItem(item, { channelId, channelTitle }) {
             item.media?.thumbnail?.[0]?.url
             || mediaThumbnailUrl
             || item.enclosure?.url,
-            videoId
+            videoId,
+            { isShort: looksLikeShort }
         ),
         description: item.contentSnippet || item.content || mediaDescription || '',
         duration: Number.isFinite(duration) ? duration : null,

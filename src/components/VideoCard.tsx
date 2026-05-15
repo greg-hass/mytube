@@ -29,8 +29,11 @@ const SWIPE_TO_WATCHED_THRESHOLD = 80;
 const SWIPE_VERTICAL_CANCEL_THRESHOLD = 48;
 
 export const VideoCard = ({ video, channelThumbnail }: Props) => {
+  const shouldFitThumbnail = video.isShort === true;
   const [imageLoaded, setImageLoaded] = useState(false);
-  const [thumbnailSrc, setThumbnailSrc] = useState(() => getHighResolutionVideoThumbnail(video.thumbnail));
+  const [thumbnailSrc, setThumbnailSrc] = useState(() => (
+    getHighResolutionVideoThumbnail(video.thumbnail, { isShort: shouldFitThumbnail })
+  ));
   const [dragOffsetX, setDragOffsetX] = useState(0);
   const pointerStartRef = useRef<{ x: number; y: number; pointerId: number } | null>(null);
   const suppressNextClickRef = useRef(false);
@@ -44,13 +47,12 @@ export const VideoCard = ({ video, channelThumbnail }: Props) => {
   const [isQueueButtonActive, setIsQueueButtonActive] = useState(isQueued);
   const isWatched = watchedVideos.has(video.id);
   const isLive = isLiveVideo(video);
-  const shouldFitThumbnail = video.isShort === true;
   const progressPercent = getVideoProgressPercent(video.id);
 
   useEffect(() => {
     setImageLoaded(false);
-    setThumbnailSrc(getHighResolutionVideoThumbnail(video.thumbnail));
-  }, [video.thumbnail]);
+    setThumbnailSrc(getHighResolutionVideoThumbnail(video.thumbnail, { isShort: shouldFitThumbnail }));
+  }, [video.thumbnail, shouldFitThumbnail]);
 
   useEffect(() => {
     setIsQueueButtonActive(isQueued);

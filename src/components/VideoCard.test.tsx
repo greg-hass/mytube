@@ -80,7 +80,7 @@ describe('VideoCard', () => {
 
     fireEvent.error(thumbnail);
 
-    expect(thumbnail).toHaveAttribute('src', 'https://i.ytimg.com/vi/video-1/sddefault.jpg');
+    expect(thumbnail).toHaveAttribute('src', 'https://i.ytimg.com/vi/video-1/hq720.jpg');
   });
 
   it('fits Shorts thumbnails inside the video frame instead of cropping vertically', () => {
@@ -99,6 +99,7 @@ describe('VideoCard', () => {
 
     const thumbnail = screen.getByAltText('A useful video');
 
+    expect(thumbnail).toHaveAttribute('src', 'https://i.ytimg.com/vi/video-1/oar2.jpg');
     expect(thumbnail.className).toContain('object-contain');
     expect(thumbnail.className).not.toContain('object-cover');
   });
