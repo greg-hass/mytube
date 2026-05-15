@@ -2,7 +2,7 @@ const SHORTS_TEXT_PATTERN = /#shorts?\b|\bshorts\b|youtube\.com\/shorts\//i;
 const YOUTUBE_VIDEO_THUMBNAIL_PATTERN = /\/(?:vi|vi_webp)\/([^/]+)\/(?:maxresdefault|hq720|sddefault|hqdefault|mqdefault|default|oar2|maxres2|hq2|frame0|0|1|2|3)\.(jpg|webp)(\?.*)?$/i;
 
 function isShortVideo(video = {}) {
-    if (typeof video.isShort === 'boolean') return video.isShort;
+    if (video.isShort === true) return true;
     return SHORTS_TEXT_PATTERN.test(`${video.title || ''} ${video.description || ''}`);
 }
 
@@ -28,11 +28,18 @@ function normalizeVideoThumbnail(video) {
     if (!video?.id) return video;
 
     const isShort = isShortVideo(video);
-    return {
+    const normalized = {
         ...video,
-        isShort,
         thumbnail: getHighResolutionVideoThumbnail(video.thumbnail, video.id, { isShort }),
     };
+
+    if (isShort) {
+        normalized.isShort = true;
+    } else {
+        delete normalized.isShort;
+    }
+
+    return normalized;
 }
 
 function normalizeVideoCacheThumbnails(cache = {}) {

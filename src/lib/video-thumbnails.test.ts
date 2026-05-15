@@ -26,6 +26,15 @@ describe('video thumbnails', () => {
     );
   });
 
+  it('can probe the portrait Shorts thumbnail before falling back to max resolution landscape', () => {
+    const probe = getHighResolutionVideoThumbnail('https://i.ytimg.com/vi/abc123/hqdefault.jpg', { probeShorts: true });
+
+    expect(probe).toBe('https://i.ytimg.com/vi/abc123/oar2.jpg');
+    expect(getNextVideoThumbnailFallback(probe, { probeShorts: true })).toBe(
+      'https://i.ytimg.com/vi/abc123/maxresdefault.jpg'
+    );
+  });
+
   it('falls back through portrait Shorts thumbnails before landscape thumbnails', () => {
     expect(getNextVideoThumbnailFallback('https://i.ytimg.com/vi/abc123/oar2.jpg')).toBe(
       'https://i.ytimg.com/vi/abc123/maxres2.jpg'
