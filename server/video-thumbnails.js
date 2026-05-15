@@ -13,7 +13,7 @@ function getHighResolutionVideoThumbnail(thumbnail, videoId, options = {}) {
 
     try {
         const url = new URL(source);
-        if ((url.hostname === 'i.ytimg.com' || url.hostname === 'img.youtube.com') && YOUTUBE_VIDEO_THUMBNAIL_PATTERN.test(url.pathname)) {
+        if ((/^i\d*\.ytimg\.com$/i.test(url.hostname) || url.hostname === 'img.youtube.com') && YOUTUBE_VIDEO_THUMBNAIL_PATTERN.test(url.pathname)) {
             url.pathname = url.pathname.replace(YOUTUBE_VIDEO_THUMBNAIL_PATTERN, `/vi/$1/${preferredThumbnailName}.$2`);
             return url.toString();
         }

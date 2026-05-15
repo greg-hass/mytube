@@ -72,7 +72,7 @@ function isYouTubeVideoThumbnail(thumbnail: string): boolean {
   try {
     const url = new URL(thumbnail);
     return (
-      (url.hostname === 'i.ytimg.com' || url.hostname === 'img.youtube.com') &&
+      (/^i\d*\.ytimg\.com$/i.test(url.hostname) || url.hostname === 'img.youtube.com') &&
       new RegExp(`/((?:vi|vi_webp))/[^/]+/(?:${YOUTUBE_THUMBNAIL_NAME_PATTERN})\\.(?:jpg|webp)$`, 'i').test(url.pathname)
     );
   } catch {
