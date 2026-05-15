@@ -27,23 +27,18 @@ const YOUTUBE_THUMBNAIL_NAME_PATTERN = YOUTUBE_THUMBNAIL_NAMES.join('|');
 
 interface VideoThumbnailOptions {
   isShort?: boolean;
-  probeShorts?: boolean;
 }
 
 export function getHighResolutionVideoThumbnail(thumbnail: string, options: VideoThumbnailOptions = {}): string {
   return getVideoThumbnailCandidate(
     thumbnail,
-    options.isShort || options.probeShorts ? YOUTUBE_SHORTS_THUMBNAIL_QUALITY_ORDER : YOUTUBE_THUMBNAIL_QUALITY_ORDER,
+    options.isShort ? YOUTUBE_SHORTS_THUMBNAIL_QUALITY_ORDER : YOUTUBE_THUMBNAIL_QUALITY_ORDER,
     0
   );
 }
 
 export function getNextVideoThumbnailFallback(currentThumbnail: string, options: VideoThumbnailOptions = {}): string | null {
-  if (options.probeShorts && /\/oar2\.(?:jpg|webp)(?:\?|$)/i.test(currentThumbnail)) {
-    return getVideoThumbnailCandidate(currentThumbnail, YOUTUBE_THUMBNAIL_QUALITY_ORDER, 0);
-  }
-
-  const qualityOrder = isShortsThumbnailCandidate(currentThumbnail)
+  const qualityOrder = options.isShort || isShortsThumbnailCandidate(currentThumbnail)
     ? YOUTUBE_SHORTS_THUMBNAIL_QUALITY_ORDER
     : YOUTUBE_THUMBNAIL_QUALITY_ORDER;
   const currentQualityIndex = qualityOrder.findIndex((quality) => {

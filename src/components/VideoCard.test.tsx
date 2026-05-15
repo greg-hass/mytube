@@ -76,10 +76,6 @@ describe('VideoCard', () => {
 
     const thumbnail = screen.getByAltText('A useful video');
 
-    expect(thumbnail).toHaveAttribute('src', 'https://i.ytimg.com/vi/video-1/oar2.jpg');
-
-    fireEvent.error(thumbnail);
-
     expect(thumbnail).toHaveAttribute('src', 'https://i.ytimg.com/vi/video-1/maxresdefault.jpg');
 
     fireEvent.error(thumbnail);
@@ -129,7 +125,7 @@ describe('VideoCard', () => {
     expect(thumbnail.className).not.toContain('object-cover');
   });
 
-  it('probes portrait thumbnails for untagged Shorts and displays them uncropped when available', () => {
+  it('does not probe portrait thumbnail URLs for normal untagged videos', () => {
     render(
       <MemoryRouter>
         <VideoCard
@@ -145,12 +141,12 @@ describe('VideoCard', () => {
 
     const thumbnail = screen.getByAltText('Harry Maguire Said NO!');
 
-    expect(thumbnail).toHaveAttribute('src', 'https://i.ytimg.com/vi/l3GdJvnYRaU/oar2.jpg');
-    expect(thumbnail.className).toContain('object-contain');
-    expect(thumbnail.className).not.toContain('object-cover');
+    expect(thumbnail).toHaveAttribute('src', 'https://i.ytimg.com/vi/l3GdJvnYRaU/maxresdefault.jpg');
+    expect(thumbnail.className).toContain('object-cover');
+    expect(thumbnail.className).not.toContain('object-contain');
   });
 
-  it('falls back from a missing portrait probe to max resolution landscape thumbnails', () => {
+  it('keeps normal thumbnails on the max resolution landscape fallback chain', () => {
     render(
       <MemoryRouter>
         <VideoCard
@@ -167,7 +163,7 @@ describe('VideoCard', () => {
 
     fireEvent.error(thumbnail);
 
-    expect(thumbnail).toHaveAttribute('src', 'https://i.ytimg.com/vi/video-1/maxresdefault.jpg');
+    expect(thumbnail).toHaveAttribute('src', 'https://i.ytimg.com/vi/video-1/hq720.jpg');
     expect(thumbnail.className).toContain('object-cover');
     expect(thumbnail.className).not.toContain('object-contain');
   });
