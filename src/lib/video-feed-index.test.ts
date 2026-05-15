@@ -127,20 +127,49 @@ describe('video feed index', () => {
     expect(isShortVideo({
       title: 'Quick football clip',
       description: '',
+      thumbnail: '',
       isShort: true,
     })).toBe(true);
 
     expect(isShortVideo({
       title: 'Quick football clip #shorts',
       description: '',
+      thumbnail: '',
       isShort: false,
     })).toBe(false);
+  });
+
+  it('treats portrait YouTube thumbnails as Shorts for filtering', () => {
+    expect(isShortVideo({
+      title: 'Quick football clip',
+      description: '',
+      thumbnail: 'https://i.ytimg.com/vi/short-id/oar2.jpg',
+      duration: 120,
+    })).toBe(true);
+
+    const index = buildVideoFeedIndex([
+      ...videos,
+      {
+        id: 'portrait-thumbnail-short',
+        title: 'Quick football clip',
+        description: '',
+        thumbnail: 'https://i.ytimg.com/vi/short-id/oar2.jpg',
+        channelId: 'news',
+        channelTitle: 'News Channel',
+        publishedAt: FIXED_PUBLISHED_AT,
+        duration: 120,
+      },
+    ], channels);
+
+    expect(filterIndexedVideos(index, { searchQuery: '', showShorts: false }).map(item => item.video.id))
+      .not.toContain('portrait-thumbnail-short');
   });
 
   it('treats square and vertical videos up to three minutes as Shorts when dimensions are known', () => {
     expect(isShortVideo({
       title: 'Vertical quick explainer',
       description: '',
+      thumbnail: '',
       duration: 179,
       videoWidth: 1080,
       videoHeight: 1920,
@@ -149,6 +178,7 @@ describe('video feed index', () => {
     expect(isShortVideo({
       title: 'Square quick explainer',
       description: '',
+      thumbnail: '',
       duration: 180,
       videoWidth: 1080,
       videoHeight: 1080,
@@ -157,6 +187,7 @@ describe('video feed index', () => {
     expect(isShortVideo({
       title: 'Horizontal quick explainer',
       description: '',
+      thumbnail: '',
       duration: 179,
       videoWidth: 1920,
       videoHeight: 1080,
@@ -167,12 +198,14 @@ describe('video feed index', () => {
     expect(isShortVideo({
       title: 'Unlabelled short upload',
       description: '',
+      thumbnail: '',
       duration: 60,
     })).toBe(true);
 
     expect(isShortVideo({
       title: 'Unlabelled two minute upload',
       description: '',
+      thumbnail: '',
       duration: 120,
     })).toBe(false);
   });

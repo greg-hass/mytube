@@ -109,6 +109,32 @@ describe('mergeVideoArchive', () => {
         });
     });
 
+    it('marks cached portrait YouTube thumbnails as Shorts so the Latest filter can hide them', () => {
+        const merged = mergeVideoArchive(
+            [
+                {
+                    id: 'cached-portrait-short',
+                    title: 'Cached vertical clip',
+                    channelId: 'UC1',
+                    channelTitle: 'Channel One',
+                    publishedAt: '2026-05-01T10:00:00.000Z',
+                    thumbnail: 'https://i.ytimg.com/vi/cached-portrait-short/oar2.jpg',
+                    description: '',
+                },
+            ],
+            [],
+            {
+                activeChannelIds: new Set(['UC1']),
+                maxVideos: 10,
+            }
+        );
+
+        expect(merged[0]).toMatchObject({
+            isShort: true,
+            thumbnail: 'https://i.ytimg.com/vi/cached-portrait-short/oar2.jpg',
+        });
+    });
+
     it('drops archived videos for channels that are no longer subscribed', () => {
         const merged = mergeVideoArchive(
             [

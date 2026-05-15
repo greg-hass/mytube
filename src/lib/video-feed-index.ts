@@ -1,6 +1,7 @@
 import type { YouTubeChannel, YouTubeVideo } from '../types/youtube';
+import { isPortraitVideoThumbnail } from './video-thumbnails';
 
-const SHORTS_TEXT_PATTERN = /#shorts?\b|\bshorts\b|youtube\.com\/shorts\//i;
+const SHORTS_TEXT_PATTERN = /#shorts?\b|#ytshorts?\b|#fyp\b|\bshorts\b|youtube\.com\/shorts\//i;
 const LIVE_REPLAY_TEXT_PATTERN = /\b(live\s*stream|livestream|watchalong|replay|full\s+stream)\b/i;
 const PREMIERE_TEXT_PATTERN = /\bpremieres?\b|\bpremiering\b/i;
 const LEGACY_SHORTS_MAX_SECONDS = 60;
@@ -45,9 +46,13 @@ function isSquareOrVerticalVideo(video: Pick<YouTubeVideo, 'videoWidth' | 'video
   return Boolean(width && height && width > 0 && height > 0 && height >= width);
 }
 
-export function isShortVideo(video: Pick<VideoWithNullableDuration, 'title' | 'description' | 'duration' | 'videoWidth' | 'videoHeight' | 'isShort'>) {
+export function isShortVideo(video: Pick<VideoWithNullableDuration, 'title' | 'description' | 'duration' | 'thumbnail' | 'videoWidth' | 'videoHeight' | 'isShort'>) {
   if (typeof video.isShort === 'boolean') {
     return video.isShort;
+  }
+
+  if (isPortraitVideoThumbnail(video.thumbnail || '')) {
+    return true;
   }
 
   const duration = video.duration;
