@@ -609,9 +609,10 @@ async function aggregateOnStartupIfStale() {
             : Infinity;
         const cacheMatchesSubscriptions = videoCache?.totalChannels === subscriptionCount;
         const cacheHasVideos = (videoCache?.totalVideos || 0) > 0;
-        const cacheHasShortsMetadata = Object.keys(videoCache?.shortsStatusById || {}).length > 0;
+        const shortsStatusCount = Object.keys(videoCache?.shortsStatusById || {}).length;
+        const cacheHasCompleteShortsMetadata = shortsStatusCount >= (videoCache?.totalVideos || 0);
 
-        if (cacheMatchesSubscriptions && cacheHasVideos && cacheHasShortsMetadata && cacheAge < STARTUP_CACHE_MAX_AGE_MS) {
+        if (cacheMatchesSubscriptions && cacheHasVideos && cacheHasCompleteShortsMetadata && cacheAge < STARTUP_CACHE_MAX_AGE_MS) {
             aggregationStatus = {
                 state: 'idle',
                 current: subscriptionCount,
@@ -626,8 +627,8 @@ async function aggregateOnStartupIfStale() {
             return;
         }
 
-        if (cacheMatchesSubscriptions && cacheHasVideos && !cacheHasShortsMetadata) {
-            console.log('🩳 Video cache is missing Shorts metadata; refreshing to backfill Shorts filter data');
+        if (cacheMatchesSubscriptions && cacheHasVideos && !cacheHasCompleteShortsMetadata) {
+            console.log(`🩳 Video cache has Shorts metadata for ${shortsStatusCount}/${videoCache.totalVideos || 0} videos; refreshing to finish Shorts filter data`);
         }
     } catch (err) {
         console.warn('Could not check startup video cache, refreshing feeds:', err.message);
