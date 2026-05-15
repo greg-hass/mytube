@@ -1,12 +1,24 @@
 const axios = require('axios');
 
 const SHORTS_STATUS_CONCURRENCY = 8;
-const ARCHIVED_SHORTS_STATUS_BACKFILL_LIMIT = 250;
+const ARCHIVED_SHORTS_STATUS_BACKFILL_LIMIT = 5000;
+const SHORTS_TEXT_PATTERN = /#shorts?\b|#ytshorts?\b|#fyp\b|\bshorts\b|youtube\.com\/shorts\//i;
+const SHORTS_THUMBNAIL_PATTERN = /\/(?:oar2|maxres2|hq2|frame0)\.(?:jpg|webp)(?:\?|$)/i;
 
 function looksLikeShortByLocalMetadata(video = {}) {
     const text = `${video.title || ''} ${video.description || ''}`;
-    if (/#shorts?\b|\bshorts\b|youtube\.com\/shorts\//i.test(text)) return true;
+    if (SHORTS_TEXT_PATTERN.test(text)) return true;
+    if (SHORTS_THUMBNAIL_PATTERN.test(video.thumbnail || '')) return true;
     return Number.isFinite(video.duration) && video.duration > 0 && video.duration <= 60;
+}
+
+function getResponseUrl(response = {}) {
+    return response.url
+        || response.responseUrl
+        || response.request?.responseURL
+        || response.request?.res?.responseUrl
+        || response.headers?.location
+        || '';
 }
 
 function applyLocalShortsMetadata(videos = [], shortsStatusById = {}) {
@@ -30,10 +42,15 @@ async function resolveYouTubeShortsStatus(videoId, httpClient = axios) {
     try {
         const response = await httpClient.get(`https://www.youtube.com/shorts/${encodeURIComponent(videoId)}`, {
             headers: { 'User-Agent': 'Mozilla/5.0' },
-            maxRedirects: 0,
+            maxRedirects: 5,
             timeout: 3000,
             validateStatus: () => true,
         });
+
+        const responseUrl = getResponseUrl(response);
+        if (responseUrl) {
+            return responseUrl.includes(`/shorts/${videoId}`);
+        }
 
         if (response.status === 200) return true;
         if (response.status >= 300 && response.status < 400) return false;
@@ -73,18 +90,12 @@ async function enrichVideosWithShortsStatus(videos = [], shortsStatusById = {}, 
 
 async function backfillArchivedShortsStatus(existingVideos = [], shortsStatusById = {}, httpClient = axios) {
     const candidates = existingVideos
-        .filter((video) => video?.id && shortsStatusById[video.id] !== true)
+        .filter((video) => video?.id && typeof shortsStatusById[video.id] !== 'boolean')
         .slice(0, ARCHIVED_SHORTS_STATUS_BACKFILL_LIMIT);
 
     if (candidates.length === 0) return shortsStatusById;
 
     console.log(`🩳 Backfilling Shorts status for ${candidates.length} archived videos`);
-    for (const video of candidates) {
-        if (video?.id && shortsStatusById[video.id] === false) {
-            delete shortsStatusById[video.id];
-        }
-    }
-
     return enrichVideosWithShortsStatus(candidates, shortsStatusById, httpClient);
 }
 

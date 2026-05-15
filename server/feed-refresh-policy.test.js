@@ -351,6 +351,13 @@ describe('feed refresh policy', () => {
                 description: '',
                 duration: 45,
             },
+            {
+                id: 'portrait-thumbnail-short',
+                title: 'Quick clip',
+                description: '',
+                thumbnail: 'https://i.ytimg.com/vi/portrait-thumbnail-short/oar2.jpg',
+                duration: null,
+            },
         ];
         const shortsStatusById = {};
 
@@ -359,6 +366,7 @@ describe('feed refresh policy', () => {
         expect(shortsStatusById).toEqual({
             'tagged-short': true,
             'duration-short': true,
+            'portrait-thumbnail-short': true,
         });
         expect(videos.every((video) => video.isShort === true)).toBe(true);
     });
@@ -382,7 +390,7 @@ describe('feed refresh policy', () => {
         expect(videos[0].isShort).toBe(true);
     });
 
-    it('backfills archived Shorts status in bounded batches', async () => {
+    it('backfills archived Shorts status for every unchecked cached video', async () => {
         const shortsStatusById = {};
         const videos = Array.from({ length: 300 }, (_, index) => ({
             id: `video-${index}`,
@@ -398,12 +406,11 @@ describe('feed refresh policy', () => {
             }),
         });
 
-        expect(Object.keys(shortsStatusById)).toHaveLength(250);
-        expect(shortsStatusById['video-249']).toBe(false);
-        expect(shortsStatusById['video-250']).toBeUndefined();
+        expect(Object.keys(shortsStatusById)).toHaveLength(300);
+        expect(shortsStatusById['video-299']).toBe(false);
     });
 
-    it('rechecks cached non-Short statuses so longer Shorts can be corrected', async () => {
+    it('does not recheck videos with cached non-Short status during archived backfill', async () => {
         const shortsStatusById = {
             'longer-short': false,
         };
@@ -413,12 +420,14 @@ describe('feed refresh policy', () => {
             description: '',
             duration: 90,
         }];
-
-        await backfillArchivedShortsStatus(videos, shortsStatusById, {
+        const httpClient = {
             get: vi.fn().mockResolvedValue({ status: 200, headers: {} }),
-        });
+        };
 
-        expect(shortsStatusById['longer-short']).toBe(true);
+        await backfillArchivedShortsStatus(videos, shortsStatusById, httpClient);
+
+        expect(httpClient.get).not.toHaveBeenCalled();
+        expect(shortsStatusById['longer-short']).toBe(false);
     });
 
     it('resolves Shorts status from the canonical YouTube Shorts URL', async () => {
@@ -430,6 +439,20 @@ describe('feed refresh policy', () => {
             get: vi.fn().mockResolvedValue({
                 status: 303,
                 headers: { location: 'https://www.youtube.com/watch?v=normal-video' },
+            }),
+        })).resolves.toBe(false);
+
+        await expect(resolveYouTubeShortsStatus('redirected-short', {
+            get: vi.fn().mockResolvedValue({
+                status: 200,
+                request: { res: { responseUrl: 'https://www.youtube.com/shorts/redirected-short' } },
+            }),
+        })).resolves.toBe(true);
+
+        await expect(resolveYouTubeShortsStatus('redirected-normal', {
+            get: vi.fn().mockResolvedValue({
+                status: 200,
+                request: { res: { responseUrl: 'https://www.youtube.com/watch?v=redirected-normal' } },
             }),
         })).resolves.toBe(false);
     });

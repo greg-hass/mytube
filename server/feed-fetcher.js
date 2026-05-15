@@ -206,7 +206,7 @@ function buildVideoFromFeedItem(item, { channelId, channelTitle }) {
     const mediaThumbnailUrl = getMediaAttribute(mediaGroup['media:thumbnail'], 'url');
     const durationSeconds = getMediaAttribute(mediaGroup['yt:duration'], 'seconds');
     const duration = durationSeconds ? parseInt(durationSeconds, 10) : null;
-    const looksLikeShort = /#shorts?\b|\bshorts\b|youtube\.com\/shorts\//i.test(`${item.title || ''} ${mediaDescription || ''}`);
+    const looksLikeShort = /#shorts?\b|#ytshorts?\b|#fyp\b|\bshorts\b|youtube\.com\/shorts\//i.test(`${item.title || ''} ${mediaDescription || ''}`);
 
     const video = {
         id: videoId,

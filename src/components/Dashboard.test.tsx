@@ -732,7 +732,7 @@ describe('Dashboard', () => {
     expect(screen.getByText('Normal upload')).toBeInTheDocument();
     expect(screen.getByText('Quick tip AJ#shorts')).toBeInTheDocument();
 
-    fireEvent.click(screen.getByLabelText('Shorts'));
+    fireEvent.click(screen.getByLabelText('Hide Shorts'));
 
     expect(screen.getByText('Normal upload')).toBeInTheDocument();
     expect(screen.queryByText('Quick tip AJ#shorts')).not.toBeInTheDocument();
@@ -768,7 +768,7 @@ describe('Dashboard', () => {
 
     expect(screen.getByText('Harry Maguire Said NO')).toBeInTheDocument();
 
-    fireEvent.click(screen.getByLabelText('Shorts'));
+    fireEvent.click(screen.getByLabelText('Hide Shorts'));
 
     expect(screen.getByText('Normal upload')).toBeInTheDocument();
     expect(screen.queryByText('Harry Maguire Said NO')).not.toBeInTheDocument();
