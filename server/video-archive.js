@@ -1,3 +1,5 @@
+const { normalizeVideoThumbnail } = require('./video-thumbnails');
+
 function getVideoTime(video) {
     const time = new Date(video?.publishedAt || 0).getTime();
     return Number.isFinite(time) ? time : 0;
@@ -24,7 +26,7 @@ function mergeVideoArchive(existingVideos = [], fetchedVideos = [], options = {}
         if (!video?.id) continue;
         if (activeChannelIds && !activeChannelIds.has(video.channelId)) continue;
         if (isLikelyFallbackNowStamp(video, cacheUpdatedAt)) continue;
-        byId.set(video.id, video);
+        byId.set(video.id, normalizeVideoThumbnail(video));
     }
 
     for (const video of fetchedVideos) {
@@ -32,17 +34,17 @@ function mergeVideoArchive(existingVideos = [], fetchedVideos = [], options = {}
         if (activeChannelIds && !activeChannelIds.has(video.channelId)) continue;
         if (video.fetchedVia === 'youtube-page-fallback' && byId.has(video.id)) {
             const existing = byId.get(video.id);
-            byId.set(video.id, {
+            byId.set(video.id, normalizeVideoThumbnail({
                 ...existing,
                 ...video,
                 publishedAt: existing.publishedAt || video.publishedAt,
                 description: existing.description || video.description,
                 duration: existing.duration ?? video.duration,
                 isShort: existing.isShort ?? video.isShort,
-            });
+            }));
             continue;
         }
-        byId.set(video.id, video);
+        byId.set(video.id, normalizeVideoThumbnail(video));
     }
 
     return Array.from(byId.values())

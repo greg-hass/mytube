@@ -37,6 +37,55 @@ describe('mergeVideoArchive', () => {
         expect(merged.map(video => video.id)).toEqual(['new-video', 'older-video']);
     });
 
+    it('normalizes cached YouTube thumbnails to max resolution when preserving archived videos', () => {
+        const merged = mergeVideoArchive(
+            [
+                {
+                    id: 'cached-video',
+                    title: 'Cached video',
+                    channelId: 'UC1',
+                    channelTitle: 'Channel One',
+                    publishedAt: '2026-05-01T10:00:00.000Z',
+                    thumbnail: 'https://i.ytimg.com/vi/cached-video/hqdefault.jpg',
+                    description: '',
+                },
+            ],
+            [],
+            {
+                activeChannelIds: new Set(['UC1']),
+                maxVideos: 10,
+            }
+        );
+
+        expect(merged[0].thumbnail).toBe('https://i.ytimg.com/vi/cached-video/maxresdefault.jpg');
+    });
+
+    it('normalizes cached Shorts thumbnails to the portrait max-resolution source', () => {
+        const merged = mergeVideoArchive(
+            [
+                {
+                    id: 'cached-short',
+                    title: 'Cached short #shorts',
+                    channelId: 'UC1',
+                    channelTitle: 'Channel One',
+                    publishedAt: '2026-05-01T10:00:00.000Z',
+                    thumbnail: 'https://i.ytimg.com/vi/cached-short/hqdefault.jpg',
+                    description: '',
+                },
+            ],
+            [],
+            {
+                activeChannelIds: new Set(['UC1']),
+                maxVideos: 10,
+            }
+        );
+
+        expect(merged[0]).toMatchObject({
+            isShort: true,
+            thumbnail: 'https://i.ytimg.com/vi/cached-short/oar2.jpg',
+        });
+    });
+
     it('drops archived videos for channels that are no longer subscribed', () => {
         const merged = mergeVideoArchive(
             [

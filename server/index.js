@@ -6,6 +6,7 @@ const { readJson, writeJsonQueued, updateJsonQueued } = require('./json-store');
 const { recoverDataFiles } = require('./data-integrity');
 const { mergeIncomingSubscriptions } = require('./sync-utils');
 const { searchChannels } = require('./channel-search');
+const { normalizeVideoCacheThumbnails } = require('./video-thumbnails');
 const serverPackage = require('./package.json');
 
 function readPackageMetadata(packagePath, fallback) {
@@ -231,7 +232,7 @@ app.post('/api/sync', async (req, res) => {
 app.get('/api/videos', async (req, res) => {
     try {
         const data = await readJson(VIDEOS_FILE, { videos: [], lastUpdated: null, totalChannels: 0, totalVideos: 0 });
-        res.json(data);
+        res.json(normalizeVideoCacheThumbnails(data));
     } catch (err) {
         // If file doesn't exist yet, return empty
         if (err.code === 'ENOENT') {
