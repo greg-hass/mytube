@@ -124,15 +124,19 @@ export function buildVideoFeedIndex(videos: YouTubeVideo[], channels: YouTubeCha
       .map((channel) => channel.id)
   );
   const items = videos
-    .map((video) => ({
-      video,
-      searchText: buildSearchText(video),
-      keywordText: buildKeywordText(video),
-      normalizedTitle: normalizeTitle(video.title),
-      isShort: isShortVideo(video),
-      isLiveReplay: isLiveReplayVideo(video),
-      isPremiere: isPremiereVideo(video),
-    }))
+    .map((video) => {
+      const isShort = isShortVideo(video);
+
+      return {
+        video: video.isShort === isShort ? video : { ...video, isShort },
+        searchText: buildSearchText(video),
+        keywordText: buildKeywordText(video),
+        normalizedTitle: normalizeTitle(video.title),
+        isShort,
+        isLiveReplay: isLiveReplayVideo(video),
+        isPremiere: isPremiereVideo(video),
+      };
+    })
     .sort((a, b) => getPublishedTime(b.video) - getPublishedTime(a.video));
 
   return {

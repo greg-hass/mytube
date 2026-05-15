@@ -104,6 +104,27 @@ describe('VideoCard', () => {
     expect(thumbnail.className).not.toContain('object-cover');
   });
 
+  it('uses portrait thumbnails for title-detected Shorts even without explicit metadata', () => {
+    render(
+      <MemoryRouter>
+        <VideoCard
+          video={{
+            ...video,
+            title: 'Quick useful video #shorts',
+            thumbnail: 'https://i.ytimg.com/vi/video-1/hqdefault.jpg',
+          }}
+          index={0}
+        />
+      </MemoryRouter>
+    );
+
+    const thumbnail = screen.getByAltText('Quick useful video #shorts');
+
+    expect(thumbnail).toHaveAttribute('src', 'https://i.ytimg.com/vi/video-1/oar2.jpg');
+    expect(thumbnail.className).toContain('object-contain');
+    expect(thumbnail.className).not.toContain('object-cover');
+  });
+
   it('does not add index-based render animation to dense timeline cards', () => {
     const { container } = render(
       <MemoryRouter>

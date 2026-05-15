@@ -84,6 +84,7 @@ describe('video feed index', () => {
     expect(index.videosById.get('normal')?.searchText).toContain('linux weekly roundup');
     expect(index.videosById.get('channel-match')?.searchText).toContain('linux news');
     expect(index.videosById.get('short')?.isShort).toBe(true);
+    expect(index.videosById.get('short')?.video.isShort).toBe(true);
     expect(index.mutedChannelIds.has('muted-channel')).toBe(true);
   });
 
