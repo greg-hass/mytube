@@ -10,6 +10,7 @@ import { useQueuedVideos } from '../hooks/useQueuedVideos';
 import { getVideoProgressPercent } from '../lib/video-progress';
 import { useStore } from '../store/useStore';
 import { isLiveVideo } from '../lib/video-live';
+import { isShortVideo } from '../lib/video-feed-index';
 
 interface Props {
   video: YouTubeVideo;
@@ -29,7 +30,7 @@ const SWIPE_TO_WATCHED_THRESHOLD = 80;
 const SWIPE_VERTICAL_CANCEL_THRESHOLD = 48;
 
 export const VideoCard = ({ video, channelThumbnail }: Props) => {
-  const shouldFitThumbnail = video.isShort === true;
+  const shouldFitThumbnail = isShortVideo(video);
   const [imageLoaded, setImageLoaded] = useState(false);
   const [thumbnailSrc, setThumbnailSrc] = useState(() => (
     getHighResolutionVideoThumbnail(video.thumbnail, { isShort: shouldFitThumbnail })
