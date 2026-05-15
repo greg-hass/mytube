@@ -1,8 +1,10 @@
-const SHORTS_TEXT_PATTERN = /#shorts?\b|\bshorts\b|youtube\.com\/shorts\//i;
+const SHORTS_TEXT_PATTERN = /#shorts?\b|#ytshorts?\b|#fyp\b|\bshorts\b|youtube\.com\/shorts\//i;
+const SHORTS_THUMBNAIL_PATTERN = /\/(?:oar2|maxres2|hq2|frame0)\.(?:jpg|webp)(?:\?|$)/i;
 const YOUTUBE_VIDEO_THUMBNAIL_PATTERN = /\/(?:vi|vi_webp)\/([^/]+)\/(?:maxresdefault|hq720|sddefault|hqdefault|mqdefault|default|oar2|maxres2|hq2|frame0|0|1|2|3)\.(jpg|webp)(\?.*)?$/i;
 
 function isShortVideo(video = {}) {
     if (video.isShort === true) return true;
+    if (SHORTS_THUMBNAIL_PATTERN.test(video.thumbnail || '')) return true;
     return SHORTS_TEXT_PATTERN.test(`${video.title || ''} ${video.description || ''}`);
 }
 
