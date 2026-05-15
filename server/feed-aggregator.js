@@ -409,6 +409,7 @@ async function runAggregation(options = {}) {
             const currentVideos = mergeVideoArchive(existingVideos, allVideos, {
                 activeChannelIds: new Set(subscriptions.map(sub => sub.id)),
                 maxVideos: MAX_ARCHIVED_VIDEOS,
+                cacheUpdatedAt: existingVideoCache.lastUpdated,
             });
             channelRefreshes = mergeChannelRefreshes(
                 channelRefreshes,
@@ -447,6 +448,7 @@ async function runAggregation(options = {}) {
         const archivedVideos = mergeVideoArchive(existingVideos, allVideos, {
             activeChannelIds: new Set(subscriptions.map(sub => sub.id)),
             maxVideos: MAX_ARCHIVED_VIDEOS,
+            cacheUpdatedAt: existingVideoCache.lastUpdated,
         });
         await backfillArchivedShortsStatus(archivedVideos, shortsStatusById);
         const archivedVideosWithShortsStatus = archivedVideos.map((video) => (

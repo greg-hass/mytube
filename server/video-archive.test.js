@@ -99,4 +99,40 @@ describe('mergeVideoArchive', () => {
             description: 'Existing description',
         });
     });
+
+    it('drops old uploads fallback entries that were stamped with the cache write time', () => {
+        const merged = mergeVideoArchive(
+            [
+                {
+                    id: 'poisoned-fallback',
+                    title: 'Fallback video without a real publish time',
+                    channelId: 'UC1',
+                    channelTitle: 'Channel One',
+                    publishedAt: '2026-05-14T12:00:03.000Z',
+                    thumbnail: 'fallback.jpg',
+                    description: '',
+                    fetchedVia: 'youtube-page-fallback',
+                },
+                {
+                    id: 'real-fallback',
+                    title: 'Fallback video with a parsed publish time',
+                    channelId: 'UC1',
+                    channelTitle: 'Channel One',
+                    publishedAt: '2026-05-14T10:00:00.000Z',
+                    thumbnail: 'fallback.jpg',
+                    description: '',
+                    fetchedVia: 'youtube-page-fallback',
+                    publishedAtSource: 'youtube-relative-time',
+                },
+            ],
+            [],
+            {
+                activeChannelIds: new Set(['UC1']),
+                cacheUpdatedAt: '2026-05-14T12:00:00.000Z',
+                maxVideos: 10,
+            }
+        );
+
+        expect(merged.map(video => video.id)).toEqual(['real-fallback']);
+    });
 });

@@ -2,6 +2,8 @@ import { describe, expect, it } from 'vitest';
 import { buildVideoFeedIndex, filterIndexedVideos, isShortVideo } from './video-feed-index';
 import type { YouTubeChannel, YouTubeVideo } from '../types/youtube';
 
+const FIXED_PUBLISHED_AT = '2026-05-14T12:00:00.000Z';
+
 const videos: YouTubeVideo[] = [
   {
     id: 'normal',
@@ -10,7 +12,7 @@ const videos: YouTubeVideo[] = [
     thumbnail: '',
     channelId: 'tech',
     channelTitle: 'Tech Channel',
-    publishedAt: new Date().toISOString(),
+    publishedAt: FIXED_PUBLISHED_AT,
     duration: 20 * 60,
   },
   {
@@ -20,7 +22,7 @@ const videos: YouTubeVideo[] = [
     thumbnail: '',
     channelId: 'linux-news',
     channelTitle: 'Linux News',
-    publishedAt: new Date().toISOString(),
+    publishedAt: FIXED_PUBLISHED_AT,
     duration: 8 * 60,
   },
   {
@@ -30,7 +32,7 @@ const videos: YouTubeVideo[] = [
     thumbnail: '',
     channelId: 'news',
     channelTitle: 'News Channel',
-    publishedAt: new Date().toISOString(),
+    publishedAt: FIXED_PUBLISHED_AT,
     duration: 30,
   },
   {
@@ -40,7 +42,7 @@ const videos: YouTubeVideo[] = [
     thumbnail: '',
     channelId: 'muted-channel',
     channelTitle: 'Muted Channel',
-    publishedAt: new Date().toISOString(),
+    publishedAt: FIXED_PUBLISHED_AT,
     duration: 15 * 60,
   },
   {
@@ -50,7 +52,7 @@ const videos: YouTubeVideo[] = [
     thumbnail: '',
     channelId: 'football',
     channelTitle: 'Football Channel',
-    publishedAt: new Date().toISOString(),
+    publishedAt: FIXED_PUBLISHED_AT,
     duration: 2 * 60 * 60,
   },
   {
@@ -60,7 +62,7 @@ const videos: YouTubeVideo[] = [
     thumbnail: '',
     channelId: 'tech',
     channelTitle: 'Tech Channel',
-    publishedAt: new Date().toISOString(),
+    publishedAt: FIXED_PUBLISHED_AT,
     duration: 45 * 60,
   },
 ];
@@ -83,6 +85,41 @@ describe('video feed index', () => {
     expect(index.videosById.get('channel-match')?.searchText).toContain('linux news');
     expect(index.videosById.get('short')?.isShort).toBe(true);
     expect(index.mutedChannelIds.has('muted-channel')).toBe(true);
+  });
+
+  it('orders indexed videos newest first even when the server payload is grouped by refresh order', () => {
+    const index = buildVideoFeedIndex([
+      {
+        id: 'older',
+        title: 'Older upload',
+        description: '',
+        thumbnail: '',
+        channelId: 'channel-a',
+        channelTitle: 'Channel A',
+        publishedAt: '2026-05-14T10:00:00.000Z',
+      },
+      {
+        id: 'newer',
+        title: 'Newer upload',
+        description: '',
+        thumbnail: '',
+        channelId: 'channel-b',
+        channelTitle: 'Channel B',
+        publishedAt: '2026-05-14T12:00:00.000Z',
+      },
+      {
+        id: 'invalid-date',
+        title: 'Missing date',
+        description: '',
+        thumbnail: '',
+        channelId: 'channel-c',
+        channelTitle: 'Channel C',
+        publishedAt: '',
+      },
+    ], []);
+
+    expect(filterIndexedVideos(index, { searchQuery: '', showShorts: true }).map(item => item.video.id))
+      .toEqual(['newer', 'older', 'invalid-date']);
   });
 
   it('trusts explicit Shorts metadata even when duration and text are missing', () => {
@@ -225,7 +262,7 @@ describe('video feed index', () => {
         thumbnail: '',
         channelId: 'tech',
         channelTitle: 'Tech Channel',
-        publishedAt: new Date().toISOString(),
+        publishedAt: FIXED_PUBLISHED_AT,
       },
       {
         id: 'second',
@@ -234,7 +271,7 @@ describe('video feed index', () => {
         thumbnail: '',
         channelId: 'news',
         channelTitle: 'News Channel',
-        publishedAt: new Date().toISOString(),
+        publishedAt: FIXED_PUBLISHED_AT,
       },
       {
         id: 'unique',
@@ -243,7 +280,7 @@ describe('video feed index', () => {
         thumbnail: '',
         channelId: 'linux-news',
         channelTitle: 'Linux News',
-        publishedAt: new Date().toISOString(),
+        publishedAt: FIXED_PUBLISHED_AT,
       },
     ];
     const index = buildVideoFeedIndex(duplicateVideos, []);

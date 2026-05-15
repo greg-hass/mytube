@@ -82,9 +82,23 @@ let mockAllSubscriptions = [
 ];
 const mockToggleChannelFavorite = vi.fn();
 let latestSubscriptionsListProps: { selectedGroup?: string; groups?: string[] } | undefined;
+const headerMockState = vi.hoisted(() => ({
+  latestProps: undefined as undefined | {
+    syncStatus?: MockRSSVideosState['syncStatus'];
+    cacheStatus?: MockRSSVideosState['cacheStatus'];
+    onRetryFailed?: () => void;
+  },
+}));
 
 vi.mock('./Header', () => ({
-  Header: () => <header>Header</header>,
+  Header: (props: {
+    syncStatus?: MockRSSVideosState['syncStatus'];
+    cacheStatus?: MockRSSVideosState['cacheStatus'];
+    onRetryFailed?: () => void;
+  }) => {
+    headerMockState.latestProps = props;
+    return <header>Header</header>;
+  },
 }));
 
 vi.mock('./SubscriptionsList', () => ({
@@ -174,6 +188,7 @@ describe('Dashboard', () => {
   beforeEach(() => {
     mockSearchQuery = '';
     latestSubscriptionsListProps = undefined;
+    headerMockState.latestProps = undefined;
     mockWatchedVideos = new Set<string>();
     mockMarkAsWatched.mockClear();
     mockToggleChannelFavorite.mockClear();
@@ -304,9 +319,15 @@ describe('Dashboard', () => {
 
     render(<Dashboard />);
 
-    expect(screen.getByText('1 channel needs attention')).toBeInTheDocument();
-    expect(screen.getByText('Broken Channel')).toBeInTheDocument();
-    expect(screen.getByText(/RSS feed failed with HTTP 404/)).toBeInTheDocument();
+    expect(screen.queryByText('1 channel needs attention')).not.toBeInTheDocument();
+    expect(screen.queryByText('Broken Channel')).not.toBeInTheDocument();
+    expect(headerMockState.latestProps?.syncStatus?.failedChannels).toEqual([{
+      id: 'UC_BAD',
+      title: 'Broken Channel',
+      reason: 'RSS feed failed with HTTP 404',
+    }]);
+    expect(headerMockState.latestProps?.cacheStatus).toBe(mockRSSVideosState.cacheStatus);
+    expect(headerMockState.latestProps?.onRetryFailed).toBe(mockRSSVideosState.refresh);
   });
 
   it('shows the latest refresh age and scheduled interval', () => {

@@ -6,7 +6,6 @@ import { Header } from './Header';
 import { SubscriptionsList } from './SubscriptionsList';
 import { SubscriptionCard } from './SubscriptionCard';
 import { VirtualizedVideoGrid } from './VirtualizedVideoGrid';
-import { RefreshStatusPanel } from './RefreshStatusPanel';
 import { EmptyState } from './EmptyState';
 import { useKeyboardShortcuts } from '../hooks/useKeyboardShortcuts';
 import { KeyboardShortcutsHelp } from './KeyboardShortcutsHelp';
@@ -445,6 +444,9 @@ export const Dashboard = () => {
         onAddChannel={() => setIsAddChannelModalOpen(true)}
         showMobileSearch={activeTab === 'subscriptions' || activeTab === 'latest' || activeTab === 'queue'}
         searchPlaceholder={activeTab === 'latest' || activeTab === 'queue' ? 'Search videos...' : 'Search channels...'}
+        syncStatus={syncStatus}
+        cacheStatus={cacheStatus}
+        onRetryFailed={refetchVideos}
       />
 
       <div
@@ -732,11 +734,6 @@ export const Dashboard = () => {
                 </div>
               ) : (
                 <>
-                  <RefreshStatusPanel
-                    status={syncStatus}
-                    cacheStatus={cacheStatus}
-                    onRetryFailed={refetchVideos}
-                  />
                   {videos.length === 0 ? (
                     <div className="text-center py-12">
                       {syncStatus?.isSyncing ? (

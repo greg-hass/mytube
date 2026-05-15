@@ -72,11 +72,11 @@ function getBestThumbnailUrl(thumbnails = []) {
 
 function parseRelativePublishedAt(text, now = Date.now()) {
     const normalized = String(text || '').trim().toLowerCase();
-    if (!normalized) return new Date(now).toISOString();
+    if (!normalized) return null;
     if (normalized === 'yesterday') return new Date(now - 24 * 60 * 60 * 1000).toISOString();
 
     const match = normalized.match(/(\d+)\s+(second|minute|hour|day|week|month|year)s?\s+ago/);
-    if (!match) return new Date(now).toISOString();
+    if (!match) return null;
 
     const amount = Number(match[1]);
     const multipliers = {
@@ -176,6 +176,9 @@ function parseUploadsPlaylistVideos(html, { channelId, now = Date.now() } = {}) 
         seenVideoIds.add(renderer.videoId);
         const title = getTextValue(renderer.title) || 'Untitled';
         const publishedText = getTextValue(renderer.publishedTimeText);
+        const publishedAt = parseRelativePublishedAt(publishedText, now);
+        if (!publishedAt) return;
+
         const thumbnail = getBestThumbnailUrl(renderer.thumbnail?.thumbnails)
             || `https://i.ytimg.com/vi/${renderer.videoId}/hqdefault.jpg`;
 
@@ -184,11 +187,12 @@ function parseUploadsPlaylistVideos(html, { channelId, now = Date.now() } = {}) 
             title,
             channelId,
             channelTitle: playlistTitle || 'Unknown',
-            publishedAt: parseRelativePublishedAt(publishedText, now),
+            publishedAt,
             thumbnail,
             description: '',
             duration: null,
             fetchedVia: 'youtube-page-fallback',
+            publishedAtSource: 'youtube-relative-time',
         });
     });
 
