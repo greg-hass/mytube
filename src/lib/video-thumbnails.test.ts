@@ -14,6 +14,12 @@ describe('video thumbnails', () => {
     );
   });
 
+  it('upgrades numbered YouTube thumbnails to max resolution', () => {
+    expect(getHighResolutionVideoThumbnail('https://img.youtube.com/vi/abc123/0.jpg')).toBe(
+      'https://img.youtube.com/vi/abc123/maxresdefault.jpg'
+    );
+  });
+
   it('falls back through lower quality YouTube thumbnail sizes', () => {
     expect(getNextVideoThumbnailFallback('https://i.ytimg.com/vi/abc123/maxresdefault.jpg')).toBe(
       'https://i.ytimg.com/vi/abc123/sddefault.jpg'

@@ -281,7 +281,7 @@ describe('feed refresh policy', () => {
                 title: 'Fallback video',
                 channelId: 'UC_FALLBACK',
                 channelTitle: 'Fallback Channel',
-                thumbnail: 'https://i.ytimg.com/vi/fallback-video/hqdefault.jpg',
+                thumbnail: 'https://i.ytimg.com/vi/fallback-video/maxresdefault.jpg',
                 publishedAt: '2026-05-14T10:00:00.000Z',
             }],
         });

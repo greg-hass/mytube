@@ -1,5 +1,6 @@
 import { XMLParser } from 'fast-xml-parser';
 import { fetchWithProxy } from './cors-proxies';
+import { getHighResolutionVideoThumbnail } from './video-thumbnails';
 import { resolveTemporaryChannelFromRSS } from './youtube-api';
 import type { YouTubeVideo, RSSVideoEntry } from '../types/youtube';
 
@@ -46,14 +47,15 @@ function transformRSSEntry(entry: RSSVideoEntry, channelId: string): YouTubeVide
 function getThumbnailUrl(videoId: string, originalUrl?: string): string {
   // If original URL exists, use it
   if (originalUrl && originalUrl.trim() !== '') {
-    return originalUrl;
+    return getHighResolutionVideoThumbnail(originalUrl);
   }
 
   // Try different thumbnail sizes in order of preference
   const thumbnailSizes = [
+    'maxresdefault.jpg',
+    'sddefault.jpg',
     'hqdefault.jpg',
     'mqdefault.jpg',
-    'sddefault.jpg',
     'default.jpg'
   ];
 

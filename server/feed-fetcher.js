@@ -4,6 +4,7 @@ const axios = require('axios');
 const FEED_FETCH_RETRY_STATUSES = new Set([408, 429, 500, 502, 503, 504]);
 const FEED_FETCH_MAX_ATTEMPTS = 3;
 const UPLOADS_PLAYLIST_FETCH_LIMIT = 15;
+const YOUTUBE_VIDEO_THUMBNAIL_PATTERN = /\/(?:vi|vi_webp)\/([^/]+)\/(?:maxresdefault|sddefault|hqdefault|mqdefault|default|0|1|2|3)\.(jpg|webp)(\?.*)?$/i;
 
 const parser = new Parser({
     timeout: 10000,
@@ -68,6 +69,23 @@ function getBestThumbnailUrl(thumbnails = []) {
     const url = sorted[0]?.url || '';
     if (url.startsWith('//')) return `https:${url}`;
     return url.replace(/\\u0026/g, '&');
+}
+
+function getHighResolutionVideoThumbnail(thumbnail, videoId) {
+    const fallback = videoId ? `https://i.ytimg.com/vi/${videoId}/maxresdefault.jpg` : '';
+    const source = String(thumbnail || fallback);
+
+    try {
+        const url = new URL(source);
+        if ((url.hostname === 'i.ytimg.com' || url.hostname === 'img.youtube.com') && YOUTUBE_VIDEO_THUMBNAIL_PATTERN.test(url.pathname)) {
+            url.pathname = url.pathname.replace(YOUTUBE_VIDEO_THUMBNAIL_PATTERN, '/vi/$1/maxresdefault.$2');
+            return url.toString();
+        }
+    } catch {
+        // Fall through to the original value or fallback URL.
+    }
+
+    return source || fallback;
 }
 
 function parseRelativePublishedAt(text, now = Date.now()) {
@@ -179,8 +197,7 @@ function parseUploadsPlaylistVideos(html, { channelId, now = Date.now() } = {}) 
         const publishedAt = parseRelativePublishedAt(publishedText, now);
         if (!publishedAt) return;
 
-        const thumbnail = getBestThumbnailUrl(renderer.thumbnail?.thumbnails)
-            || `https://i.ytimg.com/vi/${renderer.videoId}/hqdefault.jpg`;
+        const thumbnail = getHighResolutionVideoThumbnail(getBestThumbnailUrl(renderer.thumbnail?.thumbnails), renderer.videoId);
 
         videos.push({
             id: renderer.videoId,
@@ -214,10 +231,12 @@ function buildVideoFromFeedItem(item, { channelId, channelTitle }) {
         channelId: channelId,
         channelTitle,
         publishedAt: item.pubDate || item.isoDate,
-        thumbnail: item.media?.thumbnail?.[0]?.url
+        thumbnail: getHighResolutionVideoThumbnail(
+            item.media?.thumbnail?.[0]?.url
             || mediaThumbnailUrl
-            || item.enclosure?.url
-            || `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`,
+            || item.enclosure?.url,
+            videoId
+        ),
         description: item.contentSnippet || item.content || mediaDescription || '',
         duration: Number.isFinite(duration) ? duration : null,
     };

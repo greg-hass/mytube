@@ -12,7 +12,7 @@ type Props = {
   status: SyncStatus;
   cacheStatus: CacheStatus;
   onRetryFailed: () => void;
-  variant?: 'timeline' | 'menu';
+  variant?: 'timeline' | 'menu' | 'compact';
 };
 
 export function RefreshStatusPanel({ status, cacheStatus, onRetryFailed, variant = 'timeline' }: Props) {
@@ -26,9 +26,11 @@ export function RefreshStatusPanel({ status, cacheStatus, onRetryFailed, variant
       ? 'Off'
       : 'Pending';
   const isMenu = variant === 'menu';
+  const isCompact = variant === 'compact';
+  const failedPreviewLimit = isMenu ? 3 : 5;
 
   return (
-    <section className={`${isMenu ? 'rounded-lg border border-gray-200 bg-white/70 px-3 py-3 dark:border-gray-800 dark:bg-gray-900/70' : 'mb-4 rounded-lg border border-gray-200 bg-white px-4 py-3 shadow-sm dark:border-gray-800 dark:bg-gray-900'}`}>
+    <section className={`${isMenu || isCompact ? 'rounded-lg border border-gray-200 bg-white/70 px-3 py-3 dark:border-gray-800 dark:bg-gray-900/70' : 'mb-4 rounded-lg border border-gray-200 bg-white px-4 py-3 shadow-sm dark:border-gray-800 dark:bg-gray-900'}`}>
       <div className={`flex flex-col gap-3 ${isMenu ? '' : 'lg:flex-row lg:items-start lg:justify-between'}`}>
         <div className="min-w-0">
           <div className="flex items-center gap-2 text-sm font-semibold text-gray-900 dark:text-gray-100">
@@ -44,17 +46,21 @@ export function RefreshStatusPanel({ status, cacheStatus, onRetryFailed, variant
             </span>
           </div>
 
-          <div className={`mt-2 grid gap-2 text-xs text-gray-600 dark:text-gray-300 ${isMenu ? '' : 'sm:grid-cols-3'}`}>
+          <div className={`mt-2 grid gap-2 text-xs text-gray-600 dark:text-gray-300 ${isMenu || isCompact ? '' : 'sm:grid-cols-3'}`}>
             <span>
               <span className="font-medium text-gray-800 dark:text-gray-100">Last refresh</span> {formatRelativeAge(lastRefresh)}
             </span>
-            <span>
-              <span className="font-medium text-gray-800 dark:text-gray-100">Next refresh</span> {nextRefresh}
-            </span>
-            <span>
-              <span className="font-medium text-gray-800 dark:text-gray-100">Cache age</span> {formatDuration(cacheStatus.age)}
-              {cacheStatus.isStale ? ' stale' : ''}
-            </span>
+            {!isCompact && (
+              <>
+                <span>
+                  <span className="font-medium text-gray-800 dark:text-gray-100">Next refresh</span> {nextRefresh}
+                </span>
+                <span>
+                  <span className="font-medium text-gray-800 dark:text-gray-100">Cache age</span> {formatDuration(cacheStatus.age)}
+                  {cacheStatus.isStale ? ' stale' : ''}
+                </span>
+              </>
+            )}
           </div>
         </div>
 
@@ -62,7 +68,7 @@ export function RefreshStatusPanel({ status, cacheStatus, onRetryFailed, variant
           <button
             type="button"
             onClick={onRetryFailed}
-            className={`inline-flex h-9 shrink-0 items-center justify-center gap-2 rounded-lg bg-amber-100 px-3 text-sm font-medium text-amber-950 hover:bg-amber-200 dark:bg-amber-950/50 dark:text-amber-100 dark:hover:bg-amber-900/70 ${isMenu ? 'w-full' : ''}`}
+            className={`inline-flex h-9 shrink-0 items-center justify-center gap-2 rounded-lg bg-amber-100 px-3 text-sm font-medium text-amber-950 hover:bg-amber-200 dark:bg-amber-950/50 dark:text-amber-100 dark:hover:bg-amber-900/70 ${isMenu || isCompact ? 'w-full' : ''}`}
           >
             <RefreshCw className="h-4 w-4" />
             Retry failed
@@ -78,15 +84,19 @@ export function RefreshStatusPanel({ status, cacheStatus, onRetryFailed, variant
               <p className="text-xs font-semibold text-amber-950 dark:text-amber-100">
                 {failedChannels.length} channel{failedChannels.length === 1 ? '' : 's'} need{failedChannels.length === 1 ? 's' : ''} attention
               </p>
-              {failedChannels.slice(0, isMenu ? 3 : 5).map((channel) => (
-                <p key={channel.id} className="text-xs text-amber-800 dark:text-amber-200">
-                  <span className="font-medium">{channel.title}</span>: {channel.backoffUntil ? `Backoff until ${formatDateTime(channel.backoffUntil)}` : channel.reason}
-                </p>
-              ))}
-              {failedChannels.length > (isMenu ? 3 : 5) && (
-                <p className="text-xs text-amber-800 dark:text-amber-200">
-                  +{failedChannels.length - (isMenu ? 3 : 5)} more
-                </p>
+              {!isCompact && (
+                <>
+                  {failedChannels.slice(0, failedPreviewLimit).map((channel) => (
+                    <p key={channel.id} className="text-xs text-amber-800 dark:text-amber-200">
+                      <span className="font-medium">{channel.title}</span>: {channel.backoffUntil ? `Backoff until ${formatDateTime(channel.backoffUntil)}` : channel.reason}
+                    </p>
+                  ))}
+                  {failedChannels.length > failedPreviewLimit && (
+                    <p className="text-xs text-amber-800 dark:text-amber-200">
+                      +{failedChannels.length - failedPreviewLimit} more
+                    </p>
+                  )}
+                </>
               )}
             </div>
           </div>
