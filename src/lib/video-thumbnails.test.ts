@@ -20,8 +20,32 @@ describe('video thumbnails', () => {
     );
   });
 
+  it('uses portrait YouTube thumbnail variants for Shorts', () => {
+    expect(getHighResolutionVideoThumbnail('https://i.ytimg.com/vi/abc123/hqdefault.jpg', { isShort: true })).toBe(
+      'https://i.ytimg.com/vi/abc123/oar2.jpg'
+    );
+  });
+
+  it('falls back through portrait Shorts thumbnails before landscape thumbnails', () => {
+    expect(getNextVideoThumbnailFallback('https://i.ytimg.com/vi/abc123/oar2.jpg')).toBe(
+      'https://i.ytimg.com/vi/abc123/maxres2.jpg'
+    );
+    expect(getNextVideoThumbnailFallback('https://i.ytimg.com/vi/abc123/maxres2.jpg')).toBe(
+      'https://i.ytimg.com/vi/abc123/hq2.jpg'
+    );
+    expect(getNextVideoThumbnailFallback('https://i.ytimg.com/vi/abc123/hq2.jpg')).toBe(
+      'https://i.ytimg.com/vi/abc123/frame0.jpg'
+    );
+    expect(getNextVideoThumbnailFallback('https://i.ytimg.com/vi/abc123/frame0.jpg')).toBe(
+      'https://i.ytimg.com/vi/abc123/maxresdefault.jpg'
+    );
+  });
+
   it('falls back through lower quality YouTube thumbnail sizes', () => {
     expect(getNextVideoThumbnailFallback('https://i.ytimg.com/vi/abc123/maxresdefault.jpg')).toBe(
+      'https://i.ytimg.com/vi/abc123/hq720.jpg'
+    );
+    expect(getNextVideoThumbnailFallback('https://i.ytimg.com/vi/abc123/hq720.jpg')).toBe(
       'https://i.ytimg.com/vi/abc123/sddefault.jpg'
     );
     expect(getNextVideoThumbnailFallback('https://i.ytimg.com/vi/abc123/sddefault.jpg')).toBe(

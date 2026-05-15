@@ -2,7 +2,7 @@ import { createRequire } from 'node:module';
 import { describe, expect, it } from 'vitest';
 
 const require = createRequire(import.meta.url);
-const { parseUploadsPlaylistVideos } = require('./feed-fetcher');
+const { buildVideoFromFeedItem, parseUploadsPlaylistVideos } = require('./feed-fetcher');
 
 function buildUploadsPage(videoRenderers) {
     return `
@@ -24,6 +24,28 @@ function buildUploadsPage(videoRenderers) {
 }
 
 describe('feed fetcher', () => {
+    it('stores portrait thumbnail URLs for feed items that are Shorts', () => {
+        const video = buildVideoFromFeedItem({
+            id: 'yt:video:short-id',
+            title: 'Quick clip #shorts',
+            pubDate: '2026-05-14T10:00:00.000Z',
+            mediaGroup: {
+                'media:thumbnail': {
+                    $: { url: 'https://i.ytimg.com/vi/short-id/hqdefault.jpg' },
+                },
+            },
+        }, {
+            channelId: 'UC_FALLBACK',
+            channelTitle: 'Fallback Channel',
+        });
+
+        expect(video).toMatchObject({
+            id: 'short-id',
+            isShort: true,
+            thumbnail: 'https://i.ytimg.com/vi/short-id/oar2.jpg',
+        });
+    });
+
     it('does not treat missing uploads-page publish times as newly published videos', () => {
         const html = buildUploadsPage([
             {
