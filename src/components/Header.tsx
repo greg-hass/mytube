@@ -61,6 +61,7 @@ export const Header = ({
   const [showMobileMenu, setShowMobileMenu] = useState(false);
   const [showMobileSearchPanel, setShowMobileSearchPanel] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const showRefreshHealthPanel = Boolean(syncStatus?.isSyncing && cacheStatus && onRetryFailed);
 
   const handleRefresh = async () => {
     setIsRefreshing(true);
@@ -322,6 +323,16 @@ export const Header = ({
             </button>
           </div>
         </div>}
+          {showRefreshHealthPanel && syncStatus && cacheStatus && onRetryFailed && (
+            <div data-testid="mobile-refresh-health-panel" className="mobile-header-search pb-3 md:hidden">
+              <RefreshStatusPanel
+                status={syncStatus}
+                cacheStatus={cacheStatus}
+                onRetryFailed={onRetryFailed}
+                variant="compact"
+              />
+            </div>
+          )}
         </div>
       </motion.header>
 

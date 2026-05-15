@@ -28,7 +28,7 @@ function getVideoThumbnailCandidate(thumbnail: string, qualityIndex: number): st
   }
 
   return thumbnail.replace(
-    /\/(?:maxresdefault|sddefault|hqdefault|mqdefault|default)\.(jpg|webp)(\?.*)?$/i,
+    /\/(?:maxresdefault|sddefault|hqdefault|mqdefault|default|0|1|2|3)\.(jpg|webp)(\?.*)?$/i,
     `/${YOUTUBE_THUMBNAIL_QUALITY_ORDER[qualityIndex]}.$1$2`
   );
 }
@@ -38,7 +38,7 @@ function isYouTubeVideoThumbnail(thumbnail: string): boolean {
     const url = new URL(thumbnail);
     return (
       (url.hostname === 'i.ytimg.com' || url.hostname === 'img.youtube.com') &&
-      /\/(?:vi|vi_webp)\/[^/]+\/(?:maxresdefault|sddefault|hqdefault|mqdefault|default)\.(?:jpg|webp)$/i.test(url.pathname)
+      /\/(?:vi|vi_webp)\/[^/]+\/(?:maxresdefault|sddefault|hqdefault|mqdefault|default|0|1|2|3)\.(?:jpg|webp)$/i.test(url.pathname)
     );
   } catch {
     return false;

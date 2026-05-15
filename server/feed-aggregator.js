@@ -229,7 +229,7 @@ async function runAggregation(options = {}) {
                                 thumbnail: item.snippet.thumbnails.maxres?.url ||
                                     item.snippet.thumbnails.high?.url ||
                                     item.snippet.thumbnails.medium?.url ||
-                                    `https://i.ytimg.com/vi/${item.contentDetails.videoId}/hqdefault.jpg`,
+                                    `https://i.ytimg.com/vi/${item.contentDetails.videoId}/maxresdefault.jpg`,
                                 description: item.snippet.description,
                                 liveBroadcastContent: item.snippet.liveBroadcastContent,
                                 isLive: item.snippet.liveBroadcastContent === 'live',

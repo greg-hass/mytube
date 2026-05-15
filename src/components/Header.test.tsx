@@ -117,6 +117,43 @@ describe('Header', () => {
     expect(screen.getByText('Broken Channel')).toBeInTheDocument();
   });
 
+  it('shows the compact feed health panel only while refresh is running', () => {
+    const syncingStatus = {
+      total: 2,
+      current: 1,
+      isSyncing: true,
+      lastUpdated: Date.now(),
+      errors: 0,
+      videos: 10,
+      state: 'running' as const,
+      failedChannels: [],
+    };
+    const cacheStatus = { hasCache: true, isStale: false, age: 60 * 1000, videoCount: 10 };
+    const { rerender } = render(
+      <Header
+        onAddChannel={vi.fn()}
+        syncStatus={syncingStatus}
+        cacheStatus={cacheStatus}
+        onRetryFailed={vi.fn()}
+      />
+    );
+
+    expect(screen.getByTestId('mobile-refresh-health-panel')).toBeInTheDocument();
+    expect(screen.getByText('Refreshing 1/2')).toBeInTheDocument();
+    expect(screen.queryByText(/Next refresh/i)).not.toBeInTheDocument();
+
+    rerender(
+      <Header
+        onAddChannel={vi.fn()}
+        syncStatus={{ ...syncingStatus, isSyncing: false, state: 'idle' }}
+        cacheStatus={cacheStatus}
+        onRetryFailed={vi.fn()}
+      />
+    );
+
+    expect(screen.queryByTestId('mobile-refresh-health-panel')).not.toBeInTheDocument();
+  });
+
   it('can hide mobile search when the active view does not use channel search', () => {
     render(<Header onAddChannel={vi.fn()} showMobileSearch={false} />);
 

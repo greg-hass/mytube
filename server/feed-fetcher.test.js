@@ -60,6 +60,7 @@ describe('feed fetcher', () => {
         expect(videos[0]).toMatchObject({
             id: 'real-date',
             publishedAt: '2026-05-14T10:00:00.000Z',
+            thumbnail: 'https://i.ytimg.com/vi/real-date/maxresdefault.jpg',
             publishedAtSource: 'youtube-relative-time',
         });
     });
