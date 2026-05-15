@@ -112,21 +112,28 @@ function matchesDurationFilter(video: VideoWithNullableDuration, durationFilter:
   return duration >= THIRTY_MINUTES_SECONDS;
 }
 
+function getPublishedTime(video: YouTubeVideo) {
+  const time = new Date(video.publishedAt || 0).getTime();
+  return Number.isFinite(time) ? time : 0;
+}
+
 export function buildVideoFeedIndex(videos: YouTubeVideo[], channels: YouTubeChannel[]): VideoFeedIndex {
   const mutedChannelIds = new Set(
     channels
       .filter((channel) => channel.isMuted)
       .map((channel) => channel.id)
   );
-  const items = videos.map((video) => ({
-    video,
-    searchText: buildSearchText(video),
-    keywordText: buildKeywordText(video),
-    normalizedTitle: normalizeTitle(video.title),
-    isShort: isShortVideo(video),
-    isLiveReplay: isLiveReplayVideo(video),
-    isPremiere: isPremiereVideo(video),
-  }));
+  const items = videos
+    .map((video) => ({
+      video,
+      searchText: buildSearchText(video),
+      keywordText: buildKeywordText(video),
+      normalizedTitle: normalizeTitle(video.title),
+      isShort: isShortVideo(video),
+      isLiveReplay: isLiveReplayVideo(video),
+      isPremiere: isPremiereVideo(video),
+    }))
+    .sort((a, b) => getPublishedTime(b.video) - getPublishedTime(a.video));
 
   return {
     items,

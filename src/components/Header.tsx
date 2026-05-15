@@ -15,8 +15,10 @@ import {
 } from 'lucide-react';
 import { lazy, Suspense, useState } from 'react';
 import { SettingsModal } from './SettingsModal';
+import { RefreshStatusPanel } from './RefreshStatusPanel';
 import { useStore } from '../store/useStore';
 import { useSubscriptionStorage } from '../hooks/useSubscriptionStorage';
+import type { SyncStatus } from '../hooks/useRSSVideos';
 import type { SortBy } from '../types/youtube';
 
 const OPMLUpload = lazy(() => import('./OPMLUpload').then((module) => ({ default: module.OPMLUpload })));
@@ -25,12 +27,23 @@ interface HeaderProps {
   onAddChannel?: () => void;
   showMobileSearch?: boolean;
   searchPlaceholder?: string;
+  syncStatus?: SyncStatus;
+  cacheStatus?: {
+    hasCache: boolean;
+    isStale: boolean;
+    age: number;
+    videoCount: number;
+  };
+  onRetryFailed?: () => void;
 }
 
 export const Header = ({
   onAddChannel,
   showMobileSearch = true,
   searchPlaceholder = 'Search channels...',
+  syncStatus,
+  cacheStatus,
+  onRetryFailed,
 }: HeaderProps) => {
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const {
@@ -356,6 +369,20 @@ export const Header = ({
                 <RefreshCw className={`h-4 w-4 ${isRefreshing ? 'animate-spin' : ''}`} />
                 Refresh Feeds
               </button>
+
+              {syncStatus && cacheStatus && onRetryFailed && (
+                <div className="space-y-2 pt-1">
+                  <p className="text-xs font-medium uppercase tracking-wide text-gray-500 dark:text-gray-400">
+                    Feed health
+                  </p>
+                  <RefreshStatusPanel
+                    status={syncStatus}
+                    cacheStatus={cacheStatus}
+                    onRetryFailed={onRetryFailed}
+                    variant="menu"
+                  />
+                </div>
+              )}
 
               <div>
                 <label className="mb-2 block text-xs font-medium uppercase tracking-wide text-gray-500 dark:text-gray-400">

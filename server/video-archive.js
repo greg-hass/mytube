@@ -3,14 +3,27 @@ function getVideoTime(video) {
     return Number.isFinite(time) ? time : 0;
 }
 
+function isLikelyFallbackNowStamp(video, cacheUpdatedAt) {
+    if (video?.fetchedVia !== 'youtube-page-fallback') return false;
+    if (video.publishedAtSource) return false;
+
+    const publishedTime = getVideoTime(video);
+    const cacheUpdatedTime = new Date(cacheUpdatedAt || 0).getTime();
+    if (!publishedTime || !Number.isFinite(cacheUpdatedTime)) return false;
+
+    return Math.abs(cacheUpdatedTime - publishedTime) <= 30 * 1000;
+}
+
 function mergeVideoArchive(existingVideos = [], fetchedVideos = [], options = {}) {
     const maxVideos = options.maxVideos || 5000;
     const activeChannelIds = options.activeChannelIds || null;
+    const cacheUpdatedAt = options.cacheUpdatedAt || null;
     const byId = new Map();
 
     for (const video of existingVideos) {
         if (!video?.id) continue;
         if (activeChannelIds && !activeChannelIds.has(video.channelId)) continue;
+        if (isLikelyFallbackNowStamp(video, cacheUpdatedAt)) continue;
         byId.set(video.id, video);
     }
 

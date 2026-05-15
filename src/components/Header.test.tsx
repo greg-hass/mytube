@@ -90,6 +90,33 @@ describe('Header', () => {
     expect(menuPanel.querySelector('aside')?.className).not.toContain('dark:bg-gradient');
   });
 
+  it('puts feed health details in the mobile menu', () => {
+    render(
+      <Header
+        onAddChannel={vi.fn()}
+        syncStatus={{
+          total: 2,
+          current: 1,
+          isSyncing: true,
+          lastUpdated: Date.now(),
+          errors: 1,
+          videos: 10,
+          state: 'running',
+          failedChannels: [{ id: 'UC_BAD', title: 'Broken Channel', reason: 'RSS feed failed with HTTP 404' }],
+        }}
+        cacheStatus={{ hasCache: true, isStale: false, age: 60 * 1000, videoCount: 10 }}
+        onRetryFailed={vi.fn()}
+      />
+    );
+
+    expect(screen.queryByText('Broken Channel')).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByTestId('mobile-menu-button'));
+
+    expect(screen.getByText('Feed health')).toBeInTheDocument();
+    expect(screen.getByText('Broken Channel')).toBeInTheDocument();
+  });
+
   it('can hide mobile search when the active view does not use channel search', () => {
     render(<Header onAddChannel={vi.fn()} showMobileSearch={false} />);
 

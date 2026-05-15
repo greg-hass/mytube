@@ -12,9 +12,10 @@ type Props = {
   status: SyncStatus;
   cacheStatus: CacheStatus;
   onRetryFailed: () => void;
+  variant?: 'timeline' | 'menu';
 };
 
-export function RefreshStatusPanel({ status, cacheStatus, onRetryFailed }: Props) {
+export function RefreshStatusPanel({ status, cacheStatus, onRetryFailed, variant = 'timeline' }: Props) {
   const failedChannels = status.failedChannels || [];
   const lastRefresh = status.scheduledRefresh?.lastRunAt
     ? new Date(status.scheduledRefresh.lastRunAt).getTime()
@@ -24,10 +25,11 @@ export function RefreshStatusPanel({ status, cacheStatus, onRetryFailed }: Props
     : status.scheduledRefresh?.enabled === false
       ? 'Off'
       : 'Pending';
+  const isMenu = variant === 'menu';
 
   return (
-    <section className="mb-4 rounded-lg border border-gray-200 bg-white px-4 py-3 shadow-sm dark:border-gray-800 dark:bg-gray-900">
-      <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+    <section className={`${isMenu ? 'rounded-lg border border-gray-200 bg-white/70 px-3 py-3 dark:border-gray-800 dark:bg-gray-900/70' : 'mb-4 rounded-lg border border-gray-200 bg-white px-4 py-3 shadow-sm dark:border-gray-800 dark:bg-gray-900'}`}>
+      <div className={`flex flex-col gap-3 ${isMenu ? '' : 'lg:flex-row lg:items-start lg:justify-between'}`}>
         <div className="min-w-0">
           <div className="flex items-center gap-2 text-sm font-semibold text-gray-900 dark:text-gray-100">
             {status.isSyncing ? (
@@ -42,7 +44,7 @@ export function RefreshStatusPanel({ status, cacheStatus, onRetryFailed }: Props
             </span>
           </div>
 
-          <div className="mt-2 grid gap-2 text-xs text-gray-600 dark:text-gray-300 sm:grid-cols-3">
+          <div className={`mt-2 grid gap-2 text-xs text-gray-600 dark:text-gray-300 ${isMenu ? '' : 'sm:grid-cols-3'}`}>
             <span>
               <span className="font-medium text-gray-800 dark:text-gray-100">Last refresh</span> {formatRelativeAge(lastRefresh)}
             </span>
@@ -60,7 +62,7 @@ export function RefreshStatusPanel({ status, cacheStatus, onRetryFailed }: Props
           <button
             type="button"
             onClick={onRetryFailed}
-            className="inline-flex h-9 shrink-0 items-center justify-center gap-2 rounded-lg bg-amber-100 px-3 text-sm font-medium text-amber-950 hover:bg-amber-200 dark:bg-amber-950/50 dark:text-amber-100 dark:hover:bg-amber-900/70"
+            className={`inline-flex h-9 shrink-0 items-center justify-center gap-2 rounded-lg bg-amber-100 px-3 text-sm font-medium text-amber-950 hover:bg-amber-200 dark:bg-amber-950/50 dark:text-amber-100 dark:hover:bg-amber-900/70 ${isMenu ? 'w-full' : ''}`}
           >
             <RefreshCw className="h-4 w-4" />
             Retry failed
@@ -76,14 +78,14 @@ export function RefreshStatusPanel({ status, cacheStatus, onRetryFailed }: Props
               <p className="text-xs font-semibold text-amber-950 dark:text-amber-100">
                 {failedChannels.length} channel{failedChannels.length === 1 ? '' : 's'} need{failedChannels.length === 1 ? 's' : ''} attention
               </p>
-              {failedChannels.slice(0, 5).map((channel) => (
+              {failedChannels.slice(0, isMenu ? 3 : 5).map((channel) => (
                 <p key={channel.id} className="text-xs text-amber-800 dark:text-amber-200">
                   <span className="font-medium">{channel.title}</span>: {channel.backoffUntil ? `Backoff until ${formatDateTime(channel.backoffUntil)}` : channel.reason}
                 </p>
               ))}
-              {failedChannels.length > 5 && (
+              {failedChannels.length > (isMenu ? 3 : 5) && (
                 <p className="text-xs text-amber-800 dark:text-amber-200">
-                  +{failedChannels.length - 5} more
+                  +{failedChannels.length - (isMenu ? 3 : 5)} more
                 </p>
               )}
             </div>
