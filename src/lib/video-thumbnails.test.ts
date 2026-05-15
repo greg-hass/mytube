@@ -20,6 +20,12 @@ describe('video thumbnails', () => {
     );
   });
 
+  it('upgrades sharded ytimg video thumbnail hosts to max resolution', () => {
+    expect(getHighResolutionVideoThumbnail('https://i3.ytimg.com/vi/abc123/hqdefault.jpg')).toBe(
+      'https://i3.ytimg.com/vi/abc123/maxresdefault.jpg'
+    );
+  });
+
   it('uses portrait YouTube thumbnail variants for Shorts', () => {
     expect(getHighResolutionVideoThumbnail('https://i.ytimg.com/vi/abc123/hqdefault.jpg', { isShort: true })).toBe(
       'https://i.ytimg.com/vi/abc123/oar2.jpg'
