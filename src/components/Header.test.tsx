@@ -69,6 +69,21 @@ describe('Header', () => {
     expect(document.querySelectorAll('.desktop-header-controls')).toHaveLength(2);
   });
 
+  it('publishes its measured height for sticky dashboard chrome', () => {
+    const offsetHeightSpy = vi
+      .spyOn(HTMLElement.prototype, 'offsetHeight', 'get')
+      .mockReturnValue(112);
+
+    const { unmount } = render(<Header onAddChannel={vi.fn()} />);
+
+    expect(document.documentElement.style.getPropertyValue('--app-current-header-height')).toBe('112px');
+
+    unmount();
+    offsetHeightSpy.mockRestore();
+
+    expect(document.documentElement.style.getPropertyValue('--app-current-header-height')).toBe('');
+  });
+
   it('opens add channel from the mobile header plus button', () => {
     const onAddChannel = vi.fn();
     render(<Header onAddChannel={onAddChannel} />);

@@ -456,7 +456,7 @@ export const Dashboard = () => {
         {/* Tabs */}
         <div
           data-testid="dashboard-tabs"
-          className="sticky top-[calc(env(safe-area-inset-top)+var(--app-header-height)+var(--app-sticky-gap))] z-40 px-4 mb-[var(--app-sticky-gap)] pb-[var(--app-sticky-gap)] pt-[var(--app-sticky-gap)] bg-gray-50 dark:bg-gray-950 before:absolute before:bottom-full before:left-0 before:right-0 before:h-[var(--app-sticky-gap)] before:bg-gray-50 dark:before:bg-gray-950"
+          className="sticky top-[calc(var(--app-current-header-height)+var(--app-sticky-gap))] z-40 px-4 mb-[var(--app-sticky-gap)] pb-[var(--app-sticky-gap)] pt-[var(--app-sticky-gap)] bg-gray-50 dark:bg-gray-950 before:absolute before:bottom-full before:left-0 before:right-0 before:h-[var(--app-sticky-gap)] before:bg-gray-50 dark:before:bg-gray-950"
         >
           <div className="grid grid-cols-5 gap-1 bg-gray-100 dark:bg-gray-900 p-1 rounded-xl shadow-sm sm:flex sm:items-center sm:w-fit sm:gap-2">
             <button

@@ -13,7 +13,7 @@ import {
   Menu,
   X,
 } from 'lucide-react';
-import { lazy, Suspense, useState } from 'react';
+import { lazy, Suspense, useLayoutEffect, useRef, useState } from 'react';
 import { SettingsModal } from './SettingsModal';
 import { RefreshStatusPanel } from './RefreshStatusPanel';
 import { useStore } from '../store/useStore';
@@ -45,6 +45,7 @@ export const Header = ({
   cacheStatus,
   onRetryFailed,
 }: HeaderProps) => {
+  const headerRef = useRef<HTMLElement | null>(null);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const {
     theme,
@@ -62,6 +63,33 @@ export const Header = ({
   const [showMobileSearchPanel, setShowMobileSearchPanel] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const showRefreshHealthPanel = Boolean(syncStatus?.isSyncing && cacheStatus && onRetryFailed);
+
+  useLayoutEffect(() => {
+    const header = headerRef.current;
+    if (!header || typeof document === 'undefined') return;
+
+    const updateHeaderHeight = () => {
+      document.documentElement.style.setProperty('--app-current-header-height', `${header.offsetHeight}px`);
+    };
+
+    updateHeaderHeight();
+
+    if (typeof ResizeObserver === 'undefined') {
+      window.addEventListener('resize', updateHeaderHeight);
+      return () => {
+        window.removeEventListener('resize', updateHeaderHeight);
+        document.documentElement.style.removeProperty('--app-current-header-height');
+      };
+    }
+
+    const resizeObserver = new ResizeObserver(updateHeaderHeight);
+    resizeObserver.observe(header);
+
+    return () => {
+      resizeObserver.disconnect();
+      document.documentElement.style.removeProperty('--app-current-header-height');
+    };
+  }, []);
 
   const handleRefresh = async () => {
     setIsRefreshing(true);
@@ -97,6 +125,7 @@ export const Header = ({
   return (
     <>
       <motion.header
+        ref={headerRef}
         initial={{ y: -100 }}
         animate={{ y: 0 }}
         className="sticky top-0 z-50 glass safe-top border-b border-gray-200 dark:border-gray-800/80 shadow-sm"

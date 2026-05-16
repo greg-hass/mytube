@@ -5,6 +5,7 @@
 @layer base {
   :root {
     --app-header-height: 4rem;
+    --app-current-header-height: calc(env(safe-area-inset-top) + var(--app-header-height));
     --app-sticky-gap: 0.5rem;
     --app-tabs-height: 3.75rem;
   }
