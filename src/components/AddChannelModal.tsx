@@ -257,7 +257,7 @@ export const AddChannelModal = ({ isOpen, onClose, onAdd, existingSubscriptions 
             className="fixed inset-0 z-[100] md:inset-auto md:left-1/2 md:top-1/2 md:-translate-x-1/2 md:-translate-y-1/2 md:w-full md:max-w-xl bg-white dark:bg-gray-900 md:rounded-2xl shadow-2xl flex flex-col h-[100dvh] md:h-auto md:max-h-[85vh] overflow-hidden border border-gray-200 dark:border-gray-800 pt-[env(safe-area-inset-top)] md:pt-0"
           >
             {/* Header */}
-            <div className="flex items-center justify-between p-5 border-b border-gray-100 dark:border-gray-800 bg-white/50 dark:bg-gray-900/50 backdrop-blur-md sticky top-0 z-10">
+            <div className="flex items-center justify-between p-5 border-b border-gray-100 dark:border-gray-800 bg-white/50 dark:bg-gray-900/50 backdrop-blur-md shrink-0">
               <div className="flex items-center gap-3">
                 <div className="w-9 h-9 rounded-full bg-gradient-to-br from-red-600 to-red-500 flex items-center justify-center shadow-md">
                   <Youtube className="w-5 h-5 text-white" />
@@ -274,9 +274,9 @@ export const AddChannelModal = ({ isOpen, onClose, onAdd, existingSubscriptions 
               </button>
             </div>
 
-            {/* Content */}
-            <div className="flex-1 overflow-y-auto p-5 space-y-6 custom-scrollbar">
-              <form onSubmit={handleSubmit} className="space-y-6">
+            {/* Content — scrollable area */}
+            <div className="flex-1 min-h-0 overflow-y-auto custom-scrollbar">
+              <div className="p-5 space-y-6">
                 {/* Search Input */}
                 <section className="space-y-3">
                   <label
@@ -330,7 +330,7 @@ export const AddChannelModal = ({ isOpen, onClose, onAdd, existingSubscriptions 
                   )}
                 </section>
 
-                {/* Search Results */}
+                {/* Search Results — grow to fill space */}
                 <AnimatePresence>
                   {hasResults && (
                     <motion.section
@@ -343,7 +343,7 @@ export const AddChannelModal = ({ isOpen, onClose, onAdd, existingSubscriptions 
                         <Search className="w-4 h-4 text-red-600" />
                         Search Results
                       </h3>
-                      <div className="max-h-64 space-y-2 overflow-y-auto pr-1 custom-scrollbar">
+                      <div className="space-y-2 pr-1">
                         {searchResults.map((channel) => {
                           const isAlreadyAdded = existingIds.has(channel.id);
                           return (
@@ -473,35 +473,37 @@ export const AddChannelModal = ({ isOpen, onClose, onAdd, existingSubscriptions 
                     </motion.section>
                   )}
                 </AnimatePresence>
+              </div>
+            </div>
 
-                {/* Actions */}
-                <div className="flex items-center gap-3 pt-2">
-                  <button
-                    type="submit"
-                    disabled={isLoading || !canSubmit}
-                    className="flex items-center justify-center gap-2 flex-1 px-4 py-2.5 rounded-lg bg-red-600 hover:bg-red-700 text-white disabled:opacity-50 disabled:cursor-not-allowed transition-all font-medium"
-                  >
-                    {isLoading ? (
-                      <>
-                        <div className="w-4 h-4 border-2 border-white/30 border-t-transparent rounded-full animate-spin" />
-                        <span>Adding...</span>
-                      </>
-                    ) : (
-                      <>
-                        <Plus className="w-4 h-4" />
-                        <span>Add Channel</span>
-                      </>
-                    )}
-                  </button>
+            {/* Actions — pinned at bottom */}
+            <div className="shrink-0 border-t border-gray-100 dark:border-gray-800 bg-white/80 dark:bg-gray-900/80 backdrop-blur-md p-5">
+              <form onSubmit={handleSubmit} className="flex items-center gap-3">
+                <button
+                  type="submit"
+                  disabled={isLoading || !canSubmit}
+                  className="flex items-center justify-center gap-2 flex-1 px-4 py-2.5 rounded-lg bg-red-600 hover:bg-red-700 text-white disabled:opacity-50 disabled:cursor-not-allowed transition-all font-medium"
+                >
+                  {isLoading ? (
+                    <>
+                      <div className="w-4 h-4 border-2 border-white/30 border-t-transparent rounded-full animate-spin" />
+                      <span>Adding...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Plus className="w-4 h-4" />
+                      <span>Add Channel</span>
+                    </>
+                  )}
+                </button>
 
-                  <button
-                    type="button"
-                    onClick={onClose}
-                    className="px-4 py-2.5 rounded-lg text-gray-600 hover:text-gray-900 hover:bg-gray-100 dark:text-gray-400 dark:hover:text-gray-200 dark:hover:bg-gray-800 transition-all font-medium"
-                  >
-                    Cancel
-                  </button>
-                </div>
+                <button
+                  type="button"
+                  onClick={onClose}
+                  className="px-4 py-2.5 rounded-lg text-gray-600 hover:text-gray-900 hover:bg-gray-100 dark:text-gray-400 dark:hover:text-gray-200 dark:hover:bg-gray-800 transition-all font-medium"
+                >
+                  Cancel
+                </button>
               </form>
             </div>
           </motion.div>
