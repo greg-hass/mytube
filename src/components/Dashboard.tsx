@@ -121,7 +121,7 @@ export const Dashboard = () => {
   const [isRepairingIcons, setIsRepairingIcons] = useState(false);
   const { allSubscriptions, addSubscriptions, rawSubscriptions, repairChannelIcons, toggleFavorite: toggleChannelFavorite } = useSubscriptionStorage();
   const { favoriteVideoIds, favoriteVideos: savedFavoriteVideos } = useFavoriteVideos();
-  const { queuedVideoIds, queuedVideos: savedQueuedVideos, removeQueuedVideo } = useQueuedVideos();
+  const { queuedVideoIds, queuedVideos: savedQueuedVideos } = useQueuedVideos();
   const { searchQuery, watchedVideos, markAsWatched } = useStore();
 
   // Check if any channels have temporary IDs (can't fetch videos)
