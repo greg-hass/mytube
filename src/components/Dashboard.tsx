@@ -1024,6 +1024,7 @@ export const Dashboard = () => {
           isOpen={isAddChannelModalOpen}
           onClose={() => setIsAddChannelModalOpen(false)}
           onAdd={handleAddChannel}
+          existingSubscriptions={allSubscriptions}
         />
       </Suspense>
 
