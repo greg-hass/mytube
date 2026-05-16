@@ -49,6 +49,7 @@ describe('feed view presets', () => {
       createdAt: '2026-05-16T10:00:00.000Z',
       updatedAt: '2026-05-16T10:00:00.000Z',
     });
+    expect(preset.filters).not.toBe(filters);
   });
 
   it('writes presets sorted by name', () => {
@@ -63,6 +64,20 @@ describe('feed view presets', () => {
     expect(saved.map((preset: { name: string }) => preset.name)).toEqual(['Alpha', 'Zed']);
   });
 
+  it('throws when storage write fails', () => {
+    const error = new Error('Storage quota exceeded');
+    const storage = {
+      setItem: vi.fn(() => {
+        throw error;
+      }),
+    };
+
+    expect(() => writeFeedViewPresets([
+      createFeedViewPreset({ id: 'a', name: 'Alpha', filters, createdAt: '2026-05-16T10:00:00.000Z' }),
+    ], storage)).toThrow(error);
+    expect(storage.setItem).toHaveBeenCalledOnce();
+  });
+
   it('deletes a preset by id', () => {
     const storage = createStorage({
       [FEED_VIEW_PRESETS_STORAGE_KEY]: JSON.stringify([
@@ -74,5 +89,7 @@ describe('feed view presets', () => {
     const remaining = deleteFeedViewPreset('drop', storage);
 
     expect(remaining.map((preset) => preset.id)).toEqual(['keep']);
+    const saved = JSON.parse(storage.getItem(FEED_VIEW_PRESETS_STORAGE_KEY) || '[]');
+    expect(saved.map((preset: { id: string }) => preset.id)).toEqual(['keep']);
   });
 });
