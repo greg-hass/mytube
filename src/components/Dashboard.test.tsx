@@ -1,5 +1,5 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { Dashboard } from './Dashboard';
 
 type MockRSSVideosState = {
@@ -88,6 +88,15 @@ const headerMockState = vi.hoisted(() => ({
     cacheStatus?: MockRSSVideosState['cacheStatus'];
     onRetryFailed?: () => void;
   },
+}));
+const toastMockState = vi.hoisted(() => ({
+  success: vi.fn(),
+  error: vi.fn(),
+  message: vi.fn(),
+}));
+
+vi.mock('sonner', () => ({
+  toast: toastMockState,
 }));
 
 vi.mock('./Header', () => ({
@@ -185,10 +194,17 @@ vi.mock('../store/useStore', () => ({
 }));
 
 describe('Dashboard', () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
   beforeEach(() => {
     mockSearchQuery = '';
     latestSubscriptionsListProps = undefined;
     headerMockState.latestProps = undefined;
+    toastMockState.success.mockClear();
+    toastMockState.error.mockClear();
+    toastMockState.message.mockClear();
     mockWatchedVideos = new Set<string>();
     mockMarkAsWatched.mockClear();
     mockToggleChannelFavorite.mockClear();
@@ -1073,6 +1089,64 @@ describe('Dashboard', () => {
   it('saves and applies feed view presets from the latest toolbar', async () => {
     mockRSSVideosState = {
       ...mockRSSVideosState,
+      videos: [
+        {
+          id: 'video-1',
+          title: 'Long update',
+          description: '',
+          thumbnail: '',
+          channelId: 'UC123',
+          channelTitle: 'Test Channel',
+          publishedAt: new Date().toISOString(),
+          duration: 60 * 40,
+        },
+        {
+          id: 'video-2',
+          title: 'Short update',
+          description: '',
+          thumbnail: '',
+          channelId: 'UC123',
+          channelTitle: 'Test Channel',
+          publishedAt: new Date().toISOString(),
+          duration: 60 * 5,
+        },
+      ],
+    };
+
+    render(<Dashboard />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Feed filters' }));
+    fireEvent.click(screen.getByRole('button', { name: '30+ min' }));
+    expect(screen.getByText('Long update')).toBeInTheDocument();
+    expect(screen.queryByText('Short update')).not.toBeInTheDocument();
+
+    fireEvent.change(screen.getByLabelText('New saved view name'), { target: { value: 'Longform' } });
+    fireEvent.click(screen.getByRole('button', { name: /save view/i }));
+
+    await waitFor(() => {
+      expect(screen.getByRole('option', { name: 'Longform' })).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByLabelText('Hide Shorts'));
+    fireEvent.click(screen.getByRole('button', { name: 'Under 10 min' }));
+    expect(screen.queryByText('Long update')).not.toBeInTheDocument();
+    expect(screen.getByText('Short update')).toBeInTheDocument();
+
+    fireEvent.change(screen.getByLabelText('Saved view'), { target: { value: JSON.parse(localStorage.getItem('feed-view-presets') || '[]')[0].id } });
+
+    expect(screen.getByLabelText('Hide Shorts')).not.toBeChecked();
+    expect(screen.getByText('Long update')).toBeInTheDocument();
+    expect(screen.queryByText('Short update')).not.toBeInTheDocument();
+    expect(JSON.parse(localStorage.getItem('feed-view-presets') || '[]')[0].filters.durationFilter).toBe('30-plus');
+  });
+
+  it('does not add saved views when preset storage writes fail', async () => {
+    const storageError = new Error('Storage quota exceeded');
+    vi.spyOn(localStorage, 'setItem').mockImplementation((key: string, _value: string) => {
+      if (key === 'feed-view-presets') throw storageError;
+    });
+    mockRSSVideosState = {
+      ...mockRSSVideosState,
       videos: [{
         id: 'video-1',
         title: 'Long update',
@@ -1090,14 +1164,10 @@ describe('Dashboard', () => {
     fireEvent.change(screen.getByLabelText('New saved view name'), { target: { value: 'Longform' } });
     fireEvent.click(screen.getByRole('button', { name: /save view/i }));
 
-    await waitFor(() => {
-      expect(screen.getByRole('option', { name: 'Longform' })).toBeInTheDocument();
+    expect(screen.queryByRole('option', { name: 'Longform' })).not.toBeInTheDocument();
+    expect(toastMockState.error).toHaveBeenCalledWith('Could not save view', {
+      description: 'Storage quota exceeded',
     });
-
-    fireEvent.click(screen.getByLabelText('Hide Shorts'));
-    fireEvent.change(screen.getByLabelText('Saved view'), { target: { value: JSON.parse(localStorage.getItem('feed-view-presets') || '[]')[0].id } });
-
-    expect(screen.getByLabelText('Hide Shorts')).not.toBeChecked();
   });
 
   it('marks filtered videos older than 7 days as watched', async () => {
@@ -1132,5 +1202,30 @@ describe('Dashboard', () => {
 
     expect(mockMarkAsWatched).toHaveBeenCalledWith('old-video');
     expect(mockMarkAsWatched).not.toHaveBeenCalledWith('new-video');
+  });
+
+  it('does not mark videos watched when older-than bulk action has no matches', async () => {
+    vi.spyOn(Date, 'now').mockReturnValue(Date.parse('2026-05-16T00:00:00.000Z'));
+    mockRSSVideosState = {
+      ...mockRSSVideosState,
+      videos: [
+        {
+          id: 'new-video',
+          title: 'New video',
+          description: '',
+          thumbnail: '',
+          channelId: 'UC123',
+          channelTitle: 'Test Channel',
+          publishedAt: '2026-05-15T00:00:00.000Z',
+        },
+      ],
+    };
+
+    render(<Dashboard />);
+
+    fireEvent.change(screen.getByLabelText('Bulk watched action'), { target: { value: 'older-7' } });
+
+    expect(mockMarkAsWatched).not.toHaveBeenCalled();
+    expect(toastMockState.message).toHaveBeenCalledWith('No matching videos to mark watched');
   });
 });
