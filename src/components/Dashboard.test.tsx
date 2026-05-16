@@ -576,7 +576,7 @@ describe('Dashboard', () => {
     expect(screen.queryByText('No favorite videos yet')).not.toBeInTheDocument();
   });
 
-  it('removes queued videos once they are watched', async () => {
+  it('keeps queued videos even when they are watched', async () => {
     mockWatchedVideos = new Set(['video-1']);
     localStorage.setItem('queued-video-ids', JSON.stringify(['video-1']));
     localStorage.setItem('queued-videos', JSON.stringify([
@@ -596,9 +596,9 @@ describe('Dashboard', () => {
     fireEvent.click(screen.getByRole('button', { name: /queue/i }));
 
     await waitFor(() => {
-      expect(screen.getByText('Your queue is empty')).toBeInTheDocument();
+      expect(screen.getByText('Watched queued video')).toBeInTheDocument();
     });
-    expect(JSON.parse(localStorage.getItem('queued-video-ids') || '[]')).toEqual([]);
+    expect(JSON.parse(localStorage.getItem('queued-video-ids') || '[]')).toEqual(['video-1']);
   });
 
   it('shows saved favorite video records even before the feed has rebuilt', async () => {
