@@ -5,11 +5,14 @@ type OlderThanOptions = {
   days: number;
 };
 
-export function getVisibleVideoIds(videos: YouTubeVideo[]) {
+export function getVisibleVideoIds(videos: readonly YouTubeVideo[]): string[] {
   return videos.map((video) => video.id);
 }
 
-export function getVideoIdsOlderThan(videos: YouTubeVideo[], { now = Date.now(), days }: OlderThanOptions) {
+export function getVideoIdsOlderThan(
+  videos: readonly YouTubeVideo[],
+  { now = Date.now(), days }: OlderThanOptions,
+): string[] {
   const cutoff = now - (days * 24 * 60 * 60 * 1000);
 
   return videos

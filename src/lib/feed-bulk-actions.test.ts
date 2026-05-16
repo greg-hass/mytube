@@ -13,6 +13,15 @@ const videos: YouTubeVideo[] = [
     publishedAt: '2026-05-01T00:00:00.000Z',
   },
   {
+    id: 'cutoff',
+    title: 'Cutoff video',
+    description: '',
+    thumbnail: '',
+    channelId: 'UC1',
+    channelTitle: 'Channel',
+    publishedAt: '2026-05-09T00:00:00.000Z',
+  },
+  {
     id: 'new',
     title: 'New video',
     description: '',
@@ -34,7 +43,7 @@ const videos: YouTubeVideo[] = [
 
 describe('feed bulk actions', () => {
   it('returns ids for visible videos in order', () => {
-    expect(getVisibleVideoIds(videos)).toEqual(['old', 'new', 'bad-date']);
+    expect(getVisibleVideoIds(videos)).toEqual(['old', 'cutoff', 'new', 'bad-date']);
   });
 
   it('returns ids older than a day threshold', () => {
@@ -44,10 +53,17 @@ describe('feed bulk actions', () => {
     })).toEqual(['old']);
   });
 
+  it('excludes ids exactly at the day threshold cutoff', () => {
+    expect(getVideoIdsOlderThan(videos, {
+      now: Date.parse('2026-05-16T00:00:00.000Z'),
+      days: 7,
+    })).not.toContain('cutoff');
+  });
+
   it('ignores videos with invalid published dates', () => {
     expect(getVideoIdsOlderThan(videos, {
       now: Date.parse('2026-05-16T00:00:00.000Z'),
       days: 0,
-    })).toEqual(['old', 'new']);
+    })).toEqual(['old', 'cutoff', 'new']);
   });
 });
