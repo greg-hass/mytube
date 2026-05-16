@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import {
   createAppBackup,
+  readBackupLocalData,
   restoreAppBackup,
   type AppBackupLocalData,
 } from './app-backup';
@@ -84,5 +85,47 @@ describe('app backup', () => {
     expect(JSON.parse(storage.get('feed-quality-filters') || '{}')).toEqual({ mutedKeywordText: 'rumor' });
     expect(dispatchEvent).toHaveBeenCalledWith('favorite-videos-changed');
     expect(dispatchEvent).toHaveBeenCalledWith('queued-videos-changed');
+  });
+
+  it('exports and restores saved feed views', () => {
+    const storage = new Map<string, string>();
+    const fakeStorage = {
+      getItem: (key: string) => storage.get(key) ?? null,
+      setItem: (key: string, value: string) => storage.set(key, value),
+    };
+    const dispatchEvent = vi.fn();
+
+    storage.set('feed-view-presets', JSON.stringify([
+      {
+        id: 'preset-1',
+        name: 'Longform',
+        filters: {
+          showShorts: false,
+          hideWatched: true,
+          durationFilter: '30-plus',
+          hideLiveReplays: false,
+          hidePremieres: false,
+          hideDuplicateTitles: false,
+          mutedKeywordText: '',
+          boostedKeywordText: '',
+        },
+        createdAt: '2026-05-16T10:00:00.000Z',
+        updatedAt: '2026-05-16T10:00:00.000Z',
+      },
+    ]));
+
+    const backup = createAppBackup({
+      subscriptions: [],
+      watchedVideoIds: [],
+      settings: {},
+      localData: readBackupLocalData(fakeStorage),
+      exportedAt: '2026-05-16T10:30:00.000Z',
+    });
+
+    expect(backup.feedViewPresets).toHaveLength(1);
+
+    restoreAppBackup(JSON.stringify(backup), { storage: fakeStorage, dispatchEvent });
+
+    expect(JSON.parse(storage.get('feed-view-presets') || '[]')).toEqual(backup.feedViewPresets);
   });
 });

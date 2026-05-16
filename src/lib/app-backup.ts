@@ -5,6 +5,7 @@ const FAVORITE_VIDEOS_STORAGE_KEY = 'favorite-videos';
 const QUEUE_IDS_STORAGE_KEY = 'queued-video-ids';
 const QUEUE_VIDEOS_STORAGE_KEY = 'queued-videos';
 const FEED_QUALITY_FILTERS_STORAGE_KEY = 'feed-quality-filters';
+const FEED_VIEW_PRESETS_STORAGE_KEY = 'feed-view-presets';
 const FAVORITES_CHANGED_EVENT = 'favorite-videos-changed';
 const QUEUE_CHANGED_EVENT = 'queued-videos-changed';
 
@@ -14,6 +15,7 @@ export type AppBackupLocalData = {
   queuedVideoIds?: string[];
   queuedVideos?: YouTubeVideo[];
   feedQualityFilters?: Record<string, unknown>;
+  feedViewPresets?: unknown[];
 };
 
 export type AppBackupSubscription = {
@@ -45,6 +47,7 @@ export type AppBackup = {
     videos: YouTubeVideo[];
   };
   feedQualityFilters: Record<string, unknown>;
+  feedViewPresets: unknown[];
 };
 
 type CreateAppBackupOptions = {
@@ -67,6 +70,7 @@ export function readBackupLocalData(storage: Pick<Storage, 'getItem'> = window.l
     queuedVideoIds: parseJsonArray(storage.getItem(QUEUE_IDS_STORAGE_KEY)),
     queuedVideos: parseJsonArray(storage.getItem(QUEUE_VIDEOS_STORAGE_KEY)),
     feedQualityFilters: parseJsonObject(storage.getItem(FEED_QUALITY_FILTERS_STORAGE_KEY)),
+    feedViewPresets: parseJsonArray(storage.getItem(FEED_VIEW_PRESETS_STORAGE_KEY)),
   };
 }
 
@@ -92,6 +96,7 @@ export function createAppBackup({
       videos: localData.queuedVideos || [],
     },
     feedQualityFilters: localData.feedQualityFilters || {},
+    feedViewPresets: localData.feedViewPresets || [],
   };
 }
 
@@ -111,6 +116,7 @@ export function restoreAppBackup(backupJson: string, options: RestoreAppBackupOp
   storage.setItem(QUEUE_IDS_STORAGE_KEY, JSON.stringify(queue.videoIds || []));
   storage.setItem(QUEUE_VIDEOS_STORAGE_KEY, JSON.stringify(queue.videos || []));
   storage.setItem(FEED_QUALITY_FILTERS_STORAGE_KEY, JSON.stringify(backup.feedQualityFilters || {}));
+  storage.setItem(FEED_VIEW_PRESETS_STORAGE_KEY, JSON.stringify(backup.feedViewPresets || []));
   dispatchEvent(FAVORITES_CHANGED_EVENT);
   dispatchEvent(QUEUE_CHANGED_EVENT);
 
