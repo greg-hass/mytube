@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X, Plus, Check, AlertCircle, Search, Youtube } from 'lucide-react';
 import { parseChannelInput, getDisplayText, type ParsedChannelInput } from '../lib/youtube-parser';
@@ -18,12 +18,18 @@ export const AddChannelModal = ({ isOpen, onClose, onAdd, existingSubscriptions 
   const [channelInfo, setChannelInfo] = useState<YouTubeChannel | null>(null);
   const [searchResults, setSearchResults] = useState<YouTubeChannel[]>([]);
   const [isLoading, setIsLoading] = useState(false);
+  const [addingChannelIds, setAddingChannelIds] = useState<Set<string>>(new Set());
+  const [addedChannelIds, setAddedChannelIds] = useState<Set<string>>(new Set());
   const [isValidating, setIsValidating] = useState(false);
   const [isSearching, setIsSearching] = useState(false);
   const [validationError, setValidationError] = useState<string>('');
   const inputRef = useRef<HTMLInputElement>(null);
 
-  const existingIds = new Set(existingSubscriptions.map((sub) => sub.id));
+  const existingIds = useMemo(() => new Set(existingSubscriptions.map((sub) => sub.id)), [existingSubscriptions]);
+  const visibleSearchResults = useMemo(
+    () => searchResults.filter((channel) => !existingIds.has(channel.id) || addedChannelIds.has(channel.id)),
+    [addedChannelIds, existingIds, searchResults]
+  );
 
   // Validate input whenever it changes
   useEffect(() => {
@@ -124,84 +130,83 @@ export const AddChannelModal = ({ isOpen, onClose, onAdd, existingSubscriptions 
     }
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-
-    if (!channelInfo && (!parsedInput || parsedInput.type === 'invalid')) {
-      setValidationError('Search for a channel or enter a valid YouTube channel');
-      return;
+  const createChannelFromParsedInput = async () => {
+    if (!parsedInput || parsedInput.type === 'invalid') {
+      throw new Error('Search for a channel or enter a valid YouTube channel');
     }
 
+    let channelToAdd = channelInfo;
+
+    if (!channelToAdd) {
+      let resolvedId = parsedInput.value;
+
+      if (parsedInput.type === 'handle' || parsedInput.type === 'custom_url') {
+        const resolveResponse = await fetch('/api/resolve-channel', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            type: parsedInput.type,
+            value: parsedInput.value
+          })
+        });
+
+        if (!resolveResponse.ok) {
+          throw new Error('Unable to resolve channel. Please try a different URL or the channel ID directly.');
+        }
+
+        const { channelId, title, thumbnail } = await resolveResponse.json();
+        resolvedId = channelId;
+
+        channelToAdd = {
+          id: channelId,
+          title: title || parsedInput.originalInput,
+          description: '',
+          thumbnail: thumbnail || `https://ui-avatars.com/api/?name=${encodeURIComponent(parsedInput.originalInput)}&background=random&color=fff`,
+          customUrl: parsedInput.type === 'custom_url' ? parsedInput.value : undefined,
+        };
+      } else {
+        channelToAdd = {
+          id: resolvedId,
+          title: parsedInput.originalInput,
+          description: '',
+          thumbnail: `https://ui-avatars.com/api/?name=${encodeURIComponent(parsedInput.originalInput)}&background=random&color=fff`,
+        };
+      }
+    }
+
+    return channelToAdd;
+  };
+
+  const addChannel = async (channel: YouTubeChannel) => {
+    if (existingIds.has(channel.id) || addedChannelIds.has(channel.id)) return;
+
+    setAddingChannelIds((ids) => new Set(ids).add(channel.id));
+    setValidationError('');
     setIsLoading(true);
     try {
-      // Use fetched channel info or create a basic one from parsed input
-      let channelToAdd = channelInfo;
-
-      if (!channelToAdd) {
-        if (!parsedInput || parsedInput.type === 'invalid') {
-          setValidationError('Choose a channel from the search results');
-          setIsLoading(false);
-          return;
-        }
-
-        // If we don't have channel info, we need to resolve handles/custom URLs to real IDs
-        // This prevents storing handle_ or custom_ IDs in the database
-        let resolvedId = parsedInput.value;
-
-        if (parsedInput.type === 'handle' || parsedInput.type === 'custom_url') {
-          try {
-            // Ask server to resolve the handle/custom URL to a real channel ID
-            const resolveResponse = await fetch('/api/resolve-channel', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                type: parsedInput.type,
-                value: parsedInput.value
-              })
-            });
-
-            if (resolveResponse.ok) {
-              const { channelId, title, thumbnail } = await resolveResponse.json();
-              resolvedId = channelId;
-
-              // Use the resolved info
-              channelToAdd = {
-                id: channelId,
-                title: title || parsedInput.originalInput,
-                description: '',
-                thumbnail: thumbnail || `https://ui-avatars.com/api/?name=${encodeURIComponent(parsedInput.originalInput)}&background=random&color=fff`,
-                customUrl: parsedInput.type === 'custom_url' ? parsedInput.value : undefined,
-              };
-            } else {
-              throw new Error('Failed to resolve channel');
-            }
-          } catch (err) {
-            console.error('Failed to resolve handle/custom URL:', err);
-            setValidationError('Unable to resolve channel. Please try a different URL or the channel ID directly.');
-            setIsLoading(false);
-            return;
-          }
-        } else {
-          // For direct channel IDs, just use them as-is
-          channelToAdd = {
-            id: resolvedId,
-            title: parsedInput.originalInput,
-            description: '',
-            thumbnail: `https://ui-avatars.com/api/?name=${encodeURIComponent(parsedInput.originalInput)}&background=random&color=fff`,
-          };
-        }
-      }
-
-      await onAdd(channelToAdd);
-      setInput('');
-      setParsedInput(null);
-      setChannelInfo(null);
+      await onAdd(channel);
+      setAddedChannelIds((ids) => new Set(ids).add(channel.id));
       setValidationError('');
-      onClose();
     } catch (error) {
       console.error('Failed to add channel:', error);
       setValidationError('Failed to add channel. Please try again.');
     } finally {
+      setAddingChannelIds((ids) => {
+        const nextIds = new Set(ids);
+        nextIds.delete(channel.id);
+        return nextIds;
+      });
+      setIsLoading(false);
+    }
+  };
+
+  const handleAddParsedInput = async () => {
+    try {
+      const channelToAdd = await createChannelFromParsedInput();
+      await addChannel(channelToAdd);
+    } catch (error) {
+      console.error('Failed to prepare channel:', error);
+      setValidationError(error instanceof Error ? error.message : 'Failed to add channel. Please try again.');
       setIsLoading(false);
     }
   };
@@ -217,23 +222,13 @@ export const AddChannelModal = ({ isOpen, onClose, onAdd, existingSubscriptions 
     }
   };
 
-  const canSubmit =
+  const canAddParsedInput =
     Boolean(channelInfo) ||
     parsedInput?.type === 'channel_id' ||
     parsedInput?.type === 'handle' ||
     (parsedInput?.type === 'custom_url' && input.includes('youtube.com'));
 
-  const selectSearchResult = (channel: YouTubeChannel) => {
-    setChannelInfo(channel);
-    setParsedInput({
-      type: 'channel_id',
-      value: channel.id,
-      originalInput: channel.title,
-    });
-    setValidationError('');
-  };
-
-  const hasResults = searchResults.length > 0;
+  const hasResults = visibleSearchResults.length > 0;
   const showFormats = !hasResults && !channelInfo && !isSearching && input.trim().length < 2;
 
   return (
@@ -344,23 +339,15 @@ export const AddChannelModal = ({ isOpen, onClose, onAdd, existingSubscriptions 
                         Search Results
                       </h3>
                       <div className="space-y-2 pr-1">
-                        {searchResults.map((channel) => {
-                          const isAlreadyAdded = existingIds.has(channel.id);
+                        {visibleSearchResults.map((channel) => {
+                          const isAdded = addedChannelIds.has(channel.id);
+                          const isAdding = addingChannelIds.has(channel.id);
                           return (
-                            <button
+                            <div
                               key={channel.id}
-                              type="button"
-                              onClick={() => {
-                                if (!isAlreadyAdded) {
-                                  selectSearchResult(channel);
-                                }
-                              }}
-                              disabled={isAlreadyAdded}
-                              className={`flex w-full items-center gap-3 rounded-xl border p-3 text-left transition-all ${isAlreadyAdded
-                                ? 'border-gray-100 bg-gray-50/50 dark:border-gray-800 dark:bg-gray-800/30 opacity-60 cursor-default'
-                                : channelInfo?.id === channel.id
-                                  ? 'border-red-500 bg-red-50 dark:bg-red-950/20 shadow-sm'
-                                  : 'border-gray-200 bg-gray-50 hover:border-gray-300 hover:bg-gray-100 dark:border-gray-800 dark:bg-gray-800/50 dark:hover:border-gray-700 dark:hover:bg-gray-800'
+                              className={`flex w-full items-center gap-3 rounded-xl border p-3 text-left transition-all ${isAdded
+                                ? 'border-green-200 bg-green-50 dark:border-green-900/60 dark:bg-green-950/20'
+                                : 'border-gray-200 bg-gray-50 hover:border-gray-300 hover:bg-gray-100 dark:border-gray-800 dark:bg-gray-800/50 dark:hover:border-gray-700 dark:hover:bg-gray-800'
                                 }`}
                             >
                               <img
@@ -376,7 +363,7 @@ export const AddChannelModal = ({ isOpen, onClose, onAdd, existingSubscriptions 
                                   <span className="block truncate font-medium text-gray-900 dark:text-gray-100">
                                     {channel.title}
                                   </span>
-                                  {isAlreadyAdded && (
+                                  {isAdded && (
                                     <span className="shrink-0 inline-flex items-center rounded-full bg-green-100 dark:bg-green-900/30 px-2 py-0.5 text-xs font-medium text-green-700 dark:text-green-400">
                                       Added
                                     </span>
@@ -388,10 +375,25 @@ export const AddChannelModal = ({ isOpen, onClose, onAdd, existingSubscriptions 
                                   </span>
                                 )}
                               </span>
-                              {channelInfo?.id === channel.id && !isAlreadyAdded && (
-                                <Check className="h-5 w-5 flex-none text-red-500" />
-                              )}
-                            </button>
+                              <button
+                                type="button"
+                                onClick={() => addChannel(channel)}
+                                disabled={isAdded || isAdding}
+                                aria-label={isAdded ? `${channel.title} added` : `Add ${channel.title}`}
+                                className={`flex h-10 w-10 flex-none items-center justify-center rounded-full transition-all ${isAdded
+                                  ? 'bg-green-600 text-white'
+                                  : 'bg-red-600 text-white hover:bg-red-700 disabled:opacity-60'
+                                  }`}
+                              >
+                                {isAdding ? (
+                                  <span className="h-4 w-4 rounded-full border-2 border-white/40 border-t-white animate-spin" />
+                                ) : isAdded ? (
+                                  <Check className="h-5 w-5" />
+                                ) : (
+                                  <Plus className="h-5 w-5" />
+                                )}
+                              </button>
+                            </div>
                           );
                         })}
                       </div>
@@ -435,10 +437,49 @@ export const AddChannelModal = ({ isOpen, onClose, onAdd, existingSubscriptions 
                             </p>
                           )}
                         </div>
+                        <button
+                          type="button"
+                          onClick={handleAddParsedInput}
+                          disabled={isLoading || existingIds.has(channelInfo.id) || addedChannelIds.has(channelInfo.id)}
+                          aria-label={addedChannelIds.has(channelInfo.id) ? `${channelInfo.title} added` : `Add ${channelInfo.title}`}
+                          className={`flex h-10 w-10 flex-none items-center justify-center rounded-full transition-all ${addedChannelIds.has(channelInfo.id)
+                            ? 'bg-green-600 text-white'
+                            : 'bg-red-600 text-white hover:bg-red-700 disabled:opacity-60'
+                            }`}
+                        >
+                          {addingChannelIds.has(channelInfo.id) ? (
+                            <span className="h-4 w-4 rounded-full border-2 border-white/40 border-t-white animate-spin" />
+                          ) : addedChannelIds.has(channelInfo.id) ? (
+                            <Check className="h-5 w-5" />
+                          ) : (
+                            <Plus className="h-5 w-5" />
+                          )}
+                        </button>
                       </div>
                     </motion.section>
                   )}
                 </AnimatePresence>
+
+                {!channelInfo && canAddParsedInput && (
+                  <div className="flex items-center gap-3 rounded-xl border border-gray-200 bg-gray-50 p-3 dark:border-gray-800 dark:bg-gray-800/50">
+                    <span className="min-w-0 flex-1 text-sm text-gray-600 dark:text-gray-300">
+                      {parsedInput ? getDisplayText(parsedInput) : input.trim()}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={handleAddParsedInput}
+                      disabled={isLoading}
+                      aria-label={`Add ${parsedInput ? getDisplayText(parsedInput) : input.trim()}`}
+                      className="flex h-10 w-10 flex-none items-center justify-center rounded-full bg-red-600 text-white transition-all hover:bg-red-700 disabled:opacity-60"
+                    >
+                      {isLoading ? (
+                        <span className="h-4 w-4 rounded-full border-2 border-white/40 border-t-white animate-spin" />
+                      ) : (
+                        <Plus className="h-5 w-5" />
+                      )}
+                    </button>
+                  </div>
+                )}
 
                 {/* Supported Formats */}
                 <AnimatePresence>
@@ -476,36 +517,6 @@ export const AddChannelModal = ({ isOpen, onClose, onAdd, existingSubscriptions 
               </div>
             </div>
 
-            {/* Actions — pinned at bottom */}
-            <div className="shrink-0 border-t border-gray-100 dark:border-gray-800 bg-white/80 dark:bg-gray-900/80 backdrop-blur-md p-5">
-              <form onSubmit={handleSubmit} className="flex items-center gap-3">
-                <button
-                  type="submit"
-                  disabled={isLoading || !canSubmit}
-                  className="flex items-center justify-center gap-2 flex-1 px-4 py-2.5 rounded-lg bg-red-600 hover:bg-red-700 text-white disabled:opacity-50 disabled:cursor-not-allowed transition-all font-medium"
-                >
-                  {isLoading ? (
-                    <>
-                      <div className="w-4 h-4 border-2 border-white/30 border-t-transparent rounded-full animate-spin" />
-                      <span>Adding...</span>
-                    </>
-                  ) : (
-                    <>
-                      <Plus className="w-4 h-4" />
-                      <span>Add Channel</span>
-                    </>
-                  )}
-                </button>
-
-                <button
-                  type="button"
-                  onClick={onClose}
-                  className="px-4 py-2.5 rounded-lg text-gray-600 hover:text-gray-900 hover:bg-gray-100 dark:text-gray-400 dark:hover:text-gray-200 dark:hover:bg-gray-800 transition-all font-medium"
-                >
-                  Cancel
-                </button>
-              </form>
-            </div>
           </motion.div>
         </>
       )}
