@@ -1,12 +1,13 @@
 import { lazy, Suspense, useState, useEffect, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { TrendingUp, Grid3x3, RefreshCw, Loader2, Activity, Heart, CheckCircle2, Image, ListVideo, SlidersHorizontal, X } from 'lucide-react';
+import { TrendingUp, Grid3x3, RefreshCw, Loader2, Activity, Heart, Image, ListVideo, SlidersHorizontal, X } from 'lucide-react';
 import { toast } from 'sonner';
 import { Header } from './Header';
 import { SubscriptionsList } from './SubscriptionsList';
 import { SubscriptionCard } from './SubscriptionCard';
 import { VirtualizedVideoGrid } from './VirtualizedVideoGrid';
 import { EmptyState } from './EmptyState';
+import { SavedFeedViews } from './SavedFeedViews';
 import { useKeyboardShortcuts } from '../hooks/useKeyboardShortcuts';
 import { KeyboardShortcutsHelp } from './KeyboardShortcutsHelp';
 import { useRSSVideos } from '../hooks/useRSSVideos';
@@ -15,6 +16,8 @@ import { useFavoriteVideos } from '../hooks/useFavoriteVideos';
 import { useQueuedVideos } from '../hooks/useQueuedVideos';
 import { useStore } from '../store/useStore';
 import { buildVideoFeedIndex, filterIndexedVideos, type DurationFilter } from '../lib/video-feed-index';
+import { createFeedViewPreset, readFeedViewPresets, writeFeedViewPresets, type FeedViewFilters, type FeedViewPreset } from '../lib/feed-view-presets';
+import { getVideoIdsOlderThan, getVisibleVideoIds } from '../lib/feed-bulk-actions';
 import {
   getVisibleTimelineVideos,
   MOBILE_TIMELINE_INCREMENT,
@@ -104,6 +107,7 @@ export const Dashboard = () => {
   const [hideDuplicateTitles, setHideDuplicateTitles] = useState(Boolean(persistedQualityFilters.hideDuplicateTitles));
   const [mutedKeywordText, setMutedKeywordText] = useState(persistedQualityFilters.mutedKeywordText || '');
   const [boostedKeywordText, setBoostedKeywordText] = useState(persistedQualityFilters.boostedKeywordText || '');
+  const [feedViewPresets, setFeedViewPresets] = useState<FeedViewPreset[]>(() => readFeedViewPresets());
   const [isQualityFiltersOpen, setIsQualityFiltersOpen] = useState(false);
   const [activeFavoriteSection, setActiveFavoriteSection] = useState<FavoriteSection>('channels');
   const [isMobileTimeline, setIsMobileTimeline] = useState(false);
@@ -392,6 +396,67 @@ export const Dashboard = () => {
     setBoostedKeywordText('');
   };
 
+  const getCurrentFeedViewFilters = (): FeedViewFilters => ({
+    showShorts,
+    hideWatched,
+    durationFilter,
+    hideLiveReplays,
+    hidePremieres,
+    hideDuplicateTitles,
+    mutedKeywordText,
+    boostedKeywordText,
+  });
+
+  const applyFeedViewPreset = (preset: FeedViewPreset) => {
+    setShowShorts(preset.filters.showShorts);
+    setHideWatched(preset.filters.hideWatched);
+    setDurationFilter(preset.filters.durationFilter);
+    setHideLiveReplays(preset.filters.hideLiveReplays);
+    setHidePremieres(preset.filters.hidePremieres);
+    setHideDuplicateTitles(preset.filters.hideDuplicateTitles);
+    setMutedKeywordText(preset.filters.mutedKeywordText);
+    setBoostedKeywordText(preset.filters.boostedKeywordText);
+    toast.success(`Applied ${preset.name}`);
+  };
+
+  const saveCurrentFeedViewPreset = (name: string) => {
+    const preset = createFeedViewPreset({
+      name,
+      filters: getCurrentFeedViewFilters(),
+    });
+    const updatedPresets = writeFeedViewPresets([...feedViewPresets, preset]);
+    setFeedViewPresets(updatedPresets);
+    toast.success(`Saved ${preset.name}`);
+  };
+
+  const deleteSavedFeedViewPreset = (presetId: string) => {
+    const preset = feedViewPresets.find((candidate) => candidate.id === presetId);
+    const updatedPresets = writeFeedViewPresets(feedViewPresets.filter((candidate) => candidate.id !== presetId));
+    setFeedViewPresets(updatedPresets);
+    if (preset) toast.success(`Deleted ${preset.name}`);
+  };
+
+  const markVideosWatched = (videoIds: string[]) => {
+    videoIds.forEach((videoId) => markAsWatched(videoId));
+    toast.success(`Marked ${videoIds.length} video${videoIds.length === 1 ? '' : 's'} watched`);
+  };
+
+  const handleBulkWatchedAction = (action: string) => {
+    if (action === 'shown') {
+      markVideosWatched(getVisibleVideoIds(visibleLatestVideos));
+      return;
+    }
+
+    if (action === 'older-7') {
+      markVideosWatched(getVideoIdsOlderThan(filteredVideos, { days: 7 }));
+      return;
+    }
+
+    if (action === 'older-30') {
+      markVideosWatched(getVideoIdsOlderThan(filteredVideos, { days: 30 }));
+    }
+  };
+
   // Helper function to format time ago
   const formatTimeAgo = (date: Date) => {
     const seconds = Math.floor((Date.now() - date.getTime()) / 1000);
@@ -596,6 +661,12 @@ export const Dashboard = () => {
               </div>
 
               <div className="ml-auto flex shrink-0 items-center gap-2">
+                <SavedFeedViews
+                  presets={feedViewPresets}
+                  onApply={applyFeedViewPreset}
+                  onSave={saveCurrentFeedViewPreset}
+                  onDelete={deleteSavedFeedViewPreset}
+                />
                 <button
                   type="button"
                   aria-label="Feed filters"
@@ -647,14 +718,24 @@ export const Dashboard = () => {
                   <span>Refresh</span>
                 </button>
                 {visibleLatestVideos.length > 0 && (
-                  <button
-                    type="button"
-                    onClick={() => visibleLatestVideos.forEach((video) => markAsWatched(video.id))}
-                    className="hidden sm:flex items-center gap-2 px-4 py-2 rounded-lg font-medium bg-gray-100 text-gray-800 hover:bg-gray-200 dark:bg-gray-800 dark:text-gray-100 dark:hover:bg-gray-700 transition-all"
-                  >
-                    <CheckCircle2 className="w-4 h-4" />
-                    <span>Mark shown watched</span>
-                  </button>
+                  <>
+                    <label htmlFor="bulk-watched-action" className="sr-only">Bulk watched action</label>
+                    <select
+                      id="bulk-watched-action"
+                      aria-label="Bulk watched action"
+                      defaultValue=""
+                      onChange={(event) => {
+                        handleBulkWatchedAction(event.target.value);
+                        event.target.value = '';
+                      }}
+                      className="hidden h-10 rounded-lg border border-gray-200 bg-white px-3 text-sm font-medium text-gray-700 outline-none focus:border-red-500 dark:border-gray-800 dark:bg-gray-900 dark:text-gray-200 sm:block"
+                    >
+                      <option value="" disabled>Mark watched</option>
+                      <option value="shown">Shown videos</option>
+                      <option value="older-7">Older than 7 days</option>
+                      <option value="older-30">Older than 30 days</option>
+                    </select>
+                  </>
                 )}
               </div>
             </div>

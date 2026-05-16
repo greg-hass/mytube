@@ -1069,4 +1069,68 @@ describe('Dashboard', () => {
     expect(screen.getByText('Security bulletin')).toBeInTheDocument();
     expect(screen.queryByText('Football highlights')).not.toBeInTheDocument();
   });
+
+  it('saves and applies feed view presets from the latest toolbar', async () => {
+    mockRSSVideosState = {
+      ...mockRSSVideosState,
+      videos: [{
+        id: 'video-1',
+        title: 'Long update',
+        description: '',
+        thumbnail: '',
+        channelId: 'UC123',
+        channelTitle: 'Test Channel',
+        publishedAt: new Date().toISOString(),
+        duration: 60 * 40,
+      }],
+    };
+
+    render(<Dashboard />);
+
+    fireEvent.change(screen.getByLabelText('New saved view name'), { target: { value: 'Longform' } });
+    fireEvent.click(screen.getByRole('button', { name: /save view/i }));
+
+    await waitFor(() => {
+      expect(screen.getByRole('option', { name: 'Longform' })).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByLabelText('Hide Shorts'));
+    fireEvent.change(screen.getByLabelText('Saved view'), { target: { value: JSON.parse(localStorage.getItem('feed-view-presets') || '[]')[0].id } });
+
+    expect(screen.getByLabelText('Hide Shorts')).not.toBeChecked();
+  });
+
+  it('marks filtered videos older than 7 days as watched', async () => {
+    vi.spyOn(Date, 'now').mockReturnValue(Date.parse('2026-05-16T00:00:00.000Z'));
+    mockRSSVideosState = {
+      ...mockRSSVideosState,
+      videos: [
+        {
+          id: 'old-video',
+          title: 'Old video',
+          description: '',
+          thumbnail: '',
+          channelId: 'UC123',
+          channelTitle: 'Test Channel',
+          publishedAt: '2026-05-01T00:00:00.000Z',
+        },
+        {
+          id: 'new-video',
+          title: 'New video',
+          description: '',
+          thumbnail: '',
+          channelId: 'UC123',
+          channelTitle: 'Test Channel',
+          publishedAt: '2026-05-15T00:00:00.000Z',
+        },
+      ],
+    };
+
+    render(<Dashboard />);
+
+    fireEvent.change(screen.getByLabelText('Bulk watched action'), { target: { value: 'older-7' } });
+
+    expect(mockMarkAsWatched).toHaveBeenCalledWith('old-video');
+    expect(mockMarkAsWatched).not.toHaveBeenCalledWith('new-video');
+  });
 });
