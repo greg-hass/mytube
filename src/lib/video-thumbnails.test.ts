@@ -2,27 +2,27 @@ import { describe, expect, it } from 'vitest';
 import { getHighResolutionVideoThumbnail, getNextVideoThumbnailFallback } from './video-thumbnails';
 
 describe('video thumbnails', () => {
-  it('keeps standard feed thumbnails as the first choice for regular videos', () => {
+  it('upgrades YouTube video thumbnails to max resolution', () => {
     expect(getHighResolutionVideoThumbnail('https://i.ytimg.com/vi/abc123/hqdefault.jpg')).toBe(
-      'https://i.ytimg.com/vi/abc123/hqdefault.jpg'
+      'https://i.ytimg.com/vi/abc123/maxresdefault.jpg'
     );
   });
 
-  it('keeps YouTube webp feed thumbnails and preserves query strings', () => {
+  it('upgrades YouTube webp thumbnails and preserves query strings', () => {
     expect(getHighResolutionVideoThumbnail('https://i.ytimg.com/vi_webp/abc123/hqdefault.webp?sqp=-oaymw')).toBe(
-      'https://i.ytimg.com/vi_webp/abc123/hqdefault.webp?sqp=-oaymw'
+      'https://i.ytimg.com/vi_webp/abc123/maxresdefault.webp?sqp=-oaymw'
     );
   });
 
-  it('normalizes numbered YouTube thumbnails to the dependable feed thumbnail size', () => {
+  it('upgrades numbered YouTube thumbnails to max resolution', () => {
     expect(getHighResolutionVideoThumbnail('https://img.youtube.com/vi/abc123/0.jpg')).toBe(
-      'https://img.youtube.com/vi/abc123/hqdefault.jpg'
+      'https://img.youtube.com/vi/abc123/maxresdefault.jpg'
     );
   });
 
-  it('keeps sharded ytimg video feed thumbnails', () => {
+  it('upgrades sharded ytimg video thumbnail hosts to max resolution', () => {
     expect(getHighResolutionVideoThumbnail('https://i3.ytimg.com/vi/abc123/hqdefault.jpg')).toBe(
-      'https://i3.ytimg.com/vi/abc123/hqdefault.jpg'
+      'https://i3.ytimg.com/vi/abc123/maxresdefault.jpg'
     );
   });
 
@@ -43,16 +43,22 @@ describe('video thumbnails', () => {
       'https://i.ytimg.com/vi/abc123/frame0.jpg'
     );
     expect(getNextVideoThumbnailFallback('https://i.ytimg.com/vi/abc123/frame0.jpg')).toBe(
-      'https://i.ytimg.com/vi/abc123/hqdefault.jpg'
+      'https://i.ytimg.com/vi/abc123/maxresdefault.jpg'
     );
   });
 
-  it('falls back through dependable YouTube thumbnail sizes', () => {
+  it('falls back through lower quality YouTube thumbnail sizes', () => {
+    expect(getNextVideoThumbnailFallback('https://i.ytimg.com/vi/abc123/maxresdefault.jpg')).toBe(
+      'https://i.ytimg.com/vi/abc123/hq720.jpg'
+    );
+    expect(getNextVideoThumbnailFallback('https://i.ytimg.com/vi/abc123/hq720.jpg')).toBe(
+      'https://i.ytimg.com/vi/abc123/sddefault.jpg'
+    );
+    expect(getNextVideoThumbnailFallback('https://i.ytimg.com/vi/abc123/sddefault.jpg')).toBe(
+      'https://i.ytimg.com/vi/abc123/hqdefault.jpg'
+    );
     expect(getNextVideoThumbnailFallback('https://i.ytimg.com/vi/abc123/hqdefault.jpg')).toBe(
       'https://i.ytimg.com/vi/abc123/mqdefault.jpg'
-    );
-    expect(getNextVideoThumbnailFallback('https://i.ytimg.com/vi/abc123/mqdefault.jpg')).toBe(
-      'https://i.ytimg.com/vi/abc123/default.jpg'
     );
   });
 

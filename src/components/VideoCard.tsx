@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from 'react';
 import type { MouseEvent, PointerEvent } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { getDisplayThumbnail } from '../lib/icon-loader';
-import { getHighResolutionVideoThumbnail, getNextVideoThumbnailFallback } from '../lib/video-thumbnails';
+import { getHighResolutionVideoThumbnail, getNextVideoThumbnailFallback, isLikelyLowResolutionYouTubePlaceholder } from '../lib/video-thumbnails';
 import { useFavoriteVideos } from '../hooks/useFavoriteVideos';
 import { useQueuedVideos } from '../hooks/useQueuedVideos';
 import { getVideoProgressPercent } from '../lib/video-progress';
@@ -141,6 +141,15 @@ export const VideoCard = ({ video, channelThumbnail }: Props) => {
     toggleQueuedVideo(video);
   };
 
+  const useNextThumbnailFallback = () => {
+    const fallback = getNextVideoThumbnailFallback(thumbnailSrc, { isShort: isLikelyShort });
+    if (!fallback) return false;
+
+    setImageLoaded(false);
+    setThumbnailSrc(fallback);
+    return true;
+  };
+
   const formatDate = (dateString: string) => {
     const date = new Date(dateString);
     const now = new Date();
@@ -182,12 +191,15 @@ export const VideoCard = ({ video, channelThumbnail }: Props) => {
           alt={video.title}
           loading="lazy"
           onError={() => {
-            const fallback = getNextVideoThumbnailFallback(thumbnailSrc, { isShort: isLikelyShort });
-            if (fallback) {
-              setThumbnailSrc(fallback);
-            }
+            useNextThumbnailFallback();
           }}
-          onLoad={() => setImageLoaded(true)}
+          onLoad={(event) => {
+            if (isLikelyLowResolutionYouTubePlaceholder(thumbnailSrc, event.currentTarget)) {
+              useNextThumbnailFallback();
+              return;
+            }
+            setImageLoaded(true);
+          }}
           className={`w-full h-full ${isLikelyShort ? 'object-contain bg-black' : 'object-cover'} transition-all duration-300 ${imageLoaded ? 'opacity-100' : 'opacity-0'
             }`}
         />

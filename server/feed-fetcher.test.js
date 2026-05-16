@@ -24,7 +24,7 @@ function buildUploadsPage(videoRenderers) {
 }
 
 describe('feed fetcher', () => {
-    it('keeps regular RSS video thumbnails at the feed-provided size', () => {
+    it('stores high-resolution URLs for regular RSS video thumbnails', () => {
         const video = buildVideoFromFeedItem({
             id: 'yt:video:fresh-video',
             title: 'Fresh upload',
@@ -41,7 +41,7 @@ describe('feed fetcher', () => {
 
         expect(video).toMatchObject({
             id: 'fresh-video',
-            thumbnail: 'https://i.ytimg.com/vi/fresh-video/hqdefault.jpg',
+            thumbnail: 'https://i.ytimg.com/vi/fresh-video/maxresdefault.jpg',
         });
     });
 
@@ -103,7 +103,7 @@ describe('feed fetcher', () => {
         expect(videos[0]).toMatchObject({
             id: 'real-date',
             publishedAt: '2026-05-14T10:00:00.000Z',
-            thumbnail: 'https://i.ytimg.com/vi/real-date/hqdefault.jpg',
+            thumbnail: 'https://i.ytimg.com/vi/real-date/maxresdefault.jpg',
             publishedAtSource: 'youtube-relative-time',
         });
     });
