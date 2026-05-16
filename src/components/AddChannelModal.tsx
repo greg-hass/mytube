@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X, Plus, Check, AlertCircle, Search, Youtube } from 'lucide-react';
 import { parseChannelInput, getDisplayText, type ParsedChannelInput } from '../lib/youtube-parser';
@@ -9,9 +9,10 @@ interface AddChannelModalProps {
   isOpen: boolean;
   onClose: () => void;
   onAdd: (channel: YouTubeChannel) => void;
+  existingSubscriptions?: YouTubeChannel[];
 }
 
-export const AddChannelModal = ({ isOpen, onClose, onAdd }: AddChannelModalProps) => {
+export const AddChannelModal = ({ isOpen, onClose, onAdd, existingSubscriptions = [] }: AddChannelModalProps) => {
   const [input, setInput] = useState('');
   const [parsedInput, setParsedInput] = useState<ParsedChannelInput | null>(null);
   const [channelInfo, setChannelInfo] = useState<YouTubeChannel | null>(null);
@@ -20,6 +21,9 @@ export const AddChannelModal = ({ isOpen, onClose, onAdd }: AddChannelModalProps
   const [isValidating, setIsValidating] = useState(false);
   const [isSearching, setIsSearching] = useState(false);
   const [validationError, setValidationError] = useState<string>('');
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  const existingIds = new Set(existingSubscriptions.map((sub) => sub.id));
 
   // Validate input whenever it changes
   useEffect(() => {
@@ -206,6 +210,13 @@ export const AddChannelModal = ({ isOpen, onClose, onAdd }: AddChannelModalProps
     setInput(e.target.value);
   };
 
+  const handleInputKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter') {
+      // Dismiss the mobile keyboard by blurring the input
+      inputRef.current?.blur();
+    }
+  };
+
   const canSubmit =
     Boolean(channelInfo) ||
     parsedInput?.type === 'channel_id' ||
@@ -221,6 +232,9 @@ export const AddChannelModal = ({ isOpen, onClose, onAdd }: AddChannelModalProps
     });
     setValidationError('');
   };
+
+  const hasResults = searchResults.length > 0;
+  const showFormats = !hasResults && !channelInfo && !isSearching && input.trim().length < 2;
 
   return (
     <AnimatePresence>
@@ -273,10 +287,12 @@ export const AddChannelModal = ({ isOpen, onClose, onAdd }: AddChannelModalProps
                   </label>
                   <div className="relative">
                     <input
+                      ref={inputRef}
                       type="text"
                       id="channelInput"
                       value={input}
                       onChange={handleInputChange}
+                      onKeyDown={handleInputKeyDown}
                       placeholder="Search keywords, @handle, channel ID, or URL"
                       className={`w-full pl-4 pr-10 py-2.5 rounded-lg bg-gray-50 dark:bg-gray-800/50 border transition-all outline-none text-sm ${validationError
                         ? 'border-red-300 focus:border-red-500 focus:ring-2 focus:ring-red-500/20 dark:border-red-800'
@@ -316,7 +332,7 @@ export const AddChannelModal = ({ isOpen, onClose, onAdd }: AddChannelModalProps
 
                 {/* Search Results */}
                 <AnimatePresence>
-                  {searchResults.length > 0 && (
+                  {hasResults && (
                     <motion.section
                       initial={{ opacity: 0, height: 0 }}
                       animate={{ opacity: 1, height: 'auto' }}
@@ -328,37 +344,56 @@ export const AddChannelModal = ({ isOpen, onClose, onAdd }: AddChannelModalProps
                         Search Results
                       </h3>
                       <div className="max-h-64 space-y-2 overflow-y-auto pr-1 custom-scrollbar">
-                        {searchResults.map((channel) => (
-                          <button
-                            key={channel.id}
-                            type="button"
-                            onClick={() => selectSearchResult(channel)}
-                            className={`flex w-full items-center gap-3 rounded-xl border p-3 text-left transition-all ${channelInfo?.id === channel.id
-                              ? 'border-red-500 bg-red-50 dark:bg-red-950/20 shadow-sm'
-                              : 'border-gray-200 bg-gray-50 hover:border-gray-300 hover:bg-gray-100 dark:border-gray-800 dark:bg-gray-800/50 dark:hover:border-gray-700 dark:hover:bg-gray-800'
-                              }`}
-                          >
-                            <img
-                              src={channel.thumbnail || `https://ui-avatars.com/api/?name=${encodeURIComponent(channel.title)}&background=random&color=fff`}
-                              alt={channel.title}
-                              className="h-11 w-11 flex-none rounded-full object-cover"
-                              onError={(event) => {
-                                event.currentTarget.src = `https://ui-avatars.com/api/?name=${encodeURIComponent(channel.title)}&background=random&color=fff`;
+                        {searchResults.map((channel) => {
+                          const isAlreadyAdded = existingIds.has(channel.id);
+                          return (
+                            <button
+                              key={channel.id}
+                              type="button"
+                              onClick={() => {
+                                if (!isAlreadyAdded) {
+                                  selectSearchResult(channel);
+                                }
                               }}
-                            />
-                            <span className="min-w-0 flex-1">
-                              <span className="block truncate font-medium text-gray-900 dark:text-gray-100">
-                                {channel.title}
-                              </span>
-                              {channel.description && (
-                                <span className="line-clamp-1 text-sm text-gray-500 dark:text-gray-400">
-                                  {channel.description}
+                              disabled={isAlreadyAdded}
+                              className={`flex w-full items-center gap-3 rounded-xl border p-3 text-left transition-all ${isAlreadyAdded
+                                ? 'border-gray-100 bg-gray-50/50 dark:border-gray-800 dark:bg-gray-800/30 opacity-60 cursor-default'
+                                : channelInfo?.id === channel.id
+                                  ? 'border-red-500 bg-red-50 dark:bg-red-950/20 shadow-sm'
+                                  : 'border-gray-200 bg-gray-50 hover:border-gray-300 hover:bg-gray-100 dark:border-gray-800 dark:bg-gray-800/50 dark:hover:border-gray-700 dark:hover:bg-gray-800'
+                                }`}
+                            >
+                              <img
+                                src={channel.thumbnail || `https://ui-avatars.com/api/?name=${encodeURIComponent(channel.title)}&background=random&color=fff`}
+                                alt={channel.title}
+                                className="h-11 w-11 flex-none rounded-full object-cover"
+                                onError={(event) => {
+                                  event.currentTarget.src = `https://ui-avatars.com/api/?name=${encodeURIComponent(channel.title)}&background=random&color=fff`;
+                                }}
+                              />
+                              <span className="min-w-0 flex-1">
+                                <span className="flex items-center gap-2">
+                                  <span className="block truncate font-medium text-gray-900 dark:text-gray-100">
+                                    {channel.title}
+                                  </span>
+                                  {isAlreadyAdded && (
+                                    <span className="shrink-0 inline-flex items-center rounded-full bg-green-100 dark:bg-green-900/30 px-2 py-0.5 text-xs font-medium text-green-700 dark:text-green-400">
+                                      Added
+                                    </span>
+                                  )}
                                 </span>
+                                {channel.description && (
+                                  <span className="line-clamp-1 text-sm text-gray-500 dark:text-gray-400">
+                                    {channel.description}
+                                  </span>
+                                )}
+                              </span>
+                              {channelInfo?.id === channel.id && !isAlreadyAdded && (
+                                <Check className="h-5 w-5 flex-none text-red-500" />
                               )}
-                            </span>
-                            {channelInfo?.id === channel.id && <Check className="h-5 w-5 flex-none text-red-500" />}
-                          </button>
-                        ))}
+                            </button>
+                          );
+                        })}
                       </div>
                     </motion.section>
                   )}
@@ -406,29 +441,38 @@ export const AddChannelModal = ({ isOpen, onClose, onAdd }: AddChannelModalProps
                 </AnimatePresence>
 
                 {/* Supported Formats */}
-                <section className="rounded-xl border border-gray-100 dark:border-gray-800 bg-gray-50 dark:bg-gray-800/30 p-4 space-y-3">
-                  <h3 className="text-sm font-semibold text-gray-900 dark:text-white">
-                    Supported formats
-                  </h3>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                    {[
-                      { label: 'Channel ID', example: 'UCxxxxxxxxxxxxxxxxxxxxxx' },
-                      { label: 'Handle', example: '@channelname' },
-                      { label: 'Custom URL', example: 'youtube.com/c/name' },
-                      { label: 'Full URL', example: 'youtube.com/channel/UC...' },
-                    ].map((format) => (
-                      <div
-                        key={format.label}
-                        className="rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 px-3 py-2.5"
-                      >
-                        <p className="text-xs font-medium text-gray-500 dark:text-gray-400">{format.label}</p>
-                        <code className="text-xs text-gray-800 dark:text-gray-200 font-mono mt-0.5 block">
-                          {format.example}
-                        </code>
+                <AnimatePresence>
+                  {showFormats && (
+                    <motion.section
+                      initial={{ opacity: 0, y: 10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0, y: 10 }}
+                      className="rounded-xl border border-gray-100 dark:border-gray-800 bg-gray-50 dark:bg-gray-800/30 p-4 space-y-3"
+                    >
+                      <h3 className="text-sm font-semibold text-gray-900 dark:text-white">
+                        Supported formats
+                      </h3>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                        {[
+                          { label: 'Channel ID', example: 'UCxxxxxxxxxxxxxxxxxxxxxx' },
+                          { label: 'Handle', example: '@channelname' },
+                          { label: 'Custom URL', example: 'youtube.com/c/name' },
+                          { label: 'Full URL', example: 'youtube.com/channel/UC...' },
+                        ].map((format) => (
+                          <div
+                            key={format.label}
+                            className="rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 px-3 py-2.5"
+                          >
+                            <p className="text-xs font-medium text-gray-500 dark:text-gray-400">{format.label}</p>
+                            <code className="text-xs text-gray-800 dark:text-gray-200 font-mono mt-0.5 block">
+                              {format.example}
+                            </code>
+                          </div>
+                        ))}
                       </div>
-                    ))}
-                  </div>
-                </section>
+                    </motion.section>
+                  )}
+                </AnimatePresence>
 
                 {/* Actions */}
                 <div className="flex items-center gap-3 pt-2">
