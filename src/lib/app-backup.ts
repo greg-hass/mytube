@@ -1,11 +1,11 @@
 import type { YouTubeVideo } from '../types/youtube';
+import { FEED_VIEW_PRESETS_CHANGED_EVENT, FEED_VIEW_PRESETS_STORAGE_KEY } from './feed-view-presets';
 
 const FAVORITE_IDS_STORAGE_KEY = 'favorite-video-ids';
 const FAVORITE_VIDEOS_STORAGE_KEY = 'favorite-videos';
 const QUEUE_IDS_STORAGE_KEY = 'queued-video-ids';
 const QUEUE_VIDEOS_STORAGE_KEY = 'queued-videos';
 const FEED_QUALITY_FILTERS_STORAGE_KEY = 'feed-quality-filters';
-const FEED_VIEW_PRESETS_STORAGE_KEY = 'feed-view-presets';
 const FAVORITES_CHANGED_EVENT = 'favorite-videos-changed';
 const QUEUE_CHANGED_EVENT = 'queued-videos-changed';
 
@@ -116,9 +116,12 @@ export function restoreAppBackup(backupJson: string, options: RestoreAppBackupOp
   storage.setItem(QUEUE_IDS_STORAGE_KEY, JSON.stringify(queue.videoIds || []));
   storage.setItem(QUEUE_VIDEOS_STORAGE_KEY, JSON.stringify(queue.videos || []));
   storage.setItem(FEED_QUALITY_FILTERS_STORAGE_KEY, JSON.stringify(backup.feedQualityFilters || {}));
-  storage.setItem(FEED_VIEW_PRESETS_STORAGE_KEY, JSON.stringify(backup.feedViewPresets || []));
+  storage.setItem(FEED_VIEW_PRESETS_STORAGE_KEY, JSON.stringify(
+    Array.isArray(backup.feedViewPresets) ? backup.feedViewPresets : []
+  ));
   dispatchEvent(FAVORITES_CHANGED_EVENT);
   dispatchEvent(QUEUE_CHANGED_EVENT);
+  dispatchEvent(FEED_VIEW_PRESETS_CHANGED_EVENT);
 
   return {
     subscriptions: backup.subscriptions,

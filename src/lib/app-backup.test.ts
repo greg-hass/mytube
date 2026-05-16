@@ -5,6 +5,7 @@ import {
   restoreAppBackup,
   type AppBackupLocalData,
 } from './app-backup';
+import { FEED_VIEW_PRESETS_CHANGED_EVENT } from './feed-view-presets';
 import type { YouTubeChannel } from '../types/youtube';
 
 const channels: YouTubeChannel[] = [
@@ -85,6 +86,7 @@ describe('app backup', () => {
     expect(JSON.parse(storage.get('feed-quality-filters') || '{}')).toEqual({ mutedKeywordText: 'rumor' });
     expect(dispatchEvent).toHaveBeenCalledWith('favorite-videos-changed');
     expect(dispatchEvent).toHaveBeenCalledWith('queued-videos-changed');
+    expect(dispatchEvent).toHaveBeenCalledWith(FEED_VIEW_PRESETS_CHANGED_EVENT);
   });
 
   it('exports and restores saved feed views', () => {
@@ -127,5 +129,29 @@ describe('app backup', () => {
     restoreAppBackup(JSON.stringify(backup), { storage: fakeStorage, dispatchEvent });
 
     expect(JSON.parse(storage.get('feed-view-presets') || '[]')).toEqual(backup.feedViewPresets);
+    expect(dispatchEvent).toHaveBeenCalledWith(FEED_VIEW_PRESETS_CHANGED_EVENT);
+  });
+
+  it('restores missing or malformed saved feed views as an empty list', () => {
+    const storage = new Map<string, string>();
+    const fakeStorage = {
+      setItem: (key: string, value: string) => storage.set(key, value),
+    };
+    const dispatchEvent = vi.fn();
+
+    restoreAppBackup(JSON.stringify({
+      version: 2,
+      exportedAt: '2026-05-16T10:30:00.000Z',
+      subscriptions: [],
+      settings: {},
+      watchedVideos: [],
+      favorites: { videoIds: [], videos: [] },
+      queue: { videoIds: [], videos: [] },
+      feedQualityFilters: {},
+      feedViewPresets: {},
+    }), { storage: fakeStorage, dispatchEvent });
+
+    expect(JSON.parse(storage.get('feed-view-presets') || 'null')).toEqual([]);
+    expect(dispatchEvent).toHaveBeenCalledWith(FEED_VIEW_PRESETS_CHANGED_EVENT);
   });
 });

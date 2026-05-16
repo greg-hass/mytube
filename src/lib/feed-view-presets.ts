@@ -1,6 +1,7 @@
 import type { DurationFilter } from './video-feed-index';
 
 export const FEED_VIEW_PRESETS_STORAGE_KEY = 'feed-view-presets';
+export const FEED_VIEW_PRESETS_CHANGED_EVENT = 'feed-view-presets-changed';
 
 export type FeedViewFilters = {
   showShorts: boolean;

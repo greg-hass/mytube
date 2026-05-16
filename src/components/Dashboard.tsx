@@ -16,7 +16,7 @@ import { useFavoriteVideos } from '../hooks/useFavoriteVideos';
 import { useQueuedVideos } from '../hooks/useQueuedVideos';
 import { useStore } from '../store/useStore';
 import { buildVideoFeedIndex, filterIndexedVideos, type DurationFilter } from '../lib/video-feed-index';
-import { createFeedViewPreset, readFeedViewPresets, writeFeedViewPresets, type FeedViewFilters, type FeedViewPreset } from '../lib/feed-view-presets';
+import { createFeedViewPreset, FEED_VIEW_PRESETS_CHANGED_EVENT, readFeedViewPresets, writeFeedViewPresets, type FeedViewFilters, type FeedViewPreset } from '../lib/feed-view-presets';
 import { getVideoIdsOlderThan, getVisibleVideoIds } from '../lib/feed-bulk-actions';
 import {
   getVisibleTimelineVideos,
@@ -383,6 +383,15 @@ export const Dashboard = () => {
     }));
   }, [durationFilter, hideLiveReplays, hidePremieres, hideDuplicateTitles, mutedKeywordText, boostedKeywordText]);
 
+  useEffect(() => {
+    const syncFeedViewPresets = () => {
+      setFeedViewPresets(readFeedViewPresets());
+    };
+
+    window.addEventListener(FEED_VIEW_PRESETS_CHANGED_EVENT, syncFeedViewPresets);
+    return () => window.removeEventListener(FEED_VIEW_PRESETS_CHANGED_EVENT, syncFeedViewPresets);
+  }, []);
+
   const activeQualityFilterCount = (durationFilter !== 'any' ? 1 : 0)
     + (hideLiveReplays ? 1 : 0)
     + (hidePremieres ? 1 : 0)
@@ -431,10 +440,12 @@ export const Dashboard = () => {
       const updatedPresets = writeFeedViewPresets([...feedViewPresets, preset]);
       setFeedViewPresets(updatedPresets);
       toast.success(`Saved ${preset.name}`);
+      return true;
     } catch (error) {
       toast.error('Could not save view', {
         description: getErrorDescription(error),
       });
+      return false;
     }
   };
 

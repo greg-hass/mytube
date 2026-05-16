@@ -1,6 +1,7 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { Dashboard } from './Dashboard';
+import { FEED_VIEW_PRESETS_CHANGED_EVENT } from '../lib/feed-view-presets';
 
 type MockRSSVideosState = {
   videos: Array<{
@@ -1165,8 +1166,41 @@ describe('Dashboard', () => {
     fireEvent.click(screen.getByRole('button', { name: /save view/i }));
 
     expect(screen.queryByRole('option', { name: 'Longform' })).not.toBeInTheDocument();
+    expect(screen.getByLabelText('New saved view name')).toHaveValue('Longform');
     expect(toastMockState.error).toHaveBeenCalledWith('Could not save view', {
       description: 'Storage quota exceeded',
+    });
+  });
+
+  it('refreshes saved feed view presets when backup restore updates local storage', async () => {
+    render(<Dashboard />);
+
+    expect(screen.queryByRole('option', { name: 'Restored view' })).not.toBeInTheDocument();
+
+    localStorage.setItem('feed-view-presets', JSON.stringify([
+      {
+        id: 'restored-preset',
+        name: 'Restored view',
+        filters: {
+          showShorts: false,
+          hideWatched: true,
+          durationFilter: '30-plus',
+          hideLiveReplays: false,
+          hidePremieres: false,
+          hideDuplicateTitles: false,
+          mutedKeywordText: '',
+          boostedKeywordText: '',
+        },
+        createdAt: '2026-05-16T10:00:00.000Z',
+        updatedAt: '2026-05-16T10:00:00.000Z',
+      },
+    ]));
+    act(() => {
+      window.dispatchEvent(new Event(FEED_VIEW_PRESETS_CHANGED_EVENT));
+    });
+
+    await waitFor(() => {
+      expect(screen.getByRole('option', { name: 'Restored view' })).toBeInTheDocument();
     });
   });
 

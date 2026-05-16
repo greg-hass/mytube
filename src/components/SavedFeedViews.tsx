@@ -5,7 +5,7 @@ import type { FeedViewPreset } from '../lib/feed-view-presets';
 type SavedFeedViewsProps = {
   presets: FeedViewPreset[];
   onApply: (preset: FeedViewPreset) => void;
-  onSave: (name: string) => void;
+  onSave: (name: string) => boolean | void;
   onDelete: (presetId: string) => void;
 };
 
@@ -30,8 +30,10 @@ export function SavedFeedViews({ presets, onApply, onSave, onDelete }: SavedFeed
   const handleSave = () => {
     const trimmedName = newViewName.trim();
     if (!trimmedName) return;
-    onSave(trimmedName);
-    setNewViewName('');
+    const didSave = onSave(trimmedName);
+    if (didSave !== false) {
+      setNewViewName('');
+    }
   };
 
   const handleDelete = () => {
