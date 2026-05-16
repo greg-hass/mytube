@@ -56,7 +56,43 @@ describe('SavedFeedViews', () => {
     expect(onSave).toHaveBeenCalledWith('Weekend');
   });
 
-  it('deletes the selected saved view', () => {
+  it('trims the saved view name before saving', () => {
+    const onSave = vi.fn();
+
+    render(
+      <SavedFeedViews
+        presets={[]}
+        onApply={vi.fn()}
+        onSave={onSave}
+        onDelete={vi.fn()}
+      />
+    );
+
+    fireEvent.change(screen.getByLabelText('New saved view name'), { target: { value: '  Weekend  ' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Save view' }));
+
+    expect(onSave).toHaveBeenCalledWith('Weekend');
+  });
+
+  it('does not save a whitespace-only view name', () => {
+    const onSave = vi.fn();
+
+    render(
+      <SavedFeedViews
+        presets={[]}
+        onApply={vi.fn()}
+        onSave={onSave}
+        onDelete={vi.fn()}
+      />
+    );
+
+    fireEvent.change(screen.getByLabelText('New saved view name'), { target: { value: '   ' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Save view' }));
+
+    expect(onSave).not.toHaveBeenCalled();
+  });
+
+  it('deletes the selected saved view and clears the selection', () => {
     const onDelete = vi.fn();
 
     render(
@@ -68,9 +104,41 @@ describe('SavedFeedViews', () => {
       />
     );
 
+    const deleteButton = screen.getByRole('button', { name: 'Delete saved view' });
+
+    expect(deleteButton).toBeDisabled();
+
     fireEvent.change(screen.getByLabelText('Saved view'), { target: { value: 'preset-1' } });
-    fireEvent.click(screen.getByRole('button', { name: 'Delete saved view' }));
+
+    expect(deleteButton).toBeEnabled();
+
+    fireEvent.click(deleteButton);
 
     expect(onDelete).toHaveBeenCalledWith('preset-1');
+    expect(deleteButton).toBeDisabled();
+  });
+
+  it('clears the selection when the selected preset is removed externally', () => {
+    const { rerender } = render(
+      <SavedFeedViews
+        presets={[preset]}
+        onApply={vi.fn()}
+        onSave={vi.fn()}
+        onDelete={vi.fn()}
+      />
+    );
+
+    fireEvent.change(screen.getByLabelText('Saved view'), { target: { value: 'preset-1' } });
+
+    rerender(
+      <SavedFeedViews
+        presets={[]}
+        onApply={vi.fn()}
+        onSave={vi.fn()}
+        onDelete={vi.fn()}
+      />
+    );
+
+    expect(screen.getByLabelText('Saved view')).toHaveValue('');
   });
 });
