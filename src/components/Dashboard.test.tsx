@@ -367,7 +367,7 @@ describe('Dashboard', () => {
     expect(pageChrome.className).toContain('sm:pt-[var(--app-sticky-gap)]');
     expect(tabs.className).toContain('px-4');
     expect(tabs.className).toContain('sticky');
-    expect(tabs.className).toContain('top-[calc(env(safe-area-inset-top)+var(--app-header-height)+var(--app-sticky-gap))]');
+    expect(tabs.className).toContain('top-[calc(var(--app-current-header-height)+var(--app-sticky-gap))]');
     expect(tabs.className).toContain('before:bottom-full');
     expect(tabs.className).toContain('before:h-[var(--app-sticky-gap)]');
     expect(tabs.className).toContain('before:bg-gray-50');
