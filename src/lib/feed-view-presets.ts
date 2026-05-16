@@ -28,8 +28,15 @@ type CreateFeedViewPresetOptions = {
   createdAt?: string;
 };
 
+const VALID_DURATION_FILTERS: Record<DurationFilter, true> = {
+  any: true,
+  'under-10': true,
+  '10-30': true,
+  '30-plus': true,
+};
+
 const isDurationFilter = (value: unknown): value is DurationFilter => {
-  return value === 'any' || value === 'under-10' || value === '10-30' || value === '30-plus';
+  return typeof value === 'string' && value in VALID_DURATION_FILTERS;
 };
 
 const isFeedViewFilters = (value: unknown): value is FeedViewFilters => {
@@ -87,7 +94,7 @@ export function createFeedViewPreset({
   return {
     id,
     name: name.trim(),
-    filters,
+    filters: { ...filters },
     createdAt,
     updatedAt: createdAt,
   };
