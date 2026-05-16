@@ -296,14 +296,6 @@ export const Dashboard = () => {
     return Array.from(queuedById.values());
   }, [videos, queuedVideoIds, savedQueuedVideos]);
 
-  useEffect(() => {
-    for (const videoId of queuedVideoIds) {
-      if (watchedVideos.has(videoId)) {
-        removeQueuedVideo(videoId);
-      }
-    }
-  }, [queuedVideoIds, watchedVideos, removeQueuedVideo]);
-
   const changeTab = (tab: Tab) => {
     setActiveTab(tab);
     writeDashboardTabToUrl(tab);
