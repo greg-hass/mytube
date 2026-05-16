@@ -36,7 +36,7 @@ const VALID_DURATION_FILTERS: Record<DurationFilter, true> = {
 };
 
 const isDurationFilter = (value: unknown): value is DurationFilter => {
-  return typeof value === 'string' && value in VALID_DURATION_FILTERS;
+  return typeof value === 'string' && Object.hasOwn(VALID_DURATION_FILTERS, value);
 };
 
 const isFeedViewFilters = (value: unknown): value is FeedViewFilters => {

@@ -34,6 +34,25 @@ describe('feed view presets', () => {
     expect(readFeedViewPresets(createStorage({ [FEED_VIEW_PRESETS_STORAGE_KEY]: JSON.stringify({ nope: true }) }))).toEqual([]);
   });
 
+  it('filters persisted presets with inherited duration filter keys', () => {
+    const storage = createStorage({
+      [FEED_VIEW_PRESETS_STORAGE_KEY]: JSON.stringify([
+        {
+          id: 'bad-duration',
+          name: 'Bad duration',
+          filters: {
+            ...filters,
+            durationFilter: 'toString',
+          },
+          createdAt: '2026-05-16T10:00:00.000Z',
+          updatedAt: '2026-05-16T10:00:00.000Z',
+        },
+      ]),
+    });
+
+    expect(readFeedViewPresets(storage)).toEqual([]);
+  });
+
   it('creates a named preset with a stable id and serialized filters', () => {
     const preset = createFeedViewPreset({
       id: 'preset-1',
