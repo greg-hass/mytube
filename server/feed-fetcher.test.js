@@ -24,6 +24,27 @@ function buildUploadsPage(videoRenderers) {
 }
 
 describe('feed fetcher', () => {
+    it('keeps regular RSS video thumbnails at the feed-provided size', () => {
+        const video = buildVideoFromFeedItem({
+            id: 'yt:video:fresh-video',
+            title: 'Fresh upload',
+            pubDate: '2026-05-14T10:00:00.000Z',
+            mediaGroup: {
+                'media:thumbnail': {
+                    $: { url: 'https://i.ytimg.com/vi/fresh-video/hqdefault.jpg' },
+                },
+            },
+        }, {
+            channelId: 'UC_FALLBACK',
+            channelTitle: 'Fallback Channel',
+        });
+
+        expect(video).toMatchObject({
+            id: 'fresh-video',
+            thumbnail: 'https://i.ytimg.com/vi/fresh-video/hqdefault.jpg',
+        });
+    });
+
     it('stores portrait thumbnail URLs for feed items that are Shorts', () => {
         const video = buildVideoFromFeedItem({
             id: 'yt:video:short-id',
@@ -82,7 +103,7 @@ describe('feed fetcher', () => {
         expect(videos[0]).toMatchObject({
             id: 'real-date',
             publishedAt: '2026-05-14T10:00:00.000Z',
-            thumbnail: 'https://i.ytimg.com/vi/real-date/maxresdefault.jpg',
+            thumbnail: 'https://i.ytimg.com/vi/real-date/hqdefault.jpg',
             publishedAtSource: 'youtube-relative-time',
         });
     });

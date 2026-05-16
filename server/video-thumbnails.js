@@ -9,9 +9,9 @@ function isShortVideo(video = {}) {
 }
 
 function getHighResolutionVideoThumbnail(thumbnail, videoId, options = {}) {
-    const fallback = videoId ? `https://i.ytimg.com/vi/${videoId}/maxresdefault.jpg` : '';
+    const fallback = videoId ? `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg` : '';
     const source = String(thumbnail || fallback);
-    const preferredThumbnailName = options.isShort ? 'oar2' : 'maxresdefault';
+    const preferredThumbnailName = options.isShort ? 'oar2' : 'hqdefault';
 
     try {
         const url = new URL(source);

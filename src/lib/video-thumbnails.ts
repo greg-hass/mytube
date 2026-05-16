@@ -1,7 +1,4 @@
 const YOUTUBE_THUMBNAIL_QUALITY_ORDER = [
-  'maxresdefault',
-  'hq720',
-  'sddefault',
   'hqdefault',
   'mqdefault',
   'default',
