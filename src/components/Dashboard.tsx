@@ -94,6 +94,8 @@ const writeDashboardTabToUrl = (tab: Tab) => {
 const AddChannelModal = lazy(() => import('./AddChannelModal').then((module) => ({ default: module.AddChannelModal })));
 const OPMLUpload = lazy(() => import('./OPMLUpload').then((module) => ({ default: module.OPMLUpload })));
 
+const getErrorDescription = (error: unknown) => error instanceof Error ? error.message : 'Unknown error';
+
 export const Dashboard = () => {
   const persistedQualityFilters = useMemo(() => readPersistedQualityFilters(), []);
   const [activeTab, setActiveTab] = useState<Tab>(() => readDashboardTabFromUrl());
@@ -424,19 +426,38 @@ export const Dashboard = () => {
       name,
       filters: getCurrentFeedViewFilters(),
     });
-    const updatedPresets = writeFeedViewPresets([...feedViewPresets, preset]);
-    setFeedViewPresets(updatedPresets);
-    toast.success(`Saved ${preset.name}`);
+
+    try {
+      const updatedPresets = writeFeedViewPresets([...feedViewPresets, preset]);
+      setFeedViewPresets(updatedPresets);
+      toast.success(`Saved ${preset.name}`);
+    } catch (error) {
+      toast.error('Could not save view', {
+        description: getErrorDescription(error),
+      });
+    }
   };
 
   const deleteSavedFeedViewPreset = (presetId: string) => {
     const preset = feedViewPresets.find((candidate) => candidate.id === presetId);
-    const updatedPresets = writeFeedViewPresets(feedViewPresets.filter((candidate) => candidate.id !== presetId));
-    setFeedViewPresets(updatedPresets);
-    if (preset) toast.success(`Deleted ${preset.name}`);
+
+    try {
+      const updatedPresets = writeFeedViewPresets(feedViewPresets.filter((candidate) => candidate.id !== presetId));
+      setFeedViewPresets(updatedPresets);
+      if (preset) toast.success(`Deleted ${preset.name}`);
+    } catch (error) {
+      toast.error('Could not delete view', {
+        description: getErrorDescription(error),
+      });
+    }
   };
 
   const markVideosWatched = (videoIds: string[]) => {
+    if (videoIds.length === 0) {
+      toast.message('No matching videos to mark watched');
+      return;
+    }
+
     videoIds.forEach((videoId) => markAsWatched(videoId));
     toast.success(`Marked ${videoIds.length} video${videoIds.length === 1 ? '' : 's'} watched`);
   };
@@ -661,12 +682,14 @@ export const Dashboard = () => {
               </div>
 
               <div className="ml-auto flex shrink-0 items-center gap-2">
-                <SavedFeedViews
-                  presets={feedViewPresets}
-                  onApply={applyFeedViewPreset}
-                  onSave={saveCurrentFeedViewPreset}
-                  onDelete={deleteSavedFeedViewPreset}
-                />
+                <div className="hidden sm:flex">
+                  <SavedFeedViews
+                    presets={feedViewPresets}
+                    onApply={applyFeedViewPreset}
+                    onSave={saveCurrentFeedViewPreset}
+                    onDelete={deleteSavedFeedViewPreset}
+                  />
+                </div>
                 <button
                   type="button"
                   aria-label="Feed filters"
