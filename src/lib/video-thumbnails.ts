@@ -1,4 +1,7 @@
 const YOUTUBE_THUMBNAIL_QUALITY_ORDER = [
+  'maxresdefault',
+  'hq720',
+  'sddefault',
   'hqdefault',
   'mqdefault',
   'default',
@@ -78,4 +81,14 @@ function isShortsThumbnailCandidate(thumbnail: string): boolean {
 
 export function isPortraitVideoThumbnail(thumbnail: string): boolean {
   return isShortsThumbnailCandidate(thumbnail);
+}
+
+export function isLikelyLowResolutionYouTubePlaceholder(thumbnail: string, image: Pick<HTMLImageElement, 'naturalWidth' | 'naturalHeight'>): boolean {
+  if (!isYouTubeVideoThumbnail(thumbnail)) return false;
+  if (!/\/(?:maxresdefault|hq720|sddefault)\.(?:jpg|webp)(?:\?|$)/i.test(thumbnail)) return false;
+
+  const { naturalWidth, naturalHeight } = image;
+  if (!naturalWidth || !naturalHeight) return false;
+
+  return naturalWidth <= 320 || naturalHeight <= 180;
 }

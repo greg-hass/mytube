@@ -61,7 +61,7 @@ describe('VideoCard', () => {
     expect(channelIcon.compareDocumentPosition(channelTitle) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });
 
-  it('uses dependable YouTube feed thumbnails with fallback', () => {
+  it('uses max resolution YouTube thumbnails with fallback', () => {
     render(
       <MemoryRouter>
         <VideoCard
@@ -76,11 +76,33 @@ describe('VideoCard', () => {
 
     const thumbnail = screen.getByAltText('A useful video');
 
-    expect(thumbnail).toHaveAttribute('src', 'https://i.ytimg.com/vi/video-1/hqdefault.jpg');
+    expect(thumbnail).toHaveAttribute('src', 'https://i.ytimg.com/vi/video-1/maxresdefault.jpg');
 
     fireEvent.error(thumbnail);
 
-    expect(thumbnail).toHaveAttribute('src', 'https://i.ytimg.com/vi/video-1/mqdefault.jpg');
+    expect(thumbnail).toHaveAttribute('src', 'https://i.ytimg.com/vi/video-1/hq720.jpg');
+  });
+
+  it('skips successfully loaded low-resolution YouTube placeholders', () => {
+    render(
+      <MemoryRouter>
+        <VideoCard
+          video={{
+            ...video,
+            thumbnail: 'https://i.ytimg.com/vi/video-1/hqdefault.jpg',
+          }}
+          index={0}
+        />
+      </MemoryRouter>
+    );
+
+    const thumbnail = screen.getByAltText('A useful video');
+    Object.defineProperty(thumbnail, 'naturalWidth', { configurable: true, value: 120 });
+    Object.defineProperty(thumbnail, 'naturalHeight', { configurable: true, value: 90 });
+
+    fireEvent.load(thumbnail);
+
+    expect(thumbnail).toHaveAttribute('src', 'https://i.ytimg.com/vi/video-1/hq720.jpg');
   });
 
   it('fits Shorts thumbnails inside the video frame instead of cropping vertically', () => {
@@ -141,12 +163,12 @@ describe('VideoCard', () => {
 
     const thumbnail = screen.getByAltText('Harry Maguire Said NO!');
 
-    expect(thumbnail).toHaveAttribute('src', 'https://i.ytimg.com/vi/l3GdJvnYRaU/hqdefault.jpg');
+    expect(thumbnail).toHaveAttribute('src', 'https://i.ytimg.com/vi/l3GdJvnYRaU/maxresdefault.jpg');
     expect(thumbnail.className).toContain('object-cover');
     expect(thumbnail.className).not.toContain('object-contain');
   });
 
-  it('keeps normal thumbnails on the dependable landscape fallback chain', () => {
+  it('keeps normal thumbnails on the max resolution landscape fallback chain', () => {
     render(
       <MemoryRouter>
         <VideoCard
@@ -163,7 +185,7 @@ describe('VideoCard', () => {
 
     fireEvent.error(thumbnail);
 
-    expect(thumbnail).toHaveAttribute('src', 'https://i.ytimg.com/vi/video-1/mqdefault.jpg');
+    expect(thumbnail).toHaveAttribute('src', 'https://i.ytimg.com/vi/video-1/hq720.jpg');
     expect(thumbnail.className).toContain('object-cover');
     expect(thumbnail.className).not.toContain('object-contain');
   });

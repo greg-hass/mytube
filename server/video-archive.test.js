@@ -37,7 +37,7 @@ describe('mergeVideoArchive', () => {
         expect(merged.map(video => video.id)).toEqual(['new-video', 'older-video']);
     });
 
-    it('normalizes cached YouTube thumbnails to the dependable feed size when preserving archived videos', () => {
+    it('normalizes cached YouTube thumbnails to max resolution when preserving archived videos', () => {
         const merged = mergeVideoArchive(
             [
                 {
@@ -57,10 +57,10 @@ describe('mergeVideoArchive', () => {
             }
         );
 
-        expect(merged[0].thumbnail).toBe('https://i.ytimg.com/vi/cached-video/hqdefault.jpg');
+        expect(merged[0].thumbnail).toBe('https://i.ytimg.com/vi/cached-video/maxresdefault.jpg');
     });
 
-    it('normalizes sharded ytimg hosts to the dependable feed size when preserving archived videos', () => {
+    it('normalizes sharded ytimg hosts to max resolution when preserving archived videos', () => {
         const merged = mergeVideoArchive(
             [
                 {
@@ -80,7 +80,7 @@ describe('mergeVideoArchive', () => {
             }
         );
 
-        expect(merged[0].thumbnail).toBe('https://i3.ytimg.com/vi/cached-video/hqdefault.jpg');
+        expect(merged[0].thumbnail).toBe('https://i3.ytimg.com/vi/cached-video/maxresdefault.jpg');
     });
 
     it('normalizes cached Shorts thumbnails to the portrait max-resolution source', () => {
