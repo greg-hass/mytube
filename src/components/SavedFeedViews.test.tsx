@@ -92,6 +92,25 @@ describe('SavedFeedViews', () => {
     expect(onSave).not.toHaveBeenCalled();
   });
 
+  it('keeps the entered name when saving fails', () => {
+    const onSave = vi.fn(() => false);
+
+    render(
+      <SavedFeedViews
+        presets={[]}
+        onApply={vi.fn()}
+        onSave={onSave}
+        onDelete={vi.fn()}
+      />
+    );
+
+    fireEvent.change(screen.getByLabelText('New saved view name'), { target: { value: 'Weekend' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Save view' }));
+
+    expect(onSave).toHaveBeenCalledWith('Weekend');
+    expect(screen.getByLabelText('New saved view name')).toHaveValue('Weekend');
+  });
+
   it('deletes the selected saved view and clears the selection', () => {
     const onDelete = vi.fn();
 
