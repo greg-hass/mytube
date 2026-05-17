@@ -25,6 +25,15 @@ const YOUTUBE_THUMBNAIL_NAMES = [
 
 const YOUTUBE_THUMBNAIL_NAME_PATTERN = YOUTUBE_THUMBNAIL_NAMES.join('|');
 
+const YOUTUBE_THUMBNAIL_MINIMUM_SIZES: Record<string, { width: number; height: number }> = {
+  maxresdefault: { width: 320, height: 180 },
+  hq720: { width: 320, height: 180 },
+  sddefault: { width: 320, height: 180 },
+  hqdefault: { width: 320, height: 180 },
+  mqdefault: { width: 320, height: 180 },
+  default: { width: 121, height: 91 },
+};
+
 interface VideoThumbnailOptions {
   isShort?: boolean;
 }
@@ -85,10 +94,19 @@ export function isPortraitVideoThumbnail(thumbnail: string): boolean {
 
 export function isLikelyLowResolutionYouTubePlaceholder(thumbnail: string, image: Pick<HTMLImageElement, 'naturalWidth' | 'naturalHeight'>): boolean {
   if (!isYouTubeVideoThumbnail(thumbnail)) return false;
-  if (!/\/(?:maxresdefault|hq720|sddefault)\.(?:jpg|webp)(?:\?|$)/i.test(thumbnail)) return false;
+
+  const thumbnailQuality = getThumbnailQuality(thumbnail);
+  if (!thumbnailQuality) return false;
 
   const { naturalWidth, naturalHeight } = image;
   if (!naturalWidth || !naturalHeight) return false;
 
-  return naturalWidth <= 320 || naturalHeight <= 180;
+  return naturalWidth < thumbnailQuality.width || naturalHeight < thumbnailQuality.height;
+}
+
+function getThumbnailQuality(thumbnail: string): { width: number; height: number } | null {
+  const match = thumbnail.match(new RegExp(`/(${YOUTUBE_THUMBNAIL_NAME_PATTERN})\\.(?:jpg|webp)(?:\\?|$)`, 'i'));
+  if (!match) return null;
+
+  return YOUTUBE_THUMBNAIL_MINIMUM_SIZES[match[1].toLowerCase()] ?? null;
 }
