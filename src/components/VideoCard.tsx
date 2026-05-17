@@ -7,7 +7,8 @@ import { getDisplayThumbnail } from '../lib/icon-loader';
 import { getHighResolutionVideoThumbnail, getNextVideoThumbnailFallback, isLikelyLowResolutionYouTubePlaceholder } from '../lib/video-thumbnails';
 import { useFavoriteVideos } from '../hooks/useFavoriteVideos';
 import { useQueuedVideos } from '../hooks/useQueuedVideos';
-import { getVideoProgressPercent } from '../lib/video-progress';
+import { clearVideoProgress, getVideoProgress, getVideoProgressPercent, saveVideoProgress } from '../lib/video-progress';
+import { allowEnhancedMediaPlayback, loadYouTubeIframeApi, type YouTubePlayer } from '../lib/youtube-iframe-api';
 import { useStore } from '../store/useStore';
 import { isLiveVideo } from '../lib/video-live';
 import { isShortVideo } from '../lib/video-feed-index';
@@ -29,6 +30,8 @@ const getDashboardScrollStorageKey = (search: string) => {
 
 const SWIPE_TO_WATCHED_THRESHOLD = 80;
 const SWIPE_VERTICAL_CANCEL_THRESHOLD = 48;
+const WATCHED_PERCENT_THRESHOLD = 0.5;
+const WATCHED_SECONDS_THRESHOLD = 30;
 
 export const VideoCard = ({ video, channelThumbnail, onUnavailable }: Props) => {
   const isLikelyShort = video.isShort === true || isShortVideo({ ...video, isShort: undefined });
@@ -50,17 +53,105 @@ export const VideoCard = ({ video, channelThumbnail, onUnavailable }: Props) => 
   const isFavorite = isFavoriteVideo(video.id);
   const isQueued = isQueuedVideo(video.id);
   const [isQueueButtonActive, setIsQueueButtonActive] = useState(isQueued);
+  const [progressPercent, setProgressPercent] = useState(() => getVideoProgressPercent(video.id));
+  const inlinePlayerContainerRef = useRef<HTMLDivElement | null>(null);
+  const inlinePlayerRef = useRef<YouTubePlayer | null>(null);
+  const inlineSaveIntervalRef = useRef<ReturnType<typeof window.setInterval> | null>(null);
   const isWatched = watchedVideos.has(video.id);
   const isLive = isLiveVideo(video);
-  const progressPercent = getVideoProgressPercent(video.id);
 
   useEffect(() => {
     setImageLoaded(false);
     setThumbnailUnavailable(false);
     setIsPlayingInline(false);
+    setProgressPercent(getVideoProgressPercent(video.id));
     thumbnailFallbackCountRef.current = 0;
     setThumbnailSrc(getHighResolutionVideoThumbnail(video.thumbnail, { isShort: isLikelyShort }));
   }, [video.id, video.thumbnail, isLikelyShort]);
+
+  useEffect(() => {
+    const updateProgress = () => setProgressPercent(getVideoProgressPercent(video.id));
+
+    window.addEventListener('video-progress-changed', updateProgress);
+    return () => window.removeEventListener('video-progress-changed', updateProgress);
+  }, [video.id]);
+
+  useEffect(() => {
+    if (!isPlayingInline) return;
+
+    let isMounted = true;
+    let hasReachedResumePoint = false;
+    let resumeFromSeconds = 0;
+
+    const persistCurrentProgress = () => {
+      const player = inlinePlayerRef.current;
+      if (!player) return;
+
+      const currentTime = player.getCurrentTime();
+      const duration = player.getDuration();
+
+      if (Number.isFinite(currentTime) && Number.isFinite(duration) && duration > 0) {
+        if (!hasReachedResumePoint) {
+          if (currentTime < Math.max(1, resumeFromSeconds - 2)) return;
+          hasReachedResumePoint = true;
+        }
+
+        saveVideoProgress(video.id, currentTime, duration);
+        setProgressPercent(Math.min(100, Math.max(0, (currentTime / duration) * 100)));
+        if (currentTime >= WATCHED_SECONDS_THRESHOLD || currentTime / duration >= WATCHED_PERCENT_THRESHOLD) {
+          markAsWatched(video.id);
+        }
+      }
+    };
+
+    loadYouTubeIframeApi().then((youtubeApi) => {
+      if (!isMounted || !inlinePlayerContainerRef.current) return;
+
+      const savedProgress = getVideoProgress(video.id);
+      resumeFromSeconds = savedProgress ? Math.floor(savedProgress.currentTime) : 0;
+      hasReachedResumePoint = resumeFromSeconds <= 0;
+
+      inlinePlayerRef.current = new youtubeApi.Player(inlinePlayerContainerRef.current, {
+        videoId: video.id,
+        playerVars: {
+          autoplay: 1,
+          playsinline: 1,
+          rel: 0,
+          start: resumeFromSeconds,
+        },
+        events: {
+          onReady: (event) => {
+            allowEnhancedMediaPlayback(event.target);
+            if (resumeFromSeconds > 0) {
+              event.target.seekTo(resumeFromSeconds, true);
+            }
+            event.target.playVideo();
+            persistCurrentProgress();
+          },
+          onStateChange: (event) => {
+            if (event.data === youtubeApi.PlayerState.ENDED) {
+              clearVideoProgress(video.id);
+              setProgressPercent(0);
+            } else {
+              persistCurrentProgress();
+            }
+          },
+          onError: () => {},
+        },
+      });
+
+      inlineSaveIntervalRef.current = window.setInterval(persistCurrentProgress, 2500);
+    });
+
+    return () => {
+      isMounted = false;
+      persistCurrentProgress();
+      if (inlineSaveIntervalRef.current) window.clearInterval(inlineSaveIntervalRef.current);
+      inlineSaveIntervalRef.current = null;
+      inlinePlayerRef.current?.destroy();
+      inlinePlayerRef.current = null;
+    };
+  }, [isPlayingInline, markAsWatched, video.id]);
 
   useEffect(() => {
     setIsQueueButtonActive(isQueued);
@@ -204,12 +295,11 @@ export const VideoCard = ({ video, channelThumbnail, onUnavailable }: Props) => 
       {/* Thumbnail */}
       <div className="relative aspect-video overflow-hidden bg-black">
         {isPlayingInline ? (
-          <iframe
+          <div
+            ref={inlinePlayerContainerRef}
+            data-testid="inline-video-player"
             title={`${video.title} player`}
-            src={`https://www.youtube-nocookie.com/embed/${encodeURIComponent(video.id)}?autoplay=1&playsinline=1&rel=0`}
-            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
-            allowFullScreen
-            className="h-full w-full border-0"
+            className="h-full w-full"
           />
         ) : (
           <button

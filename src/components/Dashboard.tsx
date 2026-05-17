@@ -672,13 +672,14 @@ export const Dashboard = () => {
                     <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-red-300 dark:peer-focus:ring-red-800 rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-gray-600 peer-checked:bg-red-600"></div>
                   </div>
                   <span className="text-xs font-medium text-gray-700 dark:text-gray-300 sm:text-sm">
-                    <span className="hidden sm:inline">Hide </span>Shorts
+                    Hide Shorts
                   </span>
                 </label>
                 <label className="flex min-w-0 items-center gap-1.5 cursor-pointer select-none sm:gap-2">
                   <div className="relative">
                     <input
                       type="checkbox"
+                      aria-label="Hide Watched"
                       checked={hideWatched}
                       onChange={(e) => setHideWatched(e.target.checked)}
                       className="sr-only peer"
@@ -686,7 +687,7 @@ export const Dashboard = () => {
                     <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-emerald-300 dark:peer-focus:ring-emerald-800 rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-gray-600 peer-checked:bg-emerald-600"></div>
                   </div>
                   <span className="text-xs font-medium text-gray-700 dark:text-gray-300 sm:text-sm">
-                    <span className="hidden sm:inline">Hide </span>watched
+                    Hide Watched
                   </span>
                 </label>
               </div>
@@ -730,12 +731,15 @@ export const Dashboard = () => {
                   )}
                 </div>
                 {syncStatus?.isSyncing && (
-                  <div className="flex items-center gap-1.5 rounded-lg bg-blue-50 px-2 py-2 text-sm font-medium text-blue-700 animate-in fade-in slide-in-from-left-4 dark:bg-blue-900/20 dark:text-blue-300 sm:gap-2 sm:px-3">
-                    <Loader2 className="w-4 h-4 animate-spin" />
+                  <div className="flex items-center gap-2 rounded-lg bg-blue-50 px-2 py-2 text-sm font-medium text-blue-700 animate-in fade-in slide-in-from-left-4 dark:bg-blue-900/20 dark:text-blue-300 sm:px-3">
+                    <Loader2 className="h-4 w-4 shrink-0 animate-spin" />
                     <span className="hidden sm:inline">
                       {syncStatus.state === 'queued' ? 'Queued' : 'Building'} {syncStatus.current}/{syncStatus.total}
                     </span>
                     <span className="sm:hidden">
+                      {feedProgressPercent}%
+                    </span>
+                    <span className="hidden rounded-full bg-blue-100 px-2 py-0.5 text-xs font-semibold text-blue-700 dark:bg-blue-950/60 dark:text-blue-200 sm:inline-flex">
                       {feedProgressPercent}%
                     </span>
                   </div>

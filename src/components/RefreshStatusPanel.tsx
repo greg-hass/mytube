@@ -28,22 +28,32 @@ export function RefreshStatusPanel({ status, cacheStatus, onRetryFailed, variant
   const isMenu = variant === 'menu';
   const isCompact = variant === 'compact';
   const failedPreviewLimit = isMenu ? 3 : 5;
+  const progressPercent = status.total
+    ? Math.round((status.current / status.total) * 100)
+    : 0;
 
   return (
     <section className={`${isMenu || isCompact ? 'rounded-lg border border-gray-200 bg-white/70 px-3 py-3 dark:border-gray-800 dark:bg-gray-900/70' : 'mb-4 rounded-lg border border-gray-200 bg-white px-4 py-3 shadow-sm dark:border-gray-800 dark:bg-gray-900'}`}>
       <div className={`flex flex-col gap-3 ${isMenu ? '' : 'lg:flex-row lg:items-start lg:justify-between'}`}>
         <div className="min-w-0">
-          <div className="flex items-center gap-2 text-sm font-semibold text-gray-900 dark:text-gray-100">
-            {status.isSyncing ? (
-              <Loader2 className="h-4 w-4 animate-spin text-blue-600" />
-            ) : (
-              <Clock3 className="h-4 w-4 text-gray-500" />
+          <div className="flex items-center justify-between gap-3 text-sm font-semibold text-gray-900 dark:text-gray-100">
+            <div className="flex min-w-0 items-center gap-2">
+              {status.isSyncing ? (
+                <Loader2 className="h-4 w-4 shrink-0 animate-spin text-blue-600" />
+              ) : (
+                <Clock3 className="h-4 w-4 shrink-0 text-gray-500" />
+              )}
+              <span className="min-w-0 truncate">
+                {status.isSyncing
+                  ? `Refreshing ${status.current}/${status.total}`
+                  : `${status.videos || cacheStatus.videoCount} videos cached`}
+              </span>
+            </div>
+            {status.isSyncing && (
+              <span className="shrink-0 rounded-full bg-blue-100 px-2 py-0.5 text-xs font-semibold text-blue-700 dark:bg-blue-950/60 dark:text-blue-200">
+                {progressPercent}%
+              </span>
             )}
-            <span>
-              {status.isSyncing
-                ? `Refreshing ${status.current}/${status.total}`
-                : `${status.videos || cacheStatus.videoCount} videos cached`}
-            </span>
           </div>
 
           <div className={`mt-2 grid gap-2 text-xs text-gray-600 dark:text-gray-300 ${isMenu || isCompact ? '' : 'sm:grid-cols-3'}`}>
