@@ -68,7 +68,7 @@ describe('video thumbnails', () => {
       'https://i.ytimg.com/vi/abc123/0.jpg'
     );
     expect(getNextVideoThumbnailFallback('https://i.ytimg.com/vi/abc123/0.jpg')).toBe(
-      'https://i.ytimg.com/vi/abc123/1.jpg'
+      'https://i.ytimg.com/vi/abc123/default.jpg'
     );
   });
 

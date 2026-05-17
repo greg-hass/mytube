@@ -191,7 +191,42 @@ describe('VideoCard', () => {
     expect(thumbnail.className).toContain('opacity-0');
   });
 
-  it('shows the final tiny YouTube default thumbnail instead of replacing it', () => {
+  it('skips a tiny numbered YouTube frame placeholder before hiding the inaccessible video', () => {
+    render(
+      <MemoryRouter>
+        <VideoCard
+          video={{
+            ...video,
+            thumbnail: 'https://i.ytimg.com/vi/video-1/hqdefault.jpg',
+          }}
+          index={0}
+        />
+      </MemoryRouter>
+    );
+
+    const thumbnail = screen.getByAltText('A useful video');
+    fireEvent.error(thumbnail);
+    fireEvent.error(thumbnail);
+    fireEvent.error(thumbnail);
+    fireEvent.error(thumbnail);
+
+    Object.defineProperty(thumbnail, 'naturalWidth', { configurable: true, value: 120 });
+    Object.defineProperty(thumbnail, 'naturalHeight', { configurable: true, value: 90 });
+
+    fireEvent.load(thumbnail);
+
+    expect(thumbnail).toHaveAttribute('src', 'https://i.ytimg.com/vi/video-1/0.jpg');
+
+    fireEvent.load(thumbnail);
+
+    expect(thumbnail).toHaveAttribute('src', 'https://i.ytimg.com/vi/video-1/default.jpg');
+
+    fireEvent.load(thumbnail);
+
+    expect(screen.queryByTestId('video-card')).not.toBeInTheDocument();
+  });
+
+  it('hides inaccessible videos that only load the final tiny YouTube placeholder', () => {
     render(
       <MemoryRouter>
         <VideoCard
@@ -222,10 +257,7 @@ describe('VideoCard', () => {
 
     fireEvent.load(thumbnail);
 
-    expect(thumbnail).toHaveAttribute('src', 'https://i.ytimg.com/vi/video-1/default.jpg');
-    expect(screen.queryByTestId('video-thumbnail-loading')).not.toBeInTheDocument();
-    expect(screen.queryByTestId('video-thumbnail-unavailable')).not.toBeInTheDocument();
-    expect(thumbnail.className).toContain('opacity-100');
+    expect(screen.queryByTestId('video-card')).not.toBeInTheDocument();
   });
 
   it('fits Shorts thumbnails inside the video frame instead of cropping vertically', () => {
