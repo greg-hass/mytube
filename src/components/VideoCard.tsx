@@ -37,6 +37,7 @@ export const VideoCard = ({ video, channelThumbnail }: Props) => {
     getHighResolutionVideoThumbnail(video.thumbnail, { isShort: isLikelyShort })
   ));
   const [dragOffsetX, setDragOffsetX] = useState(0);
+  const thumbnailFallbackCountRef = useRef(0);
   const pointerStartRef = useRef<{ x: number; y: number; pointerId: number } | null>(null);
   const suppressNextClickRef = useRef(false);
   const navigate = useNavigate();
@@ -54,6 +55,7 @@ export const VideoCard = ({ video, channelThumbnail }: Props) => {
   useEffect(() => {
     setImageLoaded(false);
     setThumbnailUnavailable(false);
+    thumbnailFallbackCountRef.current = 0;
     setThumbnailSrc(getHighResolutionVideoThumbnail(video.thumbnail, { isShort: isLikelyShort }));
   }, [video.thumbnail, isLikelyShort]);
 
@@ -153,6 +155,7 @@ export const VideoCard = ({ video, channelThumbnail }: Props) => {
 
     setImageLoaded(false);
     setThumbnailUnavailable(false);
+    thumbnailFallbackCountRef.current += 1;
     setThumbnailSrc(fallback);
     return true;
   };
@@ -170,6 +173,10 @@ export const VideoCard = ({ video, channelThumbnail }: Props) => {
     if (diffDays < 7) return `${diffDays}d ago`;
     return date.toLocaleDateString();
   };
+
+  if (thumbnailUnavailable) {
+    return null;
+  }
 
   return (
     <div
@@ -196,13 +203,6 @@ export const VideoCard = ({ video, channelThumbnail }: Props) => {
             className="absolute inset-0 animate-pulse bg-gradient-to-r from-gray-200 via-gray-300 to-gray-200 dark:from-gray-800 dark:via-gray-700 dark:to-gray-800"
           />
         )}
-        {thumbnailUnavailable && (
-          <div data-testid="video-thumbnail-unavailable" className="absolute inset-0 flex items-center justify-center bg-black">
-            <div className="rounded-full bg-red-600 p-3">
-              <Play className="h-6 w-6 fill-white text-white" />
-            </div>
-          </div>
-        )}
         <img
           src={thumbnailSrc}
           alt={video.title}
@@ -213,6 +213,16 @@ export const VideoCard = ({ video, channelThumbnail }: Props) => {
           onLoad={(event) => {
             if (isLikelyLowResolutionYouTubePlaceholder(thumbnailSrc, event.currentTarget)) {
               useNextThumbnailFallback();
+              return;
+            }
+            if (
+              thumbnailFallbackCountRef.current > 0 &&
+              /\/default\.(?:jpg|webp)(?:\?|$)/i.test(thumbnailSrc) &&
+              event.currentTarget.naturalWidth <= 120 &&
+              event.currentTarget.naturalHeight <= 90
+            ) {
+              setImageLoaded(false);
+              setThumbnailUnavailable(true);
               return;
             }
             setThumbnailUnavailable(false);
