@@ -15,10 +15,22 @@ const ROW_GAP = 24;
 const MIN_CARD_WIDTH = 260;
 const VIDEO_INFO_HEIGHT = 112;
 
+const getItemsPerRow = (width: number, columns: number) => {
+    const calculatedColumns = Math.floor((width + ROW_GAP) / (MIN_CARD_WIDTH + ROW_GAP));
+    const maxResponsiveColumns = isCompactMobileViewport(getCurrentViewportSize()) ? 1 : columns;
+
+    return Math.max(1, Math.min(calculatedColumns, maxResponsiveColumns));
+};
+
+const getInitialContainerWidth = () => {
+    if (typeof window === 'undefined') return MIN_CARD_WIDTH;
+    return Math.max(MIN_CARD_WIDTH, Math.min(window.innerWidth, 1280) - 32);
+};
+
 export const VirtualizedVideoGrid = ({ videos, columns = 4, scrollStorageKey, channelThumbnails }: Props) => {
     const parentRef = useRef<HTMLDivElement>(null);
-    const [itemsPerRow, setItemsPerRow] = useState(columns);
-    const [containerWidth, setContainerWidth] = useState(0);
+    const [containerWidth, setContainerWidth] = useState(() => getInitialContainerWidth());
+    const [itemsPerRow, setItemsPerRow] = useState(() => getItemsPerRow(getInitialContainerWidth(), columns));
     const [scrollMargin, setScrollMargin] = useState(0);
     const [unavailableVideoIds, setUnavailableVideoIds] = useState<Set<string>>(() => new Set());
     const hasRestoredScrollRef = useRef(false);
@@ -60,11 +72,7 @@ export const VirtualizedVideoGrid = ({ videos, columns = 4, scrollStorageKey, ch
             // width + gap = cards * (minCardWidth + gap)
             // cards = (width + gap) / (minCardWidth + gap)
 
-            const calculatedColumns = Math.floor((width + ROW_GAP) / (MIN_CARD_WIDTH + ROW_GAP));
-
-            // Clamp between 1 and max columns
-            const maxResponsiveColumns = isCompactMobileViewport(getCurrentViewportSize()) ? 1 : columns;
-            const newItemsPerRow = Math.max(1, Math.min(calculatedColumns, maxResponsiveColumns));
+            const newItemsPerRow = getItemsPerRow(width, columns);
 
             setItemsPerRow(newItemsPerRow);
             setContainerWidth(width);
@@ -158,8 +166,11 @@ export const VirtualizedVideoGrid = ({ videos, columns = 4, scrollStorageKey, ch
                             }}
                         >
                             <div
-                                className="mobile-landscape-grid grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6"
-                                style={{ height: `${cardHeight}px` }}
+                                className="grid gap-6"
+                                style={{
+                                    height: `${cardHeight}px`,
+                                    gridTemplateColumns: `repeat(${itemsPerRow}, minmax(0, 1fr))`,
+                                }}
                             >
                                 {rowItems.map((video, idx) => (
                                     <VideoCard

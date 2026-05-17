@@ -396,6 +396,18 @@ describe('Dashboard', () => {
     expect(tabs.querySelector('.grid')?.className).not.toContain('grid-cols-2');
   });
 
+  it('wraps the latest timeline controls instead of forcing an iPad-width single row', () => {
+    render(<Dashboard />);
+
+    const latestToolbar = screen.getByTestId('latest-toolbar');
+    const latestActions = screen.getByTestId('latest-toolbar-actions');
+
+    expect(latestToolbar.className).toContain('flex-col');
+    expect(latestToolbar.className).toContain('xl:flex-row');
+    expect(latestActions.className).toContain('flex-wrap');
+    expect(latestActions.className).not.toContain('shrink-0');
+  });
+
   it('keeps subscription group controls inside the same sticky chrome as the tabs', async () => {
     render(<Dashboard />);
 
