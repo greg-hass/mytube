@@ -657,10 +657,10 @@ export const Dashboard = () => {
           {activeTab === 'latest' && (
             <div
               data-testid="latest-toolbar"
-              className="mt-[var(--app-sticky-gap)] flex flex-wrap items-center justify-between gap-2"
+              className="mt-[var(--app-sticky-gap)] flex flex-nowrap items-center justify-between gap-1 sm:gap-2"
             >
-              <div className="flex min-w-0 flex-wrap items-center gap-3">
-                <label className="flex items-center gap-2 cursor-pointer select-none">
+              <div className="flex min-w-0 flex-nowrap items-center gap-2 sm:gap-3">
+                <label className="flex min-w-0 items-center gap-1.5 cursor-pointer select-none sm:gap-2">
                   <div className="relative">
                     <input
                       type="checkbox"
@@ -671,9 +671,11 @@ export const Dashboard = () => {
                     />
                     <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-red-300 dark:peer-focus:ring-red-800 rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-gray-600 peer-checked:bg-red-600"></div>
                   </div>
-                  <span className="text-sm font-medium text-gray-700 dark:text-gray-300">Hide Shorts</span>
+                  <span className="text-xs font-medium text-gray-700 dark:text-gray-300 sm:text-sm">
+                    <span className="hidden sm:inline">Hide </span>Shorts
+                  </span>
                 </label>
-                <label className="flex items-center gap-2 cursor-pointer select-none">
+                <label className="flex min-w-0 items-center gap-1.5 cursor-pointer select-none sm:gap-2">
                   <div className="relative">
                     <input
                       type="checkbox"
@@ -683,11 +685,13 @@ export const Dashboard = () => {
                     />
                     <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-emerald-300 dark:peer-focus:ring-emerald-800 rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-gray-600 peer-checked:bg-emerald-600"></div>
                   </div>
-                  <span className="text-sm font-medium text-gray-700 dark:text-gray-300">Hide watched</span>
+                  <span className="text-xs font-medium text-gray-700 dark:text-gray-300 sm:text-sm">
+                    <span className="hidden sm:inline">Hide </span>watched
+                  </span>
                 </label>
               </div>
 
-              <div data-testid="latest-toolbar-actions" className="ml-auto flex min-w-0 flex-wrap items-center gap-2">
+              <div data-testid="latest-toolbar-actions" className="ml-auto flex shrink-0 flex-nowrap items-center gap-1 sm:gap-2">
                 <div className="hidden xl:flex">
                   <SavedFeedViews
                     presets={feedViewPresets}
@@ -726,7 +730,7 @@ export const Dashboard = () => {
                   )}
                 </div>
                 {syncStatus?.isSyncing && (
-                  <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300 text-sm font-medium animate-in fade-in slide-in-from-left-4">
+                  <div className="flex items-center gap-1.5 rounded-lg bg-blue-50 px-2 py-2 text-sm font-medium text-blue-700 animate-in fade-in slide-in-from-left-4 dark:bg-blue-900/20 dark:text-blue-300 sm:gap-2 sm:px-3">
                     <Loader2 className="w-4 h-4 animate-spin" />
                     <span className="hidden sm:inline">
                       {syncStatus.state === 'queued' ? 'Queued' : 'Building'} {syncStatus.current}/{syncStatus.total}
