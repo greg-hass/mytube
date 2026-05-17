@@ -26,6 +26,10 @@ const YOUTUBE_THUMBNAIL_NAMES = [
 const YOUTUBE_THUMBNAIL_NAME_PATTERN = YOUTUBE_THUMBNAIL_NAMES.join('|');
 
 const YOUTUBE_THUMBNAIL_MINIMUM_SIZES: Record<string, { width: number; height: number }> = {
+  oar2: { width: 320, height: 180 },
+  maxres2: { width: 320, height: 180 },
+  hq2: { width: 320, height: 180 },
+  frame0: { width: 320, height: 180 },
   maxresdefault: { width: 320, height: 180 },
   hq720: { width: 320, height: 180 },
   sddefault: { width: 320, height: 180 },
