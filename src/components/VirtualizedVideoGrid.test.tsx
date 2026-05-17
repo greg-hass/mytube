@@ -4,7 +4,12 @@ import { VirtualizedVideoGrid } from './VirtualizedVideoGrid';
 import type { YouTubeVideo } from '../types/youtube';
 
 vi.mock('./VideoCard', () => ({
-    VideoCard: ({ video }: { video: YouTubeVideo }) => <article>{video.title}</article>,
+    VideoCard: ({ video, onUnavailable }: { video: YouTubeVideo; onUnavailable?: (videoId: string) => void }) => (
+        <article>
+            {video.title}
+            <button type="button" onClick={() => onUnavailable?.(video.id)}>hide {video.title}</button>
+        </article>
+    ),
 }));
 
 const videos: YouTubeVideo[] = Array.from({ length: 20 }, (_, index) => ({
@@ -123,5 +128,19 @@ describe('VirtualizedVideoGrid', () => {
 
         expect(firstRow.querySelectorAll('article')).toHaveLength(1);
         expect(firstRow.querySelector('.grid')?.className).toContain('mobile-landscape-grid');
+    });
+
+    it('removes unavailable videos from the virtualized list so the timeline closes the gap', async () => {
+        render(<VirtualizedVideoGrid videos={videos.slice(0, 3)} columns={4} />);
+
+        expect(screen.getByText('Video 0')).toBeInTheDocument();
+        expect(screen.getByText('Video 1')).toBeInTheDocument();
+        expect(screen.getByText('Video 2')).toBeInTheDocument();
+
+        fireEvent.click(screen.getByRole('button', { name: 'hide Video 1' }));
+
+        expect(screen.queryByText('Video 1')).not.toBeInTheDocument();
+        expect(screen.getByText('Video 0')).toBeInTheDocument();
+        expect(screen.getByText('Video 2')).toBeInTheDocument();
     });
 });

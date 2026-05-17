@@ -16,6 +16,7 @@ interface Props {
   video: YouTubeVideo;
   index: number;
   channelThumbnail?: string;
+  onUnavailable?: (videoId: string) => void;
 }
 
 const getDashboardScrollStorageKey = (search: string) => {
@@ -29,7 +30,7 @@ const getDashboardScrollStorageKey = (search: string) => {
 const SWIPE_TO_WATCHED_THRESHOLD = 80;
 const SWIPE_VERTICAL_CANCEL_THRESHOLD = 48;
 
-export const VideoCard = ({ video, channelThumbnail }: Props) => {
+export const VideoCard = ({ video, channelThumbnail, onUnavailable }: Props) => {
   const isLikelyShort = video.isShort === true || isShortVideo({ ...video, isShort: undefined });
   const [imageLoaded, setImageLoaded] = useState(false);
   const [thumbnailUnavailable, setThumbnailUnavailable] = useState(false);
@@ -223,6 +224,7 @@ export const VideoCard = ({ video, channelThumbnail }: Props) => {
             ) {
               setImageLoaded(false);
               setThumbnailUnavailable(true);
+              onUnavailable?.(video.id);
               return;
             }
             setThumbnailUnavailable(false);
