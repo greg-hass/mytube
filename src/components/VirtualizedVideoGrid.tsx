@@ -1,5 +1,5 @@
 import { useWindowVirtualizer } from '@tanstack/react-virtual';
-import { useMemo, useRef, useState, useEffect } from 'react';
+import { useCallback, useMemo, useRef, useState, useEffect } from 'react';
 import { VideoCard } from './VideoCard';
 import type { YouTubeVideo } from '../types/youtube';
 import { getCurrentViewportSize, isCompactMobileViewport } from '../lib/mobile-viewport';
@@ -29,6 +29,8 @@ const getInitialContainerWidth = () => {
 
 export const VirtualizedVideoGrid = ({ videos, columns = 4, scrollStorageKey, channelThumbnails }: Props) => {
     const parentRef = useRef<HTMLDivElement>(null);
+    const [displayedVideos, setDisplayedVideos] = useState(videos);
+    const [inlinePlaybackVideoId, setInlinePlaybackVideoId] = useState<string | null>(null);
     const [containerWidth, setContainerWidth] = useState(() => getInitialContainerWidth());
     const [itemsPerRow, setItemsPerRow] = useState(() => getItemsPerRow(getInitialContainerWidth(), columns));
     const [scrollMargin, setScrollMargin] = useState(0);
@@ -36,20 +38,32 @@ export const VirtualizedVideoGrid = ({ videos, columns = 4, scrollStorageKey, ch
     const hasRestoredScrollRef = useRef(false);
 
     useEffect(() => {
+        if (inlinePlaybackVideoId) return;
+        setDisplayedVideos(videos);
+    }, [inlinePlaybackVideoId, videos]);
+
+    useEffect(() => {
         setUnavailableVideoIds((currentIds) => {
             if (currentIds.size === 0) return currentIds;
 
-            const availableIds = new Set(videos.map((video) => video.id));
+            const availableIds = new Set(displayedVideos.map((video) => video.id));
             const nextIds = new Set([...currentIds].filter((videoId) => availableIds.has(videoId)));
 
             return nextIds.size === currentIds.size ? currentIds : nextIds;
         });
-    }, [videos]);
+    }, [displayedVideos]);
 
     const visibleVideos = useMemo(() => {
-        if (unavailableVideoIds.size === 0) return videos;
-        return videos.filter((video) => !unavailableVideoIds.has(video.id));
-    }, [videos, unavailableVideoIds]);
+        if (unavailableVideoIds.size === 0) return displayedVideos;
+        return displayedVideos.filter((video) => !unavailableVideoIds.has(video.id));
+    }, [displayedVideos, unavailableVideoIds]);
+
+    const handleInlinePlaybackChange = useCallback((videoId: string, isPlaying: boolean) => {
+        setInlinePlaybackVideoId((currentVideoId) => {
+            if (isPlaying) return videoId;
+            return currentVideoId === videoId ? null : currentVideoId;
+        });
+    }, []);
 
     const handleVideoUnavailable = (videoId: string) => {
         setUnavailableVideoIds((currentIds) => {
@@ -178,6 +192,7 @@ export const VirtualizedVideoGrid = ({ videos, columns = 4, scrollStorageKey, ch
                                         video={video}
                                         index={startIndex + idx}
                                         channelThumbnail={channelThumbnails?.get(video.channelId)}
+                                        onInlinePlaybackChange={handleInlinePlaybackChange}
                                         onUnavailable={handleVideoUnavailable}
                                     />
                                 ))}
