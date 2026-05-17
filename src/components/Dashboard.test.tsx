@@ -396,17 +396,19 @@ describe('Dashboard', () => {
     expect(tabs.querySelector('.grid')?.className).not.toContain('grid-cols-2');
   });
 
-  it('lets the latest timeline controls wrap without forcing iPhone controls onto a second row', () => {
+  it('keeps the iPhone latest controls in one compact row', () => {
     render(<Dashboard />);
 
     const latestToolbar = screen.getByTestId('latest-toolbar');
     const latestActions = screen.getByTestId('latest-toolbar-actions');
 
-    expect(latestToolbar.className).toContain('flex-wrap');
+    expect(latestToolbar.className).toContain('flex-nowrap');
     expect(latestToolbar.className).toContain('items-center');
     expect(latestToolbar.className).not.toContain('flex-col');
-    expect(latestActions.className).toContain('flex-wrap');
-    expect(latestActions.className).not.toContain('shrink-0');
+    expect(latestActions.className).toContain('flex-nowrap');
+    expect(latestActions.className).toContain('shrink-0');
+    expect(screen.getByText('Shorts').closest('span')?.className).toContain('text-xs');
+    expect(screen.getByText('watched').closest('span')?.className).toContain('text-xs');
   });
 
   it('keeps subscription group controls inside the same sticky chrome as the tabs', async () => {
