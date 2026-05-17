@@ -384,6 +384,57 @@ describe('VideoCard', () => {
     expect(screen.getByTestId('location')).toHaveTextContent('/video/video-1');
   });
 
+  it('plays the video inline when the thumbnail is clicked', () => {
+    render(
+      <MemoryRouter initialEntries={['/?tab=latest']}>
+        <Routes>
+          <Route
+            path="/"
+            element={(
+              <>
+                <VideoCard video={video} index={0} />
+                <LocationProbe />
+              </>
+            )}
+          />
+          <Route path="/video/:videoId" element={<LocationProbe />} />
+        </Routes>
+      </MemoryRouter>
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Play A useful video inline' }));
+
+    const inlinePlayer = screen.getByTitle('A useful video player');
+    expect(inlinePlayer).toHaveAttribute('src', 'https://www.youtube-nocookie.com/embed/video-1?autoplay=1&playsinline=1&rel=0');
+    expect(screen.getByTestId('location')).toHaveTextContent('/');
+  });
+
+  it('opens the full player view when the title is clicked', () => {
+    vi.stubGlobal('scrollY', 432);
+
+    render(
+      <MemoryRouter initialEntries={['/?tab=latest']}>
+        <Routes>
+          <Route
+            path="/"
+            element={(
+              <>
+                <VideoCard video={video} index={0} />
+                <LocationProbe />
+              </>
+            )}
+          />
+          <Route path="/video/:videoId" element={<LocationProbe />} />
+        </Routes>
+      </MemoryRouter>
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Open A useful video' }));
+
+    expect(sessionStorage.getItem('latest-videos-scroll')).toBe('432');
+    expect(screen.getByTestId('location')).toHaveTextContent('/video/video-1');
+  });
+
   it('can favorite a video without opening it', () => {
     render(
       <MemoryRouter>

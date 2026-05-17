@@ -37,6 +37,7 @@ export const VideoCard = ({ video, channelThumbnail, onUnavailable }: Props) => 
   const [thumbnailSrc, setThumbnailSrc] = useState(() => (
     getHighResolutionVideoThumbnail(video.thumbnail, { isShort: isLikelyShort })
   ));
+  const [isPlayingInline, setIsPlayingInline] = useState(false);
   const [dragOffsetX, setDragOffsetX] = useState(0);
   const thumbnailFallbackCountRef = useRef(0);
   const pointerStartRef = useRef<{ x: number; y: number; pointerId: number } | null>(null);
@@ -56,9 +57,10 @@ export const VideoCard = ({ video, channelThumbnail, onUnavailable }: Props) => 
   useEffect(() => {
     setImageLoaded(false);
     setThumbnailUnavailable(false);
+    setIsPlayingInline(false);
     thumbnailFallbackCountRef.current = 0;
     setThumbnailSrc(getHighResolutionVideoThumbnail(video.thumbnail, { isShort: isLikelyShort }));
-  }, [video.thumbnail, isLikelyShort]);
+  }, [video.id, video.thumbnail, isLikelyShort]);
 
   useEffect(() => {
     setIsQueueButtonActive(isQueued);
@@ -72,6 +74,10 @@ export const VideoCard = ({ video, channelThumbnail, onUnavailable }: Props) => 
 
     sessionStorage.setItem(getDashboardScrollStorageKey(location.search), String(Math.round(window.scrollY)));
     navigate(`/video/${video.id}`);
+  };
+
+  const playInline = () => {
+    setIsPlayingInline(true);
   };
 
   const handlePointerDown = (event: PointerEvent<HTMLDivElement>) => {
@@ -182,13 +188,12 @@ export const VideoCard = ({ video, channelThumbnail, onUnavailable }: Props) => 
   return (
     <div
       data-testid="video-card"
-      onClick={openVideo}
       onPointerDown={handlePointerDown}
       onPointerMove={handlePointerMove}
       onPointerUp={handlePointerEnd}
       onPointerCancel={handlePointerCancel}
       style={{ transform: `translateX(${dragOffsetX}px)` }}
-      className="group relative flex h-full touch-pan-y cursor-pointer flex-col overflow-hidden rounded-xl border border-gray-200 bg-white shadow-md transition-colors duration-200 hover:border-gray-300 dark:border-gray-800 dark:bg-gray-900 dark:hover:border-gray-700 sm:hover:shadow-xl"
+      className="group relative flex h-full touch-pan-y flex-col overflow-hidden rounded-xl border border-gray-200 bg-white shadow-md transition-colors duration-200 hover:border-gray-300 dark:border-gray-800 dark:bg-gray-900 dark:hover:border-gray-700 sm:hover:shadow-xl"
     >
       {Math.abs(dragOffsetX) > 12 && (
         <div className="pointer-events-none absolute inset-0 z-20 flex items-center justify-center bg-emerald-600/15 text-sm font-semibold text-emerald-700 dark:text-emerald-200">
@@ -198,58 +203,74 @@ export const VideoCard = ({ video, channelThumbnail, onUnavailable }: Props) => 
       )}
       {/* Thumbnail */}
       <div className="relative aspect-video overflow-hidden bg-black">
-        {!imageLoaded && !thumbnailUnavailable && (
-          <div
-            data-testid="video-thumbnail-loading"
-            className="absolute inset-0 animate-pulse bg-gradient-to-r from-gray-200 via-gray-300 to-gray-200 dark:from-gray-800 dark:via-gray-700 dark:to-gray-800"
+        {isPlayingInline ? (
+          <iframe
+            title={`${video.title} player`}
+            src={`https://www.youtube-nocookie.com/embed/${encodeURIComponent(video.id)}?autoplay=1&playsinline=1&rel=0`}
+            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+            allowFullScreen
+            className="h-full w-full border-0"
           />
-        )}
-        <img
-          src={thumbnailSrc}
-          alt={video.title}
-          loading="lazy"
-          onError={() => {
-            useNextThumbnailFallback();
-          }}
-          onLoad={(event) => {
-            if (isLikelyLowResolutionYouTubePlaceholder(thumbnailSrc, event.currentTarget)) {
-              useNextThumbnailFallback();
-              return;
-            }
-            if (
-              thumbnailFallbackCountRef.current > 0 &&
-              /\/default\.(?:jpg|webp)(?:\?|$)/i.test(thumbnailSrc) &&
-              event.currentTarget.naturalWidth <= 120 &&
-              event.currentTarget.naturalHeight <= 90
-            ) {
-              setImageLoaded(false);
-              setThumbnailUnavailable(true);
-              onUnavailable?.(video.id);
-              return;
-            }
-            setThumbnailUnavailable(false);
-            setImageLoaded(true);
-          }}
-          className={`w-full h-full ${isLikelyShort ? 'object-contain bg-black' : 'object-cover'} transition-all duration-300 ${imageLoaded ? 'opacity-100' : 'opacity-0'
-            }`}
-        />
+        ) : (
+          <button
+            type="button"
+            aria-label={`Play ${video.title} inline`}
+            onClick={playInline}
+            className="relative h-full w-full cursor-pointer bg-black p-0 text-left"
+          >
+            {!imageLoaded && !thumbnailUnavailable && (
+              <div
+                data-testid="video-thumbnail-loading"
+                className="absolute inset-0 animate-pulse bg-gradient-to-r from-gray-200 via-gray-300 to-gray-200 dark:from-gray-800 dark:via-gray-700 dark:to-gray-800"
+              />
+            )}
+            <img
+              src={thumbnailSrc}
+              alt={video.title}
+              loading="lazy"
+              onError={() => {
+                useNextThumbnailFallback();
+              }}
+              onLoad={(event) => {
+                if (isLikelyLowResolutionYouTubePlaceholder(thumbnailSrc, event.currentTarget)) {
+                  useNextThumbnailFallback();
+                  return;
+                }
+                if (
+                  thumbnailFallbackCountRef.current > 0 &&
+                  /\/default\.(?:jpg|webp)(?:\?|$)/i.test(thumbnailSrc) &&
+                  event.currentTarget.naturalWidth <= 120 &&
+                  event.currentTarget.naturalHeight <= 90
+                ) {
+                  setImageLoaded(false);
+                  setThumbnailUnavailable(true);
+                  onUnavailable?.(video.id);
+                  return;
+                }
+                setThumbnailUnavailable(false);
+                setImageLoaded(true);
+              }}
+              className={`h-full w-full ${isLikelyShort ? 'object-contain bg-black' : 'object-cover'} transition-all duration-300 ${imageLoaded ? 'opacity-100' : 'opacity-0'
+                }`}
+            />
 
-        {/* Play overlay */}
-        <div className="absolute inset-0 hidden items-center justify-center bg-black/0 transition-colors group-hover:bg-black/40 sm:flex">
-          <div className="opacity-0 transition-opacity group-hover:opacity-100">
-            <div className="bg-red-600 rounded-full p-4">
-              <Play className="w-8 h-8 text-white fill-white" />
+            <div className="absolute inset-0 hidden items-center justify-center bg-black/0 transition-colors group-hover:bg-black/40 sm:flex">
+              <div className="opacity-0 transition-opacity group-hover:opacity-100">
+                <div className="rounded-full bg-red-600 p-4">
+                  <Play className="h-8 w-8 fill-white text-white" />
+                </div>
+              </div>
             </div>
-          </div>
-        </div>
+          </button>
+        )}
 
-        {isLive && (
+        {!isPlayingInline && isLive && (
           <div className="absolute left-2 top-2 rounded bg-red-600 px-2 py-1 text-[11px] font-bold uppercase tracking-wide text-white shadow-sm">
             LIVE
           </div>
         )}
 
-        {video.duration && (
+        {!isPlayingInline && video.duration && (
           <div className="absolute bottom-2 right-2 bg-black/80 px-2 py-1 rounded text-xs text-white font-medium">
             {video.duration}
           </div>
@@ -261,7 +282,14 @@ export const VideoCard = ({ video, channelThumbnail, onUnavailable }: Props) => 
       <div data-testid="video-card-info" className="flex h-28 flex-col p-3">
         <div className="mb-1 h-10">
           <h4 className="font-medium text-sm line-clamp-2 group-hover:text-red-600 dark:group-hover:text-red-400 transition-colors">
-            {video.title}
+            <button
+              type="button"
+              onClick={openVideo}
+              aria-label={`Open ${video.title}`}
+              className="line-clamp-2 text-left transition-colors hover:text-red-600 dark:hover:text-red-400"
+            >
+              {video.title}
+            </button>
           </h4>
         </div>
 
