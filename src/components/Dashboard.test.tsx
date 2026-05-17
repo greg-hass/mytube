@@ -396,14 +396,15 @@ describe('Dashboard', () => {
     expect(tabs.querySelector('.grid')?.className).not.toContain('grid-cols-2');
   });
 
-  it('wraps the latest timeline controls instead of forcing an iPad-width single row', () => {
+  it('lets the latest timeline controls wrap without forcing iPhone controls onto a second row', () => {
     render(<Dashboard />);
 
     const latestToolbar = screen.getByTestId('latest-toolbar');
     const latestActions = screen.getByTestId('latest-toolbar-actions');
 
-    expect(latestToolbar.className).toContain('flex-col');
-    expect(latestToolbar.className).toContain('xl:flex-row');
+    expect(latestToolbar.className).toContain('flex-wrap');
+    expect(latestToolbar.className).toContain('items-center');
+    expect(latestToolbar.className).not.toContain('flex-col');
     expect(latestActions.className).toContain('flex-wrap');
     expect(latestActions.className).not.toContain('shrink-0');
   });
