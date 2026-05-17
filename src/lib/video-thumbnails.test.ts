@@ -64,6 +64,12 @@ describe('video thumbnails', () => {
     expect(getNextVideoThumbnailFallback('https://i.ytimg.com/vi/abc123/hqdefault.jpg')).toBe(
       'https://i.ytimg.com/vi/abc123/mqdefault.jpg'
     );
+    expect(getNextVideoThumbnailFallback('https://i.ytimg.com/vi/abc123/mqdefault.jpg')).toBe(
+      'https://i.ytimg.com/vi/abc123/0.jpg'
+    );
+    expect(getNextVideoThumbnailFallback('https://i.ytimg.com/vi/abc123/0.jpg')).toBe(
+      'https://i.ytimg.com/vi/abc123/1.jpg'
+    );
   });
 
   it('leaves non-YouTube thumbnail URLs alone', () => {
@@ -87,6 +93,15 @@ describe('video thumbnails', () => {
       isLikelyLowResolutionYouTubePlaceholder(
         'https://i.ytimg.com/vi/abc123/mqdefault.jpg',
         { naturalWidth: 320, naturalHeight: 180 }
+      )
+    ).toBe(false);
+  });
+
+  it('keeps the final tiny YouTube default thumbnail instead of treating it as unavailable', () => {
+    expect(
+      isLikelyLowResolutionYouTubePlaceholder(
+        'https://i.ytimg.com/vi/abc123/default.jpg',
+        { naturalWidth: 120, naturalHeight: 90 }
       )
     ).toBe(false);
   });

@@ -4,6 +4,10 @@ const YOUTUBE_THUMBNAIL_QUALITY_ORDER = [
   'sddefault',
   'hqdefault',
   'mqdefault',
+  '0',
+  '1',
+  '2',
+  '3',
   'default',
 ];
 
@@ -35,7 +39,7 @@ const YOUTUBE_THUMBNAIL_MINIMUM_SIZES: Record<string, { width: number; height: n
   sddefault: { width: 320, height: 180 },
   hqdefault: { width: 320, height: 180 },
   mqdefault: { width: 320, height: 180 },
-  default: { width: 121, height: 91 },
+  default: { width: 120, height: 90 },
 };
 
 interface VideoThumbnailOptions {
