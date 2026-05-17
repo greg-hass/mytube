@@ -161,7 +161,37 @@ describe('VideoCard', () => {
     expect(thumbnail.className).toContain('opacity-0');
   });
 
-  it('does not leave the grey loading shimmer after all thumbnail fallbacks fail', () => {
+  it('uses numbered YouTube frame thumbnails before the final tiny default thumbnail', () => {
+    render(
+      <MemoryRouter>
+        <VideoCard
+          video={{
+            ...video,
+            thumbnail: 'https://i.ytimg.com/vi/video-1/hqdefault.jpg',
+          }}
+          index={0}
+        />
+      </MemoryRouter>
+    );
+
+    const thumbnail = screen.getByAltText('A useful video');
+    fireEvent.error(thumbnail);
+    fireEvent.error(thumbnail);
+    fireEvent.error(thumbnail);
+    fireEvent.error(thumbnail);
+
+    expect(thumbnail).toHaveAttribute('src', 'https://i.ytimg.com/vi/video-1/mqdefault.jpg');
+
+    Object.defineProperty(thumbnail, 'naturalWidth', { configurable: true, value: 120 });
+    Object.defineProperty(thumbnail, 'naturalHeight', { configurable: true, value: 90 });
+
+    fireEvent.load(thumbnail);
+
+    expect(thumbnail).toHaveAttribute('src', 'https://i.ytimg.com/vi/video-1/0.jpg');
+    expect(thumbnail.className).toContain('opacity-0');
+  });
+
+  it('shows the final tiny YouTube default thumbnail instead of replacing it', () => {
     render(
       <MemoryRouter>
         <VideoCard
@@ -180,6 +210,10 @@ describe('VideoCard', () => {
     fireEvent.error(thumbnail);
     fireEvent.error(thumbnail);
     fireEvent.error(thumbnail);
+    fireEvent.error(thumbnail);
+    fireEvent.error(thumbnail);
+    fireEvent.error(thumbnail);
+    fireEvent.error(thumbnail);
 
     expect(thumbnail).toHaveAttribute('src', 'https://i.ytimg.com/vi/video-1/default.jpg');
 
@@ -188,9 +222,10 @@ describe('VideoCard', () => {
 
     fireEvent.load(thumbnail);
 
+    expect(thumbnail).toHaveAttribute('src', 'https://i.ytimg.com/vi/video-1/default.jpg');
     expect(screen.queryByTestId('video-thumbnail-loading')).not.toBeInTheDocument();
-    expect(screen.getByTestId('video-thumbnail-unavailable')).toBeInTheDocument();
-    expect(thumbnail.className).toContain('opacity-0');
+    expect(screen.queryByTestId('video-thumbnail-unavailable')).not.toBeInTheDocument();
+    expect(thumbnail.className).toContain('opacity-100');
   });
 
   it('fits Shorts thumbnails inside the video frame instead of cropping vertically', () => {
