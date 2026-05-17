@@ -32,6 +32,7 @@ const SWIPE_VERTICAL_CANCEL_THRESHOLD = 48;
 export const VideoCard = ({ video, channelThumbnail }: Props) => {
   const isLikelyShort = video.isShort === true || isShortVideo({ ...video, isShort: undefined });
   const [imageLoaded, setImageLoaded] = useState(false);
+  const [thumbnailUnavailable, setThumbnailUnavailable] = useState(false);
   const [thumbnailSrc, setThumbnailSrc] = useState(() => (
     getHighResolutionVideoThumbnail(video.thumbnail, { isShort: isLikelyShort })
   ));
@@ -52,6 +53,7 @@ export const VideoCard = ({ video, channelThumbnail }: Props) => {
 
   useEffect(() => {
     setImageLoaded(false);
+    setThumbnailUnavailable(false);
     setThumbnailSrc(getHighResolutionVideoThumbnail(video.thumbnail, { isShort: isLikelyShort }));
   }, [video.thumbnail, isLikelyShort]);
 
@@ -143,9 +145,14 @@ export const VideoCard = ({ video, channelThumbnail }: Props) => {
 
   const useNextThumbnailFallback = () => {
     const fallback = getNextVideoThumbnailFallback(thumbnailSrc, { isShort: isLikelyShort });
-    if (!fallback) return false;
+    if (!fallback) {
+      setImageLoaded(false);
+      setThumbnailUnavailable(true);
+      return false;
+    }
 
     setImageLoaded(false);
+    setThumbnailUnavailable(false);
     setThumbnailSrc(fallback);
     return true;
   };
@@ -182,9 +189,19 @@ export const VideoCard = ({ video, channelThumbnail }: Props) => {
         </div>
       )}
       {/* Thumbnail */}
-      <div className="relative aspect-video bg-gray-200 dark:bg-gray-800 overflow-hidden">
-        {!imageLoaded && (
-          <div className="absolute inset-0 animate-pulse bg-gradient-to-r from-gray-200 via-gray-300 to-gray-200 dark:from-gray-800 dark:via-gray-700 dark:to-gray-800" />
+      <div className="relative aspect-video overflow-hidden bg-black">
+        {!imageLoaded && !thumbnailUnavailable && (
+          <div
+            data-testid="video-thumbnail-loading"
+            className="absolute inset-0 animate-pulse bg-gradient-to-r from-gray-200 via-gray-300 to-gray-200 dark:from-gray-800 dark:via-gray-700 dark:to-gray-800"
+          />
+        )}
+        {thumbnailUnavailable && (
+          <div data-testid="video-thumbnail-unavailable" className="absolute inset-0 flex items-center justify-center bg-black">
+            <div className="rounded-full bg-red-600 p-3">
+              <Play className="h-6 w-6 fill-white text-white" />
+            </div>
+          </div>
         )}
         <img
           src={thumbnailSrc}
@@ -198,6 +215,7 @@ export const VideoCard = ({ video, channelThumbnail }: Props) => {
               useNextThumbnailFallback();
               return;
             }
+            setThumbnailUnavailable(false);
             setImageLoaded(true);
           }}
           className={`w-full h-full ${isLikelyShort ? 'object-contain bg-black' : 'object-cover'} transition-all duration-300 ${imageLoaded ? 'opacity-100' : 'opacity-0'

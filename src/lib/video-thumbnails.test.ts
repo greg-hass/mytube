@@ -74,6 +74,10 @@ describe('video thumbnails', () => {
   it('detects tiny loaded YouTube placeholders across fallback thumbnail sizes', () => {
     const image = { naturalWidth: 120, naturalHeight: 90 };
 
+    expect(isLikelyLowResolutionYouTubePlaceholder('https://i.ytimg.com/vi/abc123/oar2.jpg', image)).toBe(true);
+    expect(isLikelyLowResolutionYouTubePlaceholder('https://i.ytimg.com/vi/abc123/maxres2.jpg', image)).toBe(true);
+    expect(isLikelyLowResolutionYouTubePlaceholder('https://i.ytimg.com/vi/abc123/hq2.jpg', image)).toBe(true);
+    expect(isLikelyLowResolutionYouTubePlaceholder('https://i.ytimg.com/vi/abc123/frame0.jpg', image)).toBe(true);
     expect(isLikelyLowResolutionYouTubePlaceholder('https://i.ytimg.com/vi/abc123/hqdefault.jpg', image)).toBe(true);
     expect(isLikelyLowResolutionYouTubePlaceholder('https://i.ytimg.com/vi/abc123/mqdefault.jpg', image)).toBe(true);
   });
