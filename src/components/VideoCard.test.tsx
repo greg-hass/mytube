@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { VideoCard } from './VideoCard';
@@ -405,8 +405,108 @@ describe('VideoCard', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Play A useful video inline' }));
 
     const inlinePlayer = screen.getByTitle('A useful video player');
-    expect(inlinePlayer).toHaveAttribute('src', 'https://www.youtube-nocookie.com/embed/video-1?autoplay=1&playsinline=1&rel=0');
+    expect(inlinePlayer).toHaveAttribute('data-testid', 'inline-video-player');
     expect(screen.getByTestId('location')).toHaveTextContent('/');
+  });
+
+  it('saves inline playback progress so queued videos can resume', async () => {
+    window.YT = {
+      PlayerState: { ENDED: 0 },
+      Player: class {
+        constructor(_element: HTMLElement, options: any) {
+          window.setTimeout(() => options.events.onReady({ target: this }), 0);
+        }
+
+        getCurrentTime = () => 45;
+        getDuration = () => 120;
+        destroy = vi.fn();
+        seekTo = vi.fn();
+        playVideo = vi.fn();
+      },
+    };
+
+    render(
+      <MemoryRouter initialEntries={['/?tab=latest']}>
+        <Routes>
+          <Route
+            path="/"
+            element={(
+              <>
+                <VideoCard video={video} index={0} />
+                <LocationProbe />
+              </>
+            )}
+          />
+          <Route path="/video/:videoId" element={<LocationProbe />} />
+        </Routes>
+      </MemoryRouter>
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Play A useful video inline' }));
+
+    await waitFor(() => {
+      expect(JSON.parse(localStorage.getItem('video-playback-progress') || '{}')).toMatchObject({
+        'video-1': {
+          currentTime: 45,
+          duration: 120,
+        },
+      });
+    });
+    expect(mockStore.markAsWatched).toHaveBeenCalledWith('video-1');
+    expect(screen.getByTestId('location')).toHaveTextContent('/');
+  });
+
+  it('does not overwrite inline resume progress with the player startup time', async () => {
+    localStorage.setItem('video-playback-progress', JSON.stringify({
+      'video-1': {
+        currentTime: 75,
+        duration: 300,
+        updatedAt: Date.now(),
+      },
+    }));
+    window.YT = {
+      PlayerState: { ENDED: 0 },
+      Player: class {
+        constructor(_element: HTMLElement, options: any) {
+          window.setTimeout(() => options.events.onReady({ target: this }), 0);
+        }
+
+        getCurrentTime = () => 0;
+        getDuration = () => 300;
+        destroy = vi.fn();
+        seekTo = vi.fn();
+        playVideo = vi.fn();
+      },
+    };
+
+    render(
+      <MemoryRouter initialEntries={['/?tab=queue']}>
+        <Routes>
+          <Route
+            path="/"
+            element={(
+              <>
+                <VideoCard video={video} index={0} />
+                <LocationProbe />
+              </>
+            )}
+          />
+          <Route path="/video/:videoId" element={<LocationProbe />} />
+        </Routes>
+      </MemoryRouter>
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Play A useful video inline' }));
+
+    await waitFor(() => {
+      expect(screen.getByTitle('A useful video player')).toBeInTheDocument();
+    });
+    expect(JSON.parse(localStorage.getItem('video-playback-progress') || '{}')).toMatchObject({
+      'video-1': {
+        currentTime: 75,
+        duration: 300,
+      },
+    });
   });
 
   it('opens the full player view when the title is clicked', () => {
@@ -610,6 +710,28 @@ describe('VideoCard', () => {
 
     expect(progressBar).toBeInTheDocument();
     expect(progressBar).toHaveStyle({ width: '25%' });
+  });
+
+  it('updates the bottom progress bar when playback progress changes', async () => {
+    render(
+      <MemoryRouter>
+        <VideoCard video={video} index={0} />
+      </MemoryRouter>
+    );
+
+    expect(screen.queryByTestId('video-progress-bar')).not.toBeInTheDocument();
+
+    localStorage.setItem('video-playback-progress', JSON.stringify({
+      'video-1': {
+        currentTime: 60,
+        duration: 120,
+        updatedAt: Date.now(),
+      },
+    }));
+    fireEvent(window, new Event('video-progress-changed'));
+
+    const progressBar = await screen.findByTestId('video-progress-bar');
+    expect(progressBar).toHaveStyle({ width: '50%' });
   });
 
   it('shows a red LIVE overlay for live videos', () => {

@@ -20,71 +20,12 @@ import { useSubscriptionStorage } from '../hooks/useSubscriptionStorage';
 import { getDisplayThumbnail } from '../lib/icon-loader';
 import { getHighResolutionVideoThumbnail } from '../lib/video-thumbnails';
 import { clearVideoProgress, getVideoProgress, saveVideoProgress } from '../lib/video-progress';
+import { allowEnhancedMediaPlayback, loadYouTubeIframeApi, type YouTubePlayer } from '../lib/youtube-iframe-api';
 import { useStore } from '../store/useStore';
 import type { YouTubeVideo } from '../types/youtube';
 
-interface YouTubePlayer {
-  getCurrentTime: () => number;
-  getDuration: () => number;
-  destroy: () => void;
-  seekTo: (seconds: number, allowSeekAhead: boolean) => void;
-  playVideo: () => void;
-  getIframe?: () => HTMLIFrameElement;
-  setPlaybackQuality?: (suggestedQuality: string) => void;
-}
-
-interface YouTubePlayerEvent {
-  target: YouTubePlayer;
-  data?: number;
-}
-
-interface YouTubePlayerOptions {
-  videoId: string;
-  playerVars: Record<string, string | number>;
-  events: {
-    onReady: (event: YouTubePlayerEvent) => void;
-    onStateChange: (event: YouTubePlayerEvent) => void;
-    onError: (event: YouTubePlayerEvent) => void;
-  };
-}
-
-interface YouTubeApi {
-  Player: new (element: HTMLElement, options: YouTubePlayerOptions) => YouTubePlayer;
-  PlayerState: {
-    ENDED: number;
-  };
-}
-
-declare global {
-  interface Window {
-    YT?: YouTubeApi;
-    onYouTubeIframeAPIReady?: () => void;
-  }
-}
-
-let youtubeApiPromise: Promise<YouTubeApi> | null = null;
 const WATCHED_PERCENT_THRESHOLD = 0.5;
 const WATCHED_SECONDS_THRESHOLD = 30;
-
-function loadYouTubeIframeApi() {
-  if (window.YT?.Player) return Promise.resolve(window.YT);
-
-  youtubeApiPromise ??= new Promise<YouTubeApi>((resolve) => {
-    const previousCallback = window.onYouTubeIframeAPIReady;
-    window.onYouTubeIframeAPIReady = () => {
-      previousCallback?.();
-      if (window.YT?.Player) resolve(window.YT);
-    };
-
-    if (!document.querySelector('script[src="https://www.youtube.com/iframe_api"]')) {
-      const script = document.createElement('script');
-      script.src = 'https://www.youtube.com/iframe_api';
-      document.body.appendChild(script);
-    }
-  });
-
-  return youtubeApiPromise;
-}
 
 function formatResumeTime(seconds: number) {
   const minutes = Math.floor(seconds / 60);
@@ -113,26 +54,6 @@ function getVideoDurationLabel(duration: YouTubeVideo['duration']) {
   const minutes = Math.floor(duration / 60);
   const seconds = Math.floor(duration % 60).toString().padStart(2, '0');
   return `${minutes}:${seconds}`;
-}
-
-function allowEnhancedMediaPlayback(player: YouTubePlayer) {
-  const iframe = player.getIframe?.();
-  if (!iframe) return;
-
-  iframe.setAttribute(
-    'allow',
-    [
-      'accelerometer',
-      'autoplay',
-      'clipboard-write',
-      'encrypted-media',
-      'gyroscope',
-      'picture-in-picture',
-      'web-share',
-    ].join('; ')
-  );
-  iframe.setAttribute('allowfullscreen', '');
-  iframe.setAttribute('webkitallowfullscreen', '');
 }
 
 export const VideoPlayer = () => {
@@ -209,6 +130,7 @@ export const VideoPlayer = () => {
 
   useEffect(() => {
     let isMounted = true;
+    let hasReachedResumePoint = resumeFromSeconds <= 0;
 
     const persistCurrentProgress = () => {
       const player = playerRef.current;
@@ -218,6 +140,11 @@ export const VideoPlayer = () => {
       const duration = player.getDuration();
 
       if (Number.isFinite(currentTime) && Number.isFinite(duration) && duration > 0) {
+        if (!hasReachedResumePoint) {
+          if (currentTime < Math.max(1, resumeFromSeconds - 2)) return;
+          hasReachedResumePoint = true;
+        }
+
         saveVideoProgress(videoId, currentTime, duration);
         setPlayerProgressPercent(Math.min(100, Math.max(0, (currentTime / duration) * 100)));
         if (currentTime >= WATCHED_SECONDS_THRESHOLD || currentTime / duration >= WATCHED_PERCENT_THRESHOLD) {

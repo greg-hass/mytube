@@ -407,8 +407,8 @@ describe('Dashboard', () => {
     expect(latestToolbar.className).not.toContain('flex-col');
     expect(latestActions.className).toContain('flex-nowrap');
     expect(latestActions.className).toContain('shrink-0');
-    expect(screen.getByText('Shorts').closest('span')?.className).toContain('text-xs');
-    expect(screen.getByText('watched').closest('span')?.className).toContain('text-xs');
+    expect(screen.getByText('Hide Shorts').closest('span')?.className).toContain('text-xs');
+    expect(screen.getByText('Hide Watched').closest('span')?.className).toContain('text-xs');
   });
 
   it('keeps subscription group controls inside the same sticky chrome as the tabs', async () => {
@@ -837,7 +837,7 @@ describe('Dashboard', () => {
     expect(screen.getByText('Already watched upload')).toBeInTheDocument();
     expect(screen.getByText('Fresh unwatched upload')).toBeInTheDocument();
 
-    fireEvent.click(screen.getByLabelText('Hide watched'));
+    fireEvent.click(screen.getByLabelText('Hide Watched'));
 
     expect(screen.queryByText('Already watched upload')).not.toBeInTheDocument();
     expect(screen.getByText('Fresh unwatched upload')).toBeInTheDocument();

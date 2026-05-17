@@ -63,6 +63,7 @@ export const Header = ({
   const [showMobileSearchPanel, setShowMobileSearchPanel] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const showRefreshHealthPanel = Boolean(syncStatus?.isSyncing && cacheStatus && onRetryFailed);
+  const isRefreshInProgress = isRefreshing || Boolean(syncStatus?.isSyncing);
 
   useLayoutEffect(() => {
     const header = headerRef.current;
@@ -184,11 +185,11 @@ export const Header = ({
               whileHover={{ scale: 1.05 }}
               whileTap={{ scale: 0.95 }}
               onClick={handleRefresh}
-              disabled={isRefreshing}
+              disabled={isRefreshInProgress}
               className="p-2 rounded-lg bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors disabled:opacity-50"
               title="Refresh feeds"
             >
-              <RefreshCw className={`w-5 h-5 ${isRefreshing ? 'animate-spin' : ''}`} />
+              <RefreshCw className={`w-5 h-5 ${isRefreshInProgress ? 'animate-spin' : ''}`} />
             </motion.button>
 
             {/* Sort */}
@@ -305,11 +306,11 @@ export const Header = ({
             <button
               data-testid="mobile-refresh-button"
               onClick={handleRefresh}
-              disabled={isRefreshing}
+              disabled={isRefreshInProgress}
               className="p-2 rounded-lg bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors disabled:opacity-50"
               title="Refresh feeds"
             >
-              <RefreshCw className={`w-5 h-5 ${isRefreshing ? 'animate-spin' : ''}`} />
+              <RefreshCw className={`w-5 h-5 ${isRefreshInProgress ? 'animate-spin' : ''}`} />
             </button>
             {showMobileSearch && (
               <button
@@ -403,10 +404,10 @@ export const Header = ({
 
               <button
                 onClick={handleRefresh}
-                disabled={isRefreshing}
+                disabled={isRefreshInProgress}
                 className="flex w-full items-center justify-center gap-2 rounded-lg bg-gray-100 px-4 py-3 font-medium hover:bg-gray-200 disabled:opacity-50 dark:bg-gray-800/90 dark:hover:bg-gray-700"
               >
-                <RefreshCw className={`h-4 w-4 ${isRefreshing ? 'animate-spin' : ''}`} />
+                <RefreshCw className={`h-4 w-4 ${isRefreshInProgress ? 'animate-spin' : ''}`} />
                 Refresh Feeds
               </button>
 

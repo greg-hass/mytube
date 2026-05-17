@@ -193,6 +193,114 @@ describe('VideoPlayer', () => {
     });
   });
 
+  it('resumes a queued-only video from saved playback progress', async () => {
+    let playerVars: Record<string, string | number> | undefined;
+    const seekTo = vi.fn();
+    localStorage.setItem('video-playback-progress', JSON.stringify({
+      'queued-only-video': {
+        currentTime: 75,
+        duration: 300,
+        updatedAt: Date.now(),
+      },
+    }));
+    mockUseRSSVideos.mockReturnValue({
+      videos: [],
+    });
+    mockUseQueuedVideos.mockReturnValue({
+      queuedVideos: [{
+        ...currentVideo,
+        id: 'queued-only-video',
+        title: 'Queued only video',
+      }],
+      isQueuedVideo: (videoId: string) => videoId === 'queued-only-video',
+      toggleQueuedVideo: mockToggleQueuedVideo,
+    });
+    window.YT = {
+      PlayerState: { ENDED: 0 },
+      Player: class {
+        constructor(_element: HTMLElement, options: any) {
+          playerVars = options.playerVars;
+          window.setTimeout(() => options.events.onReady({ target: this }), 0);
+        }
+
+        getCurrentTime = () => 75;
+        getDuration = () => 300;
+        destroy = vi.fn();
+        seekTo = seekTo;
+        playVideo = vi.fn();
+      },
+    };
+
+    render(
+      <MemoryRouter initialEntries={['/video/queued-only-video']}>
+        <Routes>
+          <Route path="/video/:videoId" element={<VideoPlayer />} />
+        </Routes>
+      </MemoryRouter>
+    );
+
+    expect(screen.getByRole('heading', { name: 'Queued only video' })).toBeInTheDocument();
+    expect(screen.getByText('Resuming from 1:15')).toBeInTheDocument();
+    await waitFor(() => {
+      expect(seekTo).toHaveBeenCalledWith(75, true);
+    });
+    expect(playerVars?.start).toBe(75);
+  });
+
+  it('does not overwrite queued resume progress with the player startup time', async () => {
+    localStorage.setItem('video-playback-progress', JSON.stringify({
+      'queued-only-video': {
+        currentTime: 75,
+        duration: 300,
+        updatedAt: Date.now(),
+      },
+    }));
+    mockUseRSSVideos.mockReturnValue({
+      videos: [],
+    });
+    mockUseQueuedVideos.mockReturnValue({
+      queuedVideos: [{
+        ...currentVideo,
+        id: 'queued-only-video',
+        title: 'Queued only video',
+      }],
+      isQueuedVideo: (videoId: string) => videoId === 'queued-only-video',
+      toggleQueuedVideo: mockToggleQueuedVideo,
+    });
+    window.YT = {
+      PlayerState: { ENDED: 0 },
+      Player: class {
+        constructor(_element: HTMLElement, options: any) {
+          window.setTimeout(() => options.events.onReady({ target: this }), 0);
+        }
+
+        getCurrentTime = () => 0;
+        getDuration = () => 300;
+        destroy = vi.fn();
+        seekTo = vi.fn();
+        playVideo = vi.fn();
+      },
+    };
+
+    render(
+      <MemoryRouter initialEntries={['/video/queued-only-video']}>
+        <Routes>
+          <Route path="/video/:videoId" element={<VideoPlayer />} />
+        </Routes>
+      </MemoryRouter>
+    );
+
+    await waitFor(() => {
+      expect(screen.getByText('Resuming from 1:15')).toBeInTheDocument();
+    });
+    expect(JSON.parse(localStorage.getItem('video-playback-progress') || '{}')).toMatchObject({
+      'queued-only-video': {
+        currentTime: 75,
+        duration: 300,
+      },
+    });
+  });
+
   it('allows the YouTube iframe to use fullscreen and picture-in-picture when supported', async () => {
     const iframe = document.createElement('iframe');
 
