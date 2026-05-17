@@ -17,6 +17,7 @@ interface Props {
   video: YouTubeVideo;
   index: number;
   channelThumbnail?: string;
+  onInlinePlaybackChange?: (videoId: string, isPlaying: boolean) => void;
   onUnavailable?: (videoId: string) => void;
 }
 
@@ -33,7 +34,7 @@ const SWIPE_VERTICAL_CANCEL_THRESHOLD = 48;
 const WATCHED_PERCENT_THRESHOLD = 0.5;
 const WATCHED_SECONDS_THRESHOLD = 30;
 
-export const VideoCard = ({ video, channelThumbnail, onUnavailable }: Props) => {
+export const VideoCard = ({ video, channelThumbnail, onInlinePlaybackChange, onUnavailable }: Props) => {
   const isLikelyShort = video.isShort === true || isShortVideo({ ...video, isShort: undefined });
   const [imageLoaded, setImageLoaded] = useState(false);
   const [thumbnailUnavailable, setThumbnailUnavailable] = useState(false);
@@ -79,6 +80,7 @@ export const VideoCard = ({ video, channelThumbnail, onUnavailable }: Props) => 
   useEffect(() => {
     if (!isPlayingInline) return;
 
+    onInlinePlaybackChange?.(video.id, true);
     let isMounted = true;
     let hasReachedResumePoint = false;
     let resumeFromSeconds = 0;
@@ -132,6 +134,7 @@ export const VideoCard = ({ video, channelThumbnail, onUnavailable }: Props) => 
             if (event.data === youtubeApi.PlayerState.ENDED) {
               clearVideoProgress(video.id);
               setProgressPercent(0);
+              setIsPlayingInline(false);
             } else {
               persistCurrentProgress();
             }
@@ -150,8 +153,9 @@ export const VideoCard = ({ video, channelThumbnail, onUnavailable }: Props) => 
       inlineSaveIntervalRef.current = null;
       inlinePlayerRef.current?.destroy();
       inlinePlayerRef.current = null;
+      onInlinePlaybackChange?.(video.id, false);
     };
-  }, [isPlayingInline, markAsWatched, video.id]);
+  }, [isPlayingInline, markAsWatched, onInlinePlaybackChange, video.id]);
 
   useEffect(() => {
     setIsQueueButtonActive(isQueued);

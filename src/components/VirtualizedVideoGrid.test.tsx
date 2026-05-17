@@ -4,9 +4,19 @@ import { VirtualizedVideoGrid } from './VirtualizedVideoGrid';
 import type { YouTubeVideo } from '../types/youtube';
 
 vi.mock('./VideoCard', () => ({
-    VideoCard: ({ video, onUnavailable }: { video: YouTubeVideo; onUnavailable?: (videoId: string) => void }) => (
+    VideoCard: ({
+        video,
+        onInlinePlaybackChange,
+        onUnavailable,
+    }: {
+        video: YouTubeVideo;
+        onInlinePlaybackChange?: (videoId: string, isPlaying: boolean) => void;
+        onUnavailable?: (videoId: string) => void;
+    }) => (
         <article>
             {video.title}
+            <button type="button" onClick={() => onInlinePlaybackChange?.(video.id, true)}>play {video.title}</button>
+            <button type="button" onClick={() => onInlinePlaybackChange?.(video.id, false)}>stop {video.title}</button>
             <button type="button" onClick={() => onUnavailable?.(video.id)}>hide {video.title}</button>
         </article>
     ),
@@ -163,5 +173,34 @@ describe('VirtualizedVideoGrid', () => {
         expect(screen.queryByText('Video 1')).not.toBeInTheDocument();
         expect(screen.getByText('Video 0')).toBeInTheDocument();
         expect(screen.getByText('Video 2')).toBeInTheDocument();
+    });
+
+    it('keeps the visible timeline stable while an inline video is playing', async () => {
+        const initialVideos = videos.slice(0, 3);
+        const refreshedVideos: YouTubeVideo[] = [
+            {
+                ...videos[3],
+                id: 'new-video',
+                title: 'Newly fetched video',
+            },
+            ...initialVideos,
+        ];
+
+        const { rerender } = render(<VirtualizedVideoGrid videos={initialVideos} columns={4} />);
+
+        fireEvent.click(screen.getByRole('button', { name: 'play Video 1' }));
+
+        rerender(<VirtualizedVideoGrid videos={refreshedVideos} columns={4} />);
+
+        expect(screen.queryByText('Newly fetched video')).not.toBeInTheDocument();
+        expect(screen.getByText('Video 0')).toBeInTheDocument();
+        expect(screen.getByText('Video 1')).toBeInTheDocument();
+        expect(screen.getByText('Video 2')).toBeInTheDocument();
+
+        fireEvent.click(screen.getByRole('button', { name: 'stop Video 1' }));
+
+        await waitFor(() => {
+            expect(screen.getByText('Newly fetched video')).toBeInTheDocument();
+        });
     });
 });
