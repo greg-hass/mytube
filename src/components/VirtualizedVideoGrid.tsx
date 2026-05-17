@@ -1,5 +1,5 @@
 import { useWindowVirtualizer } from '@tanstack/react-virtual';
-import { useRef, useState, useEffect } from 'react';
+import { useMemo, useRef, useState, useEffect } from 'react';
 import { VideoCard } from './VideoCard';
 import type { YouTubeVideo } from '../types/youtube';
 import { getCurrentViewportSize, isCompactMobileViewport } from '../lib/mobile-viewport';
@@ -20,7 +20,34 @@ export const VirtualizedVideoGrid = ({ videos, columns = 4, scrollStorageKey, ch
     const [itemsPerRow, setItemsPerRow] = useState(columns);
     const [containerWidth, setContainerWidth] = useState(0);
     const [scrollMargin, setScrollMargin] = useState(0);
+    const [unavailableVideoIds, setUnavailableVideoIds] = useState<Set<string>>(() => new Set());
     const hasRestoredScrollRef = useRef(false);
+
+    useEffect(() => {
+        setUnavailableVideoIds((currentIds) => {
+            if (currentIds.size === 0) return currentIds;
+
+            const availableIds = new Set(videos.map((video) => video.id));
+            const nextIds = new Set([...currentIds].filter((videoId) => availableIds.has(videoId)));
+
+            return nextIds.size === currentIds.size ? currentIds : nextIds;
+        });
+    }, [videos]);
+
+    const visibleVideos = useMemo(() => {
+        if (unavailableVideoIds.size === 0) return videos;
+        return videos.filter((video) => !unavailableVideoIds.has(video.id));
+    }, [videos, unavailableVideoIds]);
+
+    const handleVideoUnavailable = (videoId: string) => {
+        setUnavailableVideoIds((currentIds) => {
+            if (currentIds.has(videoId)) return currentIds;
+
+            const nextIds = new Set(currentIds);
+            nextIds.add(videoId);
+            return nextIds;
+        });
+    };
 
     // Update items per row based on container width
     useEffect(() => {
@@ -61,7 +88,7 @@ export const VirtualizedVideoGrid = ({ videos, columns = 4, scrollStorageKey, ch
     const rowHeight = cardHeight + ROW_GAP;
 
     const rowVirtualizer = useWindowVirtualizer({
-        count: Math.ceil(videos.length / itemsPerRow),
+        count: Math.ceil(visibleVideos.length / itemsPerRow),
         estimateSize: () => rowHeight,
         overscan: 5,
         scrollMargin,
@@ -69,7 +96,7 @@ export const VirtualizedVideoGrid = ({ videos, columns = 4, scrollStorageKey, ch
 
     useEffect(() => {
         if (!scrollStorageKey || hasRestoredScrollRef.current) return;
-        if (videos.length === 0) return;
+        if (visibleVideos.length === 0) return;
 
         const savedScrollTop = Number(sessionStorage.getItem(scrollStorageKey));
         if (!Number.isFinite(savedScrollTop) || savedScrollTop <= 0) return;
@@ -80,7 +107,7 @@ export const VirtualizedVideoGrid = ({ videos, columns = 4, scrollStorageKey, ch
         requestAnimationFrame(() => {
             window.scrollTo({ top: savedScrollTop });
         });
-    }, [scrollStorageKey, videos.length, itemsPerRow]);
+    }, [scrollStorageKey, visibleVideos.length, itemsPerRow]);
 
     useEffect(() => {
         if (!scrollStorageKey) return;
@@ -114,7 +141,7 @@ export const VirtualizedVideoGrid = ({ videos, columns = 4, scrollStorageKey, ch
             >
                 {rowVirtualizer.getVirtualItems().map((virtualRow) => {
                     const startIndex = virtualRow.index * itemsPerRow;
-                    const rowItems = videos.slice(startIndex, startIndex + itemsPerRow);
+                    const rowItems = visibleVideos.slice(startIndex, startIndex + itemsPerRow);
 
                     return (
                         <div
@@ -140,6 +167,7 @@ export const VirtualizedVideoGrid = ({ videos, columns = 4, scrollStorageKey, ch
                                         video={video}
                                         index={startIndex + idx}
                                         channelThumbnail={channelThumbnails?.get(video.channelId)}
+                                        onUnavailable={handleVideoUnavailable}
                                     />
                                 ))}
                             </div>
