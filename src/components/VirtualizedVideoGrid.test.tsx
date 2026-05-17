@@ -102,6 +102,27 @@ describe('VirtualizedVideoGrid', () => {
         expect(row.querySelector('.grid')).toHaveStyle({ height: `${rowHeight - 24}px` });
     });
 
+    it('uses the measured virtualizer column count for the rendered grid', async () => {
+        Object.defineProperty(HTMLElement.prototype, 'offsetWidth', {
+            configurable: true,
+            value: 860,
+        });
+
+        render(<VirtualizedVideoGrid videos={videos} columns={4} />);
+
+        const timeline = screen.getByTestId('latest-videos-timeline');
+
+        await waitFor(() => {
+            expect(timeline.querySelector('[data-index]')).toBeTruthy();
+        });
+
+        const grid = timeline.querySelector('.grid') as HTMLElement;
+
+        expect(grid).toHaveStyle({ gridTemplateColumns: 'repeat(3, minmax(0, 1fr))' });
+        expect(grid.className).not.toContain('sm:grid-cols-2');
+        expect(grid.className).not.toContain('lg:grid-cols-3');
+    });
+
     it('keeps landscape phone timelines to one column even when the viewport is wider than sm', async () => {
         Object.defineProperty(window, 'innerWidth', {
             configurable: true,
@@ -127,7 +148,7 @@ describe('VirtualizedVideoGrid', () => {
         const firstRow = timeline.querySelector('[data-index]') as HTMLElement;
 
         expect(firstRow.querySelectorAll('article')).toHaveLength(1);
-        expect(firstRow.querySelector('.grid')?.className).toContain('mobile-landscape-grid');
+        expect(firstRow.querySelector('.grid')).toHaveStyle({ gridTemplateColumns: 'repeat(1, minmax(0, 1fr))' });
     });
 
     it('removes unavailable videos from the virtualized list so the timeline closes the gap', async () => {

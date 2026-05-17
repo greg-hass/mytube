@@ -131,7 +131,7 @@ export const Header = ({
         className="sticky top-0 z-50 glass safe-top border-b border-gray-200 dark:border-gray-800/80 shadow-sm"
       >
         <div className="max-w-7xl mx-auto px-4">
-          <div className="flex h-[var(--app-header-height)] items-center justify-between gap-4">
+          <div className="flex h-[var(--app-header-height)] items-center justify-between gap-3 xl:gap-4">
             {/* Logo */}
             <motion.div
             whileHover={{ scale: 1.05 }}
@@ -151,7 +151,7 @@ export const Header = ({
           </motion.div>
 
           {/* Search (Desktop) */}
-          <div className="desktop-header-controls hidden md:block flex-1 max-w-md">
+          <div className="desktop-header-controls hidden xl:block flex-1 max-w-md">
             <div className="relative">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
               <input
@@ -165,7 +165,7 @@ export const Header = ({
           </div>
 
           {/* Controls */}
-          <div className="desktop-header-controls hidden md:flex items-center gap-2">
+          <div className="desktop-header-controls hidden xl:flex items-center gap-2">
             {/* Add Channel Button */}
             {onAddChannel && (
               <motion.button
@@ -291,7 +291,7 @@ export const Header = ({
             </motion.button>
           </div>
 
-          <div className="mobile-header-controls flex md:hidden items-center gap-2">
+          <div className="mobile-header-controls flex xl:hidden items-center gap-2">
             {onAddChannel && (
               <button
                 data-testid="mobile-add-channel-button"
@@ -333,7 +333,7 @@ export const Header = ({
           </div>
 
           {/* Search (Mobile) */}
-          {showMobileSearch && showMobileSearchPanel && <div className="mobile-header-search pb-3 md:hidden">
+          {showMobileSearch && showMobileSearchPanel && <div className="mobile-header-search pb-3 xl:hidden">
           <div className="relative">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
             <input
@@ -353,7 +353,7 @@ export const Header = ({
           </div>
         </div>}
           {showRefreshHealthPanel && syncStatus && cacheStatus && onRetryFailed && (
-            <div data-testid="mobile-refresh-health-panel" className="mobile-header-search pb-3 md:hidden">
+            <div data-testid="mobile-refresh-health-panel" className="mobile-header-search pb-3 xl:hidden">
               <RefreshStatusPanel
                 status={syncStatus}
                 cacheStatus={cacheStatus}
@@ -366,7 +366,7 @@ export const Header = ({
       </motion.header>
 
       {showMobileMenu && (
-        <div data-testid="mobile-menu-panel" className="mobile-menu-overlay fixed inset-0 z-[100] md:hidden">
+        <div data-testid="mobile-menu-panel" className="mobile-menu-overlay fixed inset-0 z-[100] xl:hidden">
           <button
             className="absolute inset-0 bg-gray-950/60 backdrop-blur-[2px]"
             aria-label="Close menu"

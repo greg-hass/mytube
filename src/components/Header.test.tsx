@@ -69,6 +69,20 @@ describe('Header', () => {
     expect(document.querySelectorAll('.desktop-header-controls')).toHaveLength(2);
   });
 
+  it('keeps the full desktop toolbar for wide screens and uses compact controls below xl', () => {
+    render(<Header onAddChannel={vi.fn()} />);
+
+    const desktopControls = document.querySelectorAll('.desktop-header-controls');
+    const mobileControls = screen.getByTestId('mobile-menu-button').closest('.mobile-header-controls');
+
+    desktopControls.forEach((controls) => {
+      expect(controls.className).toContain('xl:');
+      expect(controls.className).not.toContain('md:');
+    });
+    expect(mobileControls?.className).toContain('xl:hidden');
+    expect(mobileControls?.className).not.toContain('md:hidden');
+  });
+
   it('publishes its measured height for sticky dashboard chrome', () => {
     const offsetHeightSpy = vi
       .spyOn(HTMLElement.prototype, 'offsetHeight', 'get')

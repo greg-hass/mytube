@@ -655,8 +655,11 @@ export const Dashboard = () => {
           )}
 
           {activeTab === 'latest' && (
-            <div className="mt-[var(--app-sticky-gap)] flex items-center justify-between gap-2">
-              <div className="flex min-w-0 items-center gap-3">
+            <div
+              data-testid="latest-toolbar"
+              className="mt-[var(--app-sticky-gap)] flex flex-col gap-2 xl:flex-row xl:items-center xl:justify-between"
+            >
+              <div className="flex min-w-0 flex-wrap items-center gap-3">
                 <label className="flex items-center gap-2 cursor-pointer select-none">
                   <div className="relative">
                     <input
@@ -684,8 +687,8 @@ export const Dashboard = () => {
                 </label>
               </div>
 
-              <div className="ml-auto flex shrink-0 items-center gap-2">
-                <div className="hidden sm:flex">
+              <div data-testid="latest-toolbar-actions" className="flex min-w-0 flex-wrap items-center gap-2 xl:ml-auto">
+                <div className="hidden xl:flex">
                   <SavedFeedViews
                     presets={feedViewPresets}
                     onApply={applyFeedViewPreset}
@@ -714,7 +717,7 @@ export const Dashboard = () => {
                     </span>
                   )}
                 </button>
-                <div className="hidden items-center gap-2 text-xs font-medium text-gray-500 dark:text-gray-400 sm:flex">
+                <div className="hidden items-center gap-2 text-xs font-medium text-gray-500 dark:text-gray-400 xl:flex">
                   <span>Last refreshed {formatRefreshAge(syncStatus.lastUpdated)}</span>
                   {scheduledRefreshIntervalMinutes && (
                     <span className="rounded-full bg-gray-100 px-2 py-1 text-gray-600 dark:bg-gray-800 dark:text-gray-300">
