@@ -657,7 +657,7 @@ export const Dashboard = () => {
           {activeTab === 'latest' && (
             <div
               data-testid="latest-toolbar"
-              className="mt-[var(--app-sticky-gap)] flex flex-col gap-2 xl:flex-row xl:items-center xl:justify-between"
+              className="mt-[var(--app-sticky-gap)] flex flex-wrap items-center justify-between gap-2"
             >
               <div className="flex min-w-0 flex-wrap items-center gap-3">
                 <label className="flex items-center gap-2 cursor-pointer select-none">
@@ -687,7 +687,7 @@ export const Dashboard = () => {
                 </label>
               </div>
 
-              <div data-testid="latest-toolbar-actions" className="flex min-w-0 flex-wrap items-center gap-2 xl:ml-auto">
+              <div data-testid="latest-toolbar-actions" className="ml-auto flex min-w-0 flex-wrap items-center gap-2">
                 <div className="hidden xl:flex">
                   <SavedFeedViews
                     presets={feedViewPresets}
