@@ -105,6 +105,35 @@ describe('VideoCard', () => {
     expect(thumbnail).toHaveAttribute('src', 'https://i.ytimg.com/vi/video-1/hq720.jpg');
   });
 
+  it('does not show a loaded grey YouTube placeholder at lower fallback sizes', () => {
+    render(
+      <MemoryRouter>
+        <VideoCard
+          video={{
+            ...video,
+            thumbnail: 'https://i.ytimg.com/vi/video-1/hqdefault.jpg',
+          }}
+          index={0}
+        />
+      </MemoryRouter>
+    );
+
+    const thumbnail = screen.getByAltText('A useful video');
+    fireEvent.error(thumbnail);
+    fireEvent.error(thumbnail);
+    fireEvent.error(thumbnail);
+
+    expect(thumbnail).toHaveAttribute('src', 'https://i.ytimg.com/vi/video-1/hqdefault.jpg');
+
+    Object.defineProperty(thumbnail, 'naturalWidth', { configurable: true, value: 120 });
+    Object.defineProperty(thumbnail, 'naturalHeight', { configurable: true, value: 90 });
+
+    fireEvent.load(thumbnail);
+
+    expect(thumbnail).toHaveAttribute('src', 'https://i.ytimg.com/vi/video-1/mqdefault.jpg');
+    expect(thumbnail.className).toContain('opacity-0');
+  });
+
   it('fits Shorts thumbnails inside the video frame instead of cropping vertically', () => {
     render(
       <MemoryRouter>

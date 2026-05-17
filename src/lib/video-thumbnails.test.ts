@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { getHighResolutionVideoThumbnail, getNextVideoThumbnailFallback } from './video-thumbnails';
+import {
+  getHighResolutionVideoThumbnail,
+  getNextVideoThumbnailFallback,
+  isLikelyLowResolutionYouTubePlaceholder,
+} from './video-thumbnails';
 
 describe('video thumbnails', () => {
   it('upgrades YouTube video thumbnails to max resolution', () => {
@@ -65,5 +69,21 @@ describe('video thumbnails', () => {
   it('leaves non-YouTube thumbnail URLs alone', () => {
     expect(getHighResolutionVideoThumbnail('https://example.com/video.jpg')).toBe('https://example.com/video.jpg');
     expect(getNextVideoThumbnailFallback('https://example.com/video.jpg')).toBeNull();
+  });
+
+  it('detects tiny loaded YouTube placeholders across fallback thumbnail sizes', () => {
+    const image = { naturalWidth: 120, naturalHeight: 90 };
+
+    expect(isLikelyLowResolutionYouTubePlaceholder('https://i.ytimg.com/vi/abc123/hqdefault.jpg', image)).toBe(true);
+    expect(isLikelyLowResolutionYouTubePlaceholder('https://i.ytimg.com/vi/abc123/mqdefault.jpg', image)).toBe(true);
+  });
+
+  it('keeps real medium-quality YouTube thumbnails', () => {
+    expect(
+      isLikelyLowResolutionYouTubePlaceholder(
+        'https://i.ytimg.com/vi/abc123/mqdefault.jpg',
+        { naturalWidth: 320, naturalHeight: 180 }
+      )
+    ).toBe(false);
   });
 });
