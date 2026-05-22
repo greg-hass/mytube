@@ -2,11 +2,19 @@ const express = require('express');
 const cors = require('cors');
 const fs = require('fs').promises;
 const path = require('path');
-const { readJson, writeJsonQueued, updateJsonQueued } = require('./json-store');
 const { recoverDataFiles } = require('./data-integrity');
-const { mergeIncomingSubscriptions } = require('./sync-utils');
+const { mergeIncomingSubscriptions, removeSensitiveSyncSettings } = require('./sync-utils');
 const { searchChannels } = require('./channel-search');
 const { normalizeVideoCacheThumbnails } = require('./video-thumbnails');
+const appStore = require('./app-store');
+const {
+    createApiKeyAuthMiddleware,
+    createCorsOptions,
+    createOriginGuardMiddleware,
+    createRateLimitMiddleware,
+    parseAllowedOrigins,
+    validateSyncPayload,
+} = require('./security-middleware');
 const serverPackage = require('./package.json');
 
 function readPackageMetadata(packagePath, fallback) {
@@ -24,14 +32,32 @@ const appPackage = readPackageMetadata('../package.json', { version: 'unknown' }
 
 const app = express();
 const PORT = process.env.PORT || 3001;
-const DATA_FILE = path.join(__dirname, 'data', 'db.json');
-const VIDEOS_FILE = path.join(__dirname, 'data', 'videos.json');
-const DEFAULT_DATA = { subscriptions: [], settings: {}, watchedVideos: [], redirects: {} };
-const DEFAULT_VIDEO_CACHE = { videos: [], lastUpdated: null, totalChannels: 0, totalVideos: 0, channelRefreshes: {} };
+const DATA_FILE = appStore.DEFAULT_DATA_FILE;
+const VIDEOS_FILE = appStore.DEFAULT_VIDEOS_FILE;
+const DEFAULT_DATA = appStore.DEFAULT_DATA;
+const DEFAULT_VIDEO_CACHE = appStore.DEFAULT_VIDEO_CACHE;
+const ALLOWED_ORIGINS = parseAllowedOrigins(process.env.ALLOWED_ORIGINS);
+const API_WRITE_RATE_LIMIT_WINDOW_MS = Number(process.env.API_WRITE_RATE_LIMIT_WINDOW_MS) || 60 * 1000;
+const API_WRITE_RATE_LIMIT_MAX = Number(process.env.API_WRITE_RATE_LIMIT_MAX) || 30;
+const ALLOW_INSECURE_UNAUTHENTICATED_API = process.env.ALLOW_INSECURE_UNAUTHENTICATED_API === 'true';
 let dataIntegrityEvents = [];
 
-app.use(cors());
+app.use(cors(createCorsOptions({ allowedOrigins: ALLOWED_ORIGINS })));
+app.use(createOriginGuardMiddleware({ allowedOrigins: ALLOWED_ORIGINS }));
+app.use('/api', createApiKeyAuthMiddleware({
+    token: process.env.SERVER_API_TOKEN,
+    allowInsecureUnauthenticatedApi: ALLOW_INSECURE_UNAUTHENTICATED_API,
+}));
+app.use('/api', createRateLimitMiddleware({
+    windowMs: API_WRITE_RATE_LIMIT_WINDOW_MS,
+    max: API_WRITE_RATE_LIMIT_MAX,
+}));
 app.use(express.json({ limit: '50mb' })); // Large limit for full data sync
+
+// Deliberately minimal health probe for container/reverse-proxy checks.
+app.get('/api/healthz', (req, res) => {
+    res.json({ status: 'ok' });
+});
 
 // Ensure data directory exists
 async function init() {
@@ -42,8 +68,8 @@ async function init() {
             { file: VIDEOS_FILE, fallback: DEFAULT_VIDEO_CACHE },
         ]);
 
-        // Load or initialize db.json
-        let data = await readJson(DATA_FILE, DEFAULT_DATA);
+        await appStore.init();
+        let data = await appStore.readData(DEFAULT_DATA);
 
         // Merge static redirects from redirects.json if it exists
         try {
@@ -54,25 +80,23 @@ async function init() {
             data.redirects = { ...data.redirects, ...staticRedirects };
             console.log('✅ Merged static redirects:', Object.keys(staticRedirects));
 
-            // Save back to db.json
-            await writeJsonQueued(DATA_FILE, data);
+            await appStore.writeData(data);
         } catch (err) {
             // No static redirects or error reading, ignore
         }
 
     } catch (err) {
         console.error('Failed to initialize data storage:', err);
+        throw err;
     }
 }
-
-init();
 
 // GET /api/health - Lightweight service and data health summary
 app.get('/api/health', async (req, res) => {
     try {
         const [data, videoCache] = await Promise.all([
-            readJson(DATA_FILE, DEFAULT_DATA),
-            readJson(VIDEOS_FILE, { videos: [], lastUpdated: null, totalChannels: 0, totalVideos: 0 })
+            appStore.readData(DEFAULT_DATA),
+            appStore.readVideoCache(DEFAULT_VIDEO_CACHE)
         ]);
 
         res.json({
@@ -104,8 +128,8 @@ app.get('/api/version', (req, res) => {
 // GET /api/sync - Retrieve all data
 app.get('/api/sync', async (req, res) => {
     try {
-        const data = await readJson(DATA_FILE, DEFAULT_DATA);
-        res.json(data);
+        const data = await appStore.readData(DEFAULT_DATA);
+        res.json(removeSensitiveSyncSettings(data));
     } catch (err) {
         console.error('Read error:', err);
         res.status(500).json({ error: 'Failed to read data' });
@@ -184,17 +208,17 @@ app.get('/api/channel-search', async (req, res) => {
 // POST /api/sync - Overwrite all data (simple sync)
 app.post('/api/sync', async (req, res) => {
     try {
-        const data = req.body;
+        const data = removeSensitiveSyncSettings(req.body);
 
-        // Basic validation
-        if (!data || typeof data !== 'object') {
-            return res.status(400).json({ error: 'Invalid data format' });
+        const validation = validateSyncPayload(data);
+        if (!validation.valid) {
+            return res.status(400).json({ error: validation.error });
         }
 
         // Add timestamp
         data.lastSyncedAt = new Date().toISOString();
 
-        const savedData = await updateJsonQueued(DATA_FILE, DEFAULT_DATA, (existingData) => {
+        const savedData = await appStore.updateData(DEFAULT_DATA, (existingData) => {
             const redirects = existingData.redirects || {};
 
             if (data.subscriptions) {
@@ -215,7 +239,7 @@ app.post('/api/sync', async (req, res) => {
             console.log(`💾 Preserving ${Object.keys(data.redirects || {}).length} redirects:`, Object.keys(data.redirects || {}));
 
             return data;
-        });
+        }, { trackSubscriptionChanges: true });
 
         // Trigger feed aggregation when subscriptions change
         const { aggregateFeeds } = require('./feed-aggregator');
@@ -231,7 +255,7 @@ app.post('/api/sync', async (req, res) => {
 // GET /api/videos - Retrieve aggregated videos
 app.get('/api/videos', async (req, res) => {
     try {
-        const data = await readJson(VIDEOS_FILE, { videos: [], lastUpdated: null, totalChannels: 0, totalVideos: 0 });
+        const data = await appStore.readVideoCache(DEFAULT_VIDEO_CACHE);
         res.json(normalizeVideoCacheThumbnails(data));
     } catch (err) {
         // If file doesn't exist yet, return empty
@@ -277,7 +301,7 @@ app.post('/api/videos/refresh', async (req, res) => {
 // POST /api/videos/cache/reset - Clear aggregated video cache without touching subscriptions
 app.post('/api/videos/cache/reset', async (req, res) => {
     try {
-        await writeJsonQueued(VIDEOS_FILE, {
+        await appStore.writeVideoCache({
             videos: [],
             lastUpdated: null,
             totalChannels: 0,
@@ -373,7 +397,7 @@ app.post('/api/subscriptions/:id/mute', async (req, res) => {
         }
 
         let found = false;
-        await updateJsonQueued(DATA_FILE, DEFAULT_DATA, (data) => {
+        await appStore.updateData(DEFAULT_DATA, (data) => {
             const subIndex = data.subscriptions.findIndex(s => s.id === id);
             if (subIndex === -1) {
                 return data;
@@ -395,8 +419,12 @@ app.post('/api/subscriptions/:id/mute', async (req, res) => {
     }
 });
 
-app.listen(PORT, () => {
-    console.log(`Sync server running on port ${PORT}`);
-    // Start feed aggregator
-    require('./feed-aggregator');
+init().then(() => {
+    app.listen(PORT, () => {
+        console.log(`Sync server running on port ${PORT}`);
+        require('./feed-aggregator');
+    });
+}).catch((error) => {
+    console.error('Server startup failed:', error);
+    process.exitCode = 1;
 });

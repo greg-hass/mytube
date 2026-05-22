@@ -338,7 +338,7 @@ export async function tryDirectThumbnailUrlsEnhanced(channelId: string): Promise
           return url;
         }
       }
-    } catch (error) {
+    } catch {
       recordFailure();
       // Silent failures for individual URLs
     }

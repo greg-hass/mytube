@@ -16,18 +16,20 @@ services:
     image: ghcr.io/greg-hass/youtube-subscriptions:latest
     container_name: youtube-subscriptions
     ports:
-      - "5173:80"
+      - "5173:8080"
     volumes:
       - ./data:/app/server/data
     restart: unless-stopped
     environment:
       - NODE_ENV=production
       - PORT=3001
+      - SERVER_API_TOKEN=${SERVER_API_TOKEN:?Set SERVER_API_TOKEN to a long random value}
+      - YOUTUBE_API_KEY=${YOUTUBE_API_KEY:-}
       - FEED_REFRESH_ENABLED=true
       - FEED_REFRESH_INTERVAL_MINUTES=15
       - FEED_REFRESH_ON_START=true
     healthcheck:
-      test: ["CMD", "curl", "-fsS", "http://localhost/api/videos/status"]
+      test: ["CMD", "curl", "-fsS", "http://localhost:8080/api/healthz"]
       interval: 30s
       timeout: 5s
       retries: 3
@@ -55,8 +57,10 @@ docker compose up -d
 
 - The app and API run in the same container.
 - `/api` is proxied internally from nginx to Node.
+- The API fails closed until `SERVER_API_TOKEN` is set. Save that same token in Settings for each browser.
 - The server refreshes due RSS feeds every 15 minutes by default.
-- Persistent subscriptions, videos, watched state, and redirects live in `./data`.
+- Persistent SQLite state for subscriptions, videos, watched state, redirects, and deletion tombstones lives in `./data`.
+- Use `npm run backup:sqlite` inside the running container for live SQLite snapshots; stop the stack before `npm run restore:sqlite -- --file ...`.
 - If the package is private in GitHub Container Registry, log in first:
 
 ```bash

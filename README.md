@@ -15,10 +15,11 @@ This app sits in the middle: self-hosted, chronological, YouTube-aware, and deli
 ### Docker
 
 ```bash
+export SERVER_API_TOKEN="$(openssl rand -hex 32)"
 docker compose up -d
 ```
 
-The included compose file runs `ghcr.io/greg-hass/youtube-subscriptions:latest`, serves the app on `http://localhost:5173`, and stores user data in `./server/data`.
+The included compose file runs `ghcr.io/greg-hass/youtube-subscriptions:latest`, serves the app on `http://localhost:5173`, and stores user data in `./server/data`. After the first start, open Settings and save the same Server API Token in that browser.
 
 ### Local Development
 
@@ -32,8 +33,17 @@ In another terminal:
 
 ```bash
 cd server
-npm run dev
+SERVER_API_TOKEN=replace_with_a_long_random_token npm run dev
 ```
+
+For an intentionally unauthenticated local API during development:
+
+```bash
+cd server
+ALLOW_INSECURE_UNAUTHENTICATED_API=true npm run dev
+```
+
+With token protection enabled, save the same token under Settings in each browser that should use the app.
 
 The frontend runs at `http://localhost:5173`.
 
@@ -48,7 +58,7 @@ The frontend runs at `http://localhost:5173`.
 - Filters by duration, Shorts, live replays, premieres, muted keywords, and boosted keywords
 - Resumes embedded playback position for videos you have started
 - Supports dark/light theme, mobile layouts, swipe actions, and PWA install
-- Writes JSON data atomically, keeps rotating backups, and recovers from corrupt startup data when a valid backup exists
+- Uses SQLite for server state and includes tested backup and restore commands
 
 ## Screenshots
 
@@ -76,34 +86,61 @@ Suggested first set:
 
 ## Data Safety
 
-The server stores application data as JSON files:
+The server stores runtime application data in SQLite:
 
-- `server/data/db.json` for subscriptions, settings, watched state, redirects, and related user data
-- `server/data/videos.json` for cached feed metadata, Shorts metadata, and refresh state
+- `server/data/youtube-subscriptions.sqlite` for subscriptions, settings, watched state, feed cache metadata, channel refresh state, and subscription deletion tombstones
 
-Writes use a temporary file followed by rename, and existing JSON files are backed up before replacement. On startup, the server validates data files and restores the newest valid backup if the primary file is corrupt.
+Existing `server/data/db.json` and `server/data/videos.json` files are imported once during the SQLite migration and left in place as legacy recovery material. JSON writes used temporary-file replacement and rotating backups before the migration.
+
+Create a validated SQLite backup from the server folder:
+
+```bash
+cd server
+npm run backup:sqlite
+```
+
+The backup command uses SQLite's backup API, so it can snapshot the WAL-backed database while the server is running. It writes timestamped `.backup.sqlite` files under `server/data/backups` unless `--file`, `--dir`, or `SQLITE_DATABASE_FILE` selects another path.
+
+Restore while the server is stopped:
+
+```bash
+cd server
+npm run restore:sqlite -- --file data/backups/youtube-subscriptions.YYYY-MM-DDTHH-MM-SS.sssZ.backup.sqlite
+```
+
+Restore validates the backup before replacement, writes a `*.pre-restore.sqlite` recovery snapshot of the current database, and removes old SQLite WAL sidecars before the restored database is activated.
 
 The Settings screen includes a full app backup export for subscriptions, watched videos, favorites, queue, feed filters, groups, and settings.
 
-This is intended for a personal, self-hosted deployment. If you want multiple users, stronger querying, or heavier concurrency, SQLite would be the next natural storage step.
+This is intended for a personal, self-hosted deployment. SQLite improves integrity and queryability for one app instance; it is not a multi-user authorization model.
 
 ## Configuration
 
 | Environment variable | Default | Purpose |
 | --- | --- | --- |
+| `YOUTUBE_API_KEY` | unset | Optional server-only key for capped background handle/custom URL resolution |
 | `FEED_REFRESH_ENABLED` | `true` | Enables scheduled background feed refreshes |
 | `FEED_REFRESH_ON_START` | `true` | Refreshes on server startup when the cache is stale |
 | `FEED_REFRESH_INTERVAL_MINUTES` | `15` | Scheduled refresh interval |
+| `SERVER_API_TOKEN` | unset | Bearer token required by default for all `/api/*` requests except `/api/healthz` |
+| `ALLOW_INSECURE_UNAUTHENTICATED_API` | `false` | Explicit opt-out for trusted local deployments without a server API token |
+| `ALLOWED_ORIGINS` | unset | Optional comma-separated browser origin allowlist, for example `https://feeds.example.com` |
+| `API_WRITE_RATE_LIMIT_WINDOW_MS` | `60000` | Window for mutating API request rate limits |
+| `API_WRITE_RATE_LIMIT_MAX` | `30` | Maximum mutating API requests per client within the rate-limit window |
+
+When `SERVER_API_TOKEN` is unset, the API fails closed unless `ALLOW_INSECURE_UNAUTHENTICATED_API=true` is explicitly set. For anything reachable beyond the local machine, keep the token requirement, put the app behind HTTPS, and save the same value under Server API Token in each browser so the app can send `Authorization: Bearer <token>` to same-origin API requests.
 
 ## Optional YouTube API Key
 
 An API key is optional. The app only uses it as a capped fallback for resolving channel handles/custom URLs to canonical channel IDs. Routine video refreshes stay RSS-first.
 
-If you want the fallback:
+If you want the server refresh worker to use the fallback:
 
 1. Create a key in the Google Cloud Console.
 2. Enable YouTube Data API v3 for that key.
-3. Add the key in the app settings.
+3. Set `YOUTUBE_API_KEY` on the server.
+
+The Settings field is still available for browser-only channel actions. Browser keys are not included in app backups or `/api/sync`.
 
 OAuth is not required.
 

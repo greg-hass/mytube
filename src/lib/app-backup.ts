@@ -85,7 +85,7 @@ export function createAppBackup({
     version: 2,
     exportedAt,
     subscriptions,
-    settings,
+    settings: removeSensitiveBackupSettings(settings),
     watchedVideos: watchedVideoIds,
     favorites: {
       videoIds: localData.favoriteVideoIds || [],
@@ -98,6 +98,12 @@ export function createAppBackup({
     feedQualityFilters: localData.feedQualityFilters || {},
     feedViewPresets: localData.feedViewPresets || [],
   };
+}
+
+function removeSensitiveBackupSettings(settings: AppBackup['settings']): AppBackup['settings'] {
+  const nonSensitiveSettings = { ...settings };
+  delete nonSensitiveSettings.apiKey;
+  return nonSensitiveSettings;
 }
 
 export function restoreAppBackup(backupJson: string, options: RestoreAppBackupOptions = {}) {

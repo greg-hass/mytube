@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { Bookmark, Trash2 } from 'lucide-react';
 import type { FeedViewPreset } from '../lib/feed-view-presets';
 
@@ -14,12 +14,7 @@ export function SavedFeedViews({ presets, onApply, onSave, onDelete }: SavedFeed
   const [newViewName, setNewViewName] = useState('');
 
   const selectedPreset = presets.find((preset) => preset.id === selectedPresetId);
-
-  useEffect(() => {
-    if (selectedPresetId && !selectedPreset) {
-      setSelectedPresetId('');
-    }
-  }, [selectedPreset, selectedPresetId]);
+  const selectValue = selectedPreset ? selectedPresetId : '';
 
   const handleApply = (presetId: string) => {
     setSelectedPresetId(presetId);
@@ -47,7 +42,7 @@ export function SavedFeedViews({ presets, onApply, onSave, onDelete }: SavedFeed
       <label htmlFor="saved-feed-view" className="sr-only">Saved view</label>
       <select
         id="saved-feed-view"
-        value={selectedPresetId}
+        value={selectValue}
         onChange={(event) => handleApply(event.target.value)}
         className="h-10 max-w-[10rem] rounded-lg border border-gray-200 bg-white px-3 text-sm font-medium text-gray-700 outline-none focus:border-red-500 dark:border-gray-800 dark:bg-gray-900 dark:text-gray-200"
       >

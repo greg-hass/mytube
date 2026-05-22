@@ -16,6 +16,39 @@ export { fetchChannelInfoFallback };
 const YOUTUBE_API_BASE = 'https://www.googleapis.com/youtube/v3';
 const AUTO_RESOLVER_DAILY_QUOTA_CAP = 100;
 
+type ApiThumbnail = { url?: string };
+type ApiThumbnailSet = {
+  default?: ApiThumbnail;
+  medium?: ApiThumbnail;
+  high?: ApiThumbnail;
+};
+
+type ApiChannelItem = {
+  id: string;
+  snippet: {
+    title: string;
+    description?: string;
+    customUrl?: string;
+    thumbnails: ApiThumbnailSet;
+  };
+  statistics?: {
+    subscriberCount?: string;
+    videoCount?: string;
+  };
+};
+
+type ApiPlaylistItem = {
+  contentDetails: { videoId: string };
+  snippet: {
+    title: string;
+    channelId: string;
+    channelTitle: string;
+    publishedAt: string;
+    description?: string;
+    thumbnails: ApiThumbnailSet;
+  };
+};
+
 function getAutomaticResolverApiKey(providedApiKey?: string): string | null {
   const state = useStore.getState();
   const key = providedApiKey || state.apiKey || import.meta.env.VITE_YOUTUBE_API_KEY;
@@ -65,7 +98,7 @@ export async function fetchChannelInfo(
       throw new Error(`API request failed: ${response.status}`);
     }
 
-    const data = await response.json();
+    const data = await response.json() as { items?: ApiChannelItem[] };
 
     if (!data.items || data.items.length === 0) {
       throw new Error('Channel not found');
@@ -75,11 +108,11 @@ export async function fetchChannelInfo(
     return {
       id: channel.id,
       title: channel.snippet.title,
-      description: channel.snippet.description,
-      thumbnail: channel.snippet.thumbnails.high?.url || channel.snippet.thumbnails.medium?.url || channel.snippet.thumbnails.default?.url,
+      description: channel.snippet.description || '',
+      thumbnail: channel.snippet.thumbnails.high?.url || channel.snippet.thumbnails.medium?.url || channel.snippet.thumbnails.default?.url || '',
       customUrl: channel.snippet.customUrl,
-      subscriberCount: channel.statistics.subscriberCount,
-      videoCount: channel.statistics.videoCount,
+      subscriberCount: channel.statistics?.subscriberCount,
+      videoCount: channel.statistics?.videoCount,
     };
   } catch (error) {
     handleError(error, { context: 'Fetching channel info', showToast: false });
@@ -124,17 +157,17 @@ export async function fetchChannelsBatch(
         continue;
       }
 
-      const data = await response.json();
+      const data = await response.json() as { items?: ApiChannelItem[] };
 
       if (data.items) {
-        const channels = data.items.map((channel: any) => ({
+        const channels = data.items.map((channel) => ({
           id: channel.id,
           title: channel.snippet.title,
-          description: channel.snippet.description,
-          thumbnail: channel.snippet.thumbnails.high?.url || channel.snippet.thumbnails.medium?.url || channel.snippet.thumbnails.default?.url,
+          description: channel.snippet.description || '',
+          thumbnail: channel.snippet.thumbnails.high?.url || channel.snippet.thumbnails.medium?.url || channel.snippet.thumbnails.default?.url || '',
           customUrl: channel.snippet.customUrl,
-          subscriberCount: channel.statistics.subscriberCount,
-          videoCount: channel.statistics.videoCount,
+          subscriberCount: channel.statistics?.subscriberCount,
+          videoCount: channel.statistics?.videoCount,
         }));
         results.push(...channels);
       }
@@ -179,14 +212,14 @@ export async function fetchChannelIconsBatch(
         continue;
       }
 
-      const data = await response.json();
+      const data = await response.json() as { items?: ApiChannelItem[] };
 
       if (data.items) {
-        const channels = data.items.map((channel: any) => ({
+        const channels = data.items.map((channel) => ({
           id: channel.id,
           title: channel.snippet.title,
-          description: channel.snippet.description,
-          thumbnail: channel.snippet.thumbnails.high?.url || channel.snippet.thumbnails.medium?.url || channel.snippet.thumbnails.default?.url,
+          description: channel.snippet.description || '',
+          thumbnail: channel.snippet.thumbnails.high?.url || channel.snippet.thumbnails.medium?.url || channel.snippet.thumbnails.default?.url || '',
           customUrl: channel.snippet.customUrl,
         }));
         results.push(...channels);
@@ -248,18 +281,18 @@ export async function fetchVideosForChannelsAPI(
           return [];
         }
 
-        const data = await response.json();
+        const data = await response.json() as { items?: ApiPlaylistItem[] };
 
         if (!data.items) return [];
 
-        return data.items.map((item: any) => ({
+        return data.items.map((item) => ({
           id: item.contentDetails.videoId,
           title: item.snippet.title,
           channelId: item.snippet.channelId,
           channelTitle: item.snippet.channelTitle,
           publishedAt: item.snippet.publishedAt,
-          thumbnail: item.snippet.thumbnails.high?.url || item.snippet.thumbnails.medium?.url || item.snippet.thumbnails.default?.url,
-          description: item.snippet.description,
+          thumbnail: item.snippet.thumbnails.high?.url || item.snippet.thumbnails.medium?.url || item.snippet.thumbnails.default?.url || '',
+          description: item.snippet.description || '',
         }));
       } catch (error) {
         console.error(`Error fetching videos for channel ${channelId}:`, error);

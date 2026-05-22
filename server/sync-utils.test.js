@@ -2,7 +2,7 @@ import { createRequire } from 'node:module';
 import { describe, expect, it } from 'vitest';
 
 const require = createRequire(import.meta.url);
-const { mergeIncomingSubscriptions } = require('./sync-utils');
+const { mergeIncomingSubscriptions, removeSensitiveSyncSettings } = require('./sync-utils');
 
 describe('mergeIncomingSubscriptions', () => {
     it('preserves enriched server thumbnails when incoming sync has a placeholder', () => {
@@ -94,5 +94,26 @@ describe('mergeIncomingSubscriptions', () => {
                 group: 'Linux',
             },
         ]);
+    });
+});
+
+describe('removeSensitiveSyncSettings', () => {
+    it('removes YouTube API keys before sync data is stored or returned', () => {
+        const sanitized = removeSensitiveSyncSettings({
+            settings: {
+                apiKey: 'do-not-sync',
+                searchQuery: 'linux',
+                quotaUsed: 4,
+            },
+            subscriptions: [],
+        });
+
+        expect(sanitized).toEqual({
+            settings: {
+                searchQuery: 'linux',
+                quotaUsed: 4,
+            },
+            subscriptions: [],
+        });
     });
 });

@@ -31,18 +31,20 @@ services:
     image: ghcr.io/greg-hass/youtube-subscriptions:latest
     container_name: youtube-subscriptions
     ports:
-      - "5173:80"
+      - "5173:8080"
     volumes:
       - ./data:/app/server/data
     restart: unless-stopped
     environment:
       - NODE_ENV=production
       - PORT=3001
+      - SERVER_API_TOKEN=${SERVER_API_TOKEN:?Set SERVER_API_TOKEN to a long random value}
+      - YOUTUBE_API_KEY=${YOUTUBE_API_KEY:-}
       - FEED_REFRESH_ENABLED=true
       - FEED_REFRESH_INTERVAL_MINUTES=15
       - FEED_REFRESH_ON_START=true
     healthcheck:
-      test: ["CMD", "curl", "-fsS", "http://localhost/api/videos/status"]
+      test: ["CMD", "curl", "-fsS", "http://localhost:8080/api/healthz"]
       interval: 30s
       timeout: 5s
       retries: 3
@@ -52,9 +54,12 @@ services:
 Start it:
 
 ```bash
+export SERVER_API_TOKEN="$(openssl rand -hex 32)"
 docker compose pull
 docker compose up -d
 ```
+
+Open Settings after first start and save that Server API Token in each browser that should use the app.
 
 Open:
 
@@ -103,4 +108,22 @@ Set `FEED_REFRESH_INTERVAL_MINUTES=30` or `60` if you want a quieter server.
 
 ## Backup
 
-Back up the `data` directory. It contains subscriptions, cached videos, watched state, and redirects.
+The persistent `data` directory contains the SQLite database with subscriptions, cached videos, watched state, redirects, and deletion tombstones. Legacy JSON files may remain after the one-time SQLite import.
+
+For a live container, create a SQLite snapshot through the app's tested backup command:
+
+```bash
+docker compose exec youtube-subscriptions sh -lc 'cd /app/server && npm run backup:sqlite'
+```
+
+Copy the resulting `data/backups/*.backup.sqlite` file to your backup target.
+
+For restore, stop the app first, place the backup under the mounted `data` directory, then run the restore command in a one-off container:
+
+```bash
+docker compose stop youtube-subscriptions
+docker compose run --rm youtube-subscriptions sh -lc 'cd /app/server && npm run restore:sqlite -- --file data/backups/your-backup.backup.sqlite'
+docker compose up -d
+```
+
+Restore validates the backup and keeps a `data/backups/*.pre-restore.sqlite` recovery snapshot of the database it replaces.

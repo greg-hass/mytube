@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { areStringSetsEqual, mergeRemoteSubscriptionMetadata, resolveWatchedVideoSync } from './subscription-sync';
+import { applySubscriptionTombstones, areStringSetsEqual, mergeRemoteSubscriptionMetadata, resolveWatchedVideoSync } from './subscription-sync';
 import type { StoredSubscription } from './indexeddb';
 
 describe('mergeRemoteSubscriptionMetadata', () => {
@@ -110,5 +110,18 @@ describe('areStringSetsEqual', () => {
   it('compares watched ids without depending on order', () => {
     expect(areStringSetsEqual(['one', 'two'], ['two', 'one'])).toBe(true);
     expect(areStringSetsEqual(['one'], ['one', 'two'])).toBe(false);
+  });
+});
+
+describe('applySubscriptionTombstones', () => {
+  it('removes tombstoned subscriptions before local and remote lists are merged', () => {
+    const subscriptions: StoredSubscription[] = [
+      { id: 'UC_KEEP', title: 'Keep', addedAt: 1 },
+      { id: 'UC_DELETE', title: 'Delete', addedAt: 2 },
+    ];
+
+    expect(applySubscriptionTombstones(subscriptions, [{ id: 'UC_DELETE', revision: 2 }])).toEqual([
+      { id: 'UC_KEEP', title: 'Keep', addedAt: 1 },
+    ]);
   });
 });

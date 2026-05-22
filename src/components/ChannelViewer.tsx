@@ -16,11 +16,6 @@ export const ChannelViewer = () => {
   const { watchedVideos, markAsWatched } = useStore();
   const [hideWatched, setHideWatched] = useState(false);
 
-  if (!channelId) {
-    navigate('/');
-    return null;
-  }
-
   // Get channel info from subscriptions
   const channelInfo = allSubscriptions.find(sub => sub.id === channelId);
 
@@ -51,6 +46,12 @@ export const ChannelViewer = () => {
 
   // Redirect if we have a resolved ID that matches a subscription but differs from URL
   useEffect(() => {
+    if (!channelId) {
+      navigate('/', { replace: true });
+    }
+  }, [channelId, navigate]);
+
+  useEffect(() => {
     if (!channelInfo && channelVideos.length > 0) {
       const resolvedId = channelVideos[0].channelId;
       const matchingSub = allSubscriptions.find(sub => sub.id === resolvedId);
@@ -64,6 +65,10 @@ export const ChannelViewer = () => {
   useEffect(() => {
     window.scrollTo({ top: 0 });
   }, [channelId]);
+
+  if (!channelId) {
+    return null;
+  }
 
   if (error) {
     return (

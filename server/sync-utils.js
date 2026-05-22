@@ -40,7 +40,20 @@ function mergeIncomingSubscriptions(incomingSubscriptions = [], existingSubscrip
     return merged;
 }
 
+function removeSensitiveSyncSettings(data) {
+    if (!data?.settings || typeof data.settings !== 'object' || Array.isArray(data.settings)) {
+        return data;
+    }
+
+    const { apiKey, ...settings } = data.settings;
+    return {
+        ...data,
+        settings,
+    };
+}
+
 module.exports = {
     isUsefulThumbnail,
     mergeIncomingSubscriptions,
+    removeSensitiveSyncSettings,
 };

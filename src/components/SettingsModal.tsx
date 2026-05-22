@@ -4,6 +4,7 @@ import { X, Key, CheckCircle2, ShieldCheck, Download, Upload, Database, Server }
 import { useStore } from '../store/useStore';
 import { useSubscriptionStorage } from '../hooks/useSubscriptionStorage';
 import { createAppBackup, readBackupLocalData, restoreAppBackup } from '../lib/app-backup';
+import { getServerApiToken, setServerApiToken } from '../lib/api-auth';
 import { clearAllCachedVideos } from '../lib/indexeddb';
 import { useQueryClient } from '@tanstack/react-query';
 
@@ -40,6 +41,7 @@ export const SettingsModal = ({ isOpen, onClose }: SettingsModalProps) => {
     const { apiKey, setApiKey, watchedVideos, setWatchedVideos } = useStore();
     const { rawSubscriptions, addSubscriptions } = useSubscriptionStorage();
     const [inputKey, setInputKey] = useState(apiKey);
+    const [serverApiTokenInput, setServerApiTokenInput] = useState(() => getServerApiToken());
     const [isSaved, setIsSaved] = useState(false);
     const [backupStatus, setBackupStatus] = useState('');
     const [serverHealth, setServerHealth] = useState<ServerHealth | null>(null);
@@ -59,6 +61,7 @@ export const SettingsModal = ({ isOpen, onClose }: SettingsModalProps) => {
 
     const handleSave = () => {
         setApiKey(inputKey);
+        setServerApiToken(serverApiTokenInput);
         setIsSaved(true);
         setTimeout(() => {
             setIsSaved(false);
@@ -245,16 +248,37 @@ export const SettingsModal = ({ isOpen, onClose }: SettingsModalProps) => {
                                             </div>
                                         </div>
                                         <p className="text-xs text-gray-500 dark:text-gray-400">
-                                            Optional. Videos and thumbnails use RSS; the key is only used as a capped fallback for resolving channel handles.
+                                            Optional browser-only fallback for channel handle resolution. Backups and server sync do not include this key.
                                             <a href="https://console.cloud.google.com/apis/credentials" target="_blank" rel="noopener noreferrer" className="text-red-600 hover:underline ml-1">
                                                 Get a key
                                             </a>
                                         </p>
                                     </div>
 
+                                    <div className="space-y-2">
+                                        <label className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                                            Server API Token
+                                        </label>
+                                        <div className="relative">
+                                            <input
+                                                type="password"
+                                                value={serverApiTokenInput}
+                                                onChange={(e) => setServerApiTokenInput(e.target.value)}
+                                                placeholder="Match the required SERVER_API_TOKEN"
+                                                className="w-full pl-4 pr-10 py-2.5 rounded-lg bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 focus:border-red-500 focus:ring-2 focus:ring-red-500/20 transition-all outline-none text-sm"
+                                            />
+                                            <div className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400">
+                                                <ShieldCheck className="w-4 h-4" />
+                                            </div>
+                                        </div>
+                                        <p className="text-xs text-gray-500 dark:text-gray-400">
+                                            Stored only in this browser and sent as a bearer token to same-origin API requests.
+                                        </p>
+                                    </div>
+
                                     <button
                                         onClick={handleSave}
-                                        disabled={isSaved || !inputKey}
+                                        disabled={isSaved}
                                         className={`w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg font-medium transition-all ${isSaved
                                             ? 'bg-green-500 text-white'
                                             : 'bg-gray-900 dark:bg-white text-white dark:text-gray-900 hover:opacity-90'

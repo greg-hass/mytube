@@ -5,10 +5,13 @@
     "main": "index.js",
     "scripts": {
         "start": "node index.js",
-        "dev": "node --watch index.js"
+        "dev": "node --watch index.js",
+        "backup:sqlite": "node sqlite-backup.js backup",
+        "restore:sqlite": "node sqlite-backup.js restore"
     },
     "dependencies": {
         "axios": "^1.6.0",
+        "better-sqlite3": "^12.10.0",
         "cors": "^2.8.5",
         "express": "^4.18.2",
         "rss-parser": "^3.13.0"

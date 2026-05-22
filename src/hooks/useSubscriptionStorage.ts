@@ -1,5 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { useEffect, useMemo, useRef } from 'react';
+import { useCallback, useEffect, useMemo, useRef } from 'react';
 import {
   getAllSubscriptions,
   addSubscriptions,
@@ -15,6 +15,7 @@ import { parseSubscriptionImportToSubscriptions } from '../lib/opml-parser';
 import { resolveChannelThumbnail } from '../lib/icon-loader';
 import {
   areStringSetsEqual,
+  applySubscriptionTombstones,
   hasPlaceholderThumbnail,
   mergeRemoteSubscriptionMetadata,
   resolveWatchedVideoSync,
@@ -40,7 +41,10 @@ export const useSubscriptionStorage = () => {
       if (!response.ok) return localSubs;
 
       const remoteData = await response.json();
-      const remoteSubs = remoteData.subscriptions || [];
+      const tombstones = Array.isArray(remoteData.subscriptionTombstones)
+        ? remoteData.subscriptionTombstones
+        : [];
+      const remoteSubs = applySubscriptionTombstones(remoteData.subscriptions || [], tombstones);
       const mergedSubs = mergeRemoteSubscriptionMetadata(localSubs, remoteSubs);
 
       const localStr = JSON.stringify([...localSubs].sort((a, b) => a.id.localeCompare(b.id)));
@@ -224,7 +228,7 @@ export const useSubscriptionStorage = () => {
     return result;
   }, [channelSubscriptions, searchQuery, sortBy]);
 
-  const repairChannelIcons = async ({ useApi = false }: { useApi?: boolean } = {}) => {
+  const repairChannelIcons = useCallback(async ({ useApi = false }: { useApi?: boolean } = {}) => {
     const localSubs = await getAllSubscriptions();
     let repairedSubs = localSubs;
 
@@ -233,7 +237,10 @@ export const useSubscriptionStorage = () => {
       if (!response.ok) throw new Error('Failed to fetch server subscriptions');
 
       const remoteData = await response.json();
-      const remoteSubs = remoteData.subscriptions || [];
+      const tombstones = Array.isArray(remoteData.subscriptionTombstones)
+        ? remoteData.subscriptionTombstones
+        : [];
+      const remoteSubs = applySubscriptionTombstones(remoteData.subscriptions || [], tombstones);
       repairedSubs = mergeRemoteSubscriptionMetadata(localSubs, remoteSubs);
     } catch (error) {
       if (!useApi) throw error;
@@ -282,7 +289,7 @@ export const useSubscriptionStorage = () => {
     }
 
     return 0;
-  };
+  }, [apiKey, queryClient]);
 
   // Export current subscriptions as OPML
   const exportOPML = () => {
@@ -334,9 +341,7 @@ ${outlines}
       version: '1.0',
       exportedAt: new Date().toISOString(),
       subscriptions: subscriptions,
-      settings: {
-        apiKey: useStore.getState().apiKey,
-      },
+      settings: {},
       watchedVideos: Array.from(useStore.getState().watchedVideos),
     };
 
@@ -498,7 +503,7 @@ ${outlines}
   // Sync with backend
   const pushLocalStateToBackend = async () => {
     const localSubs = await getAllSubscriptions();
-    const { searchQuery, sortBy, apiKey, quotaUsed } = useStore.getState();
+    const { searchQuery, sortBy, quotaUsed } = useStore.getState();
 
     const response = await fetch('/api/sync', {
       method: 'POST',
@@ -508,7 +513,6 @@ ${outlines}
         settings: {
           searchQuery,
           sortBy,
-          apiKey,
           quotaUsed,
         },
         watchedVideos: Array.from(useStore.getState().watchedVideos),
@@ -520,22 +524,34 @@ ${outlines}
     }
   };
 
-  const syncWithBackend = async ({ importRemoteWatched = false }: { importRemoteWatched?: boolean } = {}) => {
+  const syncWithBackend = useCallback(async ({ importRemoteWatched = false }: { importRemoteWatched?: boolean } = {}) => {
     try {
       // 1. Fetch Remote Data
       const response = await fetch(`/api/sync?t=${Date.now()}`);
       if (!response.ok) throw new Error('Failed to fetch from backend');
 
       const remoteData = await response.json();
-      const remoteSubs = remoteData.subscriptions || [];
+      const tombstones = Array.isArray(remoteData.subscriptionTombstones)
+        ? remoteData.subscriptionTombstones
+        : [];
+      const remoteSubs = applySubscriptionTombstones(remoteData.subscriptions || [], tombstones);
       const remoteWatched = remoteData.watchedVideos || [];
       const redirects = remoteData.redirects || {};
 
       // 2.5 Apply Redirects to Local Data
       // If server says "handle_X" is now "UC_Y", we update our local list immediately
       // This prevents us from pushing "handle_X" back to the server
-      let localSubs = await getAllSubscriptions();
+      const storedLocalSubs = await getAllSubscriptions();
+      let localSubs = applySubscriptionTombstones(storedLocalSubs, tombstones);
       let localRedirectsApplied = false;
+      const localTombstonesApplied = localSubs.length !== storedLocalSubs.length;
+
+      if (localTombstonesApplied) {
+        await clearAllSubscriptions();
+        await addSubscriptions(localSubs);
+        queryClient.invalidateQueries({ queryKey: ['subscriptions'] });
+        queryClient.invalidateQueries({ queryKey: ['subscriptions-count'] });
+      }
 
       if (Object.keys(redirects).length > 0) {
         localSubs = localSubs.map(sub => {
@@ -627,15 +643,7 @@ ${outlines}
 
       // Sync Settings (API Key, etc.)
       if (remoteData.settings) {
-        const { apiKey: currentApiKey } = useStore.getState();
         const remoteSettings = remoteData.settings;
-
-        // If local is empty but remote has it, take remote
-        if (!currentApiKey && remoteSettings.apiKey) {
-          console.log('📥 Importing API Key from server...');
-          useStore.getState().setApiKey(remoteSettings.apiKey);
-          updatedLocal = true;
-        }
 
         // Sync Quota
         if (remoteSettings.quotaUsed !== undefined) {
@@ -692,7 +700,7 @@ ${outlines}
 
       if (mergedSubs.length !== remoteSubs.length || !areStringSetsEqual(mergedWatched, remoteWatched)) {
         // We push the MERGED list to server, so server becomes the union too.
-        const { searchQuery, sortBy, apiKey, quotaUsed } = useStore.getState();
+        const { searchQuery, sortBy, quotaUsed } = useStore.getState();
 
         const pushResponse = await fetch('/api/sync', {
           method: 'POST',
@@ -702,7 +710,6 @@ ${outlines}
             settings: {
               searchQuery,
               sortBy,
-              apiKey,
               quotaUsed // Send local quota too
             },
             watchedVideos: mergedWatched
@@ -724,12 +731,12 @@ ${outlines}
     } catch (err) {
       console.error('Sync failed:', err);
     }
-  };
+  }, [queryClient]);
 
   // Run sync on mount
   useEffect(() => {
     syncWithBackend({ importRemoteWatched: true });
-  }, []);
+  }, [syncWithBackend]);
 
   useEffect(() => {
     if (!subscriptions?.some(hasPlaceholderThumbnail)) return;
@@ -741,7 +748,7 @@ ${outlines}
     }, 500);
 
     return () => clearTimeout(timer);
-  }, [subscriptions]);
+  }, [repairChannelIcons, subscriptions]);
 
   // Auto-save to backend when subscriptions or settings change
   useEffect(() => {
@@ -752,7 +759,7 @@ ${outlines}
       }, 2000); // Debounce 2s
       return () => clearTimeout(timer);
     }
-  }, [subscriptions, isLoading, apiKey, watchedVideos]);
+  }, [apiKey, isLoading, subscriptions, syncWithBackend, watchedVideos]);
 
   return {
     // Data
@@ -772,7 +779,7 @@ ${outlines}
     clearAll: clearAllMutation.mutateAsync,
     toggleFavorite: async (channelId: string) => {
       await toggleFavorite(channelId);
-      const current = queryClient.getQueryData<any[]>(['subscriptions']);
+      const current = queryClient.getQueryData<StoredSubscription[]>(['subscriptions']);
       if (current) {
         const updated = current.map((sub) =>
           sub.id === channelId ? { ...sub, isFavorite: !sub.isFavorite } : sub
@@ -784,7 +791,7 @@ ${outlines}
     toggleMute: async (channelId: string) => {
       await toggleMute(channelId);
       // Optimistically update the cached subscriptions to reflect mute state change
-      const current = queryClient.getQueryData<any[]>(['subscriptions']);
+      const current = queryClient.getQueryData<StoredSubscription[]>(['subscriptions']);
       if (current) {
         const updated = current.map((sub) =>
           sub.id === channelId ? { ...sub, isMuted: !sub.isMuted } : sub
@@ -796,7 +803,7 @@ ${outlines}
     },
     setSubscriptionGroup: async (channelId: string, group: string) => {
       await setStoredSubscriptionGroup(channelId, group);
-      const current = queryClient.getQueryData<any[]>(['subscriptions']);
+      const current = queryClient.getQueryData<StoredSubscription[]>(['subscriptions']);
       if (current) {
         const trimmedGroup = group.trim();
         const updated = current.map((sub) =>
