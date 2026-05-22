@@ -22,7 +22,8 @@ RUN npm ci --omit=dev
 # Production stage: nginx serves the PWA, Node serves /api behind nginx.
 FROM node:20-alpine
 
-RUN apk add --no-cache nginx curl
+RUN apk add --no-cache nginx curl \
+  && sed -i '/^user /d' /etc/nginx/nginx.conf
 
 WORKDIR /app
 
