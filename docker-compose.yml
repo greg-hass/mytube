@@ -5,7 +5,7 @@ services:
     ports:
       - "5173:8080"
     volumes:
-      - ./server/data:/app/server/data
+      - youtube-subscriptions-data:/app/server/data
     restart: unless-stopped
     environment:
       - NODE_ENV=production
@@ -23,3 +23,6 @@ services:
       start_period: 15s
     labels:
       - "com.centurylinklabs.watchtower.enable=true"
+
+volumes:
+  youtube-subscriptions-data:
