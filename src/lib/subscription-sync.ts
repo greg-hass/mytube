@@ -38,6 +38,20 @@ export function hasPlaceholderThumbnail(subscription: StoredSubscription): boole
   return !isUsefulThumbnail(subscription.thumbnail);
 }
 
+export type SubscriptionTombstone = {
+  id: string;
+  revision: number;
+};
+
+export function applySubscriptionTombstones(
+  subscriptions: StoredSubscription[],
+  tombstones: SubscriptionTombstone[] = []
+): StoredSubscription[] {
+  const tombstonedIds = new Set(tombstones.map((tombstone) => tombstone.id));
+  if (tombstonedIds.size === 0) return subscriptions;
+  return subscriptions.filter((subscription) => !tombstonedIds.has(subscription.id));
+}
+
 export function resolveWatchedVideoSync(
   localWatched: string[],
   remoteWatched: string[],

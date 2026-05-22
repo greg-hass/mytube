@@ -34,7 +34,7 @@ const SWIPE_VERTICAL_CANCEL_THRESHOLD = 48;
 const WATCHED_PERCENT_THRESHOLD = 0.5;
 const WATCHED_SECONDS_THRESHOLD = 30;
 
-export const VideoCard = ({ video, channelThumbnail, onInlinePlaybackChange, onUnavailable }: Props) => {
+const StatefulVideoCard = ({ video, channelThumbnail, onInlinePlaybackChange, onUnavailable }: Props) => {
   const isLikelyShort = video.isShort === true || isShortVideo({ ...video, isShort: undefined });
   const [imageLoaded, setImageLoaded] = useState(false);
   const [thumbnailUnavailable, setThumbnailUnavailable] = useState(false);
@@ -53,22 +53,12 @@ export const VideoCard = ({ video, channelThumbnail, onInlinePlaybackChange, onU
   const { watchedVideos, markAsWatched, markAsUnwatched } = useStore();
   const isFavorite = isFavoriteVideo(video.id);
   const isQueued = isQueuedVideo(video.id);
-  const [isQueueButtonActive, setIsQueueButtonActive] = useState(isQueued);
   const [progressPercent, setProgressPercent] = useState(() => getVideoProgressPercent(video.id));
   const inlinePlayerContainerRef = useRef<HTMLDivElement | null>(null);
   const inlinePlayerRef = useRef<YouTubePlayer | null>(null);
   const inlineSaveIntervalRef = useRef<ReturnType<typeof window.setInterval> | null>(null);
   const isWatched = watchedVideos.has(video.id);
   const isLive = isLiveVideo(video);
-
-  useEffect(() => {
-    setImageLoaded(false);
-    setThumbnailUnavailable(false);
-    setIsPlayingInline(false);
-    setProgressPercent(getVideoProgressPercent(video.id));
-    thumbnailFallbackCountRef.current = 0;
-    setThumbnailSrc(getHighResolutionVideoThumbnail(video.thumbnail, { isShort: isLikelyShort }));
-  }, [video.id, video.thumbnail, isLikelyShort]);
 
   useEffect(() => {
     const updateProgress = () => setProgressPercent(getVideoProgressPercent(video.id));
@@ -157,10 +147,6 @@ export const VideoCard = ({ video, channelThumbnail, onInlinePlaybackChange, onU
     };
   }, [isPlayingInline, markAsWatched, onInlinePlaybackChange, video.id]);
 
-  useEffect(() => {
-    setIsQueueButtonActive(isQueued);
-  }, [isQueued, video.id]);
-
   const openVideo = () => {
     if (suppressNextClickRef.current) {
       suppressNextClickRef.current = false;
@@ -243,11 +229,10 @@ export const VideoCard = ({ video, channelThumbnail, onInlinePlaybackChange, onU
 
   const handleQueueClick = (event: MouseEvent<HTMLButtonElement>) => {
     event.stopPropagation();
-    setIsQueueButtonActive((isActive) => !isActive);
     toggleQueuedVideo(video);
   };
 
-  const useNextThumbnailFallback = () => {
+  const applyNextThumbnailFallback = () => {
     const fallback = getNextVideoThumbnailFallback(thumbnailSrc, { isShort: isLikelyShort });
     if (!fallback) {
       setImageLoaded(false);
@@ -323,11 +308,11 @@ export const VideoCard = ({ video, channelThumbnail, onInlinePlaybackChange, onU
               alt={video.title}
               loading="lazy"
               onError={() => {
-                useNextThumbnailFallback();
+                applyNextThumbnailFallback();
               }}
               onLoad={(event) => {
                 if (isLikelyLowResolutionYouTubePlaceholder(thumbnailSrc, event.currentTarget)) {
-                  useNextThumbnailFallback();
+                  applyNextThumbnailFallback();
                   return;
                 }
                 if (
@@ -420,13 +405,13 @@ export const VideoCard = ({ video, channelThumbnail, onInlinePlaybackChange, onU
           <button
             type="button"
             onClick={handleQueueClick}
-            aria-label={isQueueButtonActive ? 'Remove video from queue' : 'Add video to queue'}
-            className={`absolute bottom-3 right-14 flex h-9 w-9 flex-none items-center justify-center rounded-full transition-colors ${isQueueButtonActive
+            aria-label={isQueued ? 'Remove video from queue' : 'Add video to queue'}
+            className={`absolute bottom-3 right-14 flex h-9 w-9 flex-none items-center justify-center rounded-full transition-colors ${isQueued
               ? 'bg-blue-600/10 text-blue-500 dark:bg-blue-500/15 dark:text-blue-400'
               : 'text-gray-400 hover:bg-gray-100 hover:text-blue-500 dark:text-gray-500 dark:hover:bg-gray-800 dark:hover:text-blue-400'
               }`}
           >
-            <ListPlus className={`h-5 w-5 ${isQueueButtonActive ? 'stroke-[2.5]' : ''}`} />
+            <ListPlus className={`h-5 w-5 ${isQueued ? 'stroke-[2.5]' : ''}`} />
           </button>
           <button
             type="button"
@@ -451,5 +436,16 @@ export const VideoCard = ({ video, channelThumbnail, onInlinePlaybackChange, onU
         </div>
       )}
     </div>
+  );
+};
+
+export const VideoCard = (props: Props) => {
+  const isLikelyShort = props.video.isShort === true || isShortVideo({ ...props.video, isShort: undefined });
+
+  return (
+    <StatefulVideoCard
+      key={`${props.video.id}:${props.video.thumbnail}:${isLikelyShort ? 'short' : 'landscape'}`}
+      {...props}
+    />
   );
 };

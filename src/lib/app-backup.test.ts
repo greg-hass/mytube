@@ -42,7 +42,6 @@ describe('app backup', () => {
       version: 2,
       exportedAt: '2026-05-09T12:00:00.000Z',
       subscriptions: channels,
-      settings: { apiKey: 'key' },
       watchedVideos: ['video-3'],
       favorites: {
         videoIds: ['video-1'],
@@ -52,6 +51,7 @@ describe('app backup', () => {
       },
       feedQualityFilters: { durationFilter: '10-30', hidePremieres: true },
     });
+    expect(backup.settings).toEqual({});
   });
 
   it('restores client-side local data and returns subscriptions plus watched ids', () => {
@@ -80,7 +80,7 @@ describe('app backup', () => {
 
     expect(result.subscriptions).toEqual(channels);
     expect(result.watchedVideoIds).toEqual(['video-3']);
-    expect(result.settings).toEqual({ apiKey: 'key' });
+    expect(result.settings).toEqual({});
     expect(JSON.parse(storage.get('favorite-video-ids') || '[]')).toEqual(['video-1']);
     expect(JSON.parse(storage.get('queued-video-ids') || '[]')).toEqual(['video-2']);
     expect(JSON.parse(storage.get('feed-quality-filters') || '{}')).toEqual({ mutedKeywordText: 'rumor' });

@@ -4,6 +4,7 @@ const channelThumbnailCache = new Map<string, string>();
 const failedChannelThumbnailCache = new Set<string>();
 const inflightThumbnailRequests = new Map<string, Promise<string | null>>();
 const directThumbnailCache = new Map<string, string>();
+type InvidiousThumbnail = { url?: string; width?: number };
 
 // Enhanced rate limiting with exponential backoff
 interface RateLimitState {
@@ -156,7 +157,7 @@ export async function resolveChannelThumbnail(channelId: string): Promise<string
           // Try next proxy
           continue;
         }
-      } catch (error) {
+      } catch {
         recordFailure();
 
         // If this is not the last proxy, try the next one
@@ -212,7 +213,7 @@ async function tryDirectThumbnailUrls(channelId: string): Promise<string | null>
           return url;
         }
       }
-    } catch (error) {
+    } catch {
       recordFailure();
       // Silently handle individual URL failures to reduce console spam
     }
@@ -251,10 +252,10 @@ async function fetchFromInvidious(channelId: string): Promise<string | null> {
 
       if (!response.ok) continue;
 
-      const data = await response.json();
+      const data = await response.json() as { authorThumbnails?: InvidiousThumbnail[] };
       // Invidious returns an array of thumbnails, we want the highest quality one
       const thumbnails = data.authorThumbnails || [];
-      const bestThumbnail = thumbnails.sort((a: any, b: any) => b.width - a.width)[0];
+      const bestThumbnail = thumbnails.sort((a, b) => (b.width || 0) - (a.width || 0))[0];
 
       if (bestThumbnail?.url) {
         const url = bestThumbnail.url.startsWith('http')
@@ -265,7 +266,7 @@ async function fetchFromInvidious(channelId: string): Promise<string | null> {
         recordSuccess();
         return url;
       }
-    } catch (error) {
+    } catch {
       recordFailure();
       // Continue to next instance
     }

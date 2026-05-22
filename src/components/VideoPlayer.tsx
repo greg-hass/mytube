@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
   ArrowLeft,
@@ -62,9 +62,8 @@ export const VideoPlayer = () => {
   const playerContainerRef = useRef<HTMLDivElement>(null);
   const playerRef = useRef<YouTubePlayer | null>(null);
   const saveIntervalRef = useRef<ReturnType<typeof window.setInterval> | null>(null);
-  const resumeInfoRef = useRef<{ videoId: string; seconds: number } | null>(null);
   const [playerProgressPercent, setPlayerProgressPercent] = useState(0);
-  const [playerErrorCode, setPlayerErrorCode] = useState<number | null>(null);
+  const [playerError, setPlayerError] = useState<{ videoId: string; code: number } | null>(null);
   const { watchedVideos, markAsWatched, markAsUnwatched } = useStore((state) => ({
     watchedVideos: state.watchedVideos,
     markAsWatched: state.markAsWatched,
@@ -75,36 +74,29 @@ export const VideoPlayer = () => {
   const { favoriteVideos, isFavoriteVideo, toggleFavoriteVideo } = useFavoriteVideos();
   const { queuedVideos, isQueuedVideo, toggleQueuedVideo } = useQueuedVideos();
 
-  if (!videoId) {
-    navigate('/');
-    return null;
-  }
+  const resumeFromSeconds = useMemo(() => {
+    const savedProgress = videoId ? getVideoProgress(videoId) : null;
+    return savedProgress ? Math.floor(savedProgress.currentTime) : 0;
+  }, [videoId]);
 
-  if (!resumeInfoRef.current || resumeInfoRef.current.videoId !== videoId) {
-    const savedProgress = getVideoProgress(videoId);
-    resumeInfoRef.current = {
-      videoId,
-      seconds: savedProgress ? Math.floor(savedProgress.currentTime) : 0,
-    };
-  }
-
-  const resumeFromSeconds = resumeInfoRef.current.seconds;
-  const youtubeWatchUrl = `https://www.youtube.com/watch?v=${videoId}`;
+  const activeVideoId = videoId || '';
+  const playerErrorCode = playerError?.videoId === activeVideoId ? playerError.code : null;
+  const youtubeWatchUrl = `https://www.youtube.com/watch?v=${activeVideoId}`;
   const savedVideosById = new Map([
     ...favoriteVideos.map((video) => [video.id, video] as const),
     ...queuedVideos.map((video) => [video.id, video] as const),
   ]);
-  const currentVideo = videos.find((video) => video.id === videoId) ?? savedVideosById.get(videoId);
-  const currentVideoIndex = videos.findIndex((video) => video.id === videoId);
+  const currentVideo = videos.find((video) => video.id === activeVideoId) ?? savedVideosById.get(activeVideoId);
+  const currentVideoIndex = videos.findIndex((video) => video.id === activeVideoId);
   const previousVideo = currentVideoIndex > 0 ? videos[currentVideoIndex - 1] : null;
   const nextVideo = currentVideoIndex >= 0 && currentVideoIndex < videos.length - 1 ? videos[currentVideoIndex + 1] : null;
   const currentChannel = currentVideo
     ? allSubscriptions.find((channel) => channel.id === currentVideo.channelId)
     : null;
   const channelThumbnail = currentChannel?.thumbnail;
-  const isWatched = watchedVideos.has(videoId);
-  const isFavorite = isFavoriteVideo(videoId);
-  const isQueued = isQueuedVideo(videoId);
+  const isWatched = watchedVideos.has(activeVideoId);
+  const isFavorite = isFavoriteVideo(activeVideoId);
+  const isQueued = isQueuedVideo(activeVideoId);
   const relatedVideos = currentVideo
     ? videos
       .filter((video) => video.channelId === currentVideo.channelId && video.id !== currentVideo.id)
@@ -116,6 +108,8 @@ export const VideoPlayer = () => {
   };
 
   const handleWatchedClick = () => {
+    if (!videoId) return;
+
     if (isWatched) {
       markAsUnwatched(videoId);
     } else {
@@ -124,11 +118,18 @@ export const VideoPlayer = () => {
   };
 
   useEffect(() => {
-    window.scrollTo({ top: 0 });
-    setPlayerErrorCode(null);
-  }, [videoId, markAsWatched]);
+    if (!videoId) {
+      navigate('/', { replace: true });
+    }
+  }, [navigate, videoId]);
 
   useEffect(() => {
+    window.scrollTo({ top: 0 });
+  }, [videoId]);
+
+  useEffect(() => {
+    if (!videoId) return;
+
     let isMounted = true;
     let hasReachedResumePoint = resumeFromSeconds <= 0;
 
@@ -184,7 +185,7 @@ export const VideoPlayer = () => {
             }
           },
           onError: (event) => {
-            setPlayerErrorCode(event.data ?? -1);
+            setPlayerError({ videoId, code: event.data ?? -1 });
           },
         },
       });
@@ -209,7 +210,11 @@ export const VideoPlayer = () => {
       playerRef.current?.destroy();
       playerRef.current = null;
     };
-  }, [videoId]);
+  }, [markAsWatched, resumeFromSeconds, videoId]);
+
+  if (!videoId) {
+    return null;
+  }
 
   return (
     <div className="app-shell min-h-screen">

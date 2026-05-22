@@ -29,7 +29,7 @@ const getInitialContainerWidth = () => {
 
 export const VirtualizedVideoGrid = ({ videos, columns = 4, scrollStorageKey, channelThumbnails }: Props) => {
     const parentRef = useRef<HTMLDivElement>(null);
-    const [displayedVideos, setDisplayedVideos] = useState(videos);
+    const [inlinePlaybackVideos, setInlinePlaybackVideos] = useState<YouTubeVideo[] | null>(null);
     const [inlinePlaybackVideoId, setInlinePlaybackVideoId] = useState<string | null>(null);
     const [containerWidth, setContainerWidth] = useState(() => getInitialContainerWidth());
     const [itemsPerRow, setItemsPerRow] = useState(() => getItemsPerRow(getInitialContainerWidth(), columns));
@@ -37,21 +37,7 @@ export const VirtualizedVideoGrid = ({ videos, columns = 4, scrollStorageKey, ch
     const [unavailableVideoIds, setUnavailableVideoIds] = useState<Set<string>>(() => new Set());
     const hasRestoredScrollRef = useRef(false);
 
-    useEffect(() => {
-        if (inlinePlaybackVideoId) return;
-        setDisplayedVideos(videos);
-    }, [inlinePlaybackVideoId, videos]);
-
-    useEffect(() => {
-        setUnavailableVideoIds((currentIds) => {
-            if (currentIds.size === 0) return currentIds;
-
-            const availableIds = new Set(displayedVideos.map((video) => video.id));
-            const nextIds = new Set([...currentIds].filter((videoId) => availableIds.has(videoId)));
-
-            return nextIds.size === currentIds.size ? currentIds : nextIds;
-        });
-    }, [displayedVideos]);
+    const displayedVideos = inlinePlaybackVideos || videos;
 
     const visibleVideos = useMemo(() => {
         if (unavailableVideoIds.size === 0) return displayedVideos;
@@ -59,11 +45,15 @@ export const VirtualizedVideoGrid = ({ videos, columns = 4, scrollStorageKey, ch
     }, [displayedVideos, unavailableVideoIds]);
 
     const handleInlinePlaybackChange = useCallback((videoId: string, isPlaying: boolean) => {
+        setInlinePlaybackVideos((currentVideos) => {
+            if (isPlaying) return currentVideos || videos;
+            return inlinePlaybackVideoId === videoId ? null : currentVideos;
+        });
         setInlinePlaybackVideoId((currentVideoId) => {
             if (isPlaying) return videoId;
             return currentVideoId === videoId ? null : currentVideoId;
         });
-    }, []);
+    }, [inlinePlaybackVideoId, videos]);
 
     const handleVideoUnavailable = (videoId: string) => {
         setUnavailableVideoIds((currentIds) => {

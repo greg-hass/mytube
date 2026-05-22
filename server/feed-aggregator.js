@@ -1,6 +1,5 @@
 const axios = require('axios');
-const path = require('path');
-const { readJson, writeJsonQueued } = require('./json-store');
+const appStore = require('./app-store');
 const { mergeVideoArchive } = require('./video-archive');
 const {
     buildVideoFromFeedItem,
@@ -28,8 +27,6 @@ const {
     resolveTemporarySubscriptions,
 } = require('./subscription-resolver');
 
-const DATA_FILE = path.join(__dirname, 'data', 'db.json');
-const VIDEOS_FILE = path.join(__dirname, 'data', 'videos.json');
 const BATCH_SIZE = 5;
 const BATCH_DELAY = 2000; // 2 seconds between batches
 const MAX_ARCHIVED_VIDEOS = 5000;
@@ -72,9 +69,9 @@ async function runAggregation(options = {}) {
 
     try {
         // Read data to get subscriptions and settings
-        const parsedData = await readJson(DATA_FILE, DEFAULT_DATA);
+        const parsedData = await appStore.readData(DEFAULT_DATA);
         const subscriptions = parsedData.subscriptions || [];
-        const existingVideoCache = await readJson(VIDEOS_FILE, { videos: [] });
+        const existingVideoCache = await appStore.readVideoCache({ videos: [] });
         let existingVideos = existingVideoCache.videos || [];
         const shortsStatusById = existingVideoCache.shortsStatusById || {};
         applyLocalShortsMetadata(existingVideos, shortsStatusById);
@@ -84,7 +81,7 @@ async function runAggregation(options = {}) {
                 : video
         ));
         let channelRefreshes = existingVideoCache.channelRefreshes || {};
-        const apiKey = parsedData.settings?.apiKey;
+        const apiKey = process.env.YOUTUBE_API_KEY;
         if (!parsedData.settings) parsedData.settings = {};
 
         const currentPacificDate = getCurrentPacificDate();
@@ -109,7 +106,7 @@ async function runAggregation(options = {}) {
         const redirectResult = applySubscriptionRedirects(subscriptions, parsedData.redirects || {});
         if (redirectResult.changed) {
             parsedData.subscriptions = redirectResult.subscriptions;
-            await writeJsonQueued(DATA_FILE, parsedData);
+            await appStore.writeData(parsedData);
             console.log('💾 Updated subscriptions with redirects');
             subscriptions.length = 0;
             subscriptions.push(...redirectResult.subscriptions);
@@ -128,7 +125,7 @@ async function runAggregation(options = {}) {
 
             if (resolveResult.changed) {
                 parsedData.subscriptions = resolveResult.subscriptions;
-                await writeJsonQueued(DATA_FILE, parsedData);
+                await appStore.writeData(parsedData);
                 console.log('💾 Updated subscriptions with resolved IDs');
                 subscriptions.length = 0;
                 subscriptions.push(...resolveResult.subscriptions);
@@ -428,7 +425,7 @@ async function runAggregation(options = {}) {
                 lastUpdated: new Date().toISOString(),
             };
 
-            await writeJsonQueued(VIDEOS_FILE, {
+            await appStore.writeVideoCache({
                 videos: currentVideos,
                 lastUpdated: new Date().toISOString(),
                 totalChannels: subscriptions.length,
@@ -463,11 +460,11 @@ async function runAggregation(options = {}) {
         if (!parsedData.redirects) {
             parsedData.redirects = {};
         }
-        await writeJsonQueued(DATA_FILE, parsedData);
+        await appStore.writeData(parsedData);
         console.log('💾 Saved updated subscription metadata (preserving', Object.keys(parsedData.redirects).length, 'redirects)');
 
         // Save to file
-        await writeJsonQueued(VIDEOS_FILE, {
+        await appStore.writeVideoCache({
             videos: archivedVideosWithShortsStatus,
             lastUpdated: new Date().toISOString(),
             totalChannels: subscriptions.length,
@@ -502,7 +499,7 @@ async function runAggregation(options = {}) {
             const quotaCost = 1 + subscriptions.length;
 
             // Read fresh data to avoid race conditions (though we are single threaded mostly)
-            const currentData = await readJson(DATA_FILE, DEFAULT_DATA);
+            const currentData = await appStore.readData(DEFAULT_DATA);
 
             // Initialize if missing
             if (!currentData.settings) currentData.settings = {};
@@ -530,7 +527,7 @@ async function runAggregation(options = {}) {
                 console.log(`📊 API Status: ACTIVE. Quota used this run: ${quotaCost}. Total: ${currentData.settings.quotaUsed}`);
             }
 
-            await writeJsonQueued(DATA_FILE, currentData);
+            await appStore.writeData(currentData);
         }
 
         console.log(`✅ Aggregation complete: ${archivedVideosWithShortsStatus.length} archived videos from ${subscriptions.length} channels`);
@@ -599,8 +596,8 @@ async function aggregateOnStartupIfStale() {
 
     try {
         const [data, videoCache] = await Promise.all([
-            readJson(DATA_FILE, DEFAULT_DATA),
-            readJson(VIDEOS_FILE, null),
+            appStore.readData(DEFAULT_DATA),
+            appStore.readVideoCache(null),
         ]);
 
         const subscriptionCount = data.subscriptions?.length || 0;

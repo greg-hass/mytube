@@ -14,6 +14,8 @@ FROM node:20-alpine AS backend-deps
 
 WORKDIR /app/server
 
+RUN apk add --no-cache python3 make g++
+
 COPY server/package*.json ./
 RUN npm ci --omit=dev
 
@@ -31,12 +33,15 @@ COPY nginx.conf /etc/nginx/http.d/default.conf
 COPY docker/start.sh /usr/local/bin/start-youtube-subscriptions
 
 RUN chmod +x /usr/local/bin/start-youtube-subscriptions \
-  && mkdir -p /run/nginx /app/server/data
+  && mkdir -p /run/nginx /app/server/data \
+  && chown -R node:node /app /run/nginx /var/lib/nginx /var/log/nginx
 
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
-  CMD curl -fsS http://localhost/api/videos/status >/dev/null || exit 1
+  CMD curl -fsS http://localhost:8080/api/healthz >/dev/null || exit 1
 
-EXPOSE 80
+EXPOSE 8080
 VOLUME ["/app/server/data"]
+
+USER node
 
 CMD ["start-youtube-subscriptions"]

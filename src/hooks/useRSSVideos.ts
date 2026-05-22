@@ -72,6 +72,7 @@ export const useRSSVideos = () => {
   // Fetch videos from server
   const {
     data: serverData,
+    dataUpdatedAt: serverDataUpdatedAt,
     isLoading,
     error,
   } = useQuery({
@@ -139,7 +140,7 @@ export const useRSSVideos = () => {
       total,
       current,
       isSyncing: triggerServerRefresh.isPending || state === 'running' || state === 'queued',
-      lastUpdated: lastUpdated ? new Date(lastUpdated).getTime() : Date.now(),
+      lastUpdated: lastUpdated ? new Date(lastUpdated).getTime() : 0,
       errors: aggregationStatus?.errors || 0,
       videos: videosCount,
       state,
@@ -150,7 +151,7 @@ export const useRSSVideos = () => {
 
   const cacheStatus = useMemo(() => {
     const lastUpdated = serverData?.lastUpdated ? new Date(serverData.lastUpdated).getTime() : 0;
-    const age = Date.now() - lastUpdated;
+    const age = Math.max(0, serverDataUpdatedAt - lastUpdated);
     const CACHE_TTL = 60 * 60 * 1000; // 1 hour
 
     return {
@@ -159,7 +160,7 @@ export const useRSSVideos = () => {
       age,
       videoCount: serverData?.videos?.length || 0,
     };
-  }, [serverData]);
+  }, [serverData, serverDataUpdatedAt]);
 
   return {
     // Data

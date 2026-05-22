@@ -5,6 +5,9 @@ import { resolveTemporaryChannelFromRSS } from './youtube-api';
 import type { YouTubeVideo, RSSVideoEntry } from '../types/youtube';
 
 const RSS_BASE_URL = 'https://www.youtube.com/feeds/videos.xml?channel_id=';
+type FetchMultipleChannelFeedsWithResolvedChannels = typeof fetchMultipleChannelFeeds & {
+  resolvedChannels?: Map<string, { id: string; title: string; thumbnail?: string }>;
+};
 
 // Configure XML parser
 const parser = new XMLParser({
@@ -110,8 +113,7 @@ export async function fetchChannelRSSFeed(channelId: string): Promise<{ videos: 
   // Rate limit RSS requests
   await rateLimitRSSRequest();
 
-  try {
-    const xmlText = await fetchWithProxy(feedUrl);
+  const xmlText = await fetchWithProxy(feedUrl);
 
     // Validate that we got XML content
     if (!xmlText.includes('<?xml') && !xmlText.includes('<feed')) {
@@ -141,10 +143,7 @@ export async function fetchChannelRSSFeed(channelId: string): Promise<{ videos: 
       transformRSSEntry(entry, channelId)
     );
 
-    return { videos, title: feedTitle };
-  } catch (error) {
-    throw error;
-  }
+  return { videos, title: feedTitle };
 }
 
 /**
@@ -162,7 +161,7 @@ export async function fetchMultipleChannelFeeds(
   const resolvedChannels = new Map<string, { id: string; title: string; thumbnail?: string }>();
 
   // Expose resolved channels map for the caller to use
-  (fetchMultipleChannelFeeds as any).resolvedChannels = resolvedChannels;
+  (fetchMultipleChannelFeeds as FetchMultipleChannelFeedsWithResolvedChannels).resolvedChannels = resolvedChannels;
 
   // Process channels in chunks to limit concurrency
   for (let i = 0; i < channelIds.length; i += maxConcurrent) {
@@ -230,7 +229,7 @@ export async function fetchMultipleChannelFeeds(
   }
 
   // Return resolved channels for updating storage
-  (fetchMultipleChannelFeeds as any).resolvedChannels = resolvedChannels;
+  (fetchMultipleChannelFeeds as FetchMultipleChannelFeedsWithResolvedChannels).resolvedChannels = resolvedChannels;
 
   // Sort by publish date (newest first)
   return results.sort((a, b) =>

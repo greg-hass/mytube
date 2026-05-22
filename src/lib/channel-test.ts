@@ -87,8 +87,12 @@ export function testKnownChannels() {
 // Run tests if this file is executed directly
 if (typeof window !== 'undefined') {
   // In browser environment
-  (window as any).runChannelTests = runChannelTests;
-  (window as any).testKnownChannels = testKnownChannels;
+  const testWindow = window as Window & {
+    runChannelTests?: typeof runChannelTests;
+    testKnownChannels?: typeof testKnownChannels;
+  };
+  testWindow.runChannelTests = runChannelTests;
+  testWindow.testKnownChannels = testKnownChannels;
   console.log('🔧 Test functions available in console:');
   console.log('  runChannelTests() - Test all input formats');
   console.log('  testKnownChannels() - Test known channels');

@@ -100,9 +100,8 @@ function executeTransaction<T>(
   mode: IDBTransactionMode,
   operation: (store: IDBObjectStore) => IDBRequest<T>
 ): Promise<T> {
-  return new Promise(async (resolve, reject) => {
+  return getDB().then((db) => new Promise<T>((resolve, reject) => {
     try {
-      const db = await getDB();
       const transaction = db.transaction(storeName, mode);
       const store = transaction.objectStore(storeName);
       const request = operation(store);
@@ -121,7 +120,7 @@ function executeTransaction<T>(
     } catch (error) {
       reject(error);
     }
-  });
+  }));
 }
 
 /**
@@ -132,9 +131,8 @@ function executeCursor<T>(
   operation: (store: IDBObjectStore) => IDBRequest<IDBCursorWithValue | null>,
   processor: (cursor: IDBCursorWithValue) => T
 ): Promise<T[]> {
-  return new Promise(async (resolve, reject) => {
+  return getDB().then((db) => new Promise<T[]>((resolve, reject) => {
     try {
-      const db = await getDB();
       const transaction = db.transaction(storeName, 'readonly');
       const store = transaction.objectStore(storeName);
       const request = operation(store);
@@ -156,7 +154,7 @@ function executeCursor<T>(
     } catch (error) {
       reject(error);
     }
-  });
+  }));
 }
 
 // ========================================

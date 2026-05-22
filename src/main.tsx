@@ -4,6 +4,9 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { ReactQueryDevtools } from '@tanstack/react-query-devtools';
 import './index.css'
 import App from './App.tsx'
+import { installAuthenticatedFetch } from './lib/api-auth';
+
+installAuthenticatedFetch();
 
 // Create a client with optimized settings
 const queryClient = new QueryClient({

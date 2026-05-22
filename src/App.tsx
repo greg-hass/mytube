@@ -19,7 +19,7 @@ const AppFallback = () => (
 function App() {
   const { theme, checkQuotaReset } = useStore();
   const { count, isLoading } = useSubscriptionStorage();
-  const [hasSubscriptions, setHasSubscriptions] = useState(false);
+  const [hasImportedSubscriptions, setHasImportedSubscriptions] = useState(false);
 
   // Check for quota reset on mount
   useEffect(() => {
@@ -35,13 +35,6 @@ function App() {
     }
   }, [theme]);
 
-  // Check if user has subscriptions
-  useEffect(() => {
-    if (!isLoading) {
-      setHasSubscriptions(count > 0);
-    }
-  }, [count, isLoading]);
-
   // Show loading state while checking for subscriptions
   if (isLoading) {
     return (
@@ -53,6 +46,8 @@ function App() {
       </div>
     );
   }
+
+  const hasSubscriptions = hasImportedSubscriptions || count > 0;
 
   return (
     <>
@@ -78,7 +73,7 @@ function App() {
           </Suspense>
         ) : (
           <Suspense fallback={<AppFallback />}>
-            <OPMLUpload onSuccess={() => setHasSubscriptions(true)} />
+            <OPMLUpload onSuccess={() => setHasImportedSubscriptions(true)} />
           </Suspense>
         )}
       </BrowserRouter>
