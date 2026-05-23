@@ -16,6 +16,7 @@ const {
     resolveYouTubeShortsStatus,
     enrichVideosWithShortsStatus,
     backfillArchivedShortsStatus,
+    startArchivedShortsStatusBackfill,
     applyLocalShortsMetadata,
 } = require('./feed-aggregator');
 
@@ -428,6 +429,36 @@ describe('feed refresh policy', () => {
 
         expect(httpClient.get).not.toHaveBeenCalled();
         expect(shortsStatusById['longer-short']).toBe(false);
+    });
+
+    it('runs archived Shorts backfill as deferred maintenance without blocking refresh completion', async () => {
+        let resolveLookup;
+        const lookupFinished = new Promise(resolve => {
+            resolveLookup = resolve;
+        });
+        const onComplete = vi.fn();
+        const shortsStatusById = {};
+
+        const pending = startArchivedShortsStatusBackfill(
+            [{ id: 'unknown-video', title: 'Normal upload', description: '', duration: null }],
+            shortsStatusById,
+            {
+                httpClient: {
+                    get: vi.fn(() => lookupFinished.then(() => ({
+                        status: 303,
+                        headers: { location: 'https://www.youtube.com/watch?v=unknown-video' },
+                    }))),
+                },
+                onComplete,
+            }
+        );
+
+        expect(onComplete).not.toHaveBeenCalled();
+        resolveLookup();
+        await pending;
+
+        expect(shortsStatusById['unknown-video']).toBe(false);
+        expect(onComplete).toHaveBeenCalledWith(shortsStatusById);
     });
 
     it('resolves Shorts status from the canonical YouTube Shorts URL', async () => {

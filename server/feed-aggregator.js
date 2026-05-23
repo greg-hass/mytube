@@ -21,6 +21,7 @@ const {
     enrichVideosWithShortsStatus,
     looksLikeShortByLocalMetadata,
     resolveYouTubeShortsStatus,
+    startArchivedShortsStatusBackfill,
 } = require('./shorts-status');
 const {
     applySubscriptionRedirects,
@@ -34,6 +35,7 @@ const API_RESOLVER_DAILY_QUOTA_CAP = 100;
 const STARTUP_CACHE_MAX_AGE_MS = 10 * 60 * 1000;
 const DEFAULT_DATA = { subscriptions: [], settings: {}, watchedVideos: [], redirects: {} };
 let aggregationPromise = null;
+let archivedShortsBackfillPromise = null;
 let rerunRequested = false;
 let queuedAggregationOptions = {};
 let scheduledRefreshTimer = null;
@@ -55,6 +57,44 @@ let aggregationStatus = {
     lastUpdated: null,
 };
 
+function scheduleArchivedShortsStatusBackfill(archivedVideos, shortsStatusById) {
+    if (archivedShortsBackfillPromise) return;
+
+    const hasUncheckedVideos = archivedVideos.some(
+        (video) => video?.id && typeof shortsStatusById[video.id] !== 'boolean'
+    );
+    if (!hasUncheckedVideos) return;
+
+    archivedShortsBackfillPromise = startArchivedShortsStatusBackfill(
+        archivedVideos,
+        { ...shortsStatusById },
+        {
+            onComplete: async (completedStatuses) => {
+                const latestVideoCache = await appStore.readVideoCache({ videos: [] });
+                const mergedStatuses = {
+                    ...(latestVideoCache.shortsStatusById || {}),
+                    ...completedStatuses,
+                };
+                const latestVideos = latestVideoCache.videos || [];
+                applyLocalShortsMetadata(latestVideos, mergedStatuses);
+
+                await appStore.writeVideoCache({
+                    ...latestVideoCache,
+                    videos: latestVideos,
+                    shortsStatusById: mergedStatuses,
+                });
+                aggregationStatus = {
+                    ...aggregationStatus,
+                    lastUpdated: new Date().toISOString(),
+                };
+                console.log('✅ Archived Shorts metadata backfill saved');
+            },
+        }
+    ).finally(() => {
+        archivedShortsBackfillPromise = null;
+    });
+}
+
 function getCurrentPacificDate() {
     return new Intl.DateTimeFormat('en-US', {
         timeZone: 'America/Los_Angeles',
@@ -65,6 +105,16 @@ function getCurrentPacificDate() {
 }
 
 async function runAggregation(options = {}) {
+    if (archivedShortsBackfillPromise) {
+        aggregationStatus = {
+            ...aggregationStatus,
+            state: 'queued',
+            lastUpdated: new Date().toISOString(),
+        };
+        console.log('⏳ Waiting for archived Shorts metadata maintenance before the next refresh.');
+        await archivedShortsBackfillPromise;
+    }
+
     console.log('🔄 Starting feed aggregation...');
 
     try {
@@ -447,7 +497,6 @@ async function runAggregation(options = {}) {
             maxVideos: MAX_ARCHIVED_VIDEOS,
             cacheUpdatedAt: existingVideoCache.lastUpdated,
         });
-        await backfillArchivedShortsStatus(archivedVideos, shortsStatusById);
         const archivedVideosWithShortsStatus = archivedVideos.map((video) => (
             video?.id && typeof shortsStatusById[video.id] === 'boolean'
                 ? { ...video, isShort: shortsStatusById[video.id] }
@@ -531,6 +580,7 @@ async function runAggregation(options = {}) {
         }
 
         console.log(`✅ Aggregation complete: ${archivedVideosWithShortsStatus.length} archived videos from ${subscriptions.length} channels`);
+        scheduleArchivedShortsStatusBackfill(archivedVideosWithShortsStatus, shortsStatusById);
     } catch (error) {
         aggregationStatus = {
             ...aggregationStatus,
@@ -721,5 +771,6 @@ module.exports = {
     enrichVideosWithShortsStatus,
     backfillArchivedShortsStatus,
     applyLocalShortsMetadata,
-    looksLikeShortByLocalMetadata
+    looksLikeShortByLocalMetadata,
+    startArchivedShortsStatusBackfill
 };
