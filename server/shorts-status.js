@@ -99,10 +99,26 @@ async function backfillArchivedShortsStatus(existingVideos = [], shortsStatusByI
     return enrichVideosWithShortsStatus(candidates, shortsStatusById, httpClient);
 }
 
+function startArchivedShortsStatusBackfill(existingVideos = [], shortsStatusById = {}, options = {}) {
+    const {
+        httpClient = axios,
+        onComplete = async () => {},
+        onError = (error) => console.error('Archived Shorts metadata backfill failed:', error),
+    } = options;
+
+    return Promise.resolve()
+        .then(() => backfillArchivedShortsStatus(existingVideos, shortsStatusById, httpClient))
+        .then(() => onComplete(shortsStatusById))
+        .catch((error) => {
+            onError(error);
+        });
+}
+
 module.exports = {
     applyLocalShortsMetadata,
     backfillArchivedShortsStatus,
     enrichVideosWithShortsStatus,
     looksLikeShortByLocalMetadata,
     resolveYouTubeShortsStatus,
+    startArchivedShortsStatusBackfill,
 };
