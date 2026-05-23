@@ -372,6 +372,61 @@ describe('VideoPlayer', () => {
     expect(playerVars?.vq).toBe('hd1080');
   });
 
+  it('keeps the active YouTube player mounted when refreshed feed data rerenders the page', async () => {
+    const destroy = vi.fn();
+    const playerConstructor = vi.fn();
+    const player = {
+      getCurrentTime: () => 40,
+      getDuration: () => 120,
+      destroy,
+      seekTo: vi.fn(),
+      playVideo: vi.fn(),
+      setPlaybackQuality: vi.fn(),
+    };
+    window.YT = {
+      PlayerState: { ENDED: 0 },
+      Player: class {
+        constructor(element: HTMLElement, options: any) {
+          playerConstructor(element, options);
+          const iframe = document.createElement('iframe');
+          iframe.title = 'created iframe';
+          element.appendChild(iframe);
+          window.setTimeout(() => options.events.onReady({ target: player }), 0);
+          return player;
+        }
+      },
+    } as any;
+
+    const { rerender } = render(
+      <MemoryRouter initialEntries={['/video/video-1']}>
+        <Routes>
+          <Route path="/video/:videoId" element={<VideoPlayer />} />
+        </Routes>
+      </MemoryRouter>
+    );
+
+    await waitFor(() => {
+      expect(playerConstructor).toHaveBeenCalledTimes(1);
+    });
+    expect(screen.getByTitle('created iframe')).toBeInTheDocument();
+
+    mockUseRSSVideos.mockReturnValue({
+      videos: [previousVideo, { ...currentVideo, title: 'Current video after refresh' }, nextVideo, relatedVideo],
+    });
+    rerender(
+      <MemoryRouter initialEntries={['/video/video-1']}>
+        <Routes>
+          <Route path="/video/:videoId" element={<VideoPlayer />} />
+        </Routes>
+      </MemoryRouter>
+    );
+
+    expect(playerConstructor).toHaveBeenCalledTimes(1);
+    expect(destroy).not.toHaveBeenCalled();
+    expect(screen.getByTitle('created iframe')).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Current video after refresh' })).toBeInTheDocument();
+  });
+
   it('shows a direct YouTube fallback when the embedded player rejects playback', async () => {
     window.YT = {
       PlayerState: { ENDED: 0 },
