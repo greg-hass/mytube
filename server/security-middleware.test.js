@@ -80,6 +80,18 @@ describe('security middleware', () => {
         expect(res.status).not.toHaveBeenCalled();
     });
 
+    it('keeps allowlisted channel thumbnail image requests public for img elements', () => {
+        const middleware = createApiKeyAuthMiddleware({ token: 'secret-token' });
+        const req = { path: '/channel-thumbnail', method: 'GET', header: () => undefined };
+        const res = { status: vi.fn().mockReturnThis(), json: vi.fn() };
+        const next = vi.fn();
+
+        middleware(req, res, next);
+
+        expect(next).toHaveBeenCalledOnce();
+        expect(res.status).not.toHaveBeenCalled();
+    });
+
     it('rejects disallowed browser origins when allowed origins are configured', () => {
         const middleware = createOriginGuardMiddleware({ allowedOrigins: ['https://feeds.example.com'] });
         const req = {
