@@ -63,7 +63,9 @@ function createApiKeyAuthMiddleware({ token = '', allowInsecureUnauthenticatedAp
     const configuredToken = String(token || '').trim();
 
     return function apiKeyAuth(req, res, next) {
-        if (req.path === '/healthz') {
+        const isPublicGet = req.method === 'GET'
+            && (req.path === '/healthz' || req.path === '/channel-thumbnail');
+        if (isPublicGet) {
             next();
             return;
         }
