@@ -17,6 +17,8 @@ const {
     enrichVideosWithShortsStatus,
     backfillArchivedShortsStatus,
     startArchivedShortsStatusBackfill,
+    ARCHIVED_SHORTS_BACKFILL_RETRY_INTERVAL_MS,
+    isArchivedShortsBackfillDue,
     applyLocalShortsMetadata,
 } = require('./feed-aggregator');
 
@@ -459,6 +461,14 @@ describe('feed refresh policy', () => {
 
         expect(shortsStatusById['unknown-video']).toBe(false);
         expect(onComplete).toHaveBeenCalledWith(shortsStatusById);
+    });
+
+    it('cools down repeated archived Shorts backfills when unresolved videos remain', () => {
+        const now = Date.parse('2026-05-23T08:00:00.000Z');
+
+        expect(isArchivedShortsBackfillDue(null, now)).toBe(true);
+        expect(isArchivedShortsBackfillDue(now, now + ARCHIVED_SHORTS_BACKFILL_RETRY_INTERVAL_MS - 1)).toBe(false);
+        expect(isArchivedShortsBackfillDue(now, now + ARCHIVED_SHORTS_BACKFILL_RETRY_INTERVAL_MS)).toBe(true);
     });
 
     it('resolves Shorts status from the canonical YouTube Shorts URL', async () => {

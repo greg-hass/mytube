@@ -16,9 +16,11 @@ const {
     summarizeFailedChannels,
 } = require('./feed-refresh-policy');
 const {
+    ARCHIVED_SHORTS_BACKFILL_RETRY_INTERVAL_MS,
     applyLocalShortsMetadata,
     backfillArchivedShortsStatus,
     enrichVideosWithShortsStatus,
+    isArchivedShortsBackfillDue,
     looksLikeShortByLocalMetadata,
     resolveYouTubeShortsStatus,
     startArchivedShortsStatusBackfill,
@@ -36,6 +38,7 @@ const STARTUP_CACHE_MAX_AGE_MS = 10 * 60 * 1000;
 const DEFAULT_DATA = { subscriptions: [], settings: {}, watchedVideos: [], redirects: {} };
 let aggregationPromise = null;
 let archivedShortsBackfillPromise = null;
+let archivedShortsBackfillLastAttemptAt = null;
 let rerunRequested = false;
 let queuedAggregationOptions = {};
 let scheduledRefreshTimer = null;
@@ -64,7 +67,9 @@ function scheduleArchivedShortsStatusBackfill(archivedVideos, shortsStatusById) 
         (video) => video?.id && typeof shortsStatusById[video.id] !== 'boolean'
     );
     if (!hasUncheckedVideos) return;
+    if (!isArchivedShortsBackfillDue(archivedShortsBackfillLastAttemptAt)) return;
 
+    archivedShortsBackfillLastAttemptAt = Date.now();
     archivedShortsBackfillPromise = startArchivedShortsStatusBackfill(
         archivedVideos,
         { ...shortsStatusById },
@@ -755,6 +760,7 @@ aggregateOnStartupIfStale();
 startScheduledRefresh();
 
 module.exports = {
+    ARCHIVED_SHORTS_BACKFILL_RETRY_INTERVAL_MS,
     CHANNEL_REFRESH_INTERVAL_MS,
     DEFAULT_SCHEDULED_REFRESH_INTERVAL_MS,
     aggregateFeeds,
@@ -770,6 +776,7 @@ module.exports = {
     resolveYouTubeShortsStatus,
     enrichVideosWithShortsStatus,
     backfillArchivedShortsStatus,
+    isArchivedShortsBackfillDue,
     applyLocalShortsMetadata,
     looksLikeShortByLocalMetadata,
     startArchivedShortsStatusBackfill
