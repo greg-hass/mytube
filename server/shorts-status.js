@@ -2,6 +2,7 @@ const axios = require('axios');
 
 const SHORTS_STATUS_CONCURRENCY = 8;
 const ARCHIVED_SHORTS_STATUS_BACKFILL_LIMIT = 5000;
+const ARCHIVED_SHORTS_BACKFILL_RETRY_INTERVAL_MS = 6 * 60 * 60 * 1000;
 const SHORTS_TEXT_PATTERN = /#shorts?\b|#ytshorts?\b|#fyp\b|\bshorts\b|youtube\.com\/shorts\//i;
 const SHORTS_THUMBNAIL_PATTERN = /\/(?:oar2|maxres2|hq2|frame0)\.(?:jpg|webp)(?:\?|$)/i;
 
@@ -99,6 +100,11 @@ async function backfillArchivedShortsStatus(existingVideos = [], shortsStatusByI
     return enrichVideosWithShortsStatus(candidates, shortsStatusById, httpClient);
 }
 
+function isArchivedShortsBackfillDue(lastAttemptAt, now = Date.now()) {
+    return !Number.isFinite(lastAttemptAt)
+        || now - lastAttemptAt >= ARCHIVED_SHORTS_BACKFILL_RETRY_INTERVAL_MS;
+}
+
 function startArchivedShortsStatusBackfill(existingVideos = [], shortsStatusById = {}, options = {}) {
     const {
         httpClient = axios,
@@ -115,9 +121,11 @@ function startArchivedShortsStatusBackfill(existingVideos = [], shortsStatusById
 }
 
 module.exports = {
+    ARCHIVED_SHORTS_BACKFILL_RETRY_INTERVAL_MS,
     applyLocalShortsMetadata,
     backfillArchivedShortsStatus,
     enrichVideosWithShortsStatus,
+    isArchivedShortsBackfillDue,
     looksLikeShortByLocalMetadata,
     resolveYouTubeShortsStatus,
     startArchivedShortsStatusBackfill,
