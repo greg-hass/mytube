@@ -289,6 +289,26 @@ describe('Dashboard', () => {
     expect(window.location.search).toBe('?tab=subscriptions');
   });
 
+  it('scrolls the active Latest timeline to the top after a double tap', () => {
+    vi.spyOn(Date, 'now')
+      .mockReturnValueOnce(1_000)
+      .mockReturnValueOnce(1_200);
+    sessionStorage.setItem('latest-videos-scroll', '640');
+
+    render(<Dashboard />);
+
+    const latestTab = screen.getByRole('button', { name: /latest/i });
+    fireEvent.click(latestTab);
+
+    expect(window.scrollTo).not.toHaveBeenCalled();
+    expect(sessionStorage.getItem('latest-videos-scroll')).toBe('640');
+
+    fireEvent.click(latestTab);
+
+    expect(sessionStorage.getItem('latest-videos-scroll')).toBeNull();
+    expect(window.scrollTo).toHaveBeenCalledWith({ top: 0 });
+  });
+
   it('shows feed build progress instead of an empty state while syncing videos', () => {
     mockRSSVideosState = {
       ...mockRSSVideosState,
