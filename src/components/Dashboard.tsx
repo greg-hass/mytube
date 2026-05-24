@@ -1,4 +1,4 @@
-import { lazy, Suspense, useState, useEffect, useMemo } from 'react';
+import { lazy, Suspense, useState, useEffect, useMemo, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { TrendingUp, Grid3x3, RefreshCw, Loader2, Activity, Heart, Image, ListVideo, SlidersHorizontal, X } from 'lucide-react';
 import { toast } from 'sonner';
@@ -37,6 +37,8 @@ const DURATION_FILTER_OPTIONS: Array<{ value: DurationFilter; label: string }> =
   { value: '30-plus', label: '30+ min' },
 ];
 const QUALITY_FILTERS_STORAGE_KEY = 'feed-quality-filters';
+const LATEST_TIMELINE_SCROLL_STORAGE_KEY = 'latest-videos-scroll';
+const LATEST_DOUBLE_TAP_INTERVAL_MS = 350;
 
 type PersistedQualityFilters = {
   durationFilter?: DurationFilter;
@@ -119,6 +121,7 @@ export const Dashboard = () => {
   const [isNewGroupModalOpen, setIsNewGroupModalOpen] = useState(false);
   const [customSubscriptionGroups, setCustomSubscriptionGroups] = useState<string[]>([]);
   const [isRepairingIcons, setIsRepairingIcons] = useState(false);
+  const lastActiveLatestTapAtRef = useRef<number | null>(null);
   const { allSubscriptions, addSubscriptions, rawSubscriptions, repairChannelIcons, toggleFavorite: toggleChannelFavorite } = useSubscriptionStorage();
   const { favoriteVideoIds, favoriteVideos: savedFavoriteVideos } = useFavoriteVideos();
   const { queuedVideoIds, queuedVideos: savedQueuedVideos } = useQueuedVideos();
@@ -313,6 +316,27 @@ export const Dashboard = () => {
         window.scrollTo({ top: 0 });
       });
     }
+  };
+
+  const handleLatestTabClick = () => {
+    const now = Date.now();
+
+    if (activeTab !== 'latest') {
+      lastActiveLatestTapAtRef.current = null;
+      changeTab('latest');
+      return;
+    }
+
+    const lastTapAt = lastActiveLatestTapAtRef.current;
+    if (lastTapAt !== null && now - lastTapAt <= LATEST_DOUBLE_TAP_INTERVAL_MS) {
+      lastActiveLatestTapAtRef.current = null;
+      sessionStorage.removeItem(LATEST_TIMELINE_SCROLL_STORAGE_KEY);
+      window.scrollTo({ top: 0 });
+    } else {
+      lastActiveLatestTapAtRef.current = now;
+    }
+
+    changeTab('latest');
   };
 
   const createSubscriptionGroup = () => {
@@ -562,7 +586,7 @@ export const Dashboard = () => {
               </span>
             </button>
             <button
-              onClick={() => changeTab('latest')}
+              onClick={handleLatestTabClick}
               className={`flex min-w-0 items-center justify-center gap-1 px-1.5 py-2 rounded-lg text-xs sm:text-base font-medium transition-all sm:gap-2 sm:px-6 sm:py-3 ${activeTab === 'latest'
                 ? 'bg-white dark:bg-gray-800 shadow-md'
                 : 'hover:bg-gray-200 dark:hover:bg-gray-800'

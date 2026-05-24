@@ -16,7 +16,7 @@
 - Modify: `src/components/Dashboard.test.tsx`
 - Modify: `src/components/Dashboard.tsx`
 
-- [ ] **Step 1: Write the failing Dashboard interaction test**
+- [x] **Step 1: Write the failing Dashboard interaction test**
 
 Add a test alongside existing dashboard tab/scroll tests:
 
@@ -42,7 +42,7 @@ it('scrolls the active Latest timeline to the top after a double tap', () => {
 });
 ```
 
-- [ ] **Step 2: Run the focused test to verify it fails**
+- [x] **Step 2: Run the focused test to verify it fails**
 
 Run:
 
@@ -52,7 +52,7 @@ npm test -- --run src/components/Dashboard.test.tsx -t "scrolls the active Lates
 
 Expected: FAIL because the active `Latest` tab currently only calls `changeTab('latest')` and never clears its stored timeline position or scrolls to the top.
 
-- [ ] **Step 3: Implement the minimal active-Latest double-tap handler**
+- [x] **Step 3: Implement the minimal active-Latest double-tap handler**
 
 In `src/components/Dashboard.tsx`, import `useRef`, add constants, create a timestamp ref, and route only the Latest tab button through a dedicated handler:
 
@@ -94,7 +94,7 @@ Update the Latest button:
   onClick={handleLatestTabClick}
 ```
 
-- [ ] **Step 4: Run the focused and full verification suites**
+- [x] **Step 4: Run the focused and full verification suites**
 
 Run:
 
@@ -108,7 +108,7 @@ npm run build
 
 Expected: all commands exit successfully; the full suite includes the new Latest double-tap test.
 
-- [ ] **Step 5: Commit the tested implementation**
+- [x] **Step 5: Commit the tested implementation**
 
 ```bash
 git add docs/superpowers/plans/2026-05-24-latest-double-tap-scroll.md src/components/Dashboard.test.tsx src/components/Dashboard.tsx
