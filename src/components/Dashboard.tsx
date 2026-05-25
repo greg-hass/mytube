@@ -137,6 +137,56 @@ class DashboardContentBoundary extends Component<{
   }
 }
 
+const FirstRunOnboarding = ({ onAddChannel }: { onAddChannel: () => void }) => (
+  <main data-testid="first-run-onboarding" className="mx-auto max-w-3xl px-4 py-10 sm:py-14">
+    <div className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm dark:border-gray-800 dark:bg-gray-900 sm:p-6">
+      <div className="mb-5">
+        <p className="text-sm font-semibold uppercase tracking-wide text-red-600 dark:text-red-400">
+          First run
+        </p>
+        <h2 className="mt-1 text-2xl font-bold text-gray-950 dark:text-gray-50">
+          Start with your subscriptions
+        </h2>
+        <p className="mt-2 max-w-2xl text-sm text-gray-600 dark:text-gray-300">
+          Import your YouTube subscriptions file or add a channel manually. The feed starts refreshing as soon as channels are available.
+        </p>
+      </div>
+
+      <div className="grid gap-3 sm:grid-cols-2">
+        <div className="rounded-lg border border-gray-200 p-4 dark:border-gray-800">
+          <h3 className="font-semibold text-gray-900 dark:text-gray-100">
+            Import a list
+          </h3>
+          <p className="mt-1 min-h-10 text-sm text-gray-500 dark:text-gray-400">
+            Use Google Takeout CSV or OPML/XML from another reader.
+          </p>
+          <div className="mt-4">
+            <Suspense fallback={null}>
+              <OPMLUpload minimal showLabelOnMobile />
+            </Suspense>
+          </div>
+        </div>
+
+        <div className="rounded-lg border border-gray-200 p-4 dark:border-gray-800">
+          <h3 className="font-semibold text-gray-900 dark:text-gray-100">
+            Add one channel
+          </h3>
+          <p className="mt-1 min-h-10 text-sm text-gray-500 dark:text-gray-400">
+            Paste a channel URL, handle, or channel ID to try the app with one source.
+          </p>
+          <button
+            type="button"
+            onClick={onAddChannel}
+            className="mt-4 inline-flex h-10 items-center justify-center rounded-lg bg-gray-900 px-4 text-sm font-medium text-white transition-colors hover:bg-gray-800 dark:bg-gray-100 dark:text-gray-950 dark:hover:bg-white"
+          >
+            Add one channel
+          </button>
+        </div>
+      </div>
+    </div>
+  </main>
+);
+
 export const Dashboard = () => {
   const persistedQualityFilters = useMemo(() => readPersistedQualityFilters(), []);
   const [activeTab, setActiveTab] = useState<Tab>(() => readDashboardTabFromUrl());
@@ -601,10 +651,13 @@ export const Dashboard = () => {
         onRetryFailed={refetchVideos}
       />
 
-      <div
-        data-testid="dashboard-page-chrome"
-        className="max-w-7xl mx-auto pt-[var(--app-sticky-gap)] pb-3 sm:pt-[var(--app-sticky-gap)] sm:pb-8"
-      >
+      {hasNoSubscriptions ? (
+        <FirstRunOnboarding onAddChannel={() => setIsAddChannelModalOpen(true)} />
+      ) : (
+        <div
+          data-testid="dashboard-page-chrome"
+          className="max-w-7xl mx-auto pt-[var(--app-sticky-gap)] pb-3 sm:pt-[var(--app-sticky-gap)] sm:pb-8"
+        >
         {/* Tabs */}
         <div
           data-testid="dashboard-tabs"
@@ -854,125 +907,69 @@ export const Dashboard = () => {
               transition={{ duration: 0.3 }}
               className="px-4"
             >
-              {hasNoSubscriptions ? (
-                <div className="mx-auto max-w-3xl py-10">
-                  <div className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm dark:border-gray-800 dark:bg-gray-900 sm:p-6">
-                    <div className="mb-5">
-                      <p className="text-sm font-semibold uppercase tracking-wide text-red-600 dark:text-red-400">
-                        First run
-                      </p>
-                      <h2 className="mt-1 text-2xl font-bold text-gray-950 dark:text-gray-50">
-                        Start with your subscriptions
-                      </h2>
-                      <p className="mt-2 max-w-2xl text-sm text-gray-600 dark:text-gray-300">
-                        Import your YouTube subscriptions file or add a channel manually. The feed starts refreshing as soon as channels are available.
-                      </p>
-                    </div>
-
-                    <div className="grid gap-3 sm:grid-cols-2">
-                      <div className="rounded-lg border border-gray-200 p-4 dark:border-gray-800">
-                        <h3 className="font-semibold text-gray-900 dark:text-gray-100">
-                          Import a list
-                        </h3>
-                        <p className="mt-1 min-h-10 text-sm text-gray-500 dark:text-gray-400">
-                          Use Google Takeout CSV or OPML/XML from another reader.
-                        </p>
-                        <div className="mt-4">
-                          <Suspense fallback={null}>
-                            <OPMLUpload minimal showLabelOnMobile />
-                          </Suspense>
-                        </div>
-                      </div>
-
-                      <div className="rounded-lg border border-gray-200 p-4 dark:border-gray-800">
-                        <h3 className="font-semibold text-gray-900 dark:text-gray-100">
-                          Add one channel
-                        </h3>
-                        <p className="mt-1 min-h-10 text-sm text-gray-500 dark:text-gray-400">
-                          Paste a channel URL, handle, or channel ID to try the app with one source.
-                        </p>
-                        <button
-                          type="button"
-                          onClick={() => setIsAddChannelModalOpen(true)}
-                          className="mt-4 inline-flex h-10 items-center justify-center rounded-lg bg-gray-900 px-4 text-sm font-medium text-white transition-colors hover:bg-gray-800 dark:bg-gray-100 dark:text-gray-950 dark:hover:bg-white"
-                        >
-                          Add one channel
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              ) : (
-                <>
-                  {videos.length === 0 ? (
-                    <div className="text-center py-12">
-                      {syncStatus?.isSyncing ? (
-                        <>
-                          <div className="inline-block w-8 h-8 border-4 border-red-600 border-t-transparent rounded-full animate-spin mb-4" />
-                          <p className="text-gray-800 dark:text-gray-200 text-lg font-semibold">
-                            Building your feed
-                          </p>
-                          <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">
-                            Your feeds are refreshing. This can take a minute after import.
-                          </p>
-                          <p className="text-sm text-gray-500 dark:text-gray-500 mt-2">
-                            {syncStatus.current} / {syncStatus.total} channels checked
-                          </p>
-                          <div className="w-full max-w-sm h-2 bg-gray-200 dark:bg-gray-800 rounded-full overflow-hidden mx-auto mt-4">
-                            <div
-                              className="h-full bg-red-600 rounded-full transition-all"
-                              style={{ width: `${feedProgressPercent}%` }}
-                            />
-                          </div>
-                          <p className="text-xs text-gray-500 dark:text-gray-500 mt-3">
-                            {syncStatus.videos} videos found so far
-                          </p>
-                        </>
-                      ) : hasTemporaryChannels ? (
-                        <>
-                          <p className="text-gray-600 dark:text-gray-400 text-lg mb-2">
-                            Some channels need channel IDs to fetch videos
-                          </p>
-                          <p className="text-sm text-gray-500">
-                            Channels added with handles or custom names will be updated automatically when videos are discovered
-                          </p>
-                        </>
-                      ) : (
-                        <>
-                          <p className="text-gray-600 dark:text-gray-400 text-lg mb-2">
-                            No videos found
-                          </p>
-                          <p className="text-sm text-gray-500">
-                            Make sure you have subscriptions with recent uploads
-                          </p>
-                        </>
-                      )}
-                    </div>
-                  ) : (
-                    <div>
-                      <p className="hidden sm:block text-sm text-gray-500 dark:text-gray-400 mb-4">
-                        Showing {filteredVideos.length} recent videos
-                      </p>
-                      <VirtualizedVideoGrid
-                        videos={visibleLatestVideos}
-                        columns={4}
-                        scrollStorageKey="latest-videos-scroll"
-                        channelThumbnails={channelThumbnails}
+              {videos.length === 0 ? (
+                syncStatus?.isSyncing ? (
+                  <div className="text-center py-12">
+                    <div className="inline-block w-8 h-8 border-4 border-red-600 border-t-transparent rounded-full animate-spin mb-4" />
+                    <p className="text-gray-800 dark:text-gray-200 text-lg font-semibold">
+                      Building your feed
+                    </p>
+                    <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">
+                      Your feeds are refreshing. This can take a minute after import.
+                    </p>
+                    <p className="text-sm text-gray-500 dark:text-gray-500 mt-2">
+                      {syncStatus.current} / {syncStatus.total} channels checked
+                    </p>
+                    <div className="w-full max-w-sm h-2 bg-gray-200 dark:bg-gray-800 rounded-full overflow-hidden mx-auto mt-4">
+                      <div
+                        className="h-full bg-red-600 rounded-full transition-all"
+                        style={{ width: `${feedProgressPercent}%` }}
                       />
-                      {visibleLatestVideos.length < filteredVideos.length && (
-                        <div className="mt-4 flex justify-center pb-8 sm:hidden">
-                          <button
-                            type="button"
-                            onClick={() => setMobileVideoLimit((count) => count + MOBILE_TIMELINE_INCREMENT)}
-                            className="rounded-lg bg-gray-800 px-4 py-2 text-sm font-medium text-white dark:bg-gray-700"
-                          >
-                            Show older videos
-                          </button>
-                        </div>
-                      )}
+                    </div>
+                    <p className="text-xs text-gray-500 dark:text-gray-500 mt-3">
+                      {syncStatus.videos} videos found so far
+                    </p>
+                  </div>
+                ) : hasTemporaryChannels ? (
+                  <div className="text-center py-12">
+                    <p className="text-gray-600 dark:text-gray-400 text-lg mb-2">
+                      Some channels need channel IDs to fetch videos
+                    </p>
+                    <p className="text-sm text-gray-500">
+                      Channels added with handles or custom names will be updated automatically when videos are discovered
+                    </p>
+                  </div>
+                ) : (
+                  <EmptyState
+                    icon={TrendingUp}
+                    iconName="latest"
+                    title="No videos found"
+                    detail="New uploads from your subscriptions will appear here."
+                  />
+                )
+              ) : (
+                <div>
+                  <p className="hidden sm:block text-sm text-gray-500 dark:text-gray-400 mb-4">
+                    Showing {filteredVideos.length} recent videos
+                  </p>
+                  <VirtualizedVideoGrid
+                    videos={visibleLatestVideos}
+                    columns={4}
+                    scrollStorageKey="latest-videos-scroll"
+                    channelThumbnails={channelThumbnails}
+                  />
+                  {visibleLatestVideos.length < filteredVideos.length && (
+                    <div className="mt-4 flex justify-center pb-8 sm:hidden">
+                      <button
+                        type="button"
+                        onClick={() => setMobileVideoLimit((count) => count + MOBILE_TIMELINE_INCREMENT)}
+                        className="rounded-lg bg-gray-800 px-4 py-2 text-sm font-medium text-white dark:bg-gray-700"
+                      >
+                        Show older videos
+                      </button>
                     </div>
                   )}
-                </>
+                </div>
               )}
             </motion.div>
           ) : activeTab === 'queue' ? (
@@ -986,8 +983,10 @@ export const Dashboard = () => {
             >
               {queuedVideos.length === 0 ? (
                 <EmptyState
+                  icon={ListVideo}
+                  iconName="queue"
                   title="Your queue is empty"
-                  detail="Add videos with the queue button on any video."
+                  detail="Add videos to your queue to watch them later."
                 />
               ) : (
                 <div>
@@ -1013,15 +1012,12 @@ export const Dashboard = () => {
               className="px-4"
             >
               {favoriteChannels.length === 0 && favoriteVideos.length === 0 ? (
-                <div className="text-center py-12">
-                  <Heart className="w-20 h-20 text-gray-300 dark:text-gray-700 mx-auto mb-4" />
-                  <p className="text-gray-600 dark:text-gray-400 text-lg mb-2">
-                    No favorites yet
-                  </p>
-                  <p className="text-sm text-gray-500">
-                    Star channels or save videos to collect them here
-                  </p>
-                </div>
+                <EmptyState
+                  icon={Heart}
+                  iconName="favorites"
+                  title="No favorites yet"
+                  detail="Favorite channels or videos to find them here."
+                />
               ) : (
                 <div className="space-y-8">
                   {(favoriteChannels.length > 0 || favoriteVideos.length > 0) && (
@@ -1128,64 +1124,64 @@ export const Dashboard = () => {
               transition={{ duration: 0.16 }}
               className="px-4"
             >
-              <div className="mb-4">
-                <h2 className="text-2xl font-bold text-gray-900 dark:text-gray-100 mb-2">
-                  Most Active Channels
-                </h2>
-                <p className="text-sm text-gray-500 dark:text-gray-400">
-                  Top {activeChannels.length} channels by uploads in the past 7 days
-                </p>
-              </div>
-
               {activeChannels.length === 0 ? (
-                <div className="text-center py-12">
-                  <p className="text-gray-600 dark:text-gray-400 text-lg mb-2">
-                    No activity in the past week
-                  </p>
-                  <p className="text-sm text-gray-500">
-                    Check back after your channels upload new videos
-                  </p>
-                </div>
+                <EmptyState
+                  icon={Activity}
+                  iconName="activity"
+                  title="No activity yet"
+                  detail="Recent uploads from your channels will appear here."
+                />
               ) : (
-                <div className="space-y-3">
-                  {activeChannels.map((item, index) => (
-                    <div
-                      key={item.channel.id}
-                      onClick={() => window.location.href = `/channel/${item.channel.id}`}
-                      className="flex items-center gap-4 p-4 bg-white dark:bg-gray-800 rounded-xl shadow-sm hover:shadow-md transition-all cursor-pointer border border-gray-200 dark:border-gray-700"
-                    >
-                      <div className="flex-shrink-0 w-12 h-12 bg-gradient-to-br from-green-500 to-emerald-600 rounded-full flex items-center justify-center text-white font-bold text-lg">
-                        #{index + 1}
+                <>
+                  <div className="mb-4">
+                    <h2 className="text-2xl font-bold text-gray-900 dark:text-gray-100 mb-2">
+                      Most Active Channels
+                    </h2>
+                    <p className="text-sm text-gray-500 dark:text-gray-400">
+                      Top {activeChannels.length} channels by uploads in the past 7 days
+                    </p>
+                  </div>
+                  <div className="space-y-3">
+                    {activeChannels.map((item, index) => (
+                      <div
+                        key={item.channel.id}
+                        onClick={() => window.location.href = `/channel/${item.channel.id}`}
+                        className="flex items-center gap-4 p-4 bg-white dark:bg-gray-800 rounded-xl shadow-sm hover:shadow-md transition-all cursor-pointer border border-gray-200 dark:border-gray-700"
+                      >
+                        <div className="flex-shrink-0 w-12 h-12 bg-gradient-to-br from-green-500 to-emerald-600 rounded-full flex items-center justify-center text-white font-bold text-lg">
+                          #{index + 1}
+                        </div>
+                        <img
+                          src={item.channel.thumbnail}
+                          alt={item.channel.title}
+                          className="w-16 h-16 rounded-full object-cover"
+                        />
+                        <div className="flex-1 min-w-0">
+                          <h3 className="font-semibold text-gray-900 dark:text-gray-100 truncate">
+                            {item.channel.title}
+                          </h3>
+                          <p className="text-sm text-gray-500 dark:text-gray-400">
+                            {item.count} video{item.count !== 1 ? 's' : ''} this week
+                          </p>
+                        </div>
+                        <div className="text-right">
+                          <p className="text-xs text-gray-500 dark:text-gray-400">
+                            Latest upload
+                          </p>
+                          <p className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                            {formatTimeAgo(item.latestVideo)}
+                          </p>
+                        </div>
                       </div>
-                      <img
-                        src={item.channel.thumbnail}
-                        alt={item.channel.title}
-                        className="w-16 h-16 rounded-full object-cover"
-                      />
-                      <div className="flex-1 min-w-0">
-                        <h3 className="font-semibold text-gray-900 dark:text-gray-100 truncate">
-                          {item.channel.title}
-                        </h3>
-                        <p className="text-sm text-gray-500 dark:text-gray-400">
-                          {item.count} video{item.count !== 1 ? 's' : ''} this week
-                        </p>
-                      </div>
-                      <div className="text-right">
-                        <p className="text-xs text-gray-500 dark:text-gray-400">
-                          Latest upload
-                        </p>
-                        <p className="text-sm font-medium text-gray-700 dark:text-gray-300">
-                          {formatTimeAgo(item.latestVideo)}
-                        </p>
-                      </div>
-                    </div>
-                  ))}
-                </div>
+                    ))}
+                  </div>
+                </>
               )}
             </motion.div>
           )}
         </AnimatePresence>
       </div>
+      )}
 
       {/* Add Channel Modal */}
       <Suspense fallback={null}>

@@ -87,4 +87,21 @@ describe('SubscriptionsList', () => {
 
     expect(mockSetSubscriptionGroup).toHaveBeenCalledWith('UC2', 'Tech');
   });
+
+  it('uses the dashboard empty-state design and navigation icon when no subscriptions exist', () => {
+    mockSubscriptions = [];
+
+    render(<SubscriptionsList />);
+
+    expect(screen.getByTestId('dashboard-empty-state')).toHaveAttribute('data-empty-icon', 'subscriptions');
+    expect(screen.getByText('No subscriptions found')).toBeInTheDocument();
+    expect(document.querySelector('.lucide-grid3x3')).toBeInTheDocument();
+  });
+
+  it('keeps the shared empty-state design when a selected group has no channels', () => {
+    render(<SubscriptionsList selectedGroup="Empty group" groups={['Empty group']} />);
+
+    expect(screen.getByTestId('dashboard-empty-state')).toHaveAttribute('data-empty-icon', 'subscriptions');
+    expect(screen.getByText('No subscriptions found')).toBeInTheDocument();
+  });
 });
