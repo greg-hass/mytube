@@ -2,6 +2,7 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { VideoCard } from './VideoCard';
+import { MobileLandscapeGate } from './MobileLandscapeGate';
 import type { YouTubeVideo } from '../types/youtube';
 
 const mockStore = vi.hoisted(() => ({
@@ -407,6 +408,80 @@ describe('VideoCard', () => {
     const inlinePlayer = screen.getByTitle('A useful video player');
     expect(inlinePlayer).toHaveAttribute('data-testid', 'inline-video-player');
     expect(screen.getByTestId('location')).toHaveTextContent('/');
+  });
+
+  it('keeps an inline now-playing video visible after the phone rotates to landscape', async () => {
+    Object.defineProperty(window, 'innerWidth', {
+      configurable: true,
+      value: 390,
+    });
+    Object.defineProperty(window, 'innerHeight', {
+      configurable: true,
+      value: 844,
+    });
+    const unlock = vi.fn();
+    Object.defineProperty(window.screen, 'orientation', {
+      configurable: true,
+      value: { lock: vi.fn().mockResolvedValue(undefined), unlock },
+    });
+    const playerConstructed = vi.fn();
+    window.YT = {
+      PlayerState: { ENDED: 0 },
+      Player: class {
+        constructor() {
+          playerConstructed();
+        }
+
+        destroy = vi.fn();
+      },
+    } as any;
+
+    render(
+      <MemoryRouter initialEntries={['/?tab=latest']}>
+        <MobileLandscapeGate>
+          <Routes>
+            <Route
+              path="/"
+              element={(
+                <>
+                  <VideoCard video={video} index={0} />
+                  <LocationProbe />
+                </>
+              )}
+            />
+            <Route
+              path="/video/:videoId"
+              element={(
+                <>
+                  <p>Dedicated now playing</p>
+                  <LocationProbe />
+                </>
+              )}
+            />
+          </Routes>
+        </MobileLandscapeGate>
+      </MemoryRouter>
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Play A useful video inline' }));
+    await waitFor(() => {
+      expect(playerConstructed).toHaveBeenCalled();
+    });
+
+    Object.defineProperty(window, 'innerWidth', {
+      configurable: true,
+      value: 932,
+    });
+    Object.defineProperty(window, 'innerHeight', {
+      configurable: true,
+      value: 430,
+    });
+    fireEvent(window, new Event('resize'));
+
+    expect(screen.queryByText('Rotate back to portrait')).not.toBeInTheDocument();
+    expect(screen.getByText('Dedicated now playing')).toBeInTheDocument();
+    expect(screen.getByTestId('location')).toHaveTextContent('/video/video-1');
+    expect(unlock).toHaveBeenCalled();
   });
 
   it('saves inline playback progress so queued videos can resume', async () => {

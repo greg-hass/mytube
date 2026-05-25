@@ -135,7 +135,12 @@ export const VideoPlayer = () => {
 
     const persistCurrentProgress = () => {
       const player = playerRef.current;
-      if (!player || !videoId) return;
+      if (
+        !player ||
+        !videoId ||
+        typeof player.getCurrentTime !== 'function' ||
+        typeof player.getDuration !== 'function'
+      ) return;
 
       const currentTime = player.getCurrentTime();
       const duration = player.getDuration();
