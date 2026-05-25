@@ -1,6 +1,6 @@
-import { motion } from 'framer-motion';
-import { Inbox } from 'lucide-react';
+import { Grid3x3 } from 'lucide-react';
 import { toast } from 'sonner';
+import { EmptyState } from './EmptyState';
 import { SubscriptionCard } from './SubscriptionCard';
 import { SkeletonCard } from './SkeletonCard';
 import { useSubscriptionStorage } from '../hooks/useSubscriptionStorage';
@@ -44,19 +44,14 @@ export const SubscriptionsList = ({
     );
   }
 
-  if (visibleSubscriptions.length === 0 && selectedGroup === 'all') {
+  if (visibleSubscriptions.length === 0) {
     return (
-      <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        className="flex flex-col items-center justify-center min-h-[400px] text-center"
-      >
-        <Inbox className="w-20 h-20 text-gray-300 dark:text-gray-700 mb-4" />
-        <h3 className="text-2xl font-semibold mb-2">No subscriptions found</h3>
-        <p className="text-gray-600 dark:text-gray-400">
-          Try adjusting your search or subscribe to some channels on YouTube!
-        </p>
-      </motion.div>
+      <EmptyState
+        icon={Grid3x3}
+        iconName="subscriptions"
+        title="No subscriptions found"
+        detail="Subscribe to channels to see them here."
+      />
     );
   }
 

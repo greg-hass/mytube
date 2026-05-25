@@ -275,6 +275,33 @@ describe('Dashboard', () => {
     expect(screen.getByText('Start with your subscriptions')).toBeInTheDocument();
     expect(await screen.findByText('Import subscriptions')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Add one channel' })).toBeInTheDocument();
+    expect(screen.queryByTestId('dashboard-tabs')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('latest-toolbar')).not.toBeInTheDocument();
+  });
+
+  it('uses a uniform icon empty state across empty timeline tabs', async () => {
+    render(<Dashboard />);
+
+    expect(screen.getByTestId('dashboard-empty-state')).toHaveAttribute('data-empty-icon', 'latest');
+    expect(screen.getByText('No videos found')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: /activity/i }));
+    await waitFor(() => {
+      expect(screen.getByTestId('dashboard-empty-state')).toHaveAttribute('data-empty-icon', 'activity');
+      expect(screen.getByText('No activity yet')).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: /queue/i }));
+    await waitFor(() => {
+      expect(screen.getByTestId('dashboard-empty-state')).toHaveAttribute('data-empty-icon', 'queue');
+      expect(screen.getByText('Your queue is empty')).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: /faves/i }));
+    await waitFor(() => {
+      expect(screen.getByTestId('dashboard-empty-state')).toHaveAttribute('data-empty-icon', 'favorites');
+      expect(screen.getByText('No favorites yet')).toBeInTheDocument();
+    });
   });
 
   it('opens the subscriptions tab from the dashboard tab URL', () => {
