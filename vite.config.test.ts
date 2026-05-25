@@ -1,4 +1,5 @@
 // @vitest-environment node
+import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { pwaRuntimeCaching } from './vite.config';
 
@@ -10,5 +11,11 @@ describe('PWA runtime caching', () => {
     expect(cacheNames).toContain('channel-icons');
     expect(pwaRuntimeCaching.some((entry) => String(entry.urlPattern).includes('yt3'))).toBe(true);
     expect(pwaRuntimeCaching.some((entry) => String(entry.urlPattern).includes('/api/channel-thumbnail'))).toBe(true);
+  });
+
+  it('requests portrait presentation for the installed browsing UI', () => {
+    const manifest = JSON.parse(readFileSync(new URL('./public/manifest.webmanifest', import.meta.url), 'utf8'));
+
+    expect(manifest.orientation).toBe('portrait');
   });
 });
