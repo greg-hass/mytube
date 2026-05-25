@@ -164,6 +164,36 @@ describe('VideoPlayer', () => {
     });
   });
 
+  it('unmounts safely while the embedded player API is still initializing', async () => {
+    const playerConstructed = vi.fn();
+    const destroy = vi.fn();
+    window.YT = {
+      PlayerState: { ENDED: 0 },
+      Player: class {
+        constructor() {
+          playerConstructed();
+        }
+
+        destroy = destroy;
+      },
+    } as any;
+
+    const { unmount } = render(
+      <MemoryRouter initialEntries={['/video/video-1']}>
+        <Routes>
+          <Route path="/video/:videoId" element={<VideoPlayer />} />
+        </Routes>
+      </MemoryRouter>
+    );
+
+    await waitFor(() => {
+      expect(playerConstructed).toHaveBeenCalled();
+    });
+
+    expect(() => unmount()).not.toThrow();
+    expect(destroy).toHaveBeenCalled();
+  });
+
   it('marks a video watched after enough playback progress is recorded', async () => {
     window.YT = {
       PlayerState: { ENDED: 0 },
