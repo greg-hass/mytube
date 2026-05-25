@@ -116,6 +116,16 @@ describe('SettingsModal', () => {
     });
   });
 
+  it('keeps the mobile settings header below the top safe area', async () => {
+    render(<SettingsModal isOpen onClose={vi.fn()} />);
+
+    expect(await screen.findByText('Online')).toBeInTheDocument();
+
+    const modal = screen.getByText('Settings').parentElement?.parentElement;
+    expect(modal?.className).toContain('pt-[env(safe-area-inset-top)]');
+    expect(modal?.className).toContain('md:pt-0');
+  });
+
   it('shows backup health counts in Settings', async () => {
     render(<SettingsModal isOpen onClose={vi.fn()} />);
 
