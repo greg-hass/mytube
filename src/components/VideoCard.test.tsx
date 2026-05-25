@@ -410,7 +410,7 @@ describe('VideoCard', () => {
     expect(screen.getByTestId('location')).toHaveTextContent('/');
   });
 
-  it('keeps an inline now-playing video visible after the phone rotates to landscape', async () => {
+  it('keeps the expanded inline player mounted and playing when the phone rotates to landscape', async () => {
     Object.defineProperty(window, 'innerWidth', {
       configurable: true,
       value: 390,
@@ -425,6 +425,7 @@ describe('VideoCard', () => {
       value: { lock: vi.fn().mockResolvedValue(undefined), unlock },
     });
     const playerConstructed = vi.fn();
+    const destroy = vi.fn();
     window.YT = {
       PlayerState: { ENDED: 0 },
       Player: class {
@@ -432,7 +433,7 @@ describe('VideoCard', () => {
           playerConstructed();
         }
 
-        destroy = vi.fn();
+        destroy = destroy;
       },
     } as any;
 
@@ -479,8 +480,11 @@ describe('VideoCard', () => {
     fireEvent(window, new Event('resize'));
 
     expect(screen.queryByText('Rotate back to portrait')).not.toBeInTheDocument();
-    expect(screen.getByText('Dedicated now playing')).toBeInTheDocument();
-    expect(screen.getByTestId('location')).toHaveTextContent('/video/video-1');
+    expect(screen.queryByText('Dedicated now playing')).not.toBeInTheDocument();
+    expect(screen.getByTestId('inline-video-player')).toBeInTheDocument();
+    expect(screen.getByTestId('location')).toHaveTextContent('/');
+    expect(playerConstructed).toHaveBeenCalledTimes(1);
+    expect(destroy).not.toHaveBeenCalled();
     expect(unlock).toHaveBeenCalled();
   });
 
