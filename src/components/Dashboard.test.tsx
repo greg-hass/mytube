@@ -82,6 +82,7 @@ let mockAllSubscriptions = [
   },
 ];
 const mockToggleChannelFavorite = vi.fn();
+let throwSubscriptionsListError = false;
 let latestSubscriptionsListProps: { selectedGroup?: string; groups?: string[] } | undefined;
 const headerMockState = vi.hoisted(() => ({
   latestProps: undefined as undefined | {
@@ -113,6 +114,9 @@ vi.mock('./Header', () => ({
 
 vi.mock('./SubscriptionsList', () => ({
   SubscriptionsList: (props: { selectedGroup?: string; groups?: string[] }) => {
+    if (throwSubscriptionsListError) {
+      throw new Error('Subscriptions list failed to render');
+    }
     latestSubscriptionsListProps = props;
     return <section>Subscriptions list content</section>;
   },
@@ -209,6 +213,7 @@ describe('Dashboard', () => {
     mockWatchedVideos = new Set<string>();
     mockMarkAsWatched.mockClear();
     mockToggleChannelFavorite.mockClear();
+    throwSubscriptionsListError = false;
     mockAllSubscriptions = [
       {
         id: 'UC123',
@@ -287,6 +292,23 @@ describe('Dashboard', () => {
     fireEvent.click(screen.getByRole('button', { name: /subs/i }));
 
     expect(window.location.search).toBe('?tab=subscriptions');
+  });
+
+  it('keeps navigation available when subscription content cannot render', async () => {
+    throwSubscriptionsListError = true;
+    vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    window.history.replaceState(null, '', '/?tab=subscriptions');
+
+    render(<Dashboard />);
+
+    expect(screen.getByText('Header')).toBeInTheDocument();
+    expect(screen.getByTestId('dashboard-tabs')).toBeInTheDocument();
+    expect(screen.getByText('Subscriptions unavailable')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Return to Latest' }));
+    await waitFor(() => {
+      expect(screen.getByText('No videos found')).toBeInTheDocument();
+    });
   });
 
   it('scrolls the active Latest timeline to the top after a double tap', () => {

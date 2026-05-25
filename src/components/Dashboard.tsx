@@ -1,4 +1,4 @@
-import { lazy, Suspense, useState, useEffect, useMemo, useRef } from 'react';
+import { Component, lazy, Suspense, useState, useEffect, useMemo, useRef, type ErrorInfo, type ReactNode } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { TrendingUp, Grid3x3, RefreshCw, Loader2, Activity, Heart, Image, ListVideo, SlidersHorizontal, X } from 'lucide-react';
 import { toast } from 'sonner';
@@ -97,6 +97,45 @@ const AddChannelModal = lazy(() => import('./AddChannelModal').then((module) => 
 const OPMLUpload = lazy(() => import('./OPMLUpload').then((module) => ({ default: module.OPMLUpload })));
 
 const getErrorDescription = (error: unknown) => error instanceof Error ? error.message : 'Unknown error';
+
+class DashboardContentBoundary extends Component<{
+  children: ReactNode;
+  onReturnToLatest: () => void;
+}, { hasError: boolean }> {
+  state = { hasError: false };
+
+  static getDerivedStateFromError() {
+    return { hasError: true };
+  }
+
+  componentDidCatch(error: unknown, errorInfo: ErrorInfo) {
+    console.error('Dashboard tab content failed to render:', error, errorInfo);
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div className="px-4 py-12 text-center">
+          <h2 className="text-xl font-semibold text-gray-900 dark:text-gray-100">
+            Subscriptions unavailable
+          </h2>
+          <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">
+            This view could not be displayed. You can still use the rest of the app.
+          </p>
+          <button
+            type="button"
+            onClick={this.props.onReturnToLatest}
+            className="mt-5 rounded-lg bg-gray-900 px-4 py-2 text-sm font-medium text-white dark:bg-gray-100 dark:text-gray-950"
+          >
+            Return to Latest
+          </button>
+        </div>
+      );
+    }
+
+    return this.props.children;
+  }
+}
 
 export const Dashboard = () => {
   const persistedQualityFilters = useMemo(() => readPersistedQualityFilters(), []);
@@ -799,10 +838,12 @@ export const Dashboard = () => {
               exit={{ opacity: 0, x: 20 }}
               transition={{ duration: 0.3 }}
             >
-              <SubscriptionsList
-                selectedGroup={selectedSubscriptionGroup}
-                groups={subscriptionGroups}
-              />
+              <DashboardContentBoundary onReturnToLatest={() => changeTab('latest')}>
+                <SubscriptionsList
+                  selectedGroup={selectedSubscriptionGroup}
+                  groups={subscriptionGroups}
+                />
+              </DashboardContentBoundary>
             </motion.div>
           ) : activeTab === 'latest' ? (
             <motion.div

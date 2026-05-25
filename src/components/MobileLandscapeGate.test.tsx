@@ -23,7 +23,7 @@ describe('MobileLandscapeGate', () => {
     });
   });
 
-  it('blocks normal app UI in phone landscape', () => {
+  it('keeps normal app UI visible if phone landscape is reported before portrait lock applies', () => {
     render(
       <MemoryRouter initialEntries={['/']}>
         <MobileLandscapeGate>
@@ -32,8 +32,8 @@ describe('MobileLandscapeGate', () => {
       </MemoryRouter>
     );
 
-    expect(screen.getByText('Rotate back to portrait')).toBeInTheDocument();
-    expect(screen.queryByText('Feed UI')).not.toBeInTheDocument();
+    expect(screen.queryByText('Rotate back to portrait')).not.toBeInTheDocument();
+    expect(screen.getByText('Feed UI')).toBeInTheDocument();
   });
 
   it('allows the video player route to use phone landscape', () => {
