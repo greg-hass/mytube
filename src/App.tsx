@@ -1,14 +1,12 @@
-import { lazy, Suspense, useEffect, useState } from 'react';
+import { lazy, Suspense, useEffect } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { Dashboard } from './components/Dashboard';
 import { useStore } from './store/useStore';
-import { useSubscriptionStorage } from './hooks/useSubscriptionStorage';
 import { MobileLandscapeGate } from './components/MobileLandscapeGate';
 import { Toaster } from 'sonner';
 
 const VideoPlayer = lazy(() => import('./components/VideoPlayer').then((module) => ({ default: module.VideoPlayer })));
 const ChannelViewer = lazy(() => import('./components/ChannelViewer').then((module) => ({ default: module.ChannelViewer })));
-const OPMLUpload = lazy(() => import('./components/OPMLUpload').then((module) => ({ default: module.OPMLUpload })));
 
 const AppFallback = () => (
   <div className="app-shell min-h-screen flex items-center justify-center">
@@ -18,8 +16,6 @@ const AppFallback = () => (
 
 function App() {
   const { theme, checkQuotaReset } = useStore();
-  const { count, isLoading } = useSubscriptionStorage();
-  const [hasImportedSubscriptions, setHasImportedSubscriptions] = useState(false);
 
   // Check for quota reset on mount
   useEffect(() => {
@@ -35,20 +31,6 @@ function App() {
     }
   }, [theme]);
 
-  // Show loading state while checking for subscriptions
-  if (isLoading) {
-    return (
-      <div className="app-shell min-h-screen flex items-center justify-center">
-        <div className="text-center">
-          <div className="w-12 h-12 border-4 border-red-600 border-t-transparent rounded-full animate-spin mx-auto mb-4" />
-          <p className="text-gray-600 dark:text-gray-400">Loading...</p>
-        </div>
-      </div>
-    );
-  }
-
-  const hasSubscriptions = hasImportedSubscriptions || count > 0;
-
   return (
     <>
       <Toaster
@@ -60,22 +42,16 @@ function App() {
         closeButton
       />
       <BrowserRouter>
-        {hasSubscriptions ? (
-          <Suspense fallback={<AppFallback />}>
-            <MobileLandscapeGate>
-              <Routes>
-                <Route path="/" element={<Dashboard />} />
-                <Route path="/video/:videoId" element={<VideoPlayer />} />
-                <Route path="/channel/:channelId" element={<ChannelViewer />} />
-                <Route path="*" element={<Navigate to="/" replace />} />
-              </Routes>
-            </MobileLandscapeGate>
-          </Suspense>
-        ) : (
-          <Suspense fallback={<AppFallback />}>
-            <OPMLUpload onSuccess={() => setHasImportedSubscriptions(true)} />
-          </Suspense>
-        )}
+        <Suspense fallback={<AppFallback />}>
+          <MobileLandscapeGate>
+            <Routes>
+              <Route path="/" element={<Dashboard />} />
+              <Route path="/video/:videoId" element={<VideoPlayer />} />
+              <Route path="/channel/:channelId" element={<ChannelViewer />} />
+              <Route path="*" element={<Navigate to="/" replace />} />
+            </Routes>
+          </MobileLandscapeGate>
+        </Suspense>
       </BrowserRouter>
     </>
   );

@@ -820,6 +820,7 @@ ${outlines}
     importJSON,
     refreshAllChannels,
     repairChannelIcons,
+    syncWithBackend,
 
     // Mutation states
     isImporting: importOPML.isPending,
