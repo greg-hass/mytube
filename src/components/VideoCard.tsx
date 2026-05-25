@@ -12,11 +12,7 @@ import { allowEnhancedMediaPlayback, loadYouTubeIframeApi, type YouTubePlayer } 
 import { useStore } from '../store/useStore';
 import { isLiveVideo } from '../lib/video-live';
 import { isShortVideo } from '../lib/video-feed-index';
-import {
-  getCurrentViewportSize,
-  isCompactMobileViewport,
-  reportInlineVideoPlaybackChange,
-} from '../lib/mobile-viewport';
+import { reportInlineVideoPlaybackChange } from '../lib/mobile-viewport';
 
 interface Props {
   video: YouTubeVideo;
@@ -80,13 +76,6 @@ const StatefulVideoCard = ({ video, channelThumbnail, onInlinePlaybackChange, on
     let isMounted = true;
     let hasReachedResumePoint = false;
     let resumeFromSeconds = 0;
-    const continueInLandscapePlayer = () => {
-      const viewport = getCurrentViewportSize();
-      if (viewport.width <= viewport.height || !isCompactMobileViewport(viewport)) return;
-
-      sessionStorage.setItem(getDashboardScrollStorageKey(location.search), String(Math.round(window.scrollY)));
-      navigate(`/video/${video.id}`);
-    };
 
     const persistCurrentProgress = () => {
       const player = inlinePlayerRef.current;
@@ -153,14 +142,9 @@ const StatefulVideoCard = ({ video, channelThumbnail, onInlinePlaybackChange, on
       inlineSaveIntervalRef.current = window.setInterval(persistCurrentProgress, 2500);
     });
 
-    window.addEventListener('resize', continueInLandscapePlayer, { passive: true });
-    window.addEventListener('orientationchange', continueInLandscapePlayer, { passive: true });
-
     return () => {
       isMounted = false;
       persistCurrentProgress();
-      window.removeEventListener('resize', continueInLandscapePlayer);
-      window.removeEventListener('orientationchange', continueInLandscapePlayer);
       if (inlineSaveIntervalRef.current) window.clearInterval(inlineSaveIntervalRef.current);
       inlineSaveIntervalRef.current = null;
       inlinePlayerRef.current?.destroy();
@@ -168,7 +152,7 @@ const StatefulVideoCard = ({ video, channelThumbnail, onInlinePlaybackChange, on
       onInlinePlaybackChange?.(video.id, false);
       reportInlineVideoPlaybackChange(video.id, false);
     };
-  }, [isPlayingInline, location.search, markAsWatched, navigate, onInlinePlaybackChange, video.id]);
+  }, [isPlayingInline, markAsWatched, onInlinePlaybackChange, video.id]);
 
   const openVideo = () => {
     if (suppressNextClickRef.current) {
