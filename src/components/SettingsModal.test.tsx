@@ -10,6 +10,7 @@ const storeMocks = vi.hoisted(() => ({
 }));
 const subscriptionMocks = vi.hoisted(() => ({
   addSubscriptions: vi.fn(),
+  syncWithBackend: vi.fn(),
 }));
 
 vi.mock('@tanstack/react-query', () => ({
@@ -51,6 +52,7 @@ vi.mock('../hooks/useSubscriptionStorage', () => ({
       { id: 'UC3', title: 'Three', addedAt: 3 },
     ],
     addSubscriptions: subscriptionMocks.addSubscriptions,
+    syncWithBackend: subscriptionMocks.syncWithBackend,
   }),
 }));
 
@@ -61,6 +63,7 @@ describe('SettingsModal', () => {
     storeMocks.setApiKey.mockClear();
     storeMocks.setWatchedVideos.mockClear();
     subscriptionMocks.addSubscriptions.mockReset().mockResolvedValue(undefined);
+    subscriptionMocks.syncWithBackend.mockReset().mockResolvedValue(undefined);
     vi.stubGlobal('fetch', vi.fn((url: string) => {
       if (url === '/api/health') {
         return Promise.resolve({
@@ -244,5 +247,23 @@ describe('SettingsModal', () => {
     expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: ['server-videos'] });
     expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: ['server-videos-status'] });
     expect(screen.getByText('Retry started')).toBeInTheDocument();
+  });
+
+  it('retries protected data loading after saving a server API token', async () => {
+    render(<SettingsModal isOpen onClose={vi.fn()} />);
+
+    expect(await screen.findByText('Online')).toBeInTheDocument();
+    fireEvent.change(screen.getByPlaceholderText('Match the required SERVER_API_TOKEN'), {
+      target: { value: 'new-browser-token' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Save Changes' }));
+
+    expect(localStorage.setItem).toHaveBeenCalledWith(
+      'youtube-subscriptions.serverApiToken',
+      'new-browser-token'
+    );
+    expect(subscriptionMocks.syncWithBackend).toHaveBeenCalledWith({ importRemoteWatched: true });
+    expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: ['server-videos'] });
+    expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: ['server-videos-status'] });
   });
 });

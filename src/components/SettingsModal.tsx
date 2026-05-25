@@ -39,7 +39,7 @@ type FailedChannel = {
 export const SettingsModal = ({ isOpen, onClose }: SettingsModalProps) => {
     const queryClient = useQueryClient();
     const { apiKey, setApiKey, watchedVideos, setWatchedVideos } = useStore();
-    const { rawSubscriptions, addSubscriptions } = useSubscriptionStorage();
+    const { rawSubscriptions, addSubscriptions, syncWithBackend } = useSubscriptionStorage();
     const [inputKey, setInputKey] = useState(apiKey);
     const [serverApiTokenInput, setServerApiTokenInput] = useState(() => getServerApiToken());
     const [isSaved, setIsSaved] = useState(false);
@@ -62,6 +62,9 @@ export const SettingsModal = ({ isOpen, onClose }: SettingsModalProps) => {
     const handleSave = () => {
         setApiKey(inputKey);
         setServerApiToken(serverApiTokenInput);
+        void syncWithBackend({ importRemoteWatched: true });
+        queryClient.invalidateQueries({ queryKey: ['server-videos'] });
+        queryClient.invalidateQueries({ queryKey: ['server-videos-status'] });
         setIsSaved(true);
         setTimeout(() => {
             setIsSaved(false);
