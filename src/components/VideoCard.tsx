@@ -130,7 +130,6 @@ const StatefulVideoCard = ({ video, channelThumbnail, onInlinePlaybackChange, on
             if (event.data === youtubeApi.PlayerState.ENDED) {
               clearVideoProgress(video.id);
               setProgressPercent(0);
-              setIsPlayingInline(false);
             } else {
               persistCurrentProgress();
             }

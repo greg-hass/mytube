@@ -1,5 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { useCallback, useEffect, useMemo, useRef } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   getAllSubscriptions,
   addSubscriptions,
@@ -32,6 +32,7 @@ export const useSubscriptionStorage = () => {
   const queryClient = useQueryClient();
   const { searchQuery, sortBy, apiKey, watchedVideos } = useStore();
   const hasCompletedInitialSyncRef = useRef(false);
+  const [isInitialSyncing, setIsInitialSyncing] = useState(true);
 
   const getSubscriptionsWithServerMetadata = async () => {
     const localSubs = await getAllSubscriptions();
@@ -45,7 +46,12 @@ export const useSubscriptionStorage = () => {
         ? remoteData.subscriptionTombstones
         : [];
       const remoteSubs = applySubscriptionTombstones(remoteData.subscriptions || [], tombstones);
-      const mergedSubs = mergeRemoteSubscriptionMetadata(localSubs, remoteSubs);
+      const locallyMergedSubs = mergeRemoteSubscriptionMetadata(localSubs, remoteSubs);
+      const localIds = new Set(locallyMergedSubs.map((sub) => sub.id));
+      const mergedSubs = [
+        ...locallyMergedSubs,
+        ...remoteSubs.filter((sub: StoredSubscription) => !localIds.has(sub.id)),
+      ];
 
       const localStr = JSON.stringify([...localSubs].sort((a, b) => a.id.localeCompare(b.id)));
       const mergedStr = JSON.stringify([...mergedSubs].sort((a, b) => a.id.localeCompare(b.id)));
@@ -735,7 +741,17 @@ ${outlines}
 
   // Run sync on mount
   useEffect(() => {
-    syncWithBackend({ importRemoteWatched: true });
+    let isMounted = true;
+
+    void syncWithBackend({ importRemoteWatched: true }).finally(() => {
+      if (isMounted) {
+        setIsInitialSyncing(false);
+      }
+    });
+
+    return () => {
+      isMounted = false;
+    };
   }, [syncWithBackend]);
 
   useEffect(() => {
@@ -770,6 +786,7 @@ ${outlines}
 
     // Loading states
     isLoading,
+    isInitialSyncing,
     error,
 
     // Mutations

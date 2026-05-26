@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { VideoCard } from './VideoCard';
@@ -533,6 +533,45 @@ describe('VideoCard', () => {
     });
     expect(mockStore.markAsWatched).toHaveBeenCalledWith('video-1');
     expect(screen.getByTestId('location')).toHaveTextContent('/');
+  });
+
+  it('keeps the inline player visible when playback ends', async () => {
+    const destroy = vi.fn();
+    let signalEnded: (() => void) | undefined;
+    window.YT = {
+      PlayerState: { ENDED: 0 },
+      Player: class {
+        constructor(_element: HTMLElement, options: any) {
+          signalEnded = () => options.events.onStateChange({ target: this, data: 0 });
+        }
+
+        getCurrentTime = () => 120;
+        getDuration = () => 120;
+        destroy = destroy;
+        seekTo = vi.fn();
+        playVideo = vi.fn();
+      },
+    } as any;
+
+    render(
+      <MemoryRouter initialEntries={['/?tab=latest']}>
+        <VideoCard video={video} index={0} />
+      </MemoryRouter>
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Play A useful video inline' }));
+    await waitFor(() => {
+      expect(signalEnded).toBeTypeOf('function');
+    });
+
+    act(() => {
+      signalEnded?.();
+    });
+
+    await waitFor(() => {
+      expect(screen.getByTestId('inline-video-player')).toBeInTheDocument();
+      expect(destroy).not.toHaveBeenCalled();
+    });
   });
 
   it('does not overwrite inline resume progress with the player startup time', async () => {
