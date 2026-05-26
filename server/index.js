@@ -40,6 +40,27 @@ const ALLOWED_ORIGINS = parseAllowedOrigins(process.env.ALLOWED_ORIGINS);
 const API_WRITE_RATE_LIMIT_WINDOW_MS = Number(process.env.API_WRITE_RATE_LIMIT_WINDOW_MS) || 60 * 1000;
 const API_WRITE_RATE_LIMIT_MAX = Number(process.env.API_WRITE_RATE_LIMIT_MAX) || 30;
 const ALLOW_INSECURE_UNAUTHENTICATED_API = process.env.ALLOW_INSECURE_UNAUTHENTICATED_API === 'true';
+
+// --- Thumbnail proxy hardening ---
+const THUMBNAIL_PROXY_TIMEOUT_MS = 5000;
+const THUMBNAIL_PROXY_MAX_BYTES = 5 * 1024 * 1024; // 5 MB
+const THUMBNAIL_PROXY_RATE_WINDOW_MS = 60 * 1000;
+const THUMBNAIL_PROXY_RATE_MAX = 60;
+const thumbnailProxyBuckets = new Map();
+
+function checkThumbnailProxyRateLimit(ip) {
+    const now = Date.now();
+    const existing = thumbnailProxyBuckets.get(ip);
+    const bucket = existing && existing.resetAt > now
+        ? existing
+        : { count: 0, resetAt: now + THUMBNAIL_PROXY_RATE_WINDOW_MS };
+
+    bucket.count += 1;
+    thumbnailProxyBuckets.set(ip, bucket);
+    return bucket.count <= THUMBNAIL_PROXY_RATE_MAX;
+}
+// --- End thumbnail proxy hardening ---
+
 let dataIntegrityEvents = [];
 
 app.use(cors(createCorsOptions({ allowedOrigins: ALLOWED_ORIGINS })));
@@ -139,8 +160,16 @@ app.get('/api/sync', async (req, res) => {
 // GET /api/channel-thumbnail - Same-origin proxy for YouTube channel thumbnails.
 // Some browsers/extensions intermittently block direct yt3.googleusercontent.com
 // image loads; proxying through localhost makes channel icons deterministic.
+//
+// Hardened: per-IP rate limiting, upstream timeout, response-size cap.
 app.get('/api/channel-thumbnail', async (req, res) => {
     try {
+        // --- Rate limiting ---
+        const clientIp = req.ip || req.socket?.remoteAddress || 'unknown';
+        if (!checkThumbnailProxyRateLimit(clientIp)) {
+            return res.status(429).json({ error: 'Too many thumbnail requests' });
+        }
+
         const rawUrl = req.query.url;
         if (!rawUrl || typeof rawUrl !== 'string') {
             return res.status(400).json({ error: 'Missing thumbnail URL' });
@@ -163,12 +192,22 @@ app.get('/api/channel-thumbnail', async (req, res) => {
             return res.status(400).json({ error: 'Unsupported thumbnail host' });
         }
 
-        const response = await fetch(thumbnailUrl.toString(), {
-            headers: {
-                'User-Agent': 'Mozilla/5.0',
-                'Accept': 'image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8',
-            },
-        });
+        // --- Upstream fetch with timeout ---
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), THUMBNAIL_PROXY_TIMEOUT_MS);
+
+        let response;
+        try {
+            response = await fetch(thumbnailUrl.toString(), {
+                signal: controller.signal,
+                headers: {
+                    'User-Agent': 'Mozilla/5.0',
+                    'Accept': 'image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8',
+                },
+            });
+        } finally {
+            clearTimeout(timeoutId);
+        }
 
         if (!response.ok) {
             return res.status(response.status).json({ error: 'Failed to fetch thumbnail' });
@@ -179,11 +218,24 @@ app.get('/api/channel-thumbnail', async (req, res) => {
             return res.status(502).json({ error: 'Thumbnail response was not an image' });
         }
 
+        // --- Response size cap ---
+        const contentLength = response.headers.get('content-length');
+        if (contentLength && Number(contentLength) > THUMBNAIL_PROXY_MAX_BYTES) {
+            return res.status(502).json({ error: 'Thumbnail exceeds size limit' });
+        }
+
         const imageBuffer = Buffer.from(await response.arrayBuffer());
+        if (imageBuffer.length > THUMBNAIL_PROXY_MAX_BYTES) {
+            return res.status(502).json({ error: 'Thumbnail exceeds size limit' });
+        }
+
         res.setHeader('Content-Type', contentType);
         res.setHeader('Cache-Control', 'public, max-age=604800, immutable');
         res.send(imageBuffer);
     } catch (err) {
+        if (err.name === 'AbortError') {
+            return res.status(504).json({ error: 'Upstream thumbnail request timed out' });
+        }
         console.error('Channel thumbnail proxy error:', err);
         res.status(500).json({ error: 'Failed to proxy thumbnail' });
     }
