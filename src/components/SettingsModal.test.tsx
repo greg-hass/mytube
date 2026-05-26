@@ -223,7 +223,7 @@ describe('SettingsModal', () => {
     expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: ['server-videos-status'] });
     expect(localStorage.getItem('favorite-video-ids')).toBe(JSON.stringify(['fav-1']));
     expect(localStorage.getItem('queued-video-ids')).toBe(JSON.stringify(['queue-1', 'queue-2']));
-    expect(screen.getByText('Feed cache reset')).toBeInTheDocument();
+    expect(await screen.findByText('Feed cache reset')).toBeInTheDocument();
   });
 
   it('shows server health and version in Settings', async () => {
@@ -256,7 +256,7 @@ describe('SettingsModal', () => {
     });
     expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: ['server-videos'] });
     expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: ['server-videos-status'] });
-    expect(screen.getByText('Retry started')).toBeInTheDocument();
+    expect(await screen.findByText('Retry started')).toBeInTheDocument();
   });
 
   it('retries protected data loading after saving a server API token', async () => {

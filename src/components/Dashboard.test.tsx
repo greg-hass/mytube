@@ -1094,7 +1094,7 @@ describe('Dashboard', () => {
           thumbnail: 'https://example.com/same-a.jpg',
           channelId: 'UC123',
           channelTitle: 'Test Channel',
-          publishedAt: new Date().toISOString(),
+          publishedAt: '2026-01-02T00:00:00.000Z',
         },
         {
           id: 'video-4',
@@ -1103,7 +1103,7 @@ describe('Dashboard', () => {
           thumbnail: 'https://example.com/same-b.jpg',
           channelId: 'UC123',
           channelTitle: 'Test Channel',
-          publishedAt: new Date().toISOString(),
+          publishedAt: '2026-01-01T00:00:00.000Z',
         },
       ],
     };
