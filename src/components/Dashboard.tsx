@@ -211,7 +211,7 @@ export const Dashboard = () => {
   const [customSubscriptionGroups, setCustomSubscriptionGroups] = useState<string[]>([]);
   const [isRepairingIcons, setIsRepairingIcons] = useState(false);
   const lastActiveLatestTapAtRef = useRef<number | null>(null);
-  const { allSubscriptions, addSubscriptions, rawSubscriptions, repairChannelIcons, toggleFavorite: toggleChannelFavorite } = useSubscriptionStorage();
+  const { allSubscriptions, addSubscriptions, rawSubscriptions, repairChannelIcons, toggleFavorite: toggleChannelFavorite, isLoading: subscriptionsLoading } = useSubscriptionStorage();
   const { favoriteVideoIds, favoriteVideos: savedFavoriteVideos } = useFavoriteVideos();
   const { queuedVideoIds, queuedVideos: savedQueuedVideos } = useQueuedVideos();
   const { searchQuery, watchedVideos, markAsWatched } = useStore();
@@ -651,7 +651,11 @@ export const Dashboard = () => {
         onRetryFailed={refetchVideos}
       />
 
-      {hasNoSubscriptions ? (
+      {subscriptionsLoading ? (
+        <div className="min-h-[50vh] flex items-center justify-center">
+          <div className="w-10 h-10 border-4 border-red-600 border-t-transparent rounded-full animate-spin" />
+        </div>
+      ) : hasNoSubscriptions ? (
         <FirstRunOnboarding onAddChannel={() => setIsAddChannelModalOpen(true)} />
       ) : (
         <div
@@ -908,7 +912,14 @@ export const Dashboard = () => {
               className="px-4"
             >
               {videos.length === 0 ? (
-                syncStatus?.isSyncing ? (
+                videosLoading ? (
+                  <div className="text-center py-12">
+                    <div className="inline-block w-8 h-8 border-4 border-red-600 border-t-transparent rounded-full animate-spin mb-4" />
+                    <p className="text-gray-800 dark:text-gray-200 text-lg font-semibold">
+                      Loading your feed
+                    </p>
+                  </div>
+                ) : syncStatus?.isSyncing ? (
                   <div className="text-center py-12">
                     <div className="inline-block w-8 h-8 border-4 border-red-600 border-t-transparent rounded-full animate-spin mb-4" />
                     <p className="text-gray-800 dark:text-gray-200 text-lg font-semibold">
