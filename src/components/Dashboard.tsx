@@ -211,7 +211,7 @@ export const Dashboard = () => {
   const [customSubscriptionGroups, setCustomSubscriptionGroups] = useState<string[]>([]);
   const [isRepairingIcons, setIsRepairingIcons] = useState(false);
   const lastActiveLatestTapAtRef = useRef<number | null>(null);
-  const { allSubscriptions, addSubscriptions, rawSubscriptions, repairChannelIcons, toggleFavorite: toggleChannelFavorite, isLoading: subscriptionsLoading } = useSubscriptionStorage();
+  const { allSubscriptions, addSubscriptions, rawSubscriptions, repairChannelIcons, toggleFavorite: toggleChannelFavorite, isLoading: subscriptionsLoading, isInitialSyncing: subscriptionsInitialSyncing } = useSubscriptionStorage();
   const { favoriteVideoIds, favoriteVideos: savedFavoriteVideos } = useFavoriteVideos();
   const { queuedVideoIds, queuedVideos: savedQueuedVideos } = useQueuedVideos();
   const { searchQuery, watchedVideos, markAsWatched } = useStore();
@@ -651,7 +651,7 @@ export const Dashboard = () => {
         onRetryFailed={refetchVideos}
       />
 
-      {subscriptionsLoading ? (
+      {subscriptionsLoading || subscriptionsInitialSyncing ? (
         <div className="min-h-[50vh] flex items-center justify-center">
           <div className="w-10 h-10 border-4 border-red-600 border-t-transparent rounded-full animate-spin" />
         </div>

@@ -81,6 +81,7 @@ let mockAllSubscriptions = [
     isFavorite: false,
   },
 ];
+let mockSubscriptionsInitialSyncing = false;
 const mockToggleChannelFavorite = vi.fn();
 let throwSubscriptionsListError = false;
 let latestSubscriptionsListProps: { selectedGroup?: string; groups?: string[] } | undefined;
@@ -187,6 +188,7 @@ vi.mock('../hooks/useSubscriptionStorage', () => ({
     addSubscriptions: vi.fn(),
     toggleFavorite: mockToggleChannelFavorite,
     repairChannelIcons: vi.fn(),
+    isInitialSyncing: mockSubscriptionsInitialSyncing,
   }),
 }));
 
@@ -213,6 +215,7 @@ describe('Dashboard', () => {
     mockWatchedVideos = new Set<string>();
     mockMarkAsWatched.mockClear();
     mockToggleChannelFavorite.mockClear();
+    mockSubscriptionsInitialSyncing = false;
     throwSubscriptionsListError = false;
     mockAllSubscriptions = [
       {
@@ -277,6 +280,16 @@ describe('Dashboard', () => {
     expect(screen.getByRole('button', { name: 'Add one channel' })).toBeInTheDocument();
     expect(screen.queryByTestId('dashboard-tabs')).not.toBeInTheDocument();
     expect(screen.queryByTestId('latest-toolbar')).not.toBeInTheDocument();
+  });
+
+  it('does not show onboarding while the initial server subscription sync is still running', () => {
+    mockAllSubscriptions = [];
+    mockSubscriptionsInitialSyncing = true;
+
+    render(<Dashboard />);
+
+    expect(screen.queryByTestId('first-run-onboarding')).not.toBeInTheDocument();
+    expect(screen.queryByText('Start with your subscriptions')).not.toBeInTheDocument();
   });
 
   it('uses a uniform icon empty state across empty timeline tabs', async () => {
