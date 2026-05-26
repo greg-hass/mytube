@@ -64,11 +64,11 @@ export const VideoPlayer = () => {
   const saveIntervalRef = useRef<ReturnType<typeof window.setInterval> | null>(null);
   const [playerProgressPercent, setPlayerProgressPercent] = useState(0);
   const [playerError, setPlayerError] = useState<{ videoId: string; code: number } | null>(null);
-  const { watchedVideos, markAsWatched, markAsUnwatched } = useStore((state) => ({
-    watchedVideos: state.watchedVideos,
-    markAsWatched: state.markAsWatched,
-    markAsUnwatched: state.markAsUnwatched,
-  }));
+  const watchedVideos = useStore((state) => state.watchedVideos);
+  const markAsWatched = useStore((state) => state.markAsWatched);
+  const markAsUnwatched = useStore((state) => state.markAsUnwatched);
+  const markAsWatchedRef = useRef(markAsWatched);
+  markAsWatchedRef.current = markAsWatched;
   const { videos } = useRSSVideos();
   const { allSubscriptions } = useSubscriptionStorage();
   const { favoriteVideos, isFavoriteVideo, toggleFavoriteVideo } = useFavoriteVideos();
@@ -154,7 +154,7 @@ export const VideoPlayer = () => {
         saveVideoProgress(videoId, currentTime, duration);
         setPlayerProgressPercent(Math.min(100, Math.max(0, (currentTime / duration) * 100)));
         if (currentTime >= WATCHED_SECONDS_THRESHOLD || currentTime / duration >= WATCHED_PERCENT_THRESHOLD) {
-          markAsWatched(videoId);
+          markAsWatchedRef.current(videoId);
         }
       }
     };
@@ -162,7 +162,11 @@ export const VideoPlayer = () => {
     loadYouTubeIframeApi().then((youtubeApi) => {
       if (!isMounted || !playerContainerRef.current) return;
 
-      playerRef.current = new youtubeApi.Player(playerContainerRef.current, {
+      // Clear any leftover iframe from a previous player instance
+      const container = playerContainerRef.current;
+      container.innerHTML = '';
+
+      playerRef.current = new youtubeApi.Player(container, {
         videoId,
         playerVars: {
           autoplay: 1,
@@ -212,10 +216,14 @@ export const VideoPlayer = () => {
       window.removeEventListener('pagehide', saveOnPageExit);
       document.removeEventListener('visibilitychange', saveOnVisibilityChange);
       if (saveIntervalRef.current) window.clearInterval(saveIntervalRef.current);
-      playerRef.current?.destroy();
+      try {
+        playerRef.current?.destroy();
+      } catch {
+        // destroy can throw if the iframe is already gone
+      }
       playerRef.current = null;
     };
-  }, [markAsWatched, resumeFromSeconds, videoId]);
+  }, [resumeFromSeconds, videoId]);
 
   if (!videoId) {
     return null;
