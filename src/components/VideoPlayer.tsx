@@ -68,7 +68,7 @@ export const VideoPlayer = () => {
   const markAsWatched = useStore((state) => state.markAsWatched);
   const markAsUnwatched = useStore((state) => state.markAsUnwatched);
   const markAsWatchedRef = useRef(markAsWatched);
-  markAsWatchedRef.current = markAsWatched;
+  useEffect(() => { markAsWatchedRef.current = markAsWatched; }, [markAsWatched]);
   const { videos } = useRSSVideos();
   const { allSubscriptions } = useSubscriptionStorage();
   const { favoriteVideos, isFavoriteVideo, toggleFavoriteVideo } = useFavoriteVideos();
