@@ -40,7 +40,7 @@ function transformRSSEntry(entry: RSSVideoEntry, channelId: string): YouTubeVide
     thumbnail: getThumbnailUrl(videoId, originalThumbnail),
     channelId,
     channelTitle: entry.author?.name || 'Unknown Channel',
-    publishedAt: entry.published || new Date().toISOString(),
+    publishedAt: entry.published || '',
   };
 }
 
