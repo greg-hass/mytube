@@ -64,7 +64,11 @@ export const useRSSVideos = () => {
       return response.json();
     },
     staleTime: 0,
-    refetchInterval: 2000,
+    refetchInterval: (query) => {
+      const state = query.state.data?.state;
+      if (state === 'running' || state === 'queued') return 2000;
+      return 15000;
+    },
   });
 
   const isAggregating = aggregationStatus?.state === 'running' || aggregationStatus?.state === 'queued';

@@ -11,7 +11,7 @@ import {
   setSubscriptionGroup as setStoredSubscriptionGroup,
   type StoredSubscription,
 } from '../lib/indexeddb';
-import { parseSubscriptionImportToSubscriptions } from '../lib/opml-parser';
+import { escapeXml, parseSubscriptionImportToSubscriptions } from '../lib/opml-parser';
 import { resolveChannelThumbnail } from '../lib/icon-loader';
 import {
   areStringSetsEqual,
@@ -87,6 +87,19 @@ export const useSubscriptionStorage = () => {
     staleTime: 1000 * 60 * 5,
   });
 
+  function invalidateSubscriptionQueries() {
+    queryClient.invalidateQueries({ queryKey: ['subscriptions'] });
+    queryClient.invalidateQueries({ queryKey: ['subscriptions-count'] });
+  }
+
+  function updateSubscriptionsCache(updater: (subs: StoredSubscription[]) => StoredSubscription[]) {
+    const current = queryClient.getQueryData<StoredSubscription[]>(['subscriptions']);
+    if (current) {
+      queryClient.setQueryData(['subscriptions'], updater(current));
+    }
+    queryClient.invalidateQueries({ queryKey: ['subscriptions'] });
+  }
+
   // Mutation to import OPML or Google Takeout CSV file
   const importOPML = useMutation({
     mutationFn: async (importContent: string) => {
@@ -95,9 +108,7 @@ export const useSubscriptionStorage = () => {
       return newSubscriptions;
     },
     onSuccess: () => {
-      // Invalidate queries to refetch data
-      queryClient.invalidateQueries({ queryKey: ['subscriptions'] });
-      queryClient.invalidateQueries({ queryKey: ['subscriptions-count'] });
+      invalidateSubscriptionQueries();
     },
   });
 
@@ -108,8 +119,7 @@ export const useSubscriptionStorage = () => {
       return newSubscriptions;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['subscriptions'] });
-      queryClient.invalidateQueries({ queryKey: ['subscriptions-count'] });
+      invalidateSubscriptionQueries();
     },
   });
 
@@ -134,18 +144,22 @@ export const useSubscriptionStorage = () => {
       // Invalidate RSS videos, as the list of subscriptions has changed
       queryClient.invalidateQueries({ queryKey: ['rss-videos'] });
 
-      // Push the post-delete local list directly. A normal sync would fetch the
-      // server first and merge the deleted channel straight back in.
-      await pushLocalStateToBackend();
+      // Push the post-delete local list directly with forcePush to skip the
+      // fetch-merge step that would re-import the deleted channel from the server.
+      await syncWithBackend({ forcePush: true });
     },
   });
 
   // Mutation to clear all subscriptions
   const clearAllMutation = useMutation({
     mutationFn: clearAllSubscriptions,
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['subscriptions'] });
-      queryClient.invalidateQueries({ queryKey: ['subscriptions-count'] });
+    onSuccess: async () => {
+      // Push the empty state to the server before updating local caches,
+      // so the auto-save effect does not re-import from the server.
+      await syncWithBackend({ forcePush: true });
+
+      queryClient.setQueryData<StoredSubscription[]>(['subscriptions'], []);
+      queryClient.setQueryData<number>(['subscriptions-count'], 0);
       queryClient.invalidateQueries({ queryKey: ['rss-videos'] });
     },
   });
@@ -530,7 +544,21 @@ ${outlines}
     }
   };
 
-  const syncWithBackend = useCallback(async ({ importRemoteWatched = false }: { importRemoteWatched?: boolean } = {}) => {
+  const syncInProgressRef = useRef(false);
+
+  const syncWithBackend = useCallback(async ({ importRemoteWatched = false, forcePush = false }: { importRemoteWatched?: boolean, forcePush?: boolean } = {}) => {
+    if (syncInProgressRef.current) return;
+    syncInProgressRef.current = true;
+
+    if (forcePush) {
+      try {
+        await pushLocalStateToBackend();
+      } finally {
+        syncInProgressRef.current = false;
+      }
+      return;
+    }
+
     try {
       // 1. Fetch Remote Data
       const response = await fetch(`/api/sync?t=${Date.now()}`);
@@ -692,18 +720,6 @@ ${outlines}
       // However, since we now force-push on delete, the server *should* be up to date.
       // The issue is likely that 'mergedSubs' is combining local (without item) and remote (with item) and adding it back.
 
-      // FIX: If we have a local deletion that hasn't synced, 'mergedSubs' will re-add it.
-      // But we can't easily distinguish "deleted locally" from "added remotely on another device".
-
-      // For now, let's trust the server's state for additions, but if we explicitly triggered this sync from a deletion (which calls this function),
-      // we might want to force the local state.
-
-      // Actually, the simplest fix for the user's issue "it keeps re-appearing" is that when we delete, we call syncWithBackend().
-      // But syncWithBackend() fetches remote first, merges, and THEN pushes.
-      // If remote still has the item, it gets merged back in!
-
-      // We need a 'forcePush' option for syncWithBackend to skip the fetch/merge and just overwrite server.
-
       if (mergedSubs.length !== remoteSubs.length || !areStringSetsEqual(mergedWatched, remoteWatched)) {
         // We push the MERGED list to server, so server becomes the union too.
         const { searchQuery, sortBy, quotaUsed } = useStore.getState();
@@ -736,6 +752,8 @@ ${outlines}
 
     } catch (err) {
       console.error('Sync failed:', err);
+    } finally {
+      syncInProgressRef.current = false;
     }
   }, [queryClient]);
 
@@ -796,41 +814,30 @@ ${outlines}
     clearAll: clearAllMutation.mutateAsync,
     toggleFavorite: async (channelId: string) => {
       await toggleFavorite(channelId);
-      const current = queryClient.getQueryData<StoredSubscription[]>(['subscriptions']);
-      if (current) {
-        const updated = current.map((sub) =>
+      updateSubscriptionsCache((subs) =>
+        subs.map((sub) =>
           sub.id === channelId ? { ...sub, isFavorite: !sub.isFavorite } : sub
-        );
-        queryClient.setQueryData(['subscriptions'], updated);
-      }
-      queryClient.invalidateQueries({ queryKey: ['subscriptions'] });
+        )
+      );
     },
     toggleMute: async (channelId: string) => {
       await toggleMute(channelId);
-      // Optimistically update the cached subscriptions to reflect mute state change
-      const current = queryClient.getQueryData<StoredSubscription[]>(['subscriptions']);
-      if (current) {
-        const updated = current.map((sub) =>
+      updateSubscriptionsCache((subs) =>
+        subs.map((sub) =>
           sub.id === channelId ? { ...sub, isMuted: !sub.isMuted } : sub
-        );
-        queryClient.setQueryData(['subscriptions'], updated);
-      }
-      // Also invalidate to ensure fresh fetch later
-      queryClient.invalidateQueries({ queryKey: ['subscriptions'] });
+        )
+      );
     },
     setSubscriptionGroup: async (channelId: string, group: string) => {
       await setStoredSubscriptionGroup(channelId, group);
-      const current = queryClient.getQueryData<StoredSubscription[]>(['subscriptions']);
-      if (current) {
-        const trimmedGroup = group.trim();
-        const updated = current.map((sub) =>
+      const trimmedGroup = group.trim();
+      updateSubscriptionsCache((subs) =>
+        subs.map((sub) =>
           sub.id === channelId
             ? { ...sub, group: trimmedGroup || undefined }
             : sub
-        );
-        queryClient.setQueryData(['subscriptions'], updated);
-      }
-      queryClient.invalidateQueries({ queryKey: ['subscriptions'] });
+        )
+      );
     },
     exportOPML,
     exportJSON,
@@ -849,14 +856,4 @@ ${outlines}
   };
 };
 
-/**
- * Escape XML special characters
- */
-function escapeXml(text: string): string {
-  return text
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#39;');
-}
+

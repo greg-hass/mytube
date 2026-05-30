@@ -216,6 +216,13 @@ function createSqliteStore({ databaseFile, legacyDataFile, legacyVideosFile }) {
         writeAppState('legacy_imported', true);
     }
 
+    function applySubscriptionFieldUpdate(id, field, value) {
+        const database = getDb();
+        database.prepare(`
+            UPDATE subscriptions SET value_json = json_set(value_json, ?, ?) WHERE id = ?
+        `).run(`$.${field}`, JSON.stringify(value), id);
+    }
+
     return {
         async init({ defaultData, defaultVideoCache }) {
             await fsPromises.mkdir(path.dirname(databaseFile), { recursive: true });
@@ -248,6 +255,9 @@ function createSqliteStore({ databaseFile, legacyDataFile, legacyVideosFile }) {
         async writeVideoCache(cache) {
             writeVideoCacheSnapshot(cache);
             return getVideoCacheSnapshot(cache);
+        },
+        updateSubscriptionField(id, field, value) {
+            applySubscriptionFieldUpdate(id, field, value);
         },
         close() {
             db?.close();

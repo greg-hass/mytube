@@ -39,6 +39,7 @@ module.exports = {
     readData: (...args) => withStore('readData', ...args),
     readVideoCache: (...args) => withStore('readVideoCache', ...args),
     updateData: (...args) => withStore('updateData', ...args),
+    updateSubscriptionField: (...args) => withStore('updateSubscriptionField', ...args),
     writeData: (...args) => withStore('writeData', ...args),
     writeVideoCache: (...args) => withStore('writeVideoCache', ...args),
 };

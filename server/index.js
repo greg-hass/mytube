@@ -1,14 +1,16 @@
 const express = require('express');
 const cors = require('cors');
+const axios = require('axios');
 const fs = require('fs').promises;
 const path = require('path');
 const { recoverDataFiles } = require('./data-integrity');
-const { mergeIncomingSubscriptions, removeSensitiveSyncSettings } = require('./sync-utils');
+const { mergeIncomingSubscriptions, removeSensitiveSyncSettings } = require('./subscription-merge');
 const { searchChannels } = require('./channel-search');
 const { normalizeVideoCacheThumbnails } = require('./video-thumbnails');
 const appStore = require('./app-store');
 const {
     createApiKeyAuthMiddleware,
+    createBucketRateLimiter,
     createCorsOptions,
     createOriginGuardMiddleware,
     createRateLimitMiddleware,
@@ -16,6 +18,8 @@ const {
     validateSyncPayload,
 } = require('./security-middleware');
 const serverPackage = require('./package.json');
+
+let feedAggregator = null;
 
 function readPackageMetadata(packagePath, fallback) {
     try {
@@ -29,6 +33,17 @@ function readPackageMetadata(packagePath, fallback) {
 }
 
 const appPackage = readPackageMetadata('../package.json', { version: 'unknown' });
+
+function asyncHandler(handler, errorMessage) {
+    return async (req, res, next) => {
+        try {
+            await handler(req, res, next);
+        } catch (err) {
+            console.error(`${errorMessage}:`, err.message || err);
+            res.status(500).json({ error: errorMessage });
+        }
+    };
+}
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -46,19 +61,10 @@ const THUMBNAIL_PROXY_TIMEOUT_MS = 5000;
 const THUMBNAIL_PROXY_MAX_BYTES = 5 * 1024 * 1024; // 5 MB
 const THUMBNAIL_PROXY_RATE_WINDOW_MS = 60 * 1000;
 const THUMBNAIL_PROXY_RATE_MAX = 60;
-const thumbnailProxyBuckets = new Map();
-
-function checkThumbnailProxyRateLimit(ip) {
-    const now = Date.now();
-    const existing = thumbnailProxyBuckets.get(ip);
-    const bucket = existing && existing.resetAt > now
-        ? existing
-        : { count: 0, resetAt: now + THUMBNAIL_PROXY_RATE_WINDOW_MS };
-
-    bucket.count += 1;
-    thumbnailProxyBuckets.set(ip, bucket);
-    return bucket.count <= THUMBNAIL_PROXY_RATE_MAX;
-}
+const thumbnailRateLimiter = createBucketRateLimiter({
+    windowMs: THUMBNAIL_PROXY_RATE_WINDOW_MS,
+    max: THUMBNAIL_PROXY_RATE_MAX,
+});
 // --- End thumbnail proxy hardening ---
 
 let dataIntegrityEvents = [];
@@ -147,15 +153,10 @@ app.get('/api/version', (req, res) => {
 });
 
 // GET /api/sync - Retrieve all data
-app.get('/api/sync', async (req, res) => {
-    try {
-        const data = await appStore.readData(DEFAULT_DATA);
-        res.json(removeSensitiveSyncSettings(data));
-    } catch (err) {
-        console.error('Read error:', err);
-        res.status(500).json({ error: 'Failed to read data' });
-    }
-});
+app.get('/api/sync', asyncHandler(async (req, res) => {
+    const data = await appStore.readData(DEFAULT_DATA);
+    res.json(removeSensitiveSyncSettings(data));
+}, 'Failed to read data'));
 
 // GET /api/channel-thumbnail - Same-origin proxy for YouTube channel thumbnails.
 // Some browsers/extensions intermittently block direct yt3.googleusercontent.com
@@ -166,7 +167,7 @@ app.get('/api/channel-thumbnail', async (req, res) => {
     try {
         // --- Rate limiting ---
         const clientIp = req.ip || req.socket?.remoteAddress || 'unknown';
-        if (!checkThumbnailProxyRateLimit(clientIp)) {
+        if (!thumbnailRateLimiter.checkLimit(clientIp)) {
             return res.status(429).json({ error: 'Too many thumbnail requests' });
         }
 
@@ -242,239 +243,187 @@ app.get('/api/channel-thumbnail', async (req, res) => {
 });
 
 // GET /api/channel-search?q=... - Keyword/fuzzy channel discovery without YouTube Data API.
-app.get('/api/channel-search', async (req, res) => {
-    try {
-        const query = String(req.query.q || '').trim();
-        if (query.length < 2) {
-            return res.json({ results: [] });
-        }
-
-        const results = await searchChannels(query, { limit: 8 });
-        res.json({ results });
-    } catch (err) {
-        console.error('Channel search error:', err);
-        res.status(500).json({ error: 'Failed to search channels' });
+app.get('/api/channel-search', asyncHandler(async (req, res) => {
+    const query = String(req.query.q || '').trim();
+    if (query.length < 2) {
+        return res.json({ results: [] });
     }
-});
+
+    const results = await searchChannels(query, { limit: 8 });
+    res.json({ results });
+}, 'Failed to search channels'));
 
 // POST /api/sync - Overwrite all data (simple sync)
-app.post('/api/sync', async (req, res) => {
-    try {
-        const data = removeSensitiveSyncSettings(req.body);
+app.post('/api/sync', asyncHandler(async (req, res) => {
+    const data = removeSensitiveSyncSettings(req.body);
 
-        const validation = validateSyncPayload(data);
-        if (!validation.valid) {
-            return res.status(400).json({ error: validation.error });
+    const validation = validateSyncPayload(data);
+    if (!validation.valid) {
+        return res.status(400).json({ error: validation.error });
+    }
+
+    // Add timestamp
+    data.lastSyncedAt = new Date().toISOString();
+
+    const savedData = await appStore.updateData(DEFAULT_DATA, (existingData) => {
+        const redirects = existingData.redirects || {};
+
+        if (data.subscriptions) {
+            Object.keys(redirects).forEach((sourceId) => {
+                if (data.subscriptions.some(sub => sub.id === sourceId)) {
+                    console.log(`🔀 Server applying redirect on sync: ${sourceId} -> ${redirects[sourceId]}`);
+                }
+            });
+            data.subscriptions = mergeIncomingSubscriptions(
+                data.subscriptions,
+                existingData.subscriptions || [],
+                redirects
+            );
         }
 
-        // Add timestamp
-        data.lastSyncedAt = new Date().toISOString();
+        // ALWAYS preserve redirects from server, never let client overwrite them
+        data.redirects = { ...redirects, ...(data.redirects || {}) };
+        console.log(`💾 Preserving ${Object.keys(data.redirects || {}).length} redirects:`, Object.keys(data.redirects || {}));
 
-        const savedData = await appStore.updateData(DEFAULT_DATA, (existingData) => {
-            const redirects = existingData.redirects || {};
+        return data;
+    }, { trackSubscriptionChanges: true });
 
-            if (data.subscriptions) {
-                Object.keys(redirects).forEach((sourceId) => {
-                    if (data.subscriptions.some(sub => sub.id === sourceId)) {
-                        console.log(`🔀 Server applying redirect on sync: ${sourceId} -> ${redirects[sourceId]}`);
-                    }
-                });
-                data.subscriptions = mergeIncomingSubscriptions(
-                    data.subscriptions,
-                    existingData.subscriptions || [],
-                    redirects
-                );
-            }
+    // Trigger feed aggregation when subscriptions change
+    feedAggregator.aggregateFeeds().catch(err => console.error('Aggregation trigger failed:', err));
 
-            // ALWAYS preserve redirects from server, never let client overwrite them
-            data.redirects = { ...redirects, ...(data.redirects || {}) };
-            console.log(`💾 Preserving ${Object.keys(data.redirects || {}).length} redirects:`, Object.keys(data.redirects || {}));
-
-            return data;
-        }, { trackSubscriptionChanges: true });
-
-        // Trigger feed aggregation when subscriptions change
-        const { aggregateFeeds } = require('./feed-aggregator');
-        aggregateFeeds().catch(err => console.error('Aggregation trigger failed:', err));
-
-        res.json({ success: true, timestamp: savedData.lastSyncedAt });
-    } catch (err) {
-        console.error('Write error:', err);
-        res.status(500).json({ error: 'Failed to save data' });
-    }
-});
+    res.json({ success: true, timestamp: savedData.lastSyncedAt });
+}, 'Failed to save data'));
 
 // GET /api/videos - Retrieve aggregated videos
-app.get('/api/videos', async (req, res) => {
+app.get('/api/videos', asyncHandler(async (req, res) => {
+    let data;
     try {
-        const data = await appStore.readVideoCache(DEFAULT_VIDEO_CACHE);
-        res.json(normalizeVideoCacheThumbnails(data));
+        data = await appStore.readVideoCache(DEFAULT_VIDEO_CACHE);
     } catch (err) {
-        // If file doesn't exist yet, return empty
         if (err.code === 'ENOENT') {
-            res.json({ videos: [], lastUpdated: null, totalChannels: 0, totalVideos: 0 });
-        } else {
-            console.error('Read videos error:', err);
-            res.status(500).json({ error: 'Failed to read videos' });
+            return res.json({ videos: [], lastUpdated: null, totalChannels: 0, totalVideos: 0 });
         }
+        throw err;
     }
-});
+    res.json(normalizeVideoCacheThumbnails(data));
+}, 'Failed to read videos'));
 
 // GET /api/videos/status - Retrieve current aggregation progress
-app.get('/api/videos/status', async (req, res) => {
-    try {
-        const { getAggregationStatus } = require('./feed-aggregator');
-        res.json(getAggregationStatus());
-    } catch (err) {
-        console.error('Read aggregation status error:', err);
-        res.status(500).json({ error: 'Failed to read aggregation status' });
-    }
-});
+app.get('/api/videos/status', asyncHandler(async (req, res) => {
+    res.json(feedAggregator.getAggregationStatus());
+}, 'Failed to read aggregation status'));
 
 // POST /api/videos/refresh - Trigger immediate refresh (async)
-app.post('/api/videos/refresh', async (req, res) => {
-    try {
-        const { aggregateFeeds } = require('./feed-aggregator');
+app.post('/api/videos/refresh', asyncHandler(async (req, res) => {
+    // Trigger aggregation in background (don't await)
+    feedAggregator.aggregateFeeds({ force: true }).catch(err => console.error('Background aggregation error:', err));
 
-        // Trigger aggregation in background (don't await)
-        aggregateFeeds({ force: true }).catch(err => console.error('Background aggregation error:', err));
-
-        // Return immediately
-        res.json({
-            success: true,
-            message: 'Refresh started in background. Check back in a few minutes.'
-        });
-    } catch (err) {
-        console.error('Refresh trigger error:', err);
-        res.status(500).json({ error: 'Failed to trigger refresh' });
-    }
-});
+    // Return immediately
+    res.json({
+        success: true,
+        message: 'Refresh started in background. Check back in a few minutes.'
+    });
+}, 'Failed to trigger refresh'));
 
 // POST /api/videos/cache/reset - Clear aggregated video cache without touching subscriptions
-app.post('/api/videos/cache/reset', async (req, res) => {
-    try {
-        await appStore.writeVideoCache({
-            videos: [],
-            lastUpdated: null,
-            totalChannels: 0,
-            totalVideos: 0,
-            channelRefreshes: {}
-        });
+app.post('/api/videos/cache/reset', asyncHandler(async (req, res) => {
+    await appStore.writeVideoCache({
+        videos: [],
+        lastUpdated: null,
+        totalChannels: 0,
+        totalVideos: 0,
+        channelRefreshes: {}
+    });
 
-        res.json({ success: true });
-    } catch (err) {
-        console.error('Video cache reset error:', err);
-        res.status(500).json({ error: 'Failed to reset video cache' });
-    }
-});
+    res.json({ success: true });
+}, 'Failed to reset video cache'));
 
 // POST /api/resolve-channel - Resolve @handle or custom URL to real channel ID
-app.post('/api/resolve-channel', async (req, res) => {
-    try {
-        const { type, value } = req.body;
+app.post('/api/resolve-channel', asyncHandler(async (req, res) => {
+    const { type, value } = req.body;
 
-        if (!type || !value) {
-            return res.status(400).json({ error: 'Missing type or value' });
-        }
-
-        // Use scraping to resolve the channel
-        const axios = require('axios');
-        let url;
-
-        if (type === 'handle') {
-            // Handle format: @username
-            const handle = value.startsWith('@') ? value : `@${value}`;
-            url = `https://www.youtube.com/${handle}`;
-        } else if (type === 'custom_url') {
-            // Custom URL format: /c/username or /user/username
-            url = `https://www.youtube.com/${value}`;
-        } else {
-            return res.status(400).json({ error: 'Invalid type' });
-        }
-
-        // Fetch the page and extract channel ID
-        const response = await axios.get(url, {
-            headers: { 'User-Agent': 'Mozilla/5.0' }
-        });
-
-        const html = response.data;
-
-        // Extract channel ID from various possible locations
-        let channelId = null;
-        let title = null;
-
-        // Method 1: Look for channel/UC... in the HTML
-        const channelMatch = html.match(/channel\/(UC[a-zA-Z0-9_-]{22})/);
-        if (channelMatch) {
-            channelId = channelMatch[1];
-        }
-
-        // Method 2: Look for "channelId":"UC..." in JSON-LD or other structured data
-        if (!channelId) {
-            const jsonMatch = html.match(/"channelId":"(UC[a-zA-Z0-9_-]{22})"/);
-            if (jsonMatch) {
-                channelId = jsonMatch[1];
-            }
-        }
-
-        // Extract title
-        const titleMatch = html.match(/<meta property="og:title" content="([^"]+)"/);
-        if (titleMatch) {
-            title = titleMatch[1];
-        }
-
-        if (!channelId) {
-            return res.status(404).json({ error: 'Could not resolve channel ID' });
-        }
-
-        res.json({
-            channelId,
-            title: title || value,
-            thumbnail: null // RSS will provide this later
-        });
-    } catch (err) {
-        console.error('Resolve channel error:', err.message);
-        res.status(500).json({ error: 'Failed to resolve channel' });
+    if (!type || !value) {
+        return res.status(400).json({ error: 'Missing type or value' });
     }
-});
+
+    let url;
+
+    if (type === 'handle') {
+        // Handle format: @username
+        const handle = value.startsWith('@') ? value : `@${value}`;
+        url = `https://www.youtube.com/${handle}`;
+    } else if (type === 'custom_url') {
+        // Custom URL format: /c/username or /user/username
+        url = `https://www.youtube.com/${value}`;
+    } else {
+        return res.status(400).json({ error: 'Invalid type' });
+    }
+
+    // Fetch the page and extract channel ID
+    const response = await axios.get(url, {
+        headers: { 'User-Agent': 'Mozilla/5.0' }
+    });
+
+    const html = response.data;
+
+    // Extract channel ID from various possible locations
+    let channelId = null;
+    let title = null;
+
+    // Method 1: Look for channel/UC... in the HTML
+    const channelMatch = html.match(/channel\/(UC[a-zA-Z0-9_-]{22})/);
+    if (channelMatch) {
+        channelId = channelMatch[1];
+    }
+
+    // Method 2: Look for "channelId":"UC..." in JSON-LD or other structured data
+    if (!channelId) {
+        const jsonMatch = html.match(/"channelId":"(UC[a-zA-Z0-9_-]{22})"/);
+        if (jsonMatch) {
+            channelId = jsonMatch[1];
+        }
+    }
+
+    // Extract title
+    const titleMatch = html.match(/<meta property="og:title" content="([^"]+)"/);
+    if (titleMatch) {
+        title = titleMatch[1];
+    }
+
+    if (!channelId) {
+        return res.status(404).json({ error: 'Could not resolve channel ID' });
+    }
+
+    res.json({
+        channelId,
+        title: title || value,
+        thumbnail: null // RSS will provide this later
+    });
+}, 'Failed to resolve channel'));
 
 // POST /api/subscriptions/:id/mute - Toggle mute status for a channel
-app.post('/api/subscriptions/:id/mute', async (req, res) => {
-    try {
-        const { id } = req.params;
-        const { isMuted } = req.body;
+app.post('/api/subscriptions/:id/mute', asyncHandler(async (req, res) => {
+    const { id } = req.params;
+    const { isMuted } = req.body;
 
-        if (typeof isMuted !== 'boolean') {
-            return res.status(400).json({ error: 'isMuted must be a boolean' });
-        }
-
-        let found = false;
-        await appStore.updateData(DEFAULT_DATA, (data) => {
-            const subIndex = data.subscriptions.findIndex(s => s.id === id);
-            if (subIndex === -1) {
-                return data;
-            }
-
-            found = true;
-            data.subscriptions[subIndex].isMuted = isMuted;
-            return data;
-        });
-
-        if (!found) {
-            return res.status(404).json({ error: 'Subscription not found' });
-        }
-
-        res.json({ success: true, isMuted });
-    } catch (err) {
-        console.error('Mute channel error:', err);
-        res.status(500).json({ error: 'Failed to update channel' });
+    if (typeof isMuted !== 'boolean') {
+        return res.status(400).json({ error: 'isMuted must be a boolean' });
     }
-});
+
+    const data = await appStore.readData(DEFAULT_DATA);
+    const found = data.subscriptions.some(s => s.id === id);
+    if (!found) {
+        return res.status(404).json({ error: 'Subscription not found' });
+    }
+
+    await appStore.updateSubscriptionField(id, 'isMuted', isMuted);
+    res.json({ success: true, isMuted });
+}, 'Failed to update channel'));
 
 init().then(() => {
+    feedAggregator = require('./feed-aggregator');
     app.listen(PORT, () => {
         console.log(`Sync server running on port ${PORT}`);
-        require('./feed-aggregator');
     });
 }).catch((error) => {
     console.error('Server startup failed:', error);

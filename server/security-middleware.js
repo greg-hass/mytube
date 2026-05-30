@@ -95,17 +95,14 @@ function getClientKey(req) {
         || 'unknown';
 }
 
-function createRateLimitMiddleware({ windowMs = DEFAULT_WRITE_WINDOW_MS, max = DEFAULT_WRITE_LIMIT } = {}) {
+const { startBucketCleanup } = require('./utils');
+
+function createBucketRateLimiter({ windowMs = DEFAULT_WRITE_WINDOW_MS, max = DEFAULT_WRITE_LIMIT } = {}) {
     const buckets = new Map();
+    startBucketCleanup(buckets);
 
-    return function rateLimit(req, res, next) {
-        if (!['POST', 'PUT', 'PATCH', 'DELETE'].includes(req.method)) {
-            next();
-            return;
-        }
-
+    function checkLimit(key) {
         const now = Date.now();
-        const key = getClientKey(req);
         const existing = buckets.get(key);
         const bucket = existing && existing.resetAt > now
             ? existing
@@ -113,11 +110,35 @@ function createRateLimitMiddleware({ windowMs = DEFAULT_WRITE_WINDOW_MS, max = D
 
         bucket.count += 1;
         buckets.set(key, bucket);
-        res.setHeader?.('X-RateLimit-Limit', String(max));
-        res.setHeader?.('X-RateLimit-Remaining', String(Math.max(0, max - bucket.count)));
-        res.setHeader?.('X-RateLimit-Reset', new Date(bucket.resetAt).toISOString());
+        return bucket.count <= max;
+    }
 
-        if (bucket.count > max) {
+    function getBucket(key) {
+        return buckets.get(key);
+    }
+
+    return { checkLimit, getBucket, buckets };
+}
+
+function createRateLimitMiddleware(opts) {
+    const { checkLimit, getBucket } = createBucketRateLimiter(opts);
+    const { windowMs = DEFAULT_WRITE_WINDOW_MS, max = DEFAULT_WRITE_LIMIT } = opts || {};
+
+    return function rateLimit(req, res, next) {
+        if (!['POST', 'PUT', 'PATCH', 'DELETE'].includes(req.method)) {
+            next();
+            return;
+        }
+
+        const key = getClientKey(req);
+        const allowed = checkLimit(key);
+        const bucket = getBucket(key);
+
+        res.setHeader?.('X-RateLimit-Limit', String(max));
+        res.setHeader?.('X-RateLimit-Remaining', String(Math.max(0, max - (bucket?.count || 0))));
+        res.setHeader?.('X-RateLimit-Reset', bucket ? new Date(bucket.resetAt).toISOString() : '');
+
+        if (!allowed) {
             res.status(429).json({ error: 'Too many requests' });
             return;
         }
@@ -232,6 +253,7 @@ function validateSyncPayload(data) {
 
 module.exports = {
     createApiKeyAuthMiddleware,
+    createBucketRateLimiter,
     createCorsOptions,
     createOriginGuardMiddleware,
     createRateLimitMiddleware,

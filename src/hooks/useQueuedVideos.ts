@@ -1,51 +1,10 @@
 import { useCallback, useMemo, useSyncExternalStore } from 'react';
 import type { YouTubeVideo } from '../types/youtube';
+import { readRawStorage, parseVideoIds, parseVideos } from './local-storage-list';
 
 const IDS_STORAGE_KEY = 'queued-video-ids';
 const VIDEOS_STORAGE_KEY = 'queued-videos';
 const QUEUE_CHANGED_EVENT = 'queued-videos-changed';
-
-function readRawStorage(key: string) {
-  if (typeof localStorage === 'undefined') return null;
-
-  try {
-    return localStorage.getItem(key);
-  } catch {
-    return null;
-  }
-}
-
-function parseQueuedVideoIds(rawValue: string | null) {
-  try {
-    const parsedValue = rawValue ? JSON.parse(rawValue) : [];
-    return Array.isArray(parsedValue) ? parsedValue.filter((id): id is string => typeof id === 'string') : [];
-  } catch {
-    return [];
-  }
-}
-
-function isYouTubeVideo(value: unknown): value is YouTubeVideo {
-  if (!value || typeof value !== 'object') return false;
-
-  const candidate = value as Record<string, unknown>;
-  return (
-    typeof candidate.id === 'string' &&
-    typeof candidate.title === 'string' &&
-    typeof candidate.thumbnail === 'string' &&
-    typeof candidate.channelId === 'string' &&
-    typeof candidate.channelTitle === 'string' &&
-    typeof candidate.publishedAt === 'string'
-  );
-}
-
-function parseQueuedVideos(rawValue: string | null) {
-  try {
-    const parsedValue = rawValue ? JSON.parse(rawValue) : [];
-    return Array.isArray(parsedValue) ? parsedValue.filter(isYouTubeVideo) : [];
-  } catch {
-    return [];
-  }
-}
 
 function getQueueSnapshot() {
   return JSON.stringify({
@@ -75,8 +34,8 @@ export function useQueuedVideos() {
 
   const { queuedVideoIds, queuedVideos } = useMemo(() => {
     const snapshotValue = JSON.parse(snapshot) as { ids: string | null; videos: string | null };
-    const ids = parseQueuedVideoIds(snapshotValue.ids);
-    const videosById = new Map(parseQueuedVideos(snapshotValue.videos).map((video) => [video.id, video]));
+    const ids = parseVideoIds(snapshotValue.ids);
+    const videosById = new Map(parseVideos(snapshotValue.videos).map((video) => [video.id, video]));
 
     for (const video of videosById.values()) {
       if (!ids.includes(video.id)) {
@@ -91,8 +50,8 @@ export function useQueuedVideos() {
   }, [snapshot]);
 
   const addQueuedVideo = useCallback((video: YouTubeVideo) => {
-    const ids = parseQueuedVideoIds(readRawStorage(IDS_STORAGE_KEY));
-    const videosById = new Map(parseQueuedVideos(readRawStorage(VIDEOS_STORAGE_KEY)).map((queuedVideo) => [queuedVideo.id, queuedVideo]));
+    const ids = parseVideoIds(readRawStorage(IDS_STORAGE_KEY));
+    const videosById = new Map(parseVideos(readRawStorage(VIDEOS_STORAGE_KEY)).map((queuedVideo) => [queuedVideo.id, queuedVideo]));
 
     if (!ids.includes(video.id)) {
       ids.push(video.id);
@@ -103,15 +62,15 @@ export function useQueuedVideos() {
   }, []);
 
   const removeQueuedVideo = useCallback((videoId: string) => {
-    const ids = parseQueuedVideoIds(readRawStorage(IDS_STORAGE_KEY)).filter((id) => id !== videoId);
-    const videosById = new Map(parseQueuedVideos(readRawStorage(VIDEOS_STORAGE_KEY)).map((queuedVideo) => [queuedVideo.id, queuedVideo]));
+    const ids = parseVideoIds(readRawStorage(IDS_STORAGE_KEY)).filter((id) => id !== videoId);
+    const videosById = new Map(parseVideos(readRawStorage(VIDEOS_STORAGE_KEY)).map((queuedVideo) => [queuedVideo.id, queuedVideo]));
     videosById.delete(videoId);
 
     writeQueue(ids, videosById);
   }, []);
 
   const toggleQueuedVideo = useCallback((video: YouTubeVideo) => {
-    const currentIds = parseQueuedVideoIds(readRawStorage(IDS_STORAGE_KEY));
+    const currentIds = parseVideoIds(readRawStorage(IDS_STORAGE_KEY));
 
     if (currentIds.includes(video.id)) {
       removeQueuedVideo(video.id);
