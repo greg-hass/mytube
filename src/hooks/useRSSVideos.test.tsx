@@ -105,14 +105,14 @@ describe('useRSSVideos', () => {
       if (url.startsWith('/api/videos/status')) {
         statusCalls += 1;
         return new Response(JSON.stringify({
-          state: 'idle',
+          state: statusCalls <= 1 ? 'running' : 'idle',
           current: 1,
           total: 1,
           videos: 1,
           errors: 0,
-          startedAt: null,
-          completedAt: statusCalls > 1 ? '2026-05-09T10:15:00.000Z' : '2026-05-09T10:00:00.000Z',
-          lastUpdated: statusCalls > 1 ? '2026-05-09T10:15:00.000Z' : '2026-05-09T10:00:00.000Z',
+          startedAt: statusCalls <= 1 ? '2026-05-09T10:00:00.000Z' : null,
+          completedAt: statusCalls <= 1 ? null : '2026-05-09T10:15:00.000Z',
+          lastUpdated: statusCalls <= 1 ? '2026-05-09T10:00:00.000Z' : '2026-05-09T10:15:00.000Z',
         }));
       }
 

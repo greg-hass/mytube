@@ -2,7 +2,7 @@ import { createRequire } from 'node:module';
 import { describe, expect, it } from 'vitest';
 
 const require = createRequire(import.meta.url);
-const { mergeIncomingSubscriptions, removeSensitiveSyncSettings } = require('./sync-utils');
+const { mergeIncomingSubscriptions, removeSensitiveSyncSettings } = require('./subscription-merge');
 
 describe('mergeIncomingSubscriptions', () => {
     it('preserves enriched server thumbnails when incoming sync has a placeholder', () => {

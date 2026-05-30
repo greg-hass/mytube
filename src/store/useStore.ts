@@ -5,14 +5,6 @@ import { createDataSlice, type DataSlice } from './createDataSlice';
 
 type AppState = UISlice & DataSlice;
 
-// Initialize quota reset checker
-function initQuotaResetListener() {
-  // Check for quota reset every minute
-  setInterval(() => {
-    useStore.getState().checkQuotaReset();
-  }, 60000); // 60 seconds
-}
-
 export const useStore = create<AppState>()(
   persist(
     (...a) => ({
@@ -42,6 +34,3 @@ export const useStore = create<AppState>()(
     }
   )
 );
-
-// Start the quota reset checker
-initQuotaResetListener();
