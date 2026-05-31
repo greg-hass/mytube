@@ -10,6 +10,45 @@ const INVIDIOUS_INSTANCES = [
     'https://yt.artemislena.eu',
 ];
 
+const SEARCH_TIMEOUT_MS = 4000;
+const SEARCH_CACHE_MS = 30000;
+
+const searchCache = new Map();
+
+function getCacheKey(query) {
+    return normalizeText(query);
+}
+
+function getCachedResults(query) {
+    const key = getCacheKey(query);
+    const cached = searchCache.get(key);
+    if (cached && Date.now() - cached.timestamp < SEARCH_CACHE_MS) {
+        return cached.results;
+    }
+    return null;
+}
+
+function setCachedResults(query, results) {
+    const key = getCacheKey(query);
+    searchCache.set(key, { results, timestamp: Date.now() });
+    // Clean old entries occasionally
+    if (searchCache.size > 100) {
+        const now = Date.now();
+        for (const [k, v] of searchCache.entries()) {
+            if (now - v.timestamp > SEARCH_CACHE_MS) {
+                searchCache.delete(k);
+            }
+        }
+    }
+}
+
+async function withTimeout(promise, ms, fallback = []) {
+    const timeoutPromise = new Promise((resolve) => {
+        setTimeout(() => resolve(fallback), ms);
+    });
+    return Promise.race([promise, timeoutPromise]);
+}
+
 function normalizeText(value) {
     return String(value || '')
         .toLowerCase()
@@ -69,63 +108,63 @@ function normalizeThumbnail(url) {
 }
 
 async function searchPipedChannels(query, fetchImpl = fetch) {
-    for (const instance of PIPED_INSTANCES) {
+    const searches = PIPED_INSTANCES.map(async (instance) => {
         try {
             const response = await fetchImpl(`${instance}/search?q=${encodeURIComponent(query)}&filter=channels`, {
                 headers: { 'User-Agent': 'Mozilla/5.0' },
             });
 
-            if (!response.ok) continue;
+            if (!response.ok) return [];
 
             const data = await response.json();
             const items = Array.isArray(data?.items) ? data.items : [];
 
-            if (items.length > 0) {
-                return items.map(item => ({
-                    id: String(item.url || '').split('/').pop(),
-                    title: item.name,
-                    description: item.description || '',
-                    thumbnail: normalizeThumbnail(item.thumbnail),
-                    customUrl: item.url,
-                    subscriberCount: item.subscribers ? String(item.subscribers) : undefined,
-                }));
-            }
+            return items.map(item => ({
+                id: String(item.url || '').split('/').pop(),
+                title: item.name,
+                description: item.description || '',
+                thumbnail: normalizeThumbnail(item.thumbnail),
+                customUrl: item.url,
+                subscriberCount: item.subscribers ? String(item.subscribers) : undefined,
+            }));
         } catch (error) {
             console.warn(`Channel search failed for ${instance}:`, error.message);
+            return [];
         }
-    }
+    });
 
-    return [];
+    const results = await Promise.all(searches);
+    return results.flat();
 }
 
 async function searchInvidiousChannels(query, fetchImpl = fetch) {
-    for (const instance of INVIDIOUS_INSTANCES) {
+    const searches = INVIDIOUS_INSTANCES.map(async (instance) => {
         try {
             const response = await fetchImpl(`${instance}/api/v1/search?q=${encodeURIComponent(query)}&type=channel`, {
                 headers: { 'User-Agent': 'Mozilla/5.0' },
             });
 
-            if (!response.ok) continue;
+            if (!response.ok) return [];
 
             const data = await response.json();
             const items = Array.isArray(data) ? data : [];
 
-            if (items.length > 0) {
-                return items.map(item => ({
-                    id: item.authorId,
-                    title: item.author,
-                    description: item.description || '',
-                    thumbnail: normalizeThumbnail(item.authorThumbnails?.at(-1)?.url),
-                    customUrl: item.authorUrl,
-                    subscriberCount: item.subCount ? String(item.subCount) : undefined,
-                }));
-            }
+            return items.map(item => ({
+                id: item.authorId,
+                title: item.author,
+                description: item.description || '',
+                thumbnail: normalizeThumbnail(item.authorThumbnails?.at(-1)?.url),
+                customUrl: item.authorUrl,
+                subscriberCount: item.subCount ? String(item.subCount) : undefined,
+            }));
         } catch (error) {
             console.warn(`Channel search failed for ${instance}:`, error.message);
+            return [];
         }
-    }
+    });
 
-    return [];
+    const results = await Promise.all(searches);
+    return results.flat();
 }
 
 function parseYouTubeChannelSearchResults(html) {
@@ -175,14 +214,27 @@ async function searchChannels(query, options = {}) {
     const trimmedQuery = String(query || '').trim();
     if (trimmedQuery.length < 2) return [];
 
+    // Check cache first
+    const cached = getCachedResults(trimmedQuery);
+    if (cached) return cached;
+
     const fetchImpl = options.fetchImpl || fetch;
+    const limit = options.limit || 8;
+
+    // Use allSettled with timeout so slow sources don't block fast ones
     const [youtubeResults, pipedResults, invidiousResults] = await Promise.all([
-        searchYouTubePageChannels(trimmedQuery, fetchImpl),
-        searchPipedChannels(trimmedQuery, fetchImpl),
-        searchInvidiousChannels(trimmedQuery, fetchImpl),
+        withTimeout(searchYouTubePageChannels(trimmedQuery, fetchImpl), SEARCH_TIMEOUT_MS),
+        withTimeout(searchPipedChannels(trimmedQuery, fetchImpl), SEARCH_TIMEOUT_MS),
+        withTimeout(searchInvidiousChannels(trimmedQuery, fetchImpl), SEARCH_TIMEOUT_MS),
     ]);
 
-    return dedupeAndRankChannels(trimmedQuery, [...youtubeResults, ...pipedResults, ...invidiousResults], options.limit || 8);
+    const allResults = [...youtubeResults, ...pipedResults, ...invidiousResults];
+    const ranked = dedupeAndRankChannels(trimmedQuery, allResults, limit);
+    
+    // Cache the results
+    setCachedResults(trimmedQuery, ranked);
+    
+    return ranked;
 }
 
 module.exports = {
