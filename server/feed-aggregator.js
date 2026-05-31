@@ -1,11 +1,9 @@
-const axios = require('axios');
 const appStore = require('./app-store');
 const { mergeVideoArchive } = require('./video-archive');
 const {
     buildVideoFromFeedItem,
     fetchChannelFeed,
     fetchChannelThumbnail,
-    parseDuration,
 } = require('./feed-fetcher');
 const {
     CHANNEL_REFRESH_INTERVAL_MS,
@@ -150,7 +148,6 @@ function createFeedAggregator() {
             const startingResolverQuota = Number(parsedData.settings?.quotaUsed || 0);
             let resolverQuotaUsed = startingResolverQuota;
             const useResolverApi = Boolean(apiKey && resolverQuotaUsed < API_RESOLVER_DAILY_QUOTA_CAP);
-            const useApiForVideoFetching = false;
     
             if (apiKey && useResolverApi) console.log('🔑 API key available for capped handle resolution only; videos use RSS');
             else if (apiKey) console.log('ℹ️ API resolver quota cap reached or unavailable; using RSS/public fallbacks only');
@@ -158,7 +155,6 @@ function createFeedAggregator() {
             const allVideos = [];
             let failedChannels = [];
             const fetchedChannelResults = [];
-            let quotaExceeded = false;
     
             const redirectResult = applySubscriptionRedirects(subscriptions, parsedData.redirects || {});
             if (redirectResult.changed) {
@@ -221,246 +217,35 @@ function createFeedAggregator() {
                 let batchVideos = [];
                 const batchRefreshResults = [];
     
-                if (useApiForVideoFetching && !quotaExceeded) {
-                    // Use YouTube API (unless quota was already exceeded in a previous batch)
-                    try {
-                        // Filter out any non-UC IDs (like handles that failed resolution) to prevent API errors
-                        const validIds = batch.map(sub => sub.id).filter(id => id.startsWith('UC'));
-    
-                        if (validIds.length === 0) {
-                            // All IDs in this batch are invalid/handles, fallback to RSS
-                            throw new Error('No valid UC IDs in batch');
+                const batchPromises = batch.map(async sub => {
+                    const feedResult = await fetchChannelFeed(sub.id);
+                    const { videos, channelMetadata } = feedResult;
+                    const refreshResult = { ...sub, expected: true, source: 'rss', ...feedResult };
+                    batchRefreshResults.push(refreshResult);
+                    fetchedChannelResults.push(refreshResult);
+
+                    if (channelMetadata && channelMetadata.title) {
+                        const subIndex = subscriptions.findIndex(s => s.id === sub.id);
+                        if (subIndex !== -1) {
+                            subscriptions[subIndex].title = channelMetadata.title;
                         }
-    
-                        const channelIds = validIds.join(',');
-                        // First get uploads playlist IDs (cost: 1 unit)
-                        const channelsUrl = `https://www.googleapis.com/youtube/v3/channels?part=contentDetails,snippet&id=${channelIds}&key=${apiKey}`;
-                        const channelsRes = await axios.get(channelsUrl);
-    
-                        const channelMap = new Map();
-                        channelsRes.data.items?.forEach(item => {
-                            const thumbnail = item.snippet.thumbnails.high?.url || item.snippet.thumbnails.medium?.url;
-                            const title = item.snippet.title;
-    
-                            channelMap.set(item.id, {
-                                uploadsId: item.contentDetails.relatedPlaylists.uploads,
-                                thumbnail,
-                                title
-                            });
-    
-                            // Update subscription metadata
-                            const subIndex = subscriptions.findIndex(s => s.id === item.id);
-                            if (subIndex !== -1) {
-                                if (title) subscriptions[subIndex].title = title;
-                                if (thumbnail) {
-                                    subscriptions[subIndex].thumbnail = thumbnail;
-                                    // Log occasionally to avoid spam, or log all for debugging
-                                    console.log(`    ✓ API: Updated thumbnail for ${item.id}`);
-                                }
-                            }
-                        });
-    
-                        // Fetch videos for each channel's upload playlist
-                        // We can't batch playlistItems across different playlists easily without multiple requests.
-                        // But we can do them in parallel.
-                        const playlistPromises = batch.map(async (sub) => {
-                            const channelInfo = channelMap.get(sub.id);
-                            if (!channelInfo?.uploadsId) {
-                                const { videos } = await fetchChannelFeed(sub.id);
-                                return videos;
-                            }
-    
-                            try {
-                                const playlistUrl = `https://www.googleapis.com/youtube/v3/playlistItems?part=snippet,contentDetails&playlistId=${channelInfo.uploadsId}&maxResults=10&key=${apiKey}`;
-                                const playlistRes = await axios.get(playlistUrl);
-    
-                                return playlistRes.data.items.map(item => ({
-                                    id: item.contentDetails.videoId,
-                                    title: item.snippet.title,
-                                    channelId: item.snippet.channelId,
-                                    channelTitle: item.snippet.channelTitle,
-                                    publishedAt: item.snippet.publishedAt,
-                                    thumbnail: item.snippet.thumbnails.maxres?.url ||
-                                        item.snippet.thumbnails.high?.url ||
-                                        item.snippet.thumbnails.medium?.url ||
-                                        `https://i.ytimg.com/vi/${item.contentDetails.videoId}/maxresdefault.jpg`,
-                                    description: item.snippet.description,
-                                    liveBroadcastContent: item.snippet.liveBroadcastContent,
-                                    isLive: item.snippet.liveBroadcastContent === 'live',
-                                    duration: null // We'd need another call for duration, skip for now or add later
-                                }));
-                            } catch (err) {
-                                console.error(`Failed to fetch playlist for ${sub.id}, falling back to RSS`, err.message);
-                                const { videos } = await fetchChannelFeed(sub.id);
-                                return videos;
-                            }
-                        });
-    
-                        const batchResults = await Promise.all(playlistPromises);
-    
-                        // Flatten results
-                        batchResults.forEach(videos => batchVideos.push(...videos));
-    
-                        // Fetch durations for these videos using the 'videos' endpoint
-                        // We can fetch up to 50 IDs at once
-                        const videoIds = batchVideos.map(v => v.id);
-                        if (videoIds.length > 0) {
-                            try {
-                                // Split into chunks of 50
-                                const chunkSize = 50;
-                                for (let k = 0; k < videoIds.length; k += chunkSize) {
-                                    const chunkIds = videoIds.slice(k, k + chunkSize);
-                                    const videosUrl = `https://www.googleapis.com/youtube/v3/videos?part=contentDetails,snippet&id=${chunkIds.join(',')}&key=${apiKey}`;
-                                    const videosRes = await axios.get(videosUrl);
-    
-                                    videosRes.data.items?.forEach(item => {
-                                        const video = batchVideos.find(v => v.id === item.id);
-                                        if (video) {
-                                            video.duration = parseDuration(item.contentDetails.duration);
-                                            video.liveBroadcastContent = item.snippet?.liveBroadcastContent || video.liveBroadcastContent;
-                                            video.isLive = video.liveBroadcastContent === 'live';
-                                        }
-                                    });
-                                }
-                                console.log(`    ✓ API: Fetched details (duration) for ${videoIds.length} videos`);
-                            } catch (err) {
-                                console.error('    ⚠ API: Failed to fetch video durations:', err.message);
-                            }
-                        }
-    
-                        const fetchedCount = batchVideos.length;
-                        console.log(`  ✨ API Batch: Fetched ${fetchedCount} videos from ${batch.length} channels`);
-    
-                    } catch (err) {
-                        console.error('API batch error, falling back to pure RSS:', err.message, err.response?.data?.error);
-    
-                        // Check for quota exceeded
-                        if (err.response?.status === 403 ||
-                            err.response?.data?.error?.errors?.[0]?.reason === 'quotaExceeded' ||
-                            err.message?.includes('403')) {
-                            console.warn('⚠️ API Quota limit reached (403)! Switching to RSS for all remaining batches.');
-                            // We will update the file at the end of the function
-                            quotaExceeded = true;
-                        }
-    
-                        // Fallback to RSS in parallel
-                        const fallbackPromises = batch.map(async (sub) => {
-                            const feedResult = await fetchChannelFeed(sub.id);
-                            const { videos, channelMetadata } = feedResult;
-                            const refreshResult = { ...sub, expected: true, source: 'rss', ...feedResult };
-    
-                            // Update subscription metadata if we got it from RSS
-                            if (channelMetadata && channelMetadata.title) {
-                                const subIndex = subscriptions.findIndex(s => s.id === sub.id);
-                                if (subIndex !== -1) {
-                                    subscriptions[subIndex].title = channelMetadata.title;
-                                }
-                            }
-    
-                            return { refreshResult, videos };
-                        });
-                        const fallbackResults = await Promise.all(fallbackPromises);
-                        fallbackResults.forEach(({ refreshResult, videos }) => {
-                            batchRefreshResults.push(refreshResult);
-                            fetchedChannelResults.push(refreshResult);
-                            batchVideos.push(...videos);
-                        });
-    
-                        // Fetch thumbnails in parallel for this batch
-                        console.log(`  🖼️  Fetching thumbnails for ${batch.length} channels...`);
-                        const thumbnailPromises = batch.map(async (sub, idx) => {
-                            const subIndex = subscriptions.findIndex(s => s.id === sub.id);
-                            console.log(`    [${idx}] ${sub.id}: subIndex=${subIndex}, hasThumbnail=${!!subscriptions[subIndex]?.thumbnail}`);
-    
-                            if (subIndex !== -1 && (!subscriptions[subIndex].thumbnail || subscriptions[subIndex].thumbnail.includes('ui-avatars'))) {
-                                try {
-                                    console.log(`    [${idx}] Fetching thumbnail for ${sub.id}...`);
-                                    const thumbnail = await fetchChannelThumbnail(sub.id);
-                                    if (thumbnail) {
-                                        subscriptions[subIndex].thumbnail = thumbnail;
-                                        console.log(`    ✓ ${sub.id}: Got thumbnail`);
-                                    } else {
-                                        console.log(`    ✗ ${sub.id}: No thumbnail found`);
-                                    }
-                                } catch (err) {
-                                    console.error(`    ✗ ${sub.id}: Error -`, err.message);
-                                }
-                            } else {
-                                console.log(`    [${idx}] Skipping ${sub.id} (already has thumbnail or not found)`);
-                            }
-                        });
-                        await Promise.all(thumbnailPromises);
                     }
-                } else if (quotaExceeded) {
-                    // Quota was exceeded in a previous batch, use RSS for remaining batches
-                    console.log(`  📡 RSS Mode: Fetching ${batch.length} channels (quota exhausted)`);
-                    const rssPromises = batch.map(async (sub) => {
-                        const feedResult = await fetchChannelFeed(sub.id);
-                        const { videos, channelMetadata } = feedResult;
-                        const refreshResult = { ...sub, expected: true, source: 'rss', ...feedResult };
 
-                        // Update subscription metadata if we got it from RSS
-                        if (channelMetadata && channelMetadata.title) {
-                            const subIndex = subscriptions.findIndex(s => s.id === sub.id);
-                            if (subIndex !== -1) {
-                                subscriptions[subIndex].title = channelMetadata.title;
-                            }
-                        }
+                    return videos;
+                });
+                const batchResults = await Promise.all(batchPromises);
+                batchResults.forEach(videos => batchVideos.push(...videos));
 
-                        return { refreshResult, videos };
-                    });
-                    const rssResults = await Promise.all(rssPromises);
-                    rssResults.forEach(({ refreshResult, videos }) => {
-                        batchRefreshResults.push(refreshResult);
-                        fetchedChannelResults.push(refreshResult);
-                        batchVideos.push(...videos);
-                    });
-
-                    // Fetch thumbnails in parallel for this batch
-                    const thumbnailPromises = batch.map(async sub => {
-                        const subIndex = subscriptions.findIndex(s => s.id === sub.id);
-                        if (subIndex !== -1 && (!subscriptions[subIndex].thumbnail || subscriptions[subIndex].thumbnail.includes('ui-avatars'))) {
-                            const thumbnail = await fetchChannelThumbnail(sub.id);
-                            if (thumbnail) {
-                                subscriptions[subIndex].thumbnail = thumbnail;
-                            }
+                const thumbnailPromises = batch.map(async sub => {
+                    const subIndex = subscriptions.findIndex(s => s.id === sub.id);
+                    if (subIndex !== -1 && (!subscriptions[subIndex].thumbnail || subscriptions[subIndex].thumbnail.includes('ui-avatars'))) {
+                        const thumbnail = await fetchChannelThumbnail(sub.id);
+                        if (thumbnail) {
+                            subscriptions[subIndex].thumbnail = thumbnail;
                         }
-                    });
-                    await Promise.all(thumbnailPromises);
-                } else {
-                    // RSS Only
-                    const batchPromises = batch.map(async sub => {
-                        const feedResult = await fetchChannelFeed(sub.id);
-                        const { videos, channelMetadata } = feedResult;
-                        const refreshResult = { ...sub, expected: true, source: 'rss', ...feedResult };
-                        batchRefreshResults.push(refreshResult);
-                        fetchedChannelResults.push(refreshResult);
-    
-                        // Update subscription metadata if we got it from RSS
-                        if (channelMetadata && channelMetadata.title) {
-                            const subIndex = subscriptions.findIndex(s => s.id === sub.id);
-                            if (subIndex !== -1) {
-                                subscriptions[subIndex].title = channelMetadata.title;
-                            }
-                        }
-    
-                        return videos;
-                    });
-                    const batchResults = await Promise.all(batchPromises);
-                    batchResults.forEach(videos => batchVideos.push(...videos));
-    
-                    // Fetch thumbnails in parallel for this batch
-                    const thumbnailPromises = batch.map(async sub => {
-                        const subIndex = subscriptions.findIndex(s => s.id === sub.id);
-                        if (subIndex !== -1 && (!subscriptions[subIndex].thumbnail || subscriptions[subIndex].thumbnail.includes('ui-avatars'))) {
-                            const thumbnail = await fetchChannelThumbnail(sub.id);
-                            if (thumbnail) {
-                                subscriptions[subIndex].thumbnail = thumbnail;
-                            }
-                        }
-                    });
-                    await Promise.all(thumbnailPromises);
-                }
+                    }
+                });
+                await Promise.all(thumbnailPromises);
     
                 await enrichVideosWithShortsStatus(batchVideos, shortsStatusById);
                 allVideos.push(...batchVideos);
@@ -555,46 +340,6 @@ function createFeedAggregator() {
                 completedAt: new Date().toISOString(),
                 lastUpdated: new Date().toISOString(),
             };
-    
-            // Update quota usage in db.json if we used API
-            if (useApiForVideoFetching) {
-                // Calculate quota used:
-                // 1 unit for channels list
-                // 1 unit per playlist fetch (we did 1 fetch per channel that had uploads)
-                // Note: This is an approximation.
-                const quotaCost = 1 + subscriptions.length;
-    
-                // Read fresh data to avoid race conditions (though we are single threaded mostly)
-                const currentData = await appStore.readData(DEFAULT_DATA);
-    
-                // Initialize if missing
-                if (!currentData.settings) currentData.settings = {};
-                if (!currentData.settings.quotaUsed) currentData.settings.quotaUsed = 0;
-    
-                // Update API Status based on actual results (403 vs 200)
-                if (quotaExceeded) {
-                    // We hit a 403 error
-                    currentData.settings.apiExhausted = true;
-                    // Force counter to max for legacy compatibility
-                    currentData.settings.quotaUsed = 10000;
-                    console.log(`📊 API Status: EXHAUSTED (403 received).`);
-                } else {
-                    // We successfully used the API
-                    currentData.settings.apiExhausted = false;
-    
-                    // If we successfully used the API but the counter is huge (e.g. from yesterday or not reset),
-                    // and we didn't hit the limit, then the counter is wrong. Reset it to just this run's cost.
-                    if (currentData.settings.quotaUsed >= 10000) {
-                        console.log(`📊 API working but quota counter high (${currentData.settings.quotaUsed}). Resetting counter.`);
-                        currentData.settings.quotaUsed = 0;
-                    }
-    
-                    currentData.settings.quotaUsed += quotaCost;
-                    console.log(`📊 API Status: ACTIVE. Quota used this run: ${quotaCost}. Total: ${currentData.settings.quotaUsed}`);
-                }
-    
-                await appStore.writeData(currentData);
-            }
     
             console.log(`✅ Aggregation complete: ${archivedVideosWithShortsStatus.length} archived videos from ${subscriptions.length} channels`);
             scheduleArchivedShortsStatusBackfill(archivedVideosWithShortsStatus, shortsStatusById);
@@ -766,12 +511,19 @@ function createFeedAggregator() {
         console.log(`⏱️ Scheduled feed refresh every ${Math.round(config.intervalMs / 60000)} minutes`);
         return scheduledRefreshStatus;
     }
+
+    function start() {
+        aggregateOnStartupIfStale();
+        startScheduledRefresh();
+    }
+
     return {
         aggregateFeeds,
         aggregateOnStartupIfStale,
         getAggregationStatus,
         getChannelsDueForRefresh,
         getScheduledRefreshConfig,
+        start,
         startScheduledRefresh,
         stopScheduledRefresh,
         mergeChannelRefreshes,
@@ -783,10 +535,6 @@ function createFeedAggregator() {
 }
 
 const aggregator = createFeedAggregator();
-
-// Run immediately on start when enabled
-aggregator.aggregateOnStartupIfStale();
-aggregator.startScheduledRefresh();
 
 module.exports = {
     ARCHIVED_SHORTS_BACKFILL_RETRY_INTERVAL_MS,
