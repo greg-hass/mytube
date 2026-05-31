@@ -97,7 +97,7 @@ export const AddChannelModal = ({ isOpen, onClose, onAdd, existingSubscriptions 
           setIsSearching(false);
         }
       }
-    }, 300);
+    }, 150);
 
     return () => {
       controller.abort();
@@ -325,6 +325,34 @@ export const AddChannelModal = ({ isOpen, onClose, onAdd, existingSubscriptions 
                   )}
                 </section>
 
+                {/* Search Loading Skeleton */}
+                <AnimatePresence>
+                  {isSearching && !hasResults && (
+                    <motion.section
+                      initial={{ opacity: 0 }}
+                      animate={{ opacity: 1 }}
+                      exit={{ opacity: 0 }}
+                      className="space-y-3"
+                    >
+                      <div className="flex items-center gap-2 text-sm text-gray-500 dark:text-gray-400">
+                        <div className="w-4 h-4 border-2 border-red-600 border-t-transparent rounded-full animate-spin" />
+                        Searching...
+                      </div>
+                      <div className="space-y-2 pr-1">
+                        {[1, 2, 3].map((i) => (
+                          <div key={i} className="flex items-center gap-3 rounded-xl border border-gray-100 dark:border-gray-800 bg-gray-50 dark:bg-gray-800/30 p-3">
+                            <div className="h-11 w-11 flex-none rounded-full bg-gray-200 dark:bg-gray-700 animate-pulse" />
+                            <div className="flex-1 space-y-2">
+                              <div className="h-4 w-3/4 bg-gray-200 dark:bg-gray-700 rounded animate-pulse" />
+                              <div className="h-3 w-1/2 bg-gray-200 dark:bg-gray-700 rounded animate-pulse" />
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </motion.section>
+                  )}
+                </AnimatePresence>
+
                 {/* Search Results — grow to fill space */}
                 <AnimatePresence>
                   {hasResults && (
@@ -334,10 +362,18 @@ export const AddChannelModal = ({ isOpen, onClose, onAdd, existingSubscriptions 
                       exit={{ opacity: 0, height: 0 }}
                       className="space-y-3"
                     >
-                      <h3 className="text-sm font-semibold text-gray-900 dark:text-white flex items-center gap-2">
-                        <Search className="w-4 h-4 text-red-600" />
-                        Search Results
-                      </h3>
+                      <div className="flex items-center justify-between">
+                        <h3 className="text-sm font-semibold text-gray-900 dark:text-white flex items-center gap-2">
+                          <Search className="w-4 h-4 text-red-600" />
+                          Search Results
+                          {isSearching && (
+                            <span className="text-xs text-gray-400 font-normal">updating...</span>
+                          )}
+                        </h3>
+                        <span className="text-xs text-gray-400">
+                          {visibleSearchResults.length} found
+                        </span>
+                      </div>
                       <div className="space-y-2 pr-1">
                         {visibleSearchResults.map((channel) => {
                           const isAdded = addedChannelIds.has(channel.id);
@@ -398,6 +434,26 @@ export const AddChannelModal = ({ isOpen, onClose, onAdd, existingSubscriptions 
                         })}
                       </div>
                     </motion.section>
+                  )}
+                </AnimatePresence>
+
+                {/* No Results State */}
+                <AnimatePresence>
+                  {!isSearching && input.trim().length >= 2 && !hasResults && !channelInfo && (
+                    <motion.div
+                      initial={{ opacity: 0 }}
+                      animate={{ opacity: 1 }}
+                      exit={{ opacity: 0 }}
+                      className="text-center py-8"
+                    >
+                      <Search className="w-12 h-12 text-gray-300 dark:text-gray-700 mx-auto mb-3" />
+                      <p className="text-sm text-gray-500 dark:text-gray-400">
+                        No channels found for "{input.trim()}"
+                      </p>
+                      <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">
+                        Try a different search term or enter a YouTube URL
+                      </p>
+                    </motion.div>
                   )}
                 </AnimatePresence>
 
