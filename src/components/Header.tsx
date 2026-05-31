@@ -9,9 +9,11 @@ import {
   Download,
   Plus,
   Settings,
-  RefreshCw,
   Menu,
   X,
+  Play,
+  Eye,
+  EyeOff,
 } from 'lucide-react';
 import { lazy, Suspense, useLayoutEffect, useRef, useState } from 'react';
 import { SettingsModal } from './SettingsModal';
@@ -35,6 +37,11 @@ interface HeaderProps {
     videoCount: number;
   };
   onRetryFailed?: () => void;
+  showShorts?: boolean;
+  onToggleShorts?: () => void;
+  hideWatched?: boolean;
+  onToggleWatched?: () => void;
+  showFilters?: boolean;
 }
 
 export const Header = ({
@@ -44,6 +51,11 @@ export const Header = ({
   syncStatus,
   cacheStatus,
   onRetryFailed,
+  showShorts = true,
+  onToggleShorts,
+  hideWatched = false,
+  onToggleWatched,
+  showFilters = true,
 }: HeaderProps) => {
   const headerRef = useRef<HTMLElement | null>(null);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
@@ -61,9 +73,7 @@ export const Header = ({
   const [showExportMenu, setShowExportMenu] = useState(false);
   const [showMobileMenu, setShowMobileMenu] = useState(false);
   const [showMobileSearchPanel, setShowMobileSearchPanel] = useState(false);
-  const [isRefreshing, setIsRefreshing] = useState(false);
   const showRefreshHealthPanel = Boolean(syncStatus?.isSyncing && cacheStatus && onRetryFailed);
-  const isRefreshInProgress = isRefreshing || Boolean(syncStatus?.isSyncing);
 
   useLayoutEffect(() => {
     const header = headerRef.current;
@@ -92,21 +102,6 @@ export const Header = ({
     };
   }, []);
 
-  const handleRefresh = async () => {
-    setIsRefreshing(true);
-    try {
-      const response = await fetch('/api/videos/refresh', { method: 'POST' });
-      if (response.ok) {
-        console.log('Refresh triggered successfully');
-      }
-    } catch (error) {
-      console.error('Refresh failed:', error);
-    } finally {
-      // Keep spinning for a bit to show it's working
-      setTimeout(() => setIsRefreshing(false), 2000);
-    }
-  };
-
   const handleExport = (format: 'opml' | 'json') => {
     try {
       if (format === 'opml') {
@@ -120,8 +115,6 @@ export const Header = ({
       alert('Failed to export subscriptions. Make sure you have subscriptions loaded.');
     }
   };
-
-
 
   return (
     <>
@@ -180,17 +173,43 @@ export const Header = ({
               </motion.button>
             )}
 
-            {/* Refresh Button */}
-            <motion.button
-              whileHover={{ scale: 1.05 }}
-              whileTap={{ scale: 0.95 }}
-              onClick={handleRefresh}
-              disabled={isRefreshInProgress}
-              className="p-2 rounded-lg bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors disabled:opacity-50"
-              title="Refresh feeds"
-            >
-              <RefreshCw className={`w-5 h-5 ${isRefreshInProgress ? 'animate-spin' : ''}`} />
-            </motion.button>
+            {/* Shorts Toggle */}
+            {showFilters && onToggleShorts && (
+              <motion.button
+                whileHover={{ scale: 1.05 }}
+                whileTap={{ scale: 0.95 }}
+                onClick={onToggleShorts}
+                className={`p-2 rounded-lg transition-colors ${
+                  showShorts
+                    ? 'bg-red-100 text-red-600 dark:bg-red-900/30 dark:text-red-400'
+                    : 'bg-gray-100 text-gray-500 dark:bg-gray-800 dark:text-gray-400'
+                }`}
+                title={showShorts ? 'Hide Shorts' : 'Show Shorts'}
+              >
+                <Play className="w-5 h-5" />
+              </motion.button>
+            )}
+
+            {/* Watched Toggle */}
+            {showFilters && onToggleWatched && (
+              <motion.button
+                whileHover={{ scale: 1.05 }}
+                whileTap={{ scale: 0.95 }}
+                onClick={onToggleWatched}
+                className={`p-2 rounded-lg transition-colors ${
+                  hideWatched
+                    ? 'bg-emerald-100 text-emerald-600 dark:bg-emerald-900/30 dark:text-emerald-400'
+                    : 'bg-gray-100 text-gray-500 dark:bg-gray-800 dark:text-gray-400'
+                }`}
+                title={hideWatched ? 'Show Watched' : 'Hide Watched'}
+              >
+                {hideWatched ? (
+                  <EyeOff className="w-5 h-5" />
+                ) : (
+                  <Eye className="w-5 h-5" />
+                )}
+              </motion.button>
+            )}
 
             {/* Sort */}
             <select
@@ -303,15 +322,38 @@ export const Header = ({
                 <Plus className="w-5 h-5" />
               </button>
             )}
-            <button
-              data-testid="mobile-refresh-button"
-              onClick={handleRefresh}
-              disabled={isRefreshInProgress}
-              className="p-2 rounded-lg bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors disabled:opacity-50"
-              title="Refresh feeds"
-            >
-              <RefreshCw className={`w-5 h-5 ${isRefreshInProgress ? 'animate-spin' : ''}`} />
-            </button>
+            {showFilters && onToggleShorts && (
+              <button
+                data-testid="mobile-shorts-toggle"
+                onClick={onToggleShorts}
+                className={`p-2 rounded-lg transition-colors ${
+                  showShorts
+                    ? 'bg-red-100 text-red-600 dark:bg-red-900/30 dark:text-red-400'
+                    : 'bg-gray-100 text-gray-500 dark:bg-gray-800 dark:text-gray-400'
+                }`}
+                title={showShorts ? 'Hide Shorts' : 'Show Shorts'}
+              >
+                <Play className="w-5 h-5" />
+              </button>
+            )}
+            {showFilters && onToggleWatched && (
+              <button
+                data-testid="mobile-watched-toggle"
+                onClick={onToggleWatched}
+                className={`p-2 rounded-lg transition-colors ${
+                  hideWatched
+                    ? 'bg-emerald-100 text-emerald-600 dark:bg-emerald-900/30 dark:text-emerald-400'
+                    : 'bg-gray-100 text-gray-500 dark:bg-gray-800 dark:text-gray-400'
+                }`}
+                title={hideWatched ? 'Show Watched' : 'Hide Watched'}
+              >
+                {hideWatched ? (
+                  <EyeOff className="w-5 h-5" />
+                ) : (
+                  <Eye className="w-5 h-5" />
+                )}
+              </button>
+            )}
             {showMobileSearch && (
               <button
                 data-testid="mobile-search-button"
@@ -402,14 +444,43 @@ export const Header = ({
                 </button>
               )}
 
-              <button
-                onClick={handleRefresh}
-                disabled={isRefreshInProgress}
-                className="flex w-full items-center justify-center gap-2 rounded-lg bg-gray-100 px-4 py-3 font-medium hover:bg-gray-200 disabled:opacity-50 dark:bg-gray-800/90 dark:hover:bg-gray-700"
-              >
-                <RefreshCw className={`h-4 w-4 ${isRefreshInProgress ? 'animate-spin' : ''}`} />
-                Refresh Feeds
-              </button>
+              {showFilters && onToggleShorts && (
+                <button
+                  onClick={() => {
+                    setShowMobileMenu(false);
+                    onToggleShorts();
+                  }}
+                  className={`flex w-full items-center justify-center gap-2 rounded-lg px-4 py-3 font-medium transition-colors ${
+                    showShorts
+                      ? 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400'
+                      : 'bg-gray-100 text-gray-700 dark:bg-gray-800/90 dark:text-gray-300'
+                  }`}
+                >
+                  <Play className="h-4 w-4" />
+                  {showShorts ? 'Hide Shorts' : 'Show Shorts'}
+                </button>
+              )}
+
+              {showFilters && onToggleWatched && (
+                <button
+                  onClick={() => {
+                    setShowMobileMenu(false);
+                    onToggleWatched();
+                  }}
+                  className={`flex w-full items-center justify-center gap-2 rounded-lg px-4 py-3 font-medium transition-colors ${
+                    hideWatched
+                      ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400'
+                      : 'bg-gray-100 text-gray-700 dark:bg-gray-800/90 dark:text-gray-300'
+                  }`}
+                >
+                  {hideWatched ? (
+                    <EyeOff className="h-4 w-4" />
+                  ) : (
+                    <Eye className="h-4 w-4" />
+                  )}
+                  {hideWatched ? 'Show Watched' : 'Hide Watched'}
+                </button>
+              )}
 
               {syncStatus && cacheStatus && onRetryFailed && (
                 <div className="space-y-2 pt-1">
