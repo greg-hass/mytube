@@ -1,12 +1,6 @@
-// Shared list of CORS proxies for fetching YouTube resources from the browser
-// Multiple proxies for fallback in case one fails
-export const CORS_PROXIES = [
-  'https://api.allorigins.win/raw?url=',
-  'https://api.codetabs.com/v1/proxy?quest=',
-  // 'https://corsproxy.io/?', // Dead/DNS error
-  // 'https://thingproxy.freeboard.io/fetch/', // Unreliable
-  // 'https://yacdn.org/proxy/', // Unreliable
-];
+import externalServices from './external-services.json';
+
+export const CORS_PROXIES = externalServices.corsProxyPrefixes;
 
 /**
  * Build a proxied URL to bypass CORS restrictions

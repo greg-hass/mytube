@@ -1,14 +1,7 @@
-const PIPED_INSTANCES = [
-    'https://pipedapi.kavin.rocks',
-    'https://api.piped.ot.ax',
-    'https://pipedapi.drgns.space',
-];
-
-const INVIDIOUS_INSTANCES = [
-    'https://inv.tux.pizza',
-    'https://invidious.projectsegfau.lt',
-    'https://yt.artemislena.eu',
-];
+const {
+    pipedInstances: PIPED_INSTANCES,
+    invidiousInstances: INVIDIOUS_INSTANCES,
+} = require('../src/lib/external-services.json');
 
 const SEARCH_TIMEOUT_MS = 4000;
 const SEARCH_CACHE_MS = 30000;
