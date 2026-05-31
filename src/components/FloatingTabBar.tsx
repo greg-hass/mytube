@@ -73,7 +73,7 @@ export const FloatingTabBar = ({
     >
         <div className="flex items-center justify-center px-4 pb-1.5 pt-2">
         {/* Tab Bar Pill */}
-        <div className="pointer-events-auto flex items-center gap-1 rounded-[2rem] bg-white/70 px-3 py-2.5 shadow-[0_8px_32px_rgba(0,0,0,0.12)] ring-1 ring-white/40 backdrop-blur-2xl dark:bg-gray-950/70 dark:shadow-[0_8px_32px_rgba(0,0,0,0.4)] dark:ring-white/10">
+        <div className="pointer-events-auto flex items-center gap-1 rounded-[2rem] bg-white/70 px-3 py-2.5 shadow-[0_8px_32px_rgba(0,0,0,0.12)] ring-1 ring-white/40 backdrop-blur-2xl dark:bg-gray-950/70 dark:shadow-[0_8px_32px_rgba(0,0,0,0.4)] dark:ring-white/10 mx-4">
           {TABS.map((tab) => {
             const isActive = activeTab === tab.id;
             const badge = tab.getBadge?.(props) ?? null;
