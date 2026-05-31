@@ -72,18 +72,6 @@ export const FloatingTabBar = ({
       className="fixed bottom-0 left-0 right-0 z-50 pb-[env(safe-area-inset-bottom)] pointer-events-none"
     >
       <div className="flex items-center justify-center gap-2 px-4 pb-3 pt-2">
-        {/* Add Channel Button */}
-        <motion.button
-          whileHover={{ scale: 1.1 }}
-          whileTap={{ scale: 0.9 }}
-          onClick={onAddChannel}
-          className="pointer-events-auto flex h-12 w-12 items-center justify-center rounded-full bg-red-600 text-white shadow-lg shadow-red-600/30 transition-colors hover:bg-red-700 dark:bg-red-600 dark:hover:bg-red-500"
-          title="Add channel"
-          aria-label="Add channel"
-        >
-          <Plus className="h-6 w-6" />
-        </motion.button>
-
         {/* Tab Bar Pill */}
         <div className="pointer-events-auto flex items-center gap-1 rounded-[2rem] bg-white/70 px-2 py-2 shadow-[0_8px_32px_rgba(0,0,0,0.12)] ring-1 ring-white/40 backdrop-blur-2xl dark:bg-gray-950/70 dark:shadow-[0_8px_32px_rgba(0,0,0,0.4)] dark:ring-white/10">
           {TABS.map((tab) => {
@@ -134,6 +122,18 @@ export const FloatingTabBar = ({
             );
           })}
         </div>
+
+        {/* Add Channel Button */}
+        <motion.button
+          whileHover={{ scale: 1.1 }}
+          whileTap={{ scale: 0.9 }}
+          onClick={onAddChannel}
+          className="pointer-events-auto flex h-12 w-12 items-center justify-center rounded-full bg-red-600 text-white shadow-lg shadow-red-600/30 transition-colors hover:bg-red-700 dark:bg-red-600 dark:hover:bg-red-500"
+          title="Add channel"
+          aria-label="Add channel"
+        >
+          <Plus className="h-6 w-6" />
+        </motion.button>
       </div>
     </motion.nav>
   );
