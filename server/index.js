@@ -3,7 +3,6 @@ const cors = require('cors');
 const axios = require('axios');
 const fs = require('fs').promises;
 const path = require('path');
-const { recoverDataFiles } = require('./data-integrity');
 const { mergeIncomingSubscriptions, removeSensitiveSyncSettings } = require('./subscription-merge');
 const { searchChannels } = require('./channel-search');
 const { normalizeVideoCacheThumbnails } = require('./video-thumbnails');
@@ -67,7 +66,6 @@ const thumbnailRateLimiter = createBucketRateLimiter({
 });
 // --- End thumbnail proxy hardening ---
 
-let dataIntegrityEvents = [];
 let server = null;
 let shutdownPromise = null;
 
@@ -92,11 +90,6 @@ app.get('/api/healthz', (req, res) => {
 async function init() {
     try {
         await fs.mkdir(path.dirname(DATA_FILE), { recursive: true });
-        dataIntegrityEvents = await recoverDataFiles([
-            { file: DATA_FILE, fallback: DEFAULT_DATA },
-            { file: VIDEOS_FILE, fallback: DEFAULT_VIDEO_CACHE },
-        ]);
-
         await appStore.init();
         let data = await appStore.readData(DEFAULT_DATA);
 
@@ -135,7 +128,6 @@ app.get('/api/health', async (req, res) => {
             videos: videoCache.totalVideos || videoCache.videos?.length || 0,
             lastUpdated: videoCache.lastUpdated || null,
             uptime: process.uptime(),
-            dataIntegrity: dataIntegrityEvents,
         });
     } catch (err) {
         console.error('Health check error:', err);

@@ -108,6 +108,61 @@ function createFeedAggregator() {
             day: 'numeric',
         }).format(new Date());
     }
+
+    async function refreshBatch(batch, subscriptions, fetchedChannelResults, deps = {}) {
+        const feedFetcher = deps.fetchChannelFeed || fetchChannelFeed;
+        const thumbnailFetcher = deps.fetchChannelThumbnail || fetchChannelThumbnail;
+        const batchRefreshResults = [];
+        const batchVideos = [];
+
+        const batchPromises = batch.map(async (sub) => {
+            const feedResult = await feedFetcher(sub.id);
+            const { videos, channelMetadata } = feedResult;
+            const refreshResult = { ...sub, expected: true, source: 'rss', ...feedResult };
+            batchRefreshResults.push(refreshResult);
+            fetchedChannelResults.push(refreshResult);
+
+            if (channelMetadata && channelMetadata.title) {
+                const subIndex = subscriptions.findIndex((subscription) => subscription.id === sub.id);
+                if (subIndex !== -1) {
+                    subscriptions[subIndex].title = channelMetadata.title;
+                }
+            }
+
+            return videos;
+        });
+
+        const batchResults = await Promise.all(batchPromises);
+        batchResults.forEach((videos) => batchVideos.push(...videos));
+
+        const thumbnailPromises = batch.map(async (sub) => {
+            const subIndex = subscriptions.findIndex((subscription) => subscription.id === sub.id);
+            if (subIndex !== -1 && (!subscriptions[subIndex].thumbnail || subscriptions[subIndex].thumbnail.includes('ui-avatars'))) {
+                const thumbnail = await thumbnailFetcher(sub.id);
+                if (thumbnail) {
+                    subscriptions[subIndex].thumbnail = thumbnail;
+                }
+            }
+        });
+
+        await Promise.all(thumbnailPromises);
+
+        return { batchRefreshResults, batchVideos };
+    }
+
+    function setRunningAggregationStatus({ skippedChannels, subscriptions, existingVideos, startedAt }) {
+        aggregationStatus = {
+            state: 'running',
+            current: skippedChannels,
+            total: subscriptions.length,
+            videos: existingVideos.length,
+            errors: 0,
+            failedChannels: [],
+            startedAt,
+            completedAt: null,
+            lastUpdated: new Date().toISOString(),
+        };
+    }
     
     async function runAggregation(options = {}) {
         if (archivedShortsBackfillPromise) {
@@ -196,17 +251,13 @@ function createFeedAggregator() {
                 console.log(`⚡ RSS cache: skipping ${skippedChannels} recently checked channels; ${subscriptionsToRefresh.length} due`);
             }
     
-            aggregationStatus = {
-                state: 'running',
-                current: skippedChannels,
-                total: subscriptions.length,
-                videos: existingVideos.length,
-                errors: 0,
-                failedChannels: [],
-                startedAt: new Date().toISOString(),
-                completedAt: null,
-                lastUpdated: new Date().toISOString(),
-            };
+            const aggregationStartedAt = new Date().toISOString();
+            setRunningAggregationStatus({
+                skippedChannels,
+                subscriptions,
+                existingVideos,
+                startedAt: aggregationStartedAt,
+            });
     
             // Process in batches
             const CURRENT_BATCH_SIZE = BATCH_SIZE;
@@ -214,38 +265,11 @@ function createFeedAggregator() {
             for (let i = 0; i < subscriptionsToRefresh.length; i += CURRENT_BATCH_SIZE) {
                 const batch = subscriptionsToRefresh.slice(i, i + CURRENT_BATCH_SIZE);
     
-                let batchVideos = [];
-                const batchRefreshResults = [];
-    
-                const batchPromises = batch.map(async sub => {
-                    const feedResult = await fetchChannelFeed(sub.id);
-                    const { videos, channelMetadata } = feedResult;
-                    const refreshResult = { ...sub, expected: true, source: 'rss', ...feedResult };
-                    batchRefreshResults.push(refreshResult);
-                    fetchedChannelResults.push(refreshResult);
-
-                    if (channelMetadata && channelMetadata.title) {
-                        const subIndex = subscriptions.findIndex(s => s.id === sub.id);
-                        if (subIndex !== -1) {
-                            subscriptions[subIndex].title = channelMetadata.title;
-                        }
-                    }
-
-                    return videos;
-                });
-                const batchResults = await Promise.all(batchPromises);
-                batchResults.forEach(videos => batchVideos.push(...videos));
-
-                const thumbnailPromises = batch.map(async sub => {
-                    const subIndex = subscriptions.findIndex(s => s.id === sub.id);
-                    if (subIndex !== -1 && (!subscriptions[subIndex].thumbnail || subscriptions[subIndex].thumbnail.includes('ui-avatars'))) {
-                        const thumbnail = await fetchChannelThumbnail(sub.id);
-                        if (thumbnail) {
-                            subscriptions[subIndex].thumbnail = thumbnail;
-                        }
-                    }
-                });
-                await Promise.all(thumbnailPromises);
+                const { batchRefreshResults, batchVideos } = await refreshBatch(
+                    batch,
+                    subscriptions,
+                    fetchedChannelResults
+                );
     
                 await enrichVideosWithShortsStatus(batchVideos, shortsStatusById);
                 allVideos.push(...batchVideos);
@@ -336,7 +360,7 @@ function createFeedAggregator() {
                 videos: archivedVideosWithShortsStatus.length,
                 errors: failedChannels.length,
                 failedChannels,
-                startedAt: aggregationStatus.startedAt,
+                startedAt: aggregationStartedAt,
                 completedAt: new Date().toISOString(),
                 lastUpdated: new Date().toISOString(),
             };
@@ -523,14 +547,17 @@ function createFeedAggregator() {
         getAggregationStatus,
         getChannelsDueForRefresh,
         getScheduledRefreshConfig,
+        refreshBatch,
         start,
         startScheduledRefresh,
         stopScheduledRefresh,
         mergeChannelRefreshes,
         summarizeFailedChannels,
-        backfillArchivedShortsStatus,
-        isArchivedShortsBackfillDue,
-        startArchivedShortsStatusBackfill,
+    backfillArchivedShortsStatus,
+    isArchivedShortsBackfillDue,
+    startArchivedShortsStatusBackfill,
+    setRunningAggregationStatus,
+    getAggregationStatus,
     };
 }
 
@@ -549,4 +576,9 @@ module.exports = {
     isArchivedShortsBackfillDue,
     applyLocalShortsMetadata,
     looksLikeShortByLocalMetadata,
+    __test__: {
+        refreshBatch: aggregator.refreshBatch,
+        setRunningAggregationStatus: aggregator.setRunningAggregationStatus,
+        getAggregationStatus: aggregator.getAggregationStatus,
+    },
 };
