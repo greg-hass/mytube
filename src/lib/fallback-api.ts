@@ -1,4 +1,5 @@
 import { fetchWithProxy } from './cors-proxies';
+import externalServices from './external-services.json';
 
 type PipedChannelResult = {
     name: string;
@@ -22,17 +23,7 @@ export async function resolveWithFallbackApi(searchTerm: string): Promise<{ id: 
     // Remove @ for search
     const query = searchTerm.startsWith('@') ? searchTerm.substring(1) : searchTerm;
 
-    // 1. Try Piped API first (often more reliable and JSON-only)
-    // Piped instances: https://github.com/TeamPiped/Piped/wiki/Instances
-    const pipedInstances = [
-        'https://pipedapi.kavin.rocks', // Often reliable
-        'https://api.piped.ot.ax',
-        'https://pipedapi.system41.jio', // Added
-        'https://api.piped.privacy.com.de', // Added
-        'https://pipedapi.drgns.space'
-    ];
-
-    for (const instance of pipedInstances) {
+    for (const instance of externalServices.pipedInstances) {
         try {
             // Piped doesn't need CORS proxy usually, but we'll use it if direct fails
             // Try direct first
@@ -69,17 +60,7 @@ export async function resolveWithFallbackApi(searchTerm: string): Promise<{ id: 
         }
     }
 
-    // 2. Fallback to Invidious instances via Proxy
-    const invidiousInstances = [
-        'https://inv.tux.pizza',
-        'https://vid.puffyan.us',
-        'https://invidious.projectsegfau.lt',
-        'https://yt.artemislena.eu',
-        'https://invidious.flokinet.to', // Added
-        'https://invidious.privacyredirect.com' // Added
-    ];
-
-    for (const instance of invidiousInstances) {
+    for (const instance of externalServices.invidiousInstances) {
         try {
             const url = `${instance}/api/v1/search?q=${encodeURIComponent(query)}&type=channel`;
 

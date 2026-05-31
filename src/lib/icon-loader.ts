@@ -1,4 +1,5 @@
 import { CORS_PROXIES, buildProxiedUrl } from './cors-proxies';
+import externalServices from './external-services.json';
 
 const channelThumbnailCache = new Map<string, string>();
 const failedChannelThumbnailCache = new Set<string>();
@@ -223,17 +224,6 @@ async function tryDirectThumbnailUrls(channelId: string): Promise<string | null>
 }
 
 /**
- * List of public Invidious instances to use as fallback API
- */
-const INVIDIOUS_INSTANCES = [
-  'https://inv.tux.pizza',
-  'https://invidious.projectsegfau.lt',
-  'https://invidious.jing.rocks',
-  'https://vid.puffyan.us',
-  'https://invidious.drgns.space'
-];
-
-/**
  * Fetch channel thumbnail using Invidious API
  * This is more reliable than scraping YouTube via proxies
  */
@@ -243,7 +233,7 @@ async function fetchFromInvidious(channelId: string): Promise<string | null> {
     return channelThumbnailCache.get(channelId)!;
   }
 
-  for (const instance of INVIDIOUS_INSTANCES) {
+  for (const instance of externalServices.invidiousInstances) {
     try {
       await rateLimitRequest();
       const response = await fetch(`${instance}/api/v1/channels/${channelId}`, {
