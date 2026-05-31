@@ -73,7 +73,7 @@ export const FloatingTabBar = ({
     >
         <div className="flex items-center justify-center px-4 pb-1.5 pt-2">
         {/* Tab Bar Pill */}
-        <div className="pointer-events-auto flex items-center gap-1 rounded-[2rem] bg-white/70 px-3 py-2.5 shadow-[0_8px_32px_rgba(0,0,0,0.12)] ring-1 ring-white/40 backdrop-blur-2xl dark:bg-gray-950/70 dark:shadow-[0_8px_32px_rgba(0,0,0,0.4)] dark:ring-white/10 mx-4">
+        <div className="pointer-events-auto flex items-center gap-0.5 rounded-[2rem] bg-white/70 px-2 py-2 shadow-[0_8px_32px_rgba(0,0,0,0.12)] ring-1 ring-white/40 backdrop-blur-2xl dark:bg-gray-950/70 dark:shadow-[0_8px_32px_rgba(0,0,0,0.4)] dark:ring-white/10 mx-4">
           {TABS.map((tab) => {
             const isActive = activeTab === tab.id;
             const badge = tab.getBadge?.(props) ?? null;
@@ -83,7 +83,7 @@ export const FloatingTabBar = ({
               <button
                 key={tab.id}
                 onClick={() => onTabChange(tab.id)}
-                className="relative flex flex-col items-center justify-center min-w-[4rem] sm:min-w-[5rem] px-2 py-1.5 rounded-full transition-all duration-200"
+                className="relative flex flex-col items-center justify-center min-w-[3rem] sm:min-w-[4rem] px-1.5 py-1 rounded-full transition-all duration-200"
                 aria-label={tab.label}
                 aria-pressed={isActive}
               >
@@ -123,12 +123,12 @@ export const FloatingTabBar = ({
           })}
 
           {/* Add Channel Button */}
-          <div className="w-px h-8 bg-gray-200 dark:bg-gray-700 mx-1" />
+          <div className="w-px h-8 bg-gray-200 dark:bg-gray-700 mx-0.5" />
           <motion.button
             whileHover={{ scale: 1.1 }}
             whileTap={{ scale: 0.9 }}
             onClick={onAddChannel}
-            className="relative flex flex-col items-center justify-center min-w-[4rem] sm:min-w-[5rem] px-2 py-1.5 rounded-full transition-all duration-200"
+            className="relative flex flex-col items-center justify-center min-w-[3rem] sm:min-w-[4rem] px-1.5 py-1 rounded-full transition-all duration-200"
             title="Add channel"
             aria-label="Add channel"
           >
