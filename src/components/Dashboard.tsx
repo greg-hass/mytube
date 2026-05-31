@@ -1,6 +1,6 @@
 import { Component, lazy, Suspense, useState, useEffect, useMemo, useRef, type ErrorInfo, type ReactNode } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { TrendingUp, Loader2, Activity, Heart, Image, ListVideo, SlidersHorizontal, X } from 'lucide-react';
+import { TrendingUp, Loader2, Activity, Heart, Image, ListVideo, X, Upload, Plus } from 'lucide-react';
 import { toast } from 'sonner';
 import { Header } from './Header';
 import { FloatingTabBar } from './FloatingTabBar';
@@ -141,52 +141,101 @@ class DashboardContentBoundary extends Component<{
 }
 
 const FirstRunOnboarding = ({ onAddChannel }: { onAddChannel: () => void }) => (
-  <main data-testid="first-run-onboarding" className="mx-auto max-w-3xl px-4 py-10 sm:py-14">
-    <div className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm dark:border-gray-800 dark:bg-gray-900 sm:p-6">
-      <div className="mb-5">
-        <p className="text-sm font-semibold uppercase tracking-wide text-red-600 dark:text-red-400">
-          First run
-        </p>
-        <h2 className="mt-1 text-2xl font-bold text-gray-950 dark:text-gray-50">
-          Start with your subscriptions
-        </h2>
-        <p className="mt-2 max-w-2xl text-sm text-gray-600 dark:text-gray-300">
-          Import your YouTube subscriptions file or add a channel manually. The feed starts refreshing as soon as channels are available.
-        </p>
-      </div>
+  <main data-testid="first-run-onboarding" className="mx-auto flex min-h-[80vh] max-w-2xl flex-col items-center justify-center px-4 py-10 sm:py-14">
+    <motion.div
+      initial={{ opacity: 0, y: 20 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.5 }}
+      className="text-center"
+    >
+      {/* App Icon */}
+      <motion.div
+        initial={{ scale: 0.8, opacity: 0 }}
+        animate={{ scale: 1, opacity: 1 }}
+        transition={{ delay: 0.2, type: 'spring', stiffness: 200 }}
+        className="mx-auto mb-6"
+      >
+        <img
+          src="/icon-192.png"
+          alt="YouTube RSS"
+          className="mx-auto h-20 w-20 rounded-2xl shadow-2xl shadow-red-500/20 ring-2 ring-white/50 dark:ring-white/10"
+        />
+      </motion.div>
 
-      <div className="grid gap-3 sm:grid-cols-2">
-        <div className="rounded-lg border border-gray-200 p-4 dark:border-gray-800">
-          <h3 className="font-semibold text-gray-900 dark:text-gray-100">
-            Import a list
+      {/* Title */}
+      <motion.h1
+        initial={{ opacity: 0, y: 10 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.3 }}
+        className="text-3xl font-bold tracking-tight text-gray-950 dark:text-gray-50 sm:text-4xl"
+      >
+        Welcome to YouTube RSS
+      </motion.h1>
+
+      <motion.p
+        initial={{ opacity: 0, y: 10 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.4 }}
+        className="mx-auto mt-4 max-w-md text-base leading-relaxed text-gray-500 dark:text-gray-400"
+      >
+        Your personal YouTube subscription feed. No algorithms, no distractions — just the channels you care about.
+      </motion.p>
+
+      {/* Action Cards */}
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.5 }}
+        className="mt-10 grid gap-4 sm:grid-cols-2"
+      >
+        <div className="group relative overflow-hidden rounded-2xl border border-gray-200 bg-white p-6 shadow-sm transition-all hover:shadow-md dark:border-gray-800 dark:bg-gray-900">
+          <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-xl bg-red-50 dark:bg-red-900/20">
+            <Upload className="h-6 w-6 text-red-600 dark:text-red-400" />
+          </div>
+          <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">
+            Import subscriptions
           </h3>
-          <p className="mt-1 min-h-10 text-sm text-gray-500 dark:text-gray-400">
-            Use Google Takeout CSV or OPML/XML from another reader.
+          <p className="mt-2 text-sm leading-relaxed text-gray-500 dark:text-gray-400">
+            Bring your existing subscriptions from Google Takeout or another RSS reader via OPML/XML.
           </p>
-          <div className="mt-4">
+          <div className="mt-5">
             <Suspense fallback={null}>
               <OPMLUpload minimal showLabelOnMobile />
             </Suspense>
           </div>
         </div>
 
-        <div className="rounded-lg border border-gray-200 p-4 dark:border-gray-800">
-          <h3 className="font-semibold text-gray-900 dark:text-gray-100">
-            Add one channel
+        <div className="group relative overflow-hidden rounded-2xl border border-gray-200 bg-white p-6 shadow-sm transition-all hover:shadow-md dark:border-gray-800 dark:bg-gray-900">
+          <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-xl bg-gray-100 dark:bg-gray-800">
+            <Plus className="h-6 w-6 text-gray-700 dark:text-gray-300" />
+          </div>
+          <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">
+            Add a channel
           </h3>
-          <p className="mt-1 min-h-10 text-sm text-gray-500 dark:text-gray-400">
-            Paste a channel URL, handle, or channel ID to try the app with one source.
+          <p className="mt-2 text-sm leading-relaxed text-gray-500 dark:text-gray-400">
+            Paste a YouTube channel URL, handle, or channel ID to start following.
           </p>
           <button
             type="button"
             onClick={onAddChannel}
-            className="mt-4 inline-flex h-10 items-center justify-center rounded-lg bg-gray-900 px-4 text-sm font-medium text-white transition-colors hover:bg-gray-800 dark:bg-gray-100 dark:text-gray-950 dark:hover:bg-white"
+            className="mt-5 inline-flex h-11 items-center justify-center rounded-xl bg-gray-900 px-5 text-sm font-semibold text-white transition-all hover:bg-gray-800 hover:shadow-lg active:scale-[0.98] dark:bg-gray-100 dark:text-gray-950 dark:hover:bg-white"
           >
-            Add one channel
+            <Plus className="mr-2 h-4 w-4" />
+            Add channel
           </button>
         </div>
-      </div>
-    </div>
+      </motion.div>
+
+      {/* Subtle footer hint */}
+      <motion.p
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        transition={{ delay: 0.7 }}
+        className="mt-8 text-xs text-gray-400 dark:text-gray-600"
+      >
+        Your feed will start refreshing automatically once channels are added.
+      </motion.p>
+    </motion.div>
   </main>
 );
 
@@ -628,7 +677,6 @@ export const Dashboard = () => {
   return (
     <div className="app-shell min-h-screen">
       <Header
-        onAddChannel={() => setIsAddChannelModalOpen(true)}
         showMobileSearch={activeTab === 'subscriptions' || activeTab === 'latest' || activeTab === 'queue'}
         searchPlaceholder={activeTab === 'latest' || activeTab === 'queue' ? 'Search videos...' : 'Search channels...'}
         syncStatus={syncStatus}
@@ -639,6 +687,8 @@ export const Dashboard = () => {
         hideWatched={hideWatched}
         onToggleWatched={() => setHideWatched((prev) => !prev)}
         showFilters={activeTab === 'latest' || activeTab === 'queue' || activeTab === 'favorites'}
+        onOpenFilters={() => setIsQualityFiltersOpen(true)}
+        activeFilterCount={activeQualityFilterCount}
       />
 
       {subscriptionsLoading || subscriptionsInitialSyncing ? (
@@ -721,27 +771,6 @@ export const Dashboard = () => {
                     onDelete={deleteSavedFeedViewPreset}
                   />
                 </div>
-                <button
-                  type="button"
-                  aria-label="Feed filters"
-                  onClick={() => setIsQualityFiltersOpen(true)}
-                  className={`inline-flex h-10 w-10 shrink-0 items-center justify-center gap-2 rounded-lg px-0 text-sm font-medium transition-colors sm:w-auto sm:px-3 ${activeQualityFilterCount
-                    ? 'bg-red-600 text-white hover:bg-red-700'
-                    : 'bg-gray-100 text-gray-800 hover:bg-gray-200 dark:bg-gray-800 dark:text-gray-100 dark:hover:bg-gray-700'
-                    }`}
-                >
-                  <SlidersHorizontal className="h-4 w-4" />
-                  <span className="hidden sm:inline">Filters</span>
-                  {activeQualityFilterCount > 0 && (
-                    <span className={`hidden h-5 min-w-5 items-center justify-center rounded-full px-1.5 text-xs sm:inline-flex ${activeQualityFilterCount
-                      ? 'bg-white text-red-700'
-                      : 'bg-gray-200 text-gray-700 dark:bg-gray-700 dark:text-gray-200'
-                      }`}
-                    >
-                      {activeQualityFilterCount}
-                    </span>
-                  )}
-                </button>
                 {visibleLatestVideos.length > 0 && (
                   <>
                     <label htmlFor="bulk-watched-action" className="sr-only">Bulk watched action</label>
@@ -1090,6 +1119,7 @@ export const Dashboard = () => {
               changeTab(tab);
             }
           }}
+          onAddChannel={() => setIsAddChannelModalOpen(true)}
           subscriptionCount={allSubscriptions.length}
           activeChannelCount={activeChannels.length}
           queueCount={queuedVideos.length}
