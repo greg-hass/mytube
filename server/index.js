@@ -68,6 +68,8 @@ const thumbnailRateLimiter = createBucketRateLimiter({
 // --- End thumbnail proxy hardening ---
 
 let dataIntegrityEvents = [];
+let server = null;
+let shutdownPromise = null;
 
 app.use(cors(createCorsOptions({ allowedOrigins: ALLOWED_ORIGINS })));
 app.use(createOriginGuardMiddleware({ allowedOrigins: ALLOWED_ORIGINS }));
@@ -79,7 +81,7 @@ app.use('/api', createRateLimitMiddleware({
     windowMs: API_WRITE_RATE_LIMIT_WINDOW_MS,
     max: API_WRITE_RATE_LIMIT_MAX,
 }));
-app.use(express.json({ limit: '50mb' })); // Large limit for full data sync
+app.use(express.json({ limit: '5mb' }));
 
 // Deliberately minimal health probe for container/reverse-proxy checks.
 app.get('/api/healthz', (req, res) => {
@@ -420,9 +422,55 @@ app.post('/api/subscriptions/:id/mute', asyncHandler(async (req, res) => {
     res.json({ success: true, isMuted });
 }, 'Failed to update channel'));
 
+function closeHttpServer() {
+    if (!server) {
+        return Promise.resolve();
+    }
+
+    return new Promise((resolve, reject) => {
+        server.close((error) => {
+            if (error) {
+                reject(error);
+                return;
+            }
+            resolve();
+        });
+    });
+}
+
+async function shutdown(signal) {
+    if (shutdownPromise) {
+        return shutdownPromise;
+    }
+
+    console.log(`Received ${signal}, shutting down gracefully`);
+    shutdownPromise = (async () => {
+        feedAggregator?.stopScheduledRefresh?.();
+        await closeHttpServer();
+        appStore.close();
+    })();
+
+    try {
+        await shutdownPromise;
+        process.exit(0);
+    } catch (error) {
+        console.error('Graceful shutdown failed:', error);
+        process.exit(1);
+    }
+}
+
+process.on('SIGTERM', () => {
+    shutdown('SIGTERM');
+});
+
+process.on('SIGINT', () => {
+    shutdown('SIGINT');
+});
+
 init().then(() => {
     feedAggregator = require('./feed-aggregator');
-    app.listen(PORT, () => {
+    feedAggregator.start();
+    server = app.listen(PORT, () => {
         console.log(`Sync server running on port ${PORT}`);
     });
 }).catch((error) => {

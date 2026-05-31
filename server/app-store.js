@@ -42,4 +42,5 @@ module.exports = {
     updateSubscriptionField: (...args) => withStore('updateSubscriptionField', ...args),
     writeData: (...args) => withStore('writeData', ...args),
     writeVideoCache: (...args) => withStore('writeVideoCache', ...args),
+    close: () => store.close(),
 };
