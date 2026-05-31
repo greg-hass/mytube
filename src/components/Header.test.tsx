@@ -56,7 +56,15 @@ vi.mock('./OPMLUpload', () => ({
 
 describe('Header', () => {
   it('moves mobile actions into a slide-in menu instead of permanent toolbar chrome', () => {
-    render(<Header onAddChannel={vi.fn()} />);
+    render(
+      <Header
+        onAddChannel={vi.fn()}
+        showShorts={true}
+        onToggleShorts={vi.fn()}
+        hideWatched={false}
+        onToggleWatched={vi.fn()}
+      />
+    );
 
     const menuButton = screen.getByTestId('mobile-menu-button');
     const mobileControls = menuButton.closest('.mobile-header-controls');
@@ -64,7 +72,9 @@ describe('Header', () => {
     expect(menuButton).toBeInTheDocument();
     expect(mobileControls).toBeInTheDocument();
     expect(screen.getByTestId('mobile-add-channel-button')).toBeInTheDocument();
-    expect(screen.getByTestId('mobile-refresh-button')).toBeInTheDocument();
+    expect(screen.getByTestId('mobile-shorts-toggle')).toBeInTheDocument();
+    expect(screen.getByTestId('mobile-watched-toggle')).toBeInTheDocument();
+    expect(screen.queryByTestId('mobile-refresh-button')).not.toBeInTheDocument();
     expect(screen.queryByTestId('mobile-toolbar')).not.toBeInTheDocument();
     expect(document.querySelectorAll('.desktop-header-controls')).toHaveLength(2);
   });

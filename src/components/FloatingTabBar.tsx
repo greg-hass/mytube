@@ -1,0 +1,123 @@
+import { motion } from 'framer-motion';
+import { Grid3x3, TrendingUp, Activity, ListVideo, Heart } from 'lucide-react';
+
+export type Tab = 'subscriptions' | 'latest' | 'queue' | 'activity' | 'favorites';
+
+interface FloatingTabBarProps {
+  activeTab: Tab;
+  onTabChange: (tab: Tab) => void;
+  subscriptionCount: number;
+  activeChannelCount: number;
+  queueCount: number;
+  favoriteCount: number;
+}
+
+const TABS: Array<{
+  id: Tab;
+  label: string;
+  icon: typeof Grid3x3;
+  getBadge?: (props: FloatingTabBarProps) => number | null;
+}> = [
+  {
+    id: 'subscriptions',
+    label: 'Subs',
+    icon: Grid3x3,
+    getBadge: (p) => p.subscriptionCount,
+  },
+  {
+    id: 'latest',
+    label: 'Latest',
+    icon: TrendingUp,
+  },
+  {
+    id: 'activity',
+    label: 'Activity',
+    icon: Activity,
+    getBadge: (p) => p.activeChannelCount,
+  },
+  {
+    id: 'queue',
+    label: 'Queue',
+    icon: ListVideo,
+    getBadge: (p) => p.queueCount,
+  },
+  {
+    id: 'favorites',
+    label: 'Faves',
+    icon: Heart,
+    getBadge: (p) => p.favoriteCount,
+  },
+];
+
+export const FloatingTabBar = ({
+  activeTab,
+  onTabChange,
+  subscriptionCount,
+  activeChannelCount,
+  queueCount,
+  favoriteCount,
+}: FloatingTabBarProps) => {
+  const props = { subscriptionCount, activeChannelCount, queueCount, favoriteCount };
+
+  return (
+    <motion.nav
+      initial={{ y: 100, opacity: 0 }}
+      animate={{ y: 0, opacity: 1 }}
+      transition={{ type: 'spring', stiffness: 300, damping: 30, delay: 0.2 }}
+      data-testid="floating-tab-bar"
+      className="fixed bottom-0 left-0 right-0 z-50 pb-[env(safe-area-inset-bottom)] pointer-events-none"
+    >
+      <div className="flex justify-center px-4 pb-3 pt-2">
+        <div className="pointer-events-auto flex items-center gap-1 rounded-[2rem] bg-white/70 px-2 py-2 shadow-[0_8px_32px_rgba(0,0,0,0.12)] ring-1 ring-white/40 backdrop-blur-2xl dark:bg-gray-950/70 dark:shadow-[0_8px_32px_rgba(0,0,0,0.4)] dark:ring-white/10">
+          {TABS.map((tab) => {
+            const isActive = activeTab === tab.id;
+            const badge = tab.getBadge?.(props) ?? null;
+            const Icon = tab.icon;
+
+            return (
+              <button
+                key={tab.id}
+                onClick={() => onTabChange(tab.id)}
+                className="relative flex flex-col items-center justify-center min-w-[3.5rem] sm:min-w-[4.5rem] px-2 py-1.5 rounded-full transition-all duration-200"
+                aria-label={tab.label}
+                aria-pressed={isActive}
+              >
+                {isActive && (
+                  <motion.div
+                    layoutId="active-tab-indicator"
+                    className="absolute inset-0 rounded-full bg-gray-100 dark:bg-gray-800/80 shadow-sm"
+                    transition={{ type: 'spring', stiffness: 400, damping: 30 }}
+                  />
+                )}
+                <div className="relative flex items-center justify-center">
+                  <Icon
+                    className={`w-5 h-5 sm:w-[1.3rem] sm:h-[1.3rem] transition-colors duration-200 ${
+                      isActive
+                        ? 'text-gray-900 dark:text-gray-100'
+                        : 'text-gray-400 dark:text-gray-500'
+                    }`}
+                    strokeWidth={isActive ? 2.5 : 2}
+                  />
+                  {badge !== null && badge > 0 && !isActive && (
+                    <span className="absolute -top-1.5 -right-2.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-red-500 px-1 text-[10px] font-bold text-white shadow-sm">
+                      {badge > 99 ? '99+' : badge}
+                    </span>
+                  )}
+                </div>
+                <span
+                  className={`relative mt-0.5 text-[10px] sm:text-[11px] font-semibold transition-colors duration-200 ${
+                    isActive
+                      ? 'text-gray-900 dark:text-gray-100'
+                      : 'text-gray-400 dark:text-gray-500'
+                  }`}
+                >
+                  {tab.label}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+      </div>
+    </motion.nav>
+  );
+};

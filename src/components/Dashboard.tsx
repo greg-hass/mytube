@@ -1,8 +1,10 @@
 import { Component, lazy, Suspense, useState, useEffect, useMemo, useRef, type ErrorInfo, type ReactNode } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { TrendingUp, Grid3x3, RefreshCw, Loader2, Activity, Heart, Image, ListVideo, SlidersHorizontal, X } from 'lucide-react';
+import { TrendingUp, Loader2, Activity, Heart, Image, ListVideo, SlidersHorizontal, X } from 'lucide-react';
 import { toast } from 'sonner';
 import { Header } from './Header';
+import { FloatingTabBar } from './FloatingTabBar';
+import { PullToRefresh } from './PullToRefresh';
 import { SubscriptionsList } from './SubscriptionsList';
 import { SubscriptionCard } from './SubscriptionCard';
 import { VirtualizedVideoGrid } from './VirtualizedVideoGrid';
@@ -632,6 +634,11 @@ export const Dashboard = () => {
         syncStatus={syncStatus}
         cacheStatus={cacheStatus}
         onRetryFailed={refetchVideos}
+        showShorts={showShorts}
+        onToggleShorts={() => setShowShorts((prev) => !prev)}
+        hideWatched={hideWatched}
+        onToggleWatched={() => setHideWatched((prev) => !prev)}
+        showFilters={activeTab === 'latest' || activeTab === 'queue' || activeTab === 'favorites'}
       />
 
       {subscriptionsLoading || subscriptionsInitialSyncing ? (
@@ -643,82 +650,14 @@ export const Dashboard = () => {
       ) : (
         <div
           data-testid="dashboard-page-chrome"
-          className="max-w-7xl mx-auto pt-[var(--app-sticky-gap)] pb-3 sm:pt-[var(--app-sticky-gap)] sm:pb-8"
+          className="max-w-7xl mx-auto pt-[var(--app-sticky-gap)] pb-[calc(5rem+env(safe-area-inset-bottom))] sm:pb-[calc(6rem+env(safe-area-inset-bottom))]"
         >
-        {/* Tabs */}
-        <div
-          data-testid="dashboard-tabs"
-          className="sticky top-[calc(var(--app-current-header-height)+var(--app-sticky-gap))] z-40 px-4 mb-[var(--app-sticky-gap)] pb-[var(--app-sticky-gap)] pt-[var(--app-sticky-gap)] bg-gray-50 dark:bg-gray-950 before:absolute before:bottom-full before:left-0 before:right-0 before:h-[var(--app-sticky-gap)] before:bg-gray-50 dark:before:bg-gray-950"
-        >
-          <div className="grid grid-cols-5 gap-1 bg-gray-100 dark:bg-gray-900 p-1 rounded-xl shadow-sm sm:flex sm:items-center sm:w-fit sm:gap-2">
-            <button
-              onClick={() => changeTab('subscriptions')}
-              className={`flex min-w-0 items-center justify-center gap-1 px-1.5 py-2 rounded-lg text-xs sm:text-base font-medium transition-all sm:gap-2 sm:px-6 sm:py-3 ${activeTab === 'subscriptions'
-                ? 'bg-white dark:bg-gray-800 shadow-md'
-                : 'hover:bg-gray-200 dark:hover:bg-gray-800'
-                }`}
-            >
-              <Grid3x3 className="w-4 h-4 sm:w-5 sm:h-5" />
-              <span>Subs</span>
-              <span className="hidden sm:inline-flex text-xs bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400 px-2 py-1 rounded-full">
-                {allSubscriptions.length}
-              </span>
-            </button>
-            <button
-              onClick={handleLatestTabClick}
-              className={`flex min-w-0 items-center justify-center gap-1 px-1.5 py-2 rounded-lg text-xs sm:text-base font-medium transition-all sm:gap-2 sm:px-6 sm:py-3 ${activeTab === 'latest'
-                ? 'bg-white dark:bg-gray-800 shadow-md'
-                : 'hover:bg-gray-200 dark:hover:bg-gray-800'
-                }`}
-            >
-              <TrendingUp className="w-4 h-4 sm:w-5 sm:h-5" />
-              <span>Latest</span>
-            </button>
-            <button
-              onClick={() => changeTab('activity')}
-              className={`flex min-w-0 items-center justify-center gap-1 px-1.5 py-2 rounded-lg text-xs sm:text-base font-medium transition-all sm:gap-2 sm:px-6 sm:py-3 ${activeTab === 'activity'
-                ? 'bg-white dark:bg-gray-800 shadow-md'
-                : 'hover:bg-gray-200 dark:hover:bg-gray-800'
-                }`}
-            >
-              <Activity className="w-4 h-4 sm:w-5 sm:h-5" />
-              <span>Activity</span>
-              <span className="hidden sm:inline-flex text-xs bg-green-100 dark:bg-green-900/30 text-green-600 dark:text-green-400 px-2 py-1 rounded-full">
-                {activeChannels.length}
-              </span>
-            </button>
-            <button
-              onClick={() => changeTab('queue')}
-              className={`flex min-w-0 items-center justify-center gap-1 px-1.5 py-2 rounded-lg text-xs sm:text-base font-medium transition-all sm:gap-2 sm:px-6 sm:py-3 ${activeTab === 'queue'
-                ? 'bg-white dark:bg-gray-800 shadow-md'
-                : 'hover:bg-gray-200 dark:hover:bg-gray-800'
-                }`}
-            >
-              <ListVideo className="w-4 h-4 sm:w-5 sm:h-5" />
-              <span>Queue</span>
-              <span className="hidden sm:inline-flex text-xs bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 px-2 py-1 rounded-full">
-                {queuedVideos.length}
-              </span>
-            </button>
-            <button
-              onClick={() => changeTab('favorites')}
-              className={`flex min-w-0 items-center justify-center gap-1 px-1.5 py-2 rounded-lg text-xs sm:text-base font-medium transition-all sm:gap-2 sm:px-6 sm:py-3 ${activeTab === 'favorites'
-                ? 'bg-white dark:bg-gray-800 shadow-md'
-                : 'hover:bg-gray-200 dark:hover:bg-gray-800'
-                }`}
-            >
-              <Heart className="w-4 h-4 sm:w-5 sm:h-5" />
-              <span>Faves</span>
-              <span className="hidden sm:inline-flex text-xs bg-pink-100 dark:bg-pink-900/30 text-pink-600 dark:text-pink-400 px-2 py-1 rounded-full">
-                {favoriteChannels.length + favoriteVideos.length}
-              </span>
-            </button>
-          </div>
-
+        {/* Toolbars */}
+        <div className="px-4 pt-[var(--app-sticky-gap)] pb-[var(--app-sticky-gap)]">
           {activeTab === 'subscriptions' && (
             <div
               data-testid="subscription-groups-toolbar"
-              className="mt-[var(--app-sticky-gap)] flex items-start gap-2 border-b border-gray-200/70 pb-[var(--app-sticky-gap)] dark:border-gray-800/80 sm:items-center"
+              className="flex items-start gap-2 border-b border-gray-200/70 pb-[var(--app-sticky-gap)] dark:border-gray-800/80 sm:items-center"
             >
               <div className="mr-auto flex min-w-0 flex-1 flex-wrap items-center gap-2">
                 <label htmlFor="subscription-group-filter" className="sr-only">Filter group</label>
@@ -760,39 +699,17 @@ export const Dashboard = () => {
           {activeTab === 'latest' && (
             <div
               data-testid="latest-toolbar"
-              className="mt-[var(--app-sticky-gap)] flex flex-nowrap items-center justify-between gap-1 sm:gap-2"
+              className="flex flex-nowrap items-center justify-between gap-1 sm:gap-2"
             >
               <div className="flex min-w-0 flex-nowrap items-center gap-2 sm:gap-3">
-                <label className="flex min-w-0 items-center gap-1.5 cursor-pointer select-none sm:gap-2">
-                  <div className="relative">
-                    <input
-                      type="checkbox"
-                      aria-label="Hide Shorts"
-                      checked={!showShorts}
-                      onChange={(e) => setShowShorts(!e.target.checked)}
-                      className="sr-only peer"
-                    />
-                    <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-red-300 dark:peer-focus:ring-red-800 rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-gray-600 peer-checked:bg-red-600"></div>
-                  </div>
-                  <span className="text-xs font-medium text-gray-700 dark:text-gray-300 sm:text-sm">
-                    Hide Shorts
-                  </span>
-                </label>
-                <label className="flex min-w-0 items-center gap-1.5 cursor-pointer select-none sm:gap-2">
-                  <div className="relative">
-                    <input
-                      type="checkbox"
-                      aria-label="Hide Watched"
-                      checked={hideWatched}
-                      onChange={(e) => setHideWatched(e.target.checked)}
-                      className="sr-only peer"
-                    />
-                    <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-emerald-300 dark:peer-focus:ring-emerald-800 rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-gray-600 peer-checked:bg-emerald-600"></div>
-                  </div>
-                  <span className="text-xs font-medium text-gray-700 dark:text-gray-300 sm:text-sm">
-                    Hide Watched
-                  </span>
-                </label>
+                <div className="hidden items-center gap-2 text-xs font-medium text-gray-500 dark:text-gray-400 sm:flex">
+                  <span>Last refreshed {formatRefreshAge(syncStatus.lastUpdated)}</span>
+                  {scheduledRefreshIntervalMinutes && (
+                    <span className="rounded-full bg-gray-100 px-2 py-1 text-gray-600 dark:bg-gray-800 dark:text-gray-300">
+                      Auto {scheduledRefreshIntervalMinutes}m
+                    </span>
+                  )}
+                </div>
               </div>
 
               <div data-testid="latest-toolbar-actions" className="ml-auto flex shrink-0 flex-nowrap items-center gap-1 sm:gap-2">
@@ -825,24 +742,6 @@ export const Dashboard = () => {
                     </span>
                   )}
                 </button>
-                <div className="hidden items-center gap-2 text-xs font-medium text-gray-500 dark:text-gray-400 xl:flex">
-                  <span>Last refreshed {formatRefreshAge(syncStatus.lastUpdated)}</span>
-                  {scheduledRefreshIntervalMinutes && (
-                    <span className="rounded-full bg-gray-100 px-2 py-1 text-gray-600 dark:bg-gray-800 dark:text-gray-300">
-                      Auto {scheduledRefreshIntervalMinutes}m
-                    </span>
-                  )}
-                </div>
-                <button
-                  onClick={() => {
-                    refetchVideos();
-                  }}
-                  disabled={videosLoading || syncStatus?.isSyncing}
-                  className="hidden sm:flex items-center gap-2 px-4 py-2 rounded-lg font-medium bg-red-600 text-white hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
-                >
-                  <RefreshCw className={`w-4 h-4 ${videosLoading || syncStatus?.isSyncing ? 'animate-spin' : ''}`} />
-                  <span>Refresh</span>
-                </button>
                 {visibleLatestVideos.length > 0 && (
                   <>
                     <label htmlFor="bulk-watched-action" className="sr-only">Bulk watched action</label>
@@ -869,6 +768,12 @@ export const Dashboard = () => {
         </div>
 
         {/* Content */}
+        <PullToRefresh
+          onRefresh={() => {
+            refetchVideos();
+          }}
+          isRefreshing={videosLoading || syncStatus?.isSyncing || false}
+        >
         <AnimatePresence mode="wait" initial={false}>
           {activeTab === 'subscriptions' ? (
             <motion.div
@@ -1174,6 +1079,22 @@ export const Dashboard = () => {
             </motion.div>
           )}
         </AnimatePresence>
+        </PullToRefresh>
+
+        <FloatingTabBar
+          activeTab={activeTab}
+          onTabChange={(tab) => {
+            if (tab === 'latest') {
+              handleLatestTabClick();
+            } else {
+              changeTab(tab);
+            }
+          }}
+          subscriptionCount={allSubscriptions.length}
+          activeChannelCount={activeChannels.length}
+          queueCount={queuedVideos.length}
+          favoriteCount={favoriteChannels.length + favoriteVideos.length}
+        />
       </div>
       )}
 
