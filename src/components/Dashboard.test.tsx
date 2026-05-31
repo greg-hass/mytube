@@ -112,6 +112,8 @@ vi.mock('./Header', () => ({
     hideWatched?: boolean;
     onToggleWatched?: () => void;
     showFilters?: boolean;
+    onOpenFilters?: () => void;
+    activeFilterCount?: number;
   }) => {
     headerMockState.latestProps = props;
     return (
@@ -134,6 +136,14 @@ vi.mock('./Header', () => ({
               onClick={props.onToggleWatched}
             >
               Watched
+            </button>
+            <button
+              type="button"
+              aria-label="Feed filters"
+              data-testid="feed-filters-button"
+              onClick={props.onOpenFilters}
+            >
+              Filters
             </button>
           </>
         )}
@@ -304,9 +314,9 @@ describe('Dashboard', () => {
 
     render(<Dashboard />);
 
-    expect(screen.getByText('Start with your subscriptions')).toBeInTheDocument();
+    expect(screen.getByText('Welcome to YouTube RSS')).toBeInTheDocument();
     expect(await screen.findByText('Import subscriptions')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Add one channel' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Add channel' })).toBeInTheDocument();
     expect(screen.queryByTestId('dashboard-tabs')).not.toBeInTheDocument();
     expect(screen.queryByTestId('floating-tab-bar')).not.toBeInTheDocument();
     expect(screen.queryByTestId('latest-toolbar')).not.toBeInTheDocument();
@@ -970,7 +980,7 @@ describe('Dashboard', () => {
 
     render(<Dashboard />);
 
-    fireEvent.click(screen.getByRole('button', { name: 'Feed filters' }));
+    fireEvent.click(screen.getByTestId('feed-filters-button'));
     fireEvent.click(screen.getByRole('button', { name: '10-30 min' }));
 
     expect(screen.queryByText('Quick update')).not.toBeInTheDocument();
@@ -1006,7 +1016,7 @@ describe('Dashboard', () => {
 
     render(<Dashboard />);
 
-    fireEvent.click(screen.getByRole('button', { name: 'Feed filters' }));
+    fireEvent.click(screen.getByTestId('feed-filters-button'));
     fireEvent.click(screen.getByLabelText('Hide livestream replays'));
 
     expect(screen.getByText('Normal upload')).toBeInTheDocument();
@@ -1040,7 +1050,7 @@ describe('Dashboard', () => {
 
     render(<Dashboard />);
 
-    fireEvent.click(screen.getByRole('button', { name: 'Feed filters' }));
+    fireEvent.click(screen.getByTestId('feed-filters-button'));
     fireEvent.change(screen.getByLabelText('Mute keywords'), { target: { value: 'rumor' } });
 
     expect(screen.queryByText('Transfer rumor roundup')).not.toBeInTheDocument();
@@ -1074,7 +1084,7 @@ describe('Dashboard', () => {
 
     render(<Dashboard />);
 
-    fireEvent.click(screen.getByRole('button', { name: 'Feed filters' }));
+    fireEvent.click(screen.getByTestId('feed-filters-button'));
     fireEvent.change(screen.getByLabelText('Boost keywords'), { target: { value: 'linux' } });
 
     const renderedText = document.body.textContent || '';
@@ -1126,7 +1136,7 @@ describe('Dashboard', () => {
 
     render(<Dashboard />);
 
-    fireEvent.click(screen.getByRole('button', { name: 'Feed filters' }));
+    fireEvent.click(screen.getByTestId('feed-filters-button'));
     fireEvent.click(screen.getByLabelText('Hide premieres'));
     fireEvent.click(screen.getByLabelText('Hide duplicate titles'));
 
@@ -1148,7 +1158,7 @@ describe('Dashboard', () => {
 
     render(<Dashboard />);
 
-    fireEvent.click(screen.getByRole('button', { name: 'Feed filters' }));
+    fireEvent.click(screen.getByTestId('feed-filters-button'));
 
     expect(screen.getByRole('button', { name: '10-30 min' }).className).toContain('bg-red-600');
     expect(screen.getByLabelText('Hide livestream replays')).toBeChecked();
@@ -1229,7 +1239,7 @@ describe('Dashboard', () => {
 
     render(<Dashboard />);
 
-    fireEvent.click(screen.getByRole('button', { name: 'Feed filters' }));
+    fireEvent.click(screen.getByTestId('feed-filters-button'));
     fireEvent.click(screen.getByRole('button', { name: '30+ min' }));
     expect(screen.getByText('Long update')).toBeInTheDocument();
     expect(screen.queryByText('Short update')).not.toBeInTheDocument();

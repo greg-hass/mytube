@@ -1,13 +1,12 @@
 import { motion } from 'framer-motion';
 import {
-  Youtube,
   Sun,
   Moon,
   Search,
   Grid3x3,
   List,
   Download,
-  Plus,
+  SlidersHorizontal,
   Settings,
   Menu,
   X,
@@ -26,7 +25,6 @@ import type { SortBy } from '../types/youtube';
 const OPMLUpload = lazy(() => import('./OPMLUpload').then((module) => ({ default: module.OPMLUpload })));
 
 interface HeaderProps {
-  onAddChannel?: () => void;
   showMobileSearch?: boolean;
   searchPlaceholder?: string;
   syncStatus?: SyncStatus;
@@ -42,10 +40,11 @@ interface HeaderProps {
   hideWatched?: boolean;
   onToggleWatched?: () => void;
   showFilters?: boolean;
+  onOpenFilters?: () => void;
+  activeFilterCount?: number;
 }
 
 export const Header = ({
-  onAddChannel,
   showMobileSearch = true,
   searchPlaceholder = 'Search channels...',
   syncStatus,
@@ -56,6 +55,8 @@ export const Header = ({
   hideWatched = false,
   onToggleWatched,
   showFilters = true,
+  onOpenFilters,
+  activeFilterCount = 0,
 }: HeaderProps) => {
   const headerRef = useRef<HTMLElement | null>(null);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
@@ -141,9 +142,11 @@ export const Header = ({
             whileHover={{ scale: 1.05 }}
             className="flex items-center gap-3"
           >
-            <div className="w-10 h-10 rounded-full bg-gradient-to-br from-red-600 to-red-500 flex items-center justify-center shadow-lg">
-              <Youtube className="w-6 h-6 text-white" />
-            </div>
+            <img
+              src="/icon-192.png"
+              alt="YouTube RSS"
+              className="h-10 w-10 rounded-xl shadow-lg"
+            />
             <div>
               <h1 className="text-lg md:text-xl font-bold bg-gradient-to-r from-red-600 to-red-500 bg-clip-text text-transparent">
                 YouTube RSS
@@ -180,16 +183,22 @@ export const Header = ({
 
           {/* Controls */}
           <div className="desktop-header-controls hidden xl:flex items-center gap-2">
-            {/* Add Channel Button */}
-            {onAddChannel && (
+            {/* Filter Button */}
+            {showFilters && onOpenFilters && (
               <motion.button
                 whileHover={{ scale: 1.05 }}
                 whileTap={{ scale: 0.95 }}
-                onClick={onAddChannel}
-                className="flex items-center gap-2 px-4 py-2 rounded-lg bg-red-600 hover:bg-red-700 text-white transition-colors"
+                onClick={onOpenFilters}
+                className={`p-2 rounded-lg transition-colors ${activeFilterCount > 0
+                  ? 'bg-red-600 text-white hover:bg-red-700'
+                  : 'bg-gray-100 text-gray-800 hover:bg-gray-200 dark:bg-gray-800 dark:text-gray-100 dark:hover:bg-gray-700'
+                  }`}
+                title="Feed filters"
               >
-                <Plus className="w-4 h-4" />
-                <span className="hidden sm:inline">Add Channel</span>
+                <SlidersHorizontal className="w-5 h-5" />
+                {activeFilterCount > 0 && (
+                  <span className="ml-1 text-xs font-semibold">{activeFilterCount}</span>
+                )}
               </motion.button>
             )}
 
@@ -332,14 +341,17 @@ export const Header = ({
           </div>
 
           <div className="mobile-header-controls flex xl:hidden items-center gap-2">
-            {onAddChannel && (
+            {showFilters && onOpenFilters && (
               <button
-                data-testid="mobile-add-channel-button"
-                onClick={onAddChannel}
-                className="p-2 rounded-lg bg-red-600 text-white hover:bg-red-700 transition-colors"
-                title="Add channel"
+                data-testid="mobile-filter-button"
+                onClick={onOpenFilters}
+                className={`p-2 rounded-lg transition-colors ${activeFilterCount > 0
+                  ? 'bg-red-600 text-white hover:bg-red-700'
+                  : 'bg-gray-100 text-gray-800 hover:bg-gray-200 dark:bg-gray-800 dark:text-gray-100 dark:hover:bg-gray-700'
+                  }`}
+                title="Feed filters"
               >
-                <Plus className="w-5 h-5" />
+                <SlidersHorizontal className="w-5 h-5" />
               </button>
             )}
             {showFilters && onToggleShorts && (
@@ -455,16 +467,24 @@ export const Header = ({
             </div>
 
             <div className="space-y-3">
-              {onAddChannel && (
+              {showFilters && onOpenFilters && (
                 <button
                   onClick={() => {
                     setShowMobileMenu(false);
-                    onAddChannel();
+                    onOpenFilters();
                   }}
-                  className="flex w-full items-center justify-center gap-2 rounded-lg bg-red-600 px-4 py-3 font-semibold text-white shadow-lg shadow-red-950/20 hover:bg-red-700"
+                  className={`flex w-full items-center justify-center gap-2 rounded-lg px-4 py-3 font-semibold shadow-lg transition-colors ${activeFilterCount > 0
+                    ? 'bg-red-600 text-white shadow-red-950/20 hover:bg-red-700'
+                    : 'bg-gray-100 text-gray-800 hover:bg-gray-200 dark:bg-gray-800/90 dark:text-gray-100 dark:hover:bg-gray-700'
+                    }`}
                 >
-                  <Plus className="h-4 w-4" />
-                  Add Channel
+                  <SlidersHorizontal className="h-4 w-4" />
+                  Filters
+                  {activeFilterCount > 0 && (
+                    <span className="ml-1 rounded-full bg-white px-2 py-0.5 text-xs text-red-700 dark:bg-gray-700 dark:text-gray-200">
+                      {activeFilterCount}
+                    </span>
+                  )}
                 </button>
               )}
 

@@ -58,11 +58,11 @@ describe('Header', () => {
   it('moves mobile actions into a slide-in menu instead of permanent toolbar chrome', () => {
     render(
       <Header
-        onAddChannel={vi.fn()}
         showShorts={true}
         onToggleShorts={vi.fn()}
         hideWatched={false}
         onToggleWatched={vi.fn()}
+        onOpenFilters={vi.fn()}
       />
     );
 
@@ -71,16 +71,16 @@ describe('Header', () => {
 
     expect(menuButton).toBeInTheDocument();
     expect(mobileControls).toBeInTheDocument();
-    expect(screen.getByTestId('mobile-add-channel-button')).toBeInTheDocument();
+    expect(screen.getByTestId('mobile-filter-button')).toBeInTheDocument();
     expect(screen.getByTestId('mobile-shorts-toggle')).toBeInTheDocument();
     expect(screen.getByTestId('mobile-watched-toggle')).toBeInTheDocument();
-    expect(screen.queryByTestId('mobile-refresh-button')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('mobile-add-channel-button')).not.toBeInTheDocument();
     expect(screen.queryByTestId('mobile-toolbar')).not.toBeInTheDocument();
     expect(document.querySelectorAll('.desktop-header-controls')).toHaveLength(2);
   });
 
   it('keeps the full desktop toolbar for wide screens and uses compact controls below xl', () => {
-    render(<Header onAddChannel={vi.fn()} />);
+    render(<Header />);
 
     const desktopControls = document.querySelectorAll('.desktop-header-controls');
     const mobileControls = screen.getByTestId('mobile-menu-button').closest('.mobile-header-controls');
@@ -98,7 +98,7 @@ describe('Header', () => {
       .spyOn(HTMLElement.prototype, 'offsetHeight', 'get')
       .mockReturnValue(112);
 
-    const { unmount } = render(<Header onAddChannel={vi.fn()} />);
+    const { unmount } = render(<Header />);
 
     expect(document.documentElement.style.getPropertyValue('--app-current-header-height')).toBe('112px');
 
@@ -108,17 +108,22 @@ describe('Header', () => {
     expect(document.documentElement.style.getPropertyValue('--app-current-header-height')).toBe('');
   });
 
-  it('opens add channel from the mobile header plus button', () => {
-    const onAddChannel = vi.fn();
-    render(<Header onAddChannel={onAddChannel} />);
+  it('opens feed filters from the mobile header filter button', () => {
+    const onOpenFilters = vi.fn();
+    render(
+      <Header
+        showFilters={true}
+        onOpenFilters={onOpenFilters}
+      />
+    );
 
-    fireEvent.click(screen.getByTestId('mobile-add-channel-button'));
+    fireEvent.click(screen.getByTestId('mobile-filter-button'));
 
-    expect(onAddChannel).toHaveBeenCalledOnce();
+    expect(onOpenFilters).toHaveBeenCalledOnce();
   });
 
   it('renders the mobile menu overlay outside the animated header', () => {
-    render(<Header onAddChannel={vi.fn()} />);
+    render(<Header />);
 
     fireEvent.click(screen.getByTestId('mobile-menu-button'));
 
@@ -132,7 +137,6 @@ describe('Header', () => {
   it('puts feed health details in the mobile menu', () => {
     render(
       <Header
-        onAddChannel={vi.fn()}
         syncStatus={{
           total: 2,
           current: 1,
@@ -170,7 +174,6 @@ describe('Header', () => {
     const cacheStatus = { hasCache: true, isStale: false, age: 60 * 1000, videoCount: 10 };
     const { rerender } = render(
       <Header
-        onAddChannel={vi.fn()}
         syncStatus={syncingStatus}
         cacheStatus={cacheStatus}
         onRetryFailed={vi.fn()}
@@ -183,7 +186,6 @@ describe('Header', () => {
 
     rerender(
       <Header
-        onAddChannel={vi.fn()}
         syncStatus={{ ...syncingStatus, isSyncing: false, state: 'idle' }}
         cacheStatus={cacheStatus}
         onRetryFailed={vi.fn()}
@@ -194,13 +196,13 @@ describe('Header', () => {
   });
 
   it('can hide mobile search when the active view does not use channel search', () => {
-    render(<Header onAddChannel={vi.fn()} showMobileSearch={false} />);
+    render(<Header showMobileSearch={false} />);
 
     expect(screen.queryAllByPlaceholderText('Search channels...')).toHaveLength(1);
   });
 
   it('reveals mobile search only after tapping the search icon', () => {
-    render(<Header onAddChannel={vi.fn()} searchPlaceholder="Search videos..." />);
+    render(<Header searchPlaceholder="Search videos..." />);
 
     expect(screen.queryAllByPlaceholderText('Search videos...')).toHaveLength(1);
 
