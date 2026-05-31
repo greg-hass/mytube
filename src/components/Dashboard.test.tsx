@@ -314,9 +314,9 @@ describe('Dashboard', () => {
 
     render(<Dashboard />);
 
-    expect(screen.getByText('Welcome to YouTube RSS')).toBeInTheDocument();
+    expect(screen.getByText('YouTube RSS')).toBeInTheDocument();
     expect(await screen.findByText('Import subscriptions')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Add channel' })).toBeInTheDocument();
+    expect(screen.getByText('Add a channel')).toBeInTheDocument();
     expect(screen.queryByTestId('dashboard-tabs')).not.toBeInTheDocument();
     expect(screen.queryByTestId('floating-tab-bar')).not.toBeInTheDocument();
     expect(screen.queryByTestId('latest-toolbar')).not.toBeInTheDocument();

@@ -141,100 +141,66 @@ class DashboardContentBoundary extends Component<{
 }
 
 const FirstRunOnboarding = ({ onAddChannel }: { onAddChannel: () => void }) => (
-  <main data-testid="first-run-onboarding" className="mx-auto flex min-h-[80vh] max-w-2xl flex-col items-center justify-center px-4 py-10 sm:py-14">
+  <main data-testid="first-run-onboarding" className="mx-auto flex h-[calc(100dvh-var(--app-header-height))] max-w-lg flex-col items-center justify-center px-4 py-2">
     <motion.div
-      initial={{ opacity: 0, y: 20 }}
+      initial={{ opacity: 0, y: 10 }}
       animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.5 }}
-      className="text-center"
+      transition={{ duration: 0.4 }}
+      className="w-full"
     >
-      {/* App Icon */}
-      <motion.div
-        initial={{ scale: 0.8, opacity: 0 }}
-        animate={{ scale: 1, opacity: 1 }}
-        transition={{ delay: 0.2, type: 'spring', stiffness: 200 }}
-        className="mx-auto mb-6"
-      >
+      {/* Title */}
+      <div className="mb-5 flex items-center gap-3">
         <img
           src="/icon-192.png"
           alt="YouTube RSS"
-          className="mx-auto h-20 w-20 rounded-2xl shadow-2xl shadow-red-500/20 ring-2 ring-white/50 dark:ring-white/10"
+          className="h-10 w-10 rounded-xl shadow-lg shadow-red-500/20"
         />
-      </motion.div>
-
-      {/* Title */}
-      <motion.h1
-        initial={{ opacity: 0, y: 10 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.3 }}
-        className="text-3xl font-bold tracking-tight text-gray-950 dark:text-gray-50 sm:text-4xl"
-      >
-        Welcome to YouTube RSS
-      </motion.h1>
-
-      <motion.p
-        initial={{ opacity: 0, y: 10 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.4 }}
-        className="mx-auto mt-4 max-w-md text-base leading-relaxed text-gray-500 dark:text-gray-400"
-      >
-        Your personal YouTube subscription feed. No algorithms, no distractions — just the channels you care about.
-      </motion.p>
+        <h1 className="text-xl font-bold text-gray-950 dark:text-gray-50">
+          YouTube RSS
+        </h1>
+      </div>
 
       {/* Action Cards */}
-      <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.5 }}
-        className="mt-10 grid gap-4 sm:grid-cols-2"
-      >
-        <div className="group relative overflow-hidden rounded-2xl border border-gray-200 bg-white p-6 shadow-sm transition-all hover:shadow-md dark:border-gray-800 dark:bg-gray-900">
-          <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-xl bg-red-50 dark:bg-red-900/20">
-            <Upload className="h-6 w-6 text-red-600 dark:text-red-400" />
+      <div className="grid gap-2">
+        <button
+          type="button"
+          onClick={onAddChannel}
+          className="flex items-center gap-3 rounded-xl border border-gray-200 bg-white p-3 text-left shadow-sm transition-all active:scale-[0.98] dark:border-gray-800 dark:bg-gray-900"
+        >
+          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-gray-100 dark:bg-gray-800">
+            <Plus className="h-5 w-5 text-gray-700 dark:text-gray-300" />
           </div>
-          <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">
-            Import subscriptions
-          </h3>
-          <p className="mt-2 text-sm leading-relaxed text-gray-500 dark:text-gray-400">
-            Bring your existing subscriptions from Google Takeout or another RSS reader via OPML/XML.
-          </p>
-          <div className="mt-5">
-            <Suspense fallback={null}>
-              <OPMLUpload minimal showLabelOnMobile />
-            </Suspense>
+          <div>
+            <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100">
+              Add a channel
+            </h3>
+            <p className="text-xs text-gray-500 dark:text-gray-400">
+              Paste a YouTube URL, handle, or channel ID
+            </p>
           </div>
-        </div>
+        </button>
 
-        <div className="group relative overflow-hidden rounded-2xl border border-gray-200 bg-white p-6 shadow-sm transition-all hover:shadow-md dark:border-gray-800 dark:bg-gray-900">
-          <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-xl bg-gray-100 dark:bg-gray-800">
-            <Plus className="h-6 w-6 text-gray-700 dark:text-gray-300" />
+        <div className="flex items-center gap-3 rounded-xl border border-gray-200 bg-white p-3 shadow-sm dark:border-gray-800 dark:bg-gray-900">
+          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-red-50 dark:bg-red-900/20">
+            <Upload className="h-5 w-5 text-red-600 dark:text-red-400" />
           </div>
-          <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">
-            Add a channel
-          </h3>
-          <p className="mt-2 text-sm leading-relaxed text-gray-500 dark:text-gray-400">
-            Paste a YouTube channel URL, handle, or channel ID to start following.
-          </p>
-          <button
-            type="button"
-            onClick={onAddChannel}
-            className="mt-5 inline-flex h-11 items-center justify-center rounded-xl bg-gray-900 px-5 text-sm font-semibold text-white transition-all hover:bg-gray-800 hover:shadow-lg active:scale-[0.98] dark:bg-gray-100 dark:text-gray-950 dark:hover:bg-white"
-          >
-            <Plus className="mr-2 h-4 w-4" />
-            Add channel
-          </button>
+          <div className="min-w-0 flex-1">
+            <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100">
+              Import subscriptions
+            </h3>
+            <p className="text-xs text-gray-500 dark:text-gray-400">
+              Google Takeout CSV or OPML/XML
+            </p>
+          </div>
+          <Suspense fallback={null}>
+            <OPMLUpload minimal showLabelOnMobile />
+          </Suspense>
         </div>
-      </motion.div>
+      </div>
 
-      {/* Subtle footer hint */}
-      <motion.p
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        transition={{ delay: 0.7 }}
-        className="mt-8 text-xs text-gray-400 dark:text-gray-600"
-      >
-        Your feed will start refreshing automatically once channels are added.
-      </motion.p>
+      <p className="mt-4 text-center text-xs text-gray-400 dark:text-gray-600">
+        Your feed refreshes automatically once channels are added.
+      </p>
     </motion.div>
   </main>
 );
