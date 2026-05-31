@@ -523,6 +523,11 @@ describe('feed refresh policy', () => {
             .toBe(DEFAULT_SCHEDULED_REFRESH_INTERVAL_MS);
     });
 
+    it('treats the refresh interval as a 5 minute default', () => {
+        expect(DEFAULT_SCHEDULED_REFRESH_INTERVAL_MS).toBe(15 * 60 * 1000);
+        expect(CHANNEL_REFRESH_INTERVAL_MS).toBe(15 * 60 * 1000);
+    });
+
     it('forces scheduled refreshes so every subscribed channel is checked every interval', async () => {
         vi.useFakeTimers();
         const aggregateFeeds = vi.fn().mockResolvedValue(undefined);
