@@ -30,8 +30,8 @@ const {
     resolveTemporarySubscriptions,
 } = require('./subscription-resolver');
 
-const BATCH_SIZE = 5;
-const BATCH_DELAY = 2000; // 2 seconds between batches
+const BATCH_SIZE = 15;
+const BATCH_DELAY = 500; // 500ms between batches
 const MAX_ARCHIVED_VIDEOS = 5000;
 const API_RESOLVER_DAILY_QUOTA_CAP = 100;
 const STARTUP_CACHE_MAX_AGE_MS = 10 * 60 * 1000;
@@ -343,14 +343,11 @@ function createFeedAggregator() {
                             quotaExceeded = true;
                         }
     
-                        // Fallback to RSS with delay to avoid 429s
-                        for (const sub of batch) {
+                        // Fallback to RSS in parallel
+                        const fallbackPromises = batch.map(async (sub) => {
                             const feedResult = await fetchChannelFeed(sub.id);
                             const { videos, channelMetadata } = feedResult;
                             const refreshResult = { ...sub, expected: true, source: 'rss', ...feedResult };
-                            batchRefreshResults.push(refreshResult);
-                            fetchedChannelResults.push(refreshResult);
-                            batchVideos.push(...videos);
     
                             // Update subscription metadata if we got it from RSS
                             if (channelMetadata && channelMetadata.title) {
@@ -360,9 +357,14 @@ function createFeedAggregator() {
                                 }
                             }
     
-                            // Small delay between RSS fetches in fallback mode
-                            await new Promise(resolve => setTimeout(resolve, 500));
-                        }
+                            return { refreshResult, videos };
+                        });
+                        const fallbackResults = await Promise.all(fallbackPromises);
+                        fallbackResults.forEach(({ refreshResult, videos }) => {
+                            batchRefreshResults.push(refreshResult);
+                            fetchedChannelResults.push(refreshResult);
+                            batchVideos.push(...videos);
+                        });
     
                         // Fetch thumbnails in parallel for this batch
                         console.log(`  🖼️  Fetching thumbnails for ${batch.length} channels...`);
@@ -392,14 +394,11 @@ function createFeedAggregator() {
                 } else if (quotaExceeded) {
                     // Quota was exceeded in a previous batch, use RSS for remaining batches
                     console.log(`  📡 RSS Mode: Fetching ${batch.length} channels (quota exhausted)`);
-                    for (const sub of batch) {
+                    const rssPromises = batch.map(async (sub) => {
                         const feedResult = await fetchChannelFeed(sub.id);
                         const { videos, channelMetadata } = feedResult;
                         const refreshResult = { ...sub, expected: true, source: 'rss', ...feedResult };
-                        batchRefreshResults.push(refreshResult);
-                        fetchedChannelResults.push(refreshResult);
-                        batchVideos.push(...videos);
-    
+
                         // Update subscription metadata if we got it from RSS
                         if (channelMetadata && channelMetadata.title) {
                             const subIndex = subscriptions.findIndex(s => s.id === sub.id);
@@ -407,10 +406,16 @@ function createFeedAggregator() {
                                 subscriptions[subIndex].title = channelMetadata.title;
                             }
                         }
-    
-                        await new Promise(resolve => setTimeout(resolve, 500));
-                    }
-    
+
+                        return { refreshResult, videos };
+                    });
+                    const rssResults = await Promise.all(rssPromises);
+                    rssResults.forEach(({ refreshResult, videos }) => {
+                        batchRefreshResults.push(refreshResult);
+                        fetchedChannelResults.push(refreshResult);
+                        batchVideos.push(...videos);
+                    });
+
                     // Fetch thumbnails in parallel for this batch
                     const thumbnailPromises = batch.map(async sub => {
                         const subIndex = subscriptions.findIndex(s => s.id === sub.id);
@@ -482,14 +487,19 @@ function createFeedAggregator() {
                     lastUpdated: new Date().toISOString(),
                 };
     
-                await appStore.writeVideoCache({
-                    videos: currentVideos,
-                    lastUpdated: new Date().toISOString(),
-                    totalChannels: subscriptions.length,
-                    totalVideos: currentVideos.length,
-                    channelRefreshes,
-                    shortsStatusById
-                });
+                // Write cache every 5 batches or on the last batch to reduce I/O
+                const batchNumber = Math.floor(i / CURRENT_BATCH_SIZE) + 1;
+                const isLastBatch = i + CURRENT_BATCH_SIZE >= subscriptionsToRefresh.length;
+                if (batchNumber % 5 === 0 || isLastBatch) {
+                    await appStore.writeVideoCache({
+                        videos: currentVideos,
+                        lastUpdated: new Date().toISOString(),
+                        totalChannels: subscriptions.length,
+                        totalVideos: currentVideos.length,
+                        channelRefreshes,
+                        shortsStatusById
+                    });
+                }
     
                 console.log(`Progress: ${Math.min(skippedChannels + i + CURRENT_BATCH_SIZE, subscriptions.length)}/${subscriptions.length}`);
     
