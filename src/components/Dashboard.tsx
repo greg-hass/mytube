@@ -113,6 +113,15 @@ class DashboardContentBoundary extends Component<{
 
   componentDidCatch(error: unknown, errorInfo: ErrorInfo) {
     console.error('Dashboard tab content failed to render:', error, errorInfo);
+    // Log additional details for debugging
+    if (error instanceof Error) {
+      console.error('Error stack:', error.stack);
+    }
+    // Report to console for easier debugging
+    console.error('Error details:', {
+      message: error instanceof Error ? error.message : String(error),
+      componentStack: errorInfo.componentStack,
+    });
   }
 
   render() {
@@ -140,7 +149,7 @@ class DashboardContentBoundary extends Component<{
   }
 }
 
-const FirstRunOnboarding = ({ onAddChannel }: { onAddChannel: () => void }) => (
+const FirstRunOnboarding = ({ onAddChannel, onImportSuccess }: { onAddChannel: () => void; onImportSuccess?: () => void }) => (
   <main data-testid="first-run-onboarding" className="mx-auto flex h-[calc(100dvh-var(--app-header-height))] max-w-lg flex-col items-center justify-center px-4 py-2">
     <motion.div
       initial={{ opacity: 0, y: 10 }}
@@ -193,7 +202,7 @@ const FirstRunOnboarding = ({ onAddChannel }: { onAddChannel: () => void }) => (
             </p>
           </div>
           <Suspense fallback={null}>
-            <OPMLUpload minimal showLabelOnMobile />
+            <OPMLUpload minimal showLabelOnMobile onSuccess={onImportSuccess} />
           </Suspense>
         </div>
       </div>
@@ -662,7 +671,14 @@ export const Dashboard = () => {
           <div className="w-10 h-10 border-4 border-red-600 border-t-transparent rounded-full animate-spin" />
         </div>
       ) : hasNoSubscriptions ? (
-        <FirstRunOnboarding onAddChannel={() => setIsAddChannelModalOpen(true)} />
+        <FirstRunOnboarding
+          onAddChannel={() => setIsAddChannelModalOpen(true)}
+          onImportSuccess={() => {
+            // Trigger feed refresh after import
+            refetchVideos();
+            toast.success('Subscriptions imported! Refreshing your feed...');
+          }}
+        />
       ) : (
         <div
           data-testid="dashboard-page-chrome"

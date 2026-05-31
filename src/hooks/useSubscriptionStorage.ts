@@ -109,6 +109,10 @@ export const useSubscriptionStorage = () => {
     },
     onSuccess: () => {
       invalidateSubscriptionQueries();
+      // Also invalidate RSS videos so the feed refreshes with new channels
+      queryClient.invalidateQueries({ queryKey: ['rss-videos'] });
+      queryClient.invalidateQueries({ queryKey: ['server-videos'] });
+      queryClient.invalidateQueries({ queryKey: ['server-videos-status'] });
     },
   });
 
