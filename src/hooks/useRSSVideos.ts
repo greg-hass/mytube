@@ -116,7 +116,8 @@ export const useRSSVideos = () => {
         method: 'POST',
       });
       if (!response.ok) {
-        throw new Error('Failed to trigger server refresh');
+        const errorText = await response.text().catch(() => 'Unknown error');
+        throw new Error(`Server returned ${response.status}: ${errorText}`);
       }
       return response.json();
     },
@@ -124,7 +125,8 @@ export const useRSSVideos = () => {
       queryClient.invalidateQueries({ queryKey: ['server-videos-status'] });
     },
     onError: (error) => {
-      toast.error(`Refresh failed: ${error.message}`);
+      console.error('Pull-to-refresh failed:', error);
+      toast.error(`Refresh failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   });
 
