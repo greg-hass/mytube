@@ -71,9 +71,9 @@ export const FloatingTabBar = ({
       data-testid="floating-tab-bar"
       className="fixed bottom-0 left-0 right-0 z-50 pb-[env(safe-area-inset-bottom)] pointer-events-none"
     >
-      <div className="flex items-center justify-center gap-2 px-4 pb-3 pt-2">
+        <div className="flex items-center justify-center px-4 pb-1.5 pt-2">
         {/* Tab Bar Pill */}
-        <div className="pointer-events-auto flex items-center gap-1 rounded-[2rem] bg-white/70 px-2 py-2 shadow-[0_8px_32px_rgba(0,0,0,0.12)] ring-1 ring-white/40 backdrop-blur-2xl dark:bg-gray-950/70 dark:shadow-[0_8px_32px_rgba(0,0,0,0.4)] dark:ring-white/10">
+        <div className="pointer-events-auto flex items-center gap-1 rounded-[2rem] bg-white/70 px-3 py-2.5 shadow-[0_8px_32px_rgba(0,0,0,0.12)] ring-1 ring-white/40 backdrop-blur-2xl dark:bg-gray-950/70 dark:shadow-[0_8px_32px_rgba(0,0,0,0.4)] dark:ring-white/10">
           {TABS.map((tab) => {
             const isActive = activeTab === tab.id;
             const badge = tab.getBadge?.(props) ?? null;
@@ -83,7 +83,7 @@ export const FloatingTabBar = ({
               <button
                 key={tab.id}
                 onClick={() => onTabChange(tab.id)}
-                className="relative flex flex-col items-center justify-center min-w-[3.5rem] sm:min-w-[4.5rem] px-2 py-1.5 rounded-full transition-all duration-200"
+                className="relative flex flex-col items-center justify-center min-w-[4rem] sm:min-w-[5rem] px-2 py-1.5 rounded-full transition-all duration-200"
                 aria-label={tab.label}
                 aria-pressed={isActive}
               >
@@ -96,7 +96,7 @@ export const FloatingTabBar = ({
                 )}
                 <div className="relative flex items-center justify-center">
                   <Icon
-                    className={`w-5 h-5 sm:w-[1.3rem] sm:h-[1.3rem] transition-colors duration-200 ${
+                    className={`w-6 h-6 sm:w-7 sm:h-7 transition-colors duration-200 ${
                       isActive
                         ? 'text-gray-900 dark:text-gray-100'
                         : 'text-gray-400 dark:text-gray-500'
@@ -121,19 +121,28 @@ export const FloatingTabBar = ({
               </button>
             );
           })}
-        </div>
 
-        {/* Add Channel Button */}
-        <motion.button
-          whileHover={{ scale: 1.1 }}
-          whileTap={{ scale: 0.9 }}
-          onClick={onAddChannel}
-          className="pointer-events-auto flex h-12 w-12 items-center justify-center rounded-full bg-red-600 text-white shadow-lg shadow-red-600/30 transition-colors hover:bg-red-700 dark:bg-red-600 dark:hover:bg-red-500"
-          title="Add channel"
-          aria-label="Add channel"
-        >
-          <Plus className="h-6 w-6" />
-        </motion.button>
+          {/* Add Channel Button */}
+          <div className="w-px h-8 bg-gray-200 dark:bg-gray-700 mx-1" />
+          <motion.button
+            whileHover={{ scale: 1.1 }}
+            whileTap={{ scale: 0.9 }}
+            onClick={onAddChannel}
+            className="relative flex flex-col items-center justify-center min-w-[4rem] sm:min-w-[5rem] px-2 py-1.5 rounded-full transition-all duration-200"
+            title="Add channel"
+            aria-label="Add channel"
+          >
+            <div className="relative flex items-center justify-center">
+              <Plus
+                className="w-6 h-6 sm:w-7 sm:h-7 text-red-600 dark:text-red-500"
+                strokeWidth={2.5}
+              />
+            </div>
+            <span className="relative mt-0.5 text-[10px] sm:text-[11px] font-semibold text-red-600 dark:text-red-500">
+              Add
+            </span>
+          </motion.button>
+        </div>
       </div>
     </motion.nav>
   );
