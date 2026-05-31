@@ -12,11 +12,13 @@ interface FloatingTabBarProps {
   favoriteCount: number;
 }
 
+type FloatingTabBarCounts = Pick<FloatingTabBarProps, 'subscriptionCount' | 'activeChannelCount' | 'queueCount' | 'favoriteCount'>;
+
 const TABS: Array<{
   id: Tab;
   label: string;
   icon: typeof Grid3x3;
-  getBadge?: (props: FloatingTabBarProps) => number | null;
+  getBadge?: (props: FloatingTabBarCounts) => number | null;
 }> = [
   {
     id: 'subscriptions',
