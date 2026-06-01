@@ -13,6 +13,7 @@ const {
     createCorsOptions,
     createOriginGuardMiddleware,
     createRateLimitMiddleware,
+    describeAllowlist,
     parseAllowedOrigins,
     validateSyncPayload,
 } = require('./security-middleware');
@@ -54,6 +55,8 @@ const ALLOWED_ORIGINS = parseAllowedOrigins(process.env.ALLOWED_ORIGINS);
 const API_WRITE_RATE_LIMIT_WINDOW_MS = Number(process.env.API_WRITE_RATE_LIMIT_WINDOW_MS) || 60 * 1000;
 const API_WRITE_RATE_LIMIT_MAX = Number(process.env.API_WRITE_RATE_LIMIT_MAX) || 30;
 const ALLOW_INSECURE_UNAUTHENTICATED_API = process.env.ALLOW_INSECURE_UNAUTHENTICATED_API === 'true';
+
+console.log(`[startup] Allowed browser origins: ${describeAllowlist(new Set(ALLOWED_ORIGINS))}`);
 
 // --- Thumbnail proxy hardening ---
 const THUMBNAIL_PROXY_TIMEOUT_MS = 5000;

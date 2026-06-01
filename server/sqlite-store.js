@@ -2,8 +2,8 @@ const fs = require('fs');
 const fsPromises = require('fs').promises;
 const path = require('path');
 const Database = require('better-sqlite3');
+const { runMigrations } = require('./migrations-runner');
 
-const INITIAL_MIGRATION_FILE = path.join(__dirname, 'migrations', '001_initial.sql');
 const ISO_NOW = () => new Date().toISOString();
 
 function parseJson(value, fallback) {
@@ -229,7 +229,7 @@ function createSqliteStore({ databaseFile, legacyDataFile, legacyVideosFile }) {
             db = new Database(databaseFile);
             db.pragma('foreign_keys = ON');
             db.pragma('journal_mode = WAL');
-            db.exec(fs.readFileSync(INITIAL_MIGRATION_FILE, 'utf8'));
+            runMigrations(db);
             await importLegacyJson({ defaultData, defaultVideoCache });
         },
         async readData(fallback) {

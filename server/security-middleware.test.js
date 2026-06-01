@@ -4,8 +4,10 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 const require = createRequire(import.meta.url);
 const {
     createApiKeyAuthMiddleware,
+    createCorsOptions,
     createOriginGuardMiddleware,
     createRateLimitMiddleware,
+    describeAllowlist,
     validateSyncPayload,
 } = require('./security-middleware');
 
@@ -120,6 +122,79 @@ describe('security middleware', () => {
         middleware(req, res, next);
 
         expect(next).toHaveBeenCalledOnce();
+    });
+
+    it('rejects public origins by default when no allowed origins are configured', () => {
+        const middleware = createOriginGuardMiddleware({ allowedOrigins: [] });
+        const req = {
+            method: 'POST',
+            header: (name) => name.toLowerCase() === 'origin' ? 'https://evil.example' : undefined,
+        };
+        const res = { status: vi.fn().mockReturnThis(), json: vi.fn() };
+        const next = vi.fn();
+
+        middleware(req, res, next);
+
+        expect(next).not.toHaveBeenCalled();
+        expect(res.status).toHaveBeenCalledWith(403);
+    });
+
+    it('allows loopback and private network origins by default', () => {
+        const middleware = createOriginGuardMiddleware({ allowedOrigins: [] });
+        const cases = [
+            'http://localhost:5173',
+            'http://127.0.0.1:8080',
+            'http://192.168.1.50:5173',
+            'http://10.0.0.5:5173',
+            'http://172.20.10.4:5173',
+            'http://my-mac.local:5173',
+        ];
+
+        for (const origin of cases) {
+            const req = {
+                method: 'POST',
+                header: (name) => name.toLowerCase() === 'origin' ? origin : undefined,
+            };
+            const res = { status: vi.fn().mockReturnThis(), json: vi.fn() };
+            const next = vi.fn();
+
+            middleware(req, res, next);
+
+            expect(next, `expected ${origin} to be allowed`).toHaveBeenCalledOnce();
+        }
+    });
+
+    it('allows requests with no Origin header (non-browser clients)', () => {
+        const middleware = createOriginGuardMiddleware({ allowedOrigins: [] });
+        const req = { method: 'POST', header: () => undefined };
+        const res = { status: vi.fn().mockReturnThis(), json: vi.fn() };
+        const next = vi.fn();
+
+        middleware(req, res, next);
+
+        expect(next).toHaveBeenCalledOnce();
+    });
+
+    it('describeAllowlist summarizes the effective policy', () => {
+        expect(describeAllowlist(new Set())).toMatch(/loopback/);
+        expect(describeAllowlist(new Set(['https://a.example', 'https://b.example'])))
+            .toBe('https://a.example, https://b.example');
+    });
+
+    it('createCorsOptions rejects public origins by default', () => {
+        const opts = createCorsOptions({ allowedOrigins: [] });
+        const callback = vi.fn();
+
+        opts.origin('https://evil.example', callback);
+        expect(callback).toHaveBeenCalledWith(expect.any(Error));
+
+        callback.mockClear();
+        opts.origin('http://localhost:5173', callback);
+        expect(callback).toHaveBeenCalledWith(null, true);
+
+        callback.mockClear();
+        opts.origin(undefined, callback);
+        expect(callback).toHaveBeenCalledWith(null, true);
     });
 
     it('rejects oversized sync payloads', () => {
