@@ -1,7 +1,7 @@
 const {
     pipedInstances: PIPED_INSTANCES,
     invidiousInstances: INVIDIOUS_INSTANCES,
-} = require('../src/lib/external-services.json');
+} = require('./external-services.json');
 const { createLruCache } = require('./utils');
 
 const SEARCH_TIMEOUT_MS = 4000;
