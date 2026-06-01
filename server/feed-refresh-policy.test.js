@@ -7,6 +7,7 @@ const {
     DEFAULT_SCHEDULED_REFRESH_INTERVAL_MS,
     getScheduledRefreshConfig,
     getChannelsDueForRefresh,
+    getNextChannelsForRefresh,
     mergeChannelRefreshes,
     summarizeFailedChannels,
     startScheduledRefresh,
@@ -566,5 +567,35 @@ describe('feed refresh policy', () => {
         await vi.advanceTimersByTimeAsync(100);
 
         expect(aggregateFeeds).toHaveBeenCalledTimes(2);
+    });
+});
+
+describe('getNextChannelsForRefresh', () => {
+    it('orders channels by oldest lastSuccessfulFetchAt first', () => {
+        const result = getNextChannelsForRefresh(
+            [
+                { id: 'UC_FRESH', title: 'Fresh' },
+                { id: 'UC_STALE', title: 'Stale' },
+                { id: 'UC_NEVER', title: 'Never' },
+            ],
+            {
+                UC_FRESH: { lastSuccessfulFetchAt: '2026-06-01T12:00:00.000Z' },
+                UC_STALE: { lastSuccessfulFetchAt: '2026-05-30T12:00:00.000Z' },
+            },
+            { limit: 3 }
+        );
+
+        expect(result.map((entry) => entry.id)).toEqual(['UC_NEVER', 'UC_STALE', 'UC_FRESH']);
+    });
+
+    it('respects the requested limit', () => {
+        const subs = Array.from({ length: 10 }, (_, i) => ({ id: `UC_${i}`, title: `Channel ${i}` }));
+        const result = getNextChannelsForRefresh(subs, {}, { limit: 3 });
+        expect(result).toHaveLength(3);
+        expect(result.map((entry) => entry.id)).toEqual(['UC_0', 'UC_1', 'UC_2']);
+    });
+
+    it('returns an empty list when no subscriptions are present', () => {
+        expect(getNextChannelsForRefresh([], {}, { limit: 5 })).toEqual([]);
     });
 });

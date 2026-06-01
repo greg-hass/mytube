@@ -19,6 +19,7 @@ import {
   hasPlaceholderThumbnail,
   mergeRemoteSubscriptionMetadata,
   resolveWatchedVideoSync,
+  subscriptionsEqual,
 } from '../lib/subscription-sync';
 import { useStore } from '../store/useStore';
 import type { YouTubeChannel } from '../types/youtube';
@@ -62,10 +63,7 @@ export const useSubscriptionStorage = () => {
         ...remoteSubs.filter((sub: StoredSubscription) => !localIds.has(sub.id)),
       ];
 
-      const localStr = JSON.stringify([...localSubs].sort((a, b) => a.id.localeCompare(b.id)));
-      const mergedStr = JSON.stringify([...mergedSubs].sort((a, b) => a.id.localeCompare(b.id)));
-
-      if (localStr !== mergedStr) {
+      if (!subscriptionsEqual(localSubs, mergedSubs)) {
         await addSubscriptions(mergedSubs);
       }
 
@@ -308,10 +306,7 @@ export const useSubscriptionStorage = () => {
       }
     }
 
-    const localStr = JSON.stringify([...localSubs].sort((a, b) => a.id.localeCompare(b.id)));
-    const repairedStr = JSON.stringify([...repairedSubs].sort((a, b) => a.id.localeCompare(b.id)));
-
-    if (localStr !== repairedStr) {
+    if (!subscriptionsEqual(localSubs, repairedSubs)) {
       await addSubscriptions(repairedSubs);
       queryClient.setQueryData(['subscriptions'], repairedSubs);
       queryClient.invalidateQueries({ queryKey: ['subscriptions'] });
@@ -689,10 +684,8 @@ ${outlines}
       // Writing 200 items to IndexedDB is fast. Let's just do it if we have remote data.
 
       let updatedLocal = false;
-      const localStr = JSON.stringify(localSubs.sort((a, b) => a.id.localeCompare(b.id)));
-      const mergedStr = JSON.stringify(mergedSubs.sort((a, b) => a.id.localeCompare(b.id)));
 
-      if (localStr !== mergedStr) {
+      if (!subscriptionsEqual(localSubs, mergedSubs)) {
         console.log(`📥 Syncing changes from server (metadata or new channels)...`);
 
         // We can just overwrite local with the merged list
