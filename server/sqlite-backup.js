@@ -3,8 +3,77 @@ const path = require('path');
 const Database = require('better-sqlite3');
 const { DEFAULT_DATABASE_FILE } = require('./app-store');
 
+const BUSY_AGGREGATOR_STATES = new Set(['running', 'queued']);
+const DEFAULT_AGGREGATOR_STATUS_URL = `http://127.0.0.1:${process.env.PORT || 3001}/api/videos/status`;
+const DEFAULT_AGGREGATOR_WAIT_TIMEOUT_MS = 15 * 60 * 1000;
+const DEFAULT_AGGREGATOR_POLL_INTERVAL_MS = 1000;
+
 function makeTimestamp() {
     return new Date().toISOString().replace(/:/g, '-');
+}
+
+function getAggregatorStatusUrl() {
+    if (process.env.AGGREGATOR_STATUS_URL) {
+        return process.env.AGGREGATOR_STATUS_URL;
+    }
+    return DEFAULT_AGGREGATOR_STATUS_URL;
+}
+
+async function fetchAggregatorStatus({ statusUrl, fetchImpl = globalThis.fetch, timeoutMs = 5000 } = {}) {
+    if (!statusUrl) {
+        throw new Error('aggregator statusUrl is required');
+    }
+
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), timeoutMs);
+    try {
+        const response = await fetchImpl(statusUrl, { signal: controller.signal });
+        if (!response.ok) {
+            throw new Error(`Aggregator status request failed: ${response.status}`);
+        }
+        return await response.json();
+    } finally {
+        clearTimeout(timer);
+    }
+}
+
+async function waitForAggregatorIdle({
+    statusUrl = getAggregatorStatusUrl(),
+    timeoutMs = DEFAULT_AGGREGATOR_WAIT_TIMEOUT_MS,
+    pollMs = DEFAULT_AGGREGATOR_POLL_INTERVAL_MS,
+    fetchImpl = globalThis.fetch,
+    sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
+} = {}) {
+    const deadline = Date.now() + timeoutMs;
+    let lastState = null;
+    let didWait = false;
+
+    while (Date.now() <= deadline) {
+        let status;
+        try {
+            status = await fetchAggregatorStatus({ statusUrl, fetchImpl });
+        } catch (error) {
+            // The server may be offline (CLI run from cron without the app).
+            // Treat that as "idle" so the backup proceeds; the database
+            // cannot be mutated by a process that is not running.
+            console.warn(`Skipping aggregator coordination (${error.message || error}); proceeding with backup.`);
+            return { waited: false, state: 'unreachable' };
+        }
+
+        const state = status?.state || 'idle';
+        lastState = state;
+
+        if (!BUSY_AGGREGATOR_STATES.has(state)) {
+            return { waited: didWait, state };
+        }
+
+        didWait = true;
+        await sleep(pollMs);
+    }
+
+    throw new Error(
+        `Aggregator still ${lastState} after ${Math.round(timeoutMs / 1000)}s; refusing to back up while feeds are being refreshed.`
+    );
 }
 
 async function validateSqliteDatabase(databaseFile) {
@@ -22,10 +91,23 @@ async function validateSqliteDatabase(databaseFile) {
     }
 }
 
-async function backupSqliteDatabase({ databaseFile = DEFAULT_DATABASE_FILE, backupFile }) {
+async function backupSqliteDatabase({
+    databaseFile = DEFAULT_DATABASE_FILE,
+    backupFile,
+    aggregatorStatusUrl,
+    waitForAggregator = true,
+    aggregatorTimeoutMs = DEFAULT_AGGREGATOR_WAIT_TIMEOUT_MS,
+}) {
     if (!backupFile) throw new Error('backupFile is required');
     if (path.resolve(databaseFile) === path.resolve(backupFile)) {
         throw new Error('Backup destination must differ from the active database');
+    }
+
+    if (waitForAggregator) {
+        await waitForAggregatorIdle({
+            statusUrl: aggregatorStatusUrl,
+            timeoutMs: aggregatorTimeoutMs,
+        });
     }
 
     await fs.mkdir(path.dirname(backupFile), { recursive: true });
@@ -56,10 +138,20 @@ async function restoreSqliteDatabase({
     backupFile,
     recoveryDir = path.join(path.dirname(databaseFile), 'backups'),
     timestamp = makeTimestamp(),
+    aggregatorStatusUrl,
+    waitForAggregator = true,
+    aggregatorTimeoutMs = DEFAULT_AGGREGATOR_WAIT_TIMEOUT_MS,
 }) {
     if (!backupFile) throw new Error('backupFile is required');
     if (path.resolve(databaseFile) === path.resolve(backupFile)) {
         throw new Error('Restore source must differ from the active database');
+    }
+
+    if (waitForAggregator) {
+        await waitForAggregatorIdle({
+            statusUrl: aggregatorStatusUrl,
+            timeoutMs: aggregatorTimeoutMs,
+        });
     }
 
     const integrity = await validateSqliteDatabase(backupFile);
@@ -145,7 +237,10 @@ if (require.main === module) {
 
 module.exports = {
     backupSqliteDatabase,
+    fetchAggregatorStatus,
+    getAggregatorStatusUrl,
     restoreSqliteDatabase,
     runCli,
     validateSqliteDatabase,
+    waitForAggregatorIdle,
 };

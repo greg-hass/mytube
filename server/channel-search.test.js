@@ -2,7 +2,13 @@ import { createRequire } from 'node:module';
 import { describe, expect, it } from 'vitest';
 
 const require = createRequire(import.meta.url);
-const { dedupeAndRankChannels, parseYouTubeChannelSearchResults, scoreChannelResult } = require('./channel-search');
+const {
+    dedupeAndRankChannels,
+    getSearchCacheStats,
+    parseYouTubeChannelSearchResults,
+    scoreChannelResult,
+    searchChannels,
+} = require('./channel-search');
 
 describe('channel search ranking', () => {
     it('ranks exact and token matches above weak matches', () => {
@@ -51,5 +57,21 @@ describe('channel search ranking', () => {
                 customUrl: '/@veritasium',
             },
         ]);
+    });
+});
+
+describe('channel search cache', () => {
+    it('caps cached results at the configured LRU size', async () => {
+        const emptyFetch = async () => ({ ok: false, status: 500, json: async () => ([]), text: async () => '' });
+        const before = getSearchCacheStats().size;
+
+        for (let i = 0; i < 150; i += 1) {
+            await searchChannels(`query-${i}`, { fetchImpl: emptyFetch, limit: 1 });
+        }
+
+        const after = getSearchCacheStats();
+        expect(after.size).toBeLessThanOrEqual(100);
+        expect(after.maxEntries).toBe(100);
+        expect(after.size).toBeGreaterThanOrEqual(before);
     });
 });

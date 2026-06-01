@@ -1,15 +1,10 @@
 import type { StateCreator } from 'zustand';
+import { getCurrentDateInTimezone } from '../lib/date-helpers';
 
-// Helper function to get current date in Pacific Time
+const QUOTA_TIMEZONE = 'America/Los_Angeles';
+
 function getCurrentPacificDate(): string {
-    const now = new Date();
-    const options: Intl.DateTimeFormatOptions = {
-        timeZone: 'America/Los_Angeles',
-        year: 'numeric',
-        month: 'numeric',
-        day: 'numeric',
-    };
-    return new Intl.DateTimeFormat('en-US', options).format(now);
+    return getCurrentDateInTimezone(QUOTA_TIMEZONE);
 }
 
 export interface DataSlice {
