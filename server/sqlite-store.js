@@ -113,8 +113,9 @@ function createSqliteStore({ databaseFile, legacyDataFile, legacyVideosFile }) {
             writeAppState('watched_videos', watchedVideos || [], updatedAt);
             writeAppState('redirects', redirects || {}, updatedAt);
 
+            const nextRevision = getRevision() + 1;
+
             if (trackSubscriptionChanges && removedIds.length > 0) {
-                const revision = getRevision() + 1;
                 const insertTombstone = database.prepare(`
                     INSERT INTO subscription_tombstones (id, revision, deleted_at)
                     VALUES (?, ?, ?)
@@ -123,12 +124,11 @@ function createSqliteStore({ databaseFile, legacyDataFile, legacyVideosFile }) {
                         deleted_at = excluded.deleted_at
                 `);
                 for (const id of removedIds) {
-                    insertTombstone.run(id, revision, updatedAt);
+                    insertTombstone.run(id, nextRevision, updatedAt);
                 }
-                writeAppState('sync_revision', revision, updatedAt);
-            } else if (syncRevision !== undefined) {
-                writeAppState('sync_revision', syncRevision, updatedAt);
             }
+
+            writeAppState('sync_revision', nextRevision, updatedAt);
         });
 
         write();
@@ -231,6 +231,9 @@ function createSqliteStore({ databaseFile, legacyDataFile, legacyVideosFile }) {
             db.pragma('journal_mode = WAL');
             runMigrations(db);
             await importLegacyJson({ defaultData, defaultVideoCache });
+        },
+        getRevision() {
+            return getRevision();
         },
         async readData(fallback) {
             return getDataSnapshot(fallback);

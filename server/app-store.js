@@ -28,6 +28,10 @@ async function withStore(method, ...args) {
     return store[method](...args);
 }
 
+function getCurrentRevision() {
+    return store.getRevision();
+}
+
 module.exports = {
     DATA_DIR,
     DEFAULT_DATA,
@@ -35,6 +39,7 @@ module.exports = {
     DEFAULT_DATABASE_FILE,
     DEFAULT_VIDEO_CACHE,
     DEFAULT_VIDEOS_FILE,
+    getCurrentRevision,
     init,
     readData: (...args) => withStore('readData', ...args),
     readVideoCache: (...args) => withStore('readVideoCache', ...args),
