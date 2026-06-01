@@ -2,7 +2,8 @@ const fs = require('fs').promises;
 const path = require('path');
 const appStore = require('./app-store');
 const feedAggregatorModule = require('./feed-aggregator');
-const { createApp, describeAllowlist, parseAllowedOrigins } = require('./app-factory');
+const { createApp } = require('./app-factory');
+const { describeAllowlist, parseAllowedOrigins } = require('./security-middleware');
 
 let feedAggregator = null;
 let server = null;
