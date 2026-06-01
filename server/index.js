@@ -4,8 +4,9 @@ const axios = require('axios');
 const fs = require('fs').promises;
 const path = require('path');
 const { mergeIncomingSubscriptions, removeSensitiveSyncSettings } = require('./subscription-merge');
-const { searchChannels } = require('./channel-search');
+const { getSearchCacheStats, searchChannels } = require('./channel-search');
 const { normalizeVideoCacheThumbnails } = require('./video-thumbnails');
+const { extractYouTubeChannelMetadata } = require('./youtube-html-parser');
 const appStore = require('./app-store');
 const {
     createApiKeyAuthMiddleware,
@@ -124,6 +125,8 @@ app.get('/api/health', async (req, res) => {
             appStore.readVideoCache(DEFAULT_VIDEO_CACHE)
         ]);
 
+        const searchCache = getSearchCacheStats();
+
         res.json({
             status: 'ok',
             subscriptions: data.subscriptions?.length || 0,
@@ -131,6 +134,8 @@ app.get('/api/health', async (req, res) => {
             videos: videoCache.totalVideos || videoCache.videos?.length || 0,
             lastUpdated: videoCache.lastUpdated || null,
             uptime: process.uptime(),
+            rateLimitBuckets: thumbnailRateLimiter.getBucketStats(),
+            searchCache,
         });
     } catch (err) {
         console.error('Health check error:', err);
@@ -387,30 +392,9 @@ app.post('/api/resolve-channel', asyncHandler(async (req, res) => {
         headers: { 'User-Agent': 'Mozilla/5.0' }
     });
 
-    const html = response.data;
-
-    // Extract channel ID from various possible locations
-    let channelId = null;
-    let title = null;
-
-    // Method 1: Look for channel/UC... in the HTML
-    const channelMatch = html.match(/channel\/(UC[a-zA-Z0-9_-]{22})/);
-    if (channelMatch) {
-        channelId = channelMatch[1];
-    }
-
-    // Method 2: Look for "channelId":"UC..." in JSON-LD or other structured data
-    if (!channelId) {
-        const jsonMatch = html.match(/"channelId":"(UC[a-zA-Z0-9_-]{22})"/);
-        if (jsonMatch) {
-            channelId = jsonMatch[1];
-        }
-    }
-
-    // Extract title
-    const titleMatch = html.match(/<meta property="og:title" content="([^"]+)"/);
-    if (titleMatch) {
-        title = titleMatch[1];
+    const { channelId, title, disabled } = extractYouTubeChannelMetadata(response.data);
+    if (disabled) {
+        return res.status(503).json({ error: 'YouTube HTML parsing is disabled' });
     }
 
     if (!channelId) {

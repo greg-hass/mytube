@@ -27,6 +27,7 @@ const {
     applySubscriptionRedirects,
     resolveTemporarySubscriptions,
 } = require('./subscription-resolver');
+const { getCurrentDateInTimezone } = require('../src/lib/date-helpers');
 
 const BATCH_SIZE = 15;
 const BATCH_DELAY = 500; // 500ms between batches
@@ -34,6 +35,7 @@ const MAX_ARCHIVED_VIDEOS = 5000;
 const API_RESOLVER_DAILY_QUOTA_CAP = 100;
 const STARTUP_CACHE_MAX_AGE_MS = 10 * 60 * 1000;
 const DEFAULT_DATA = { subscriptions: [], settings: {}, watchedVideos: [], redirects: {} };
+const QUOTA_TIMEZONE = 'America/Los_Angeles';
 
 function createFeedAggregator() {
     let aggregationPromise = null;
@@ -101,12 +103,7 @@ function createFeedAggregator() {
     }
     
     function getCurrentPacificDate() {
-        return new Intl.DateTimeFormat('en-US', {
-            timeZone: 'America/Los_Angeles',
-            year: 'numeric',
-            month: 'numeric',
-            day: 'numeric',
-        }).format(new Date());
+        return getCurrentDateInTimezone(QUOTA_TIMEZONE);
     }
 
     async function refreshBatch(batch, subscriptions, fetchedChannelResults, deps = {}) {

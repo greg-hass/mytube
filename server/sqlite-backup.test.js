@@ -6,7 +6,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 const require = createRequire(import.meta.url);
 const Database = require('better-sqlite3');
-const { backupSqliteDatabase, restoreSqliteDatabase } = require('./sqlite-backup');
+const { backupSqliteDatabase, restoreSqliteDatabase, waitForAggregatorIdle } = require('./sqlite-backup');
 
 let tempDir;
 
@@ -77,5 +77,61 @@ describe('sqlite backup', () => {
             recoveryFile: path.join(recoveryDir, 'state.2026-05-22T21-30-00.000Z.pre-restore.sqlite'),
             integrity: 'ok',
         });
+    });
+
+    it('skips aggregator coordination when the status endpoint is unreachable', async () => {
+        const databaseFile = path.join(tempDir, 'state.sqlite');
+        const backupFile = path.join(tempDir, 'backups', 'state.snapshot.sqlite');
+        writeValue(databaseFile, 'original');
+
+        const result = await backupSqliteDatabase({
+            databaseFile,
+            backupFile,
+            aggregatorStatusUrl: 'http://127.0.0.1:1/should-not-respond',
+            aggregatorTimeoutMs: 200,
+        });
+
+        expect(result.integrity).toBe('ok');
+        expect(readValue(backupFile)).toBe('original');
+    });
+
+    it('refuses to back up while the aggregator is running past the timeout', async () => {
+        const states = ['running'];
+        const fetchImpl = async () => ({
+            ok: true,
+            status: 200,
+            json: async () => ({ state: states.shift() ?? 'running' }),
+        });
+        const sleep = async () => {};
+
+        await expect(
+            waitForAggregatorIdle({
+                statusUrl: 'http://stub/aggregator-status',
+                fetchImpl,
+                sleep,
+                timeoutMs: 50,
+                pollMs: 10,
+            })
+        ).rejects.toThrow(/Aggregator still running/);
+    });
+
+    it('reports idle once the aggregator leaves the busy states', async () => {
+        const states = ['running', 'queued', 'idle'];
+        const fetchImpl = async () => ({
+            ok: true,
+            status: 200,
+            json: async () => ({ state: states.shift() ?? 'idle' }),
+        });
+        const sleep = async () => {};
+
+        const result = await waitForAggregatorIdle({
+            statusUrl: 'http://stub/aggregator-status',
+            fetchImpl,
+            sleep,
+            timeoutMs: 5000,
+            pollMs: 1,
+        });
+
+        expect(result).toEqual({ waited: true, state: 'idle' });
     });
 });

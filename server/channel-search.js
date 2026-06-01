@@ -2,11 +2,13 @@ const {
     pipedInstances: PIPED_INSTANCES,
     invidiousInstances: INVIDIOUS_INSTANCES,
 } = require('../src/lib/external-services.json');
+const { createLruCache } = require('./utils');
 
 const SEARCH_TIMEOUT_MS = 4000;
 const SEARCH_CACHE_MS = 30000;
+const SEARCH_CACHE_MAX_ENTRIES = 100;
 
-const searchCache = new Map();
+const searchCache = createLruCache({ maxEntries: SEARCH_CACHE_MAX_ENTRIES });
 
 function getCacheKey(query) {
     return normalizeText(query);
@@ -24,15 +26,6 @@ function getCachedResults(query) {
 function setCachedResults(query, results) {
     const key = getCacheKey(query);
     searchCache.set(key, { results, timestamp: Date.now() });
-    // Clean old entries occasionally
-    if (searchCache.size > 100) {
-        const now = Date.now();
-        for (const [k, v] of searchCache.entries()) {
-            if (now - v.timestamp > SEARCH_CACHE_MS) {
-                searchCache.delete(k);
-            }
-        }
-    }
 }
 
 async function withTimeout(promise, ms, fallback = []) {
@@ -230,8 +223,16 @@ async function searchChannels(query, options = {}) {
     return ranked;
 }
 
+function getSearchCacheStats() {
+    return {
+        size: searchCache.size,
+        maxEntries: searchCache.maxEntries,
+    };
+}
+
 module.exports = {
     dedupeAndRankChannels,
+    getSearchCacheStats,
     parseYouTubeChannelSearchResults,
     scoreChannelResult,
     searchChannels,

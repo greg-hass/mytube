@@ -133,10 +133,12 @@ function getClientKey(req) {
         || 'unknown';
 }
 
-const { startBucketCleanup } = require('./utils');
+const { createLruCache, startBucketCleanup } = require('./utils');
 
-function createBucketRateLimiter({ windowMs = DEFAULT_WRITE_WINDOW_MS, max = DEFAULT_WRITE_LIMIT } = {}) {
-    const buckets = new Map();
+const DEFAULT_BUCKET_MAX_ENTRIES = 10000;
+
+function createBucketRateLimiter({ windowMs = DEFAULT_WRITE_WINDOW_MS, max = DEFAULT_WRITE_LIMIT, maxEntries = DEFAULT_BUCKET_MAX_ENTRIES } = {}) {
+    const buckets = createLruCache({ maxEntries });
     startBucketCleanup(buckets);
 
     function checkLimit(key) {
@@ -155,7 +157,14 @@ function createBucketRateLimiter({ windowMs = DEFAULT_WRITE_WINDOW_MS, max = DEF
         return buckets.get(key);
     }
 
-    return { checkLimit, getBucket, buckets };
+    function getBucketStats() {
+        return {
+            size: buckets.size,
+            maxEntries: buckets.maxEntries,
+        };
+    }
+
+    return { checkLimit, getBucket, buckets, getBucketStats };
 }
 
 function createRateLimitMiddleware(opts) {

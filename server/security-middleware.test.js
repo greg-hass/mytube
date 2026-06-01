@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 const require = createRequire(import.meta.url);
 const {
     createApiKeyAuthMiddleware,
+    createBucketRateLimiter,
     createCorsOptions,
     createOriginGuardMiddleware,
     createRateLimitMiddleware,
@@ -276,5 +277,31 @@ describe('security middleware', () => {
 
         expect(next).toHaveBeenCalledOnce();
         expect(res.status).toHaveBeenCalledWith(429);
+    });
+});
+
+describe('bucket rate limiter', () => {
+    it('caps the bucket map at the configured LRU size', () => {
+        const limiter = createBucketRateLimiter({ windowMs: 60_000, max: 5, maxEntries: 3 });
+
+        for (let i = 0; i < 5; i += 1) {
+            limiter.checkLimit(`ip-${i}`);
+        }
+
+        expect(limiter.getBucketStats().size).toBe(3);
+        expect(limiter.getBucketStats().maxEntries).toBe(3);
+    });
+
+    it('keeps recently used buckets when evicting the LRU', () => {
+        const limiter = createBucketRateLimiter({ windowMs: 60_000, max: 5, maxEntries: 2 });
+
+        limiter.checkLimit('a');
+        limiter.checkLimit('b');
+        limiter.checkLimit('a');
+        limiter.checkLimit('c');
+
+        expect(limiter.getBucket('a')).toBeDefined();
+        expect(limiter.getBucket('b')).toBeUndefined();
+        expect(limiter.getBucket('c')).toBeDefined();
     });
 });
