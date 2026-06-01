@@ -77,6 +77,7 @@ describe('sqlite store', () => {
                 { id: 'UC_DELETE', title: 'Delete' },
             ],
         });
+        const revisionBeforeRemoval = store.getRevision();
 
         await store.updateData(defaultData, (data) => ({
             ...data,
@@ -85,8 +86,63 @@ describe('sqlite store', () => {
 
         await expect(store.readData(defaultData)).resolves.toMatchObject({
             subscriptions: [{ id: 'UC_KEEP', title: 'Keep' }],
-            syncRevision: 1,
-            subscriptionTombstones: [{ id: 'UC_DELETE', revision: 1 }],
+            subscriptionTombstones: [{ id: 'UC_DELETE', revision: revisionBeforeRemoval + 1 }],
         });
+        expect(store.getRevision()).toBe(revisionBeforeRemoval + 1);
+    });
+
+    it('bumps the sync revision on every writeData call', async () => {
+        store = createSqliteStore({
+            databaseFile: path.join(tempDir, 'youtube-subscriptions.sqlite'),
+            legacyDataFile: path.join(tempDir, 'missing-db.json'),
+            legacyVideosFile: path.join(tempDir, 'missing-videos.json'),
+        });
+        await store.init({ defaultData, defaultVideoCache });
+
+        const baseline = store.getRevision();
+
+        await store.writeData({ ...defaultData, settings: { searchQuery: 'rust' } });
+        expect(store.getRevision()).toBe(baseline + 1);
+
+        await store.writeData({ ...defaultData, settings: { searchQuery: 'golang' } });
+        expect(store.getRevision()).toBe(baseline + 2);
+
+        const snapshot = await store.readData(defaultData);
+        expect(snapshot.syncRevision).toBe(baseline + 2);
+    });
+
+    it('keeps the sync revision monotonic across updateData and writeData', async () => {
+        store = createSqliteStore({
+            databaseFile: path.join(tempDir, 'youtube-subscriptions.sqlite'),
+            legacyDataFile: path.join(tempDir, 'missing-db.json'),
+            legacyVideosFile: path.join(tempDir, 'missing-videos.json'),
+        });
+        await store.init({ defaultData, defaultVideoCache });
+
+        await store.updateData(defaultData, (data) => ({ ...data, settings: { sortBy: 'name' } }));
+        const afterUpdate = store.getRevision();
+
+        await store.writeData({ ...defaultData, settings: { sortBy: 'recent' } });
+        const afterWrite = store.getRevision();
+
+        expect(afterUpdate).toBeGreaterThan(0);
+        expect(afterWrite).toBe(afterUpdate + 1);
+    });
+
+    it('does not let client-supplied syncRevision values roll the revision backwards', async () => {
+        store = createSqliteStore({
+            databaseFile: path.join(tempDir, 'youtube-subscriptions.sqlite'),
+            legacyDataFile: path.join(tempDir, 'missing-db.json'),
+            legacyVideosFile: path.join(tempDir, 'missing-videos.json'),
+        });
+        await store.init({ defaultData, defaultVideoCache });
+
+        await store.writeData({ ...defaultData, settings: { sortBy: 'name' } });
+        const revision = store.getRevision();
+        expect(revision).toBeGreaterThan(0);
+
+        await store.writeData({ ...defaultData, settings: { sortBy: 'recent' }, syncRevision: 0 });
+
+        expect(store.getRevision()).toBe(revision + 1);
     });
 });

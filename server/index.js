@@ -152,6 +152,8 @@ app.get('/api/version', (req, res) => {
 // GET /api/sync - Retrieve all data
 app.get('/api/sync', asyncHandler(async (req, res) => {
     const data = await appStore.readData(DEFAULT_DATA);
+    const revision = data.syncRevision ?? appStore.getCurrentRevision();
+    res.setHeader('ETag', `"${revision}"`);
     res.json(removeSensitiveSyncSettings(data));
 }, 'Failed to read data'));
 
@@ -259,6 +261,24 @@ app.post('/api/sync', asyncHandler(async (req, res) => {
         return res.status(400).json({ error: validation.error });
     }
 
+    const ifMatchHeader = req.header('if-match');
+    let expectedRevision = null;
+    if (ifMatchHeader !== undefined && ifMatchHeader !== '') {
+        const parsed = Number.parseInt(String(ifMatchHeader).replace(/^"|"$/g, ''), 10);
+        if (!Number.isFinite(parsed) || parsed < 0) {
+            return res.status(400).json({ error: 'Invalid If-Match revision' });
+        }
+        expectedRevision = parsed;
+        const currentRevision = appStore.getCurrentRevision();
+        if (parsed !== currentRevision) {
+            res.setHeader('ETag', `"${currentRevision}"`);
+            return res.status(412).json({
+                error: 'Sync revision mismatch',
+                currentRevision,
+            });
+        }
+    }
+
     // Add timestamp
     data.lastSyncedAt = new Date().toISOString();
 
@@ -288,7 +308,13 @@ app.post('/api/sync', asyncHandler(async (req, res) => {
     // Trigger feed aggregation when subscriptions change
     feedAggregator.aggregateFeeds().catch(err => console.error('Aggregation trigger failed:', err));
 
-    res.json({ success: true, timestamp: savedData.lastSyncedAt });
+    const newRevision = savedData.syncRevision ?? appStore.getCurrentRevision();
+    res.setHeader('ETag', `"${newRevision}"`);
+    res.json({
+        success: true,
+        timestamp: savedData.lastSyncedAt,
+        syncRevision: newRevision,
+    });
 }, 'Failed to save data'));
 
 // GET /api/videos - Retrieve aggregated videos

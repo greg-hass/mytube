@@ -34,6 +34,14 @@ export const useSubscriptionStorage = () => {
   const hasCompletedInitialSyncRef = useRef(false);
   const [isInitialSyncing, setIsInitialSyncing] = useState(true);
 
+  const lastKnownServerRevisionRef = useRef<number | null>(null);
+
+  async function recordServerRevision(snapshot: { syncRevision?: number | null } | null | undefined) {
+    if (typeof snapshot?.syncRevision === 'number') {
+      lastKnownServerRevisionRef.current = snapshot.syncRevision;
+    }
+  }
+
   const getSubscriptionsWithServerMetadata = async () => {
     const localSubs = await getAllSubscriptions();
 
@@ -42,6 +50,7 @@ export const useSubscriptionStorage = () => {
       if (!response.ok) return localSubs;
 
       const remoteData = await response.json();
+      await recordServerRevision(remoteData);
       const tombstones = Array.isArray(remoteData.subscriptionTombstones)
         ? remoteData.subscriptionTombstones
         : [];
@@ -261,6 +270,7 @@ export const useSubscriptionStorage = () => {
       if (!response.ok) throw new Error('Failed to fetch server subscriptions');
 
       const remoteData = await response.json();
+      await recordServerRevision(remoteData);
       const tombstones = Array.isArray(remoteData.subscriptionTombstones)
         ? remoteData.subscriptionTombstones
         : [];
@@ -525,28 +535,48 @@ ${outlines}
   };
 
   // Sync with backend
-  const pushLocalStateToBackend = async () => {
-    const localSubs = await getAllSubscriptions();
-    const { searchQuery, sortBy, quotaUsed } = useStore.getState();
+  const pushToServer = useCallback(async (payload: object) => {
+    const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+    const known = lastKnownServerRevisionRef.current;
+    if (known !== null) {
+      headers['If-Match'] = String(known);
+    }
 
     const response = await fetch('/api/sync', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        subscriptions: localSubs,
-        settings: {
-          searchQuery,
-          sortBy,
-          quotaUsed,
-        },
-        watchedVideos: Array.from(useStore.getState().watchedVideos),
-      }),
+      headers,
+      body: JSON.stringify(payload),
     });
+
+    if (response.status === 412) {
+      const body = await response.json().catch(() => ({}));
+      console.warn('Server rejected push (412); refreshing remote revision', body);
+      return { ok: false, status: 412, currentRevision: body?.currentRevision ?? null } as const;
+    }
 
     if (!response.ok) {
       throw new Error(`Failed to push local subscriptions: ${response.status}`);
     }
-  };
+
+    const body = await response.json().catch(() => ({}));
+    await recordServerRevision(body);
+    return { ok: true, body } as const;
+  }, []);
+
+  const pushLocalStateToBackend = useCallback(async () => {
+    const localSubs = await getAllSubscriptions();
+    const { searchQuery, sortBy, quotaUsed } = useStore.getState();
+
+    await pushToServer({
+      subscriptions: localSubs,
+      settings: {
+        searchQuery,
+        sortBy,
+        quotaUsed,
+      },
+      watchedVideos: Array.from(useStore.getState().watchedVideos),
+    });
+  }, [pushToServer]);
 
   const syncInProgressRef = useRef(false);
 
@@ -569,6 +599,7 @@ ${outlines}
       if (!response.ok) throw new Error('Failed to fetch from backend');
 
       const remoteData = await response.json();
+      await recordServerRevision(remoteData);
       const tombstones = Array.isArray(remoteData.subscriptionTombstones)
         ? remoteData.subscriptionTombstones
         : [];
@@ -728,24 +759,22 @@ ${outlines}
         // We push the MERGED list to server, so server becomes the union too.
         const { searchQuery, sortBy, quotaUsed } = useStore.getState();
 
-        const pushResponse = await fetch('/api/sync', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            subscriptions: mergedSubs,
-            settings: {
-              searchQuery,
-              sortBy,
-              quotaUsed // Send local quota too
-            },
-            watchedVideos: mergedWatched
-            // NOTE: We intentionally don't send 'redirects' - those are server-only
-          })
+        const pushResult = await pushToServer({
+          subscriptions: mergedSubs,
+          settings: {
+            searchQuery,
+            sortBy,
+            quotaUsed // Send local quota too
+          },
+          watchedVideos: mergedWatched
+          // NOTE: We intentionally don't send 'redirects' - those are server-only
         });
 
-        if (!pushResponse.ok) {
-          console.error('Sync push failed:', pushResponse.status);
-        } else {
+        if (pushResult.status === 412) {
+          // Server has newer state. The next syncWithBackend pass will pick it up;
+          // skip auto-retry here to avoid an infinite loop.
+          console.warn('⏭️  Skipping push; server has newer revision. Will reconcile on next sync.');
+        } else if (pushResult.ok) {
           console.log('✅ Data pushed to server');
         }
       }
@@ -759,7 +788,7 @@ ${outlines}
     } finally {
       syncInProgressRef.current = false;
     }
-  }, [queryClient]);
+  }, [queryClient, pushLocalStateToBackend, pushToServer]);
 
   // Run sync on mount
   useEffect(() => {
