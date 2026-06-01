@@ -30,7 +30,7 @@ WORKDIR /app
 COPY --from=frontend-builder /app/dist /usr/share/nginx/html
 COPY --from=backend-deps /app/server/node_modules /app/server/node_modules
 COPY server /app/server
-COPY src/lib/external-services.json /app/src/lib/external-services.json
+COPY src/lib/external-services.json /app/server/external-services.json
 COPY nginx.conf /etc/nginx/http.d/default.conf
 COPY docker/start.sh /usr/local/bin/start-youtube-subscriptions
 

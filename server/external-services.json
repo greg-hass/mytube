@@ -1,0 +1,25 @@
+{
+  "corsProxyOrigins": [
+    "https://api.allorigins.win",
+    "https://api.codetabs.com"
+  ],
+  "corsProxyPrefixes": [
+    "https://api.allorigins.win/raw?url=",
+    "https://api.codetabs.com/v1/proxy?quest="
+  ],
+  "pipedInstances": [
+    "https://pipedapi.kavin.rocks",
+    "https://api.piped.ot.ax",
+    "https://pipedapi.system41.jio",
+    "https://api.piped.privacy.com.de",
+    "https://pipedapi.drgns.space"
+  ],
+  "invidiousInstances": [
+    "https://inv.tux.pizza",
+    "https://vid.puffyan.us",
+    "https://invidious.projectsegfau.lt",
+    "https://yt.artemislena.eu",
+    "https://invidious.flokinet.to",
+    "https://invidious.privacyredirect.com"
+  ]
+}
