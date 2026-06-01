@@ -77,6 +77,21 @@ function getScheduledRefreshConfig(env = process.env) {
     };
 }
 
+function getNextChannelsForRefresh(subscriptions = [], channelRefreshes = {}, { limit = 5 } = {}) {
+    const sorted = [...subscriptions].sort((a, b) => {
+        const aLast = new Date(channelRefreshes[a.id]?.lastSuccessfulFetchAt || 0).getTime();
+        const bLast = new Date(channelRefreshes[b.id]?.lastSuccessfulFetchAt || 0).getTime();
+        return aLast - bLast;
+    });
+    return sorted.slice(0, Math.max(0, limit)).map((sub) => ({
+        id: sub.id,
+        title: sub.title,
+        thumbnail: sub.thumbnail,
+        lastSuccessfulFetchAt: channelRefreshes[sub.id]?.lastSuccessfulFetchAt || null,
+        consecutiveFailures: channelRefreshes[sub.id]?.consecutiveFailures || 0,
+    }));
+}
+
 function mergeChannelRefreshes(existingRefreshes = {}, activeChannelIds = new Set(), fetchedChannels = [], fetchedAt = new Date().toISOString()) {
     const merged = {};
     const fetchedTime = new Date(fetchedAt).getTime();
@@ -132,6 +147,7 @@ module.exports = {
     CHANNEL_FAILURE_BACKOFF_THRESHOLD,
     DEFAULT_SCHEDULED_REFRESH_INTERVAL_MS,
     getChannelsDueForRefresh,
+    getNextChannelsForRefresh,
     getScheduledRefreshConfig,
     mergeChannelRefreshes,
     summarizeFailedChannels,

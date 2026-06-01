@@ -65,6 +65,9 @@ export const useRSSVideos = () => {
     },
     staleTime: 0,
     refetchInterval: (query) => {
+      if (typeof document !== 'undefined' && document.visibilityState === 'hidden') {
+        return false;
+      }
       const state = query.state.data?.state;
       if (state === 'running' || state === 'queued') return 2000;
       return 15000;

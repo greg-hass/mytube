@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { applySubscriptionTombstones, areStringSetsEqual, mergeRemoteSubscriptionMetadata, resolveWatchedVideoSync } from './subscription-sync';
+import {
+    applySubscriptionTombstones,
+    areStringSetsEqual,
+    mergeRemoteSubscriptionMetadata,
+    resolveWatchedVideoSync,
+    subscriptionsEqual,
+} from './subscription-sync';
 import type { StoredSubscription } from './indexeddb';
 
 describe('mergeRemoteSubscriptionMetadata', () => {
@@ -123,5 +129,38 @@ describe('applySubscriptionTombstones', () => {
     expect(applySubscriptionTombstones(subscriptions, [{ id: 'UC_DELETE', revision: 2 }])).toEqual([
       { id: 'UC_KEEP', title: 'Keep', addedAt: 1 },
     ]);
+  });
+});
+
+describe('subscriptionsEqual', () => {
+  const base: StoredSubscription[] = [
+    { id: 'UC_A', title: 'Alpha', addedAt: 1, thumbnail: 'https://x/a.jpg', isFavorite: true, isMuted: false, group: 'News' },
+    { id: 'UC_B', title: 'Beta', addedAt: 2, thumbnail: 'https://x/b.jpg' },
+  ];
+
+  it('treats identical content as equal regardless of input order', () => {
+    expect(subscriptionsEqual(base, [...base].reverse())).toBe(true);
+  });
+
+  it('returns false for differing lengths', () => {
+    expect(subscriptionsEqual(base, base.slice(0, 1))).toBe(false);
+  });
+
+  it('returns false when a thumbnail changes', () => {
+    expect(subscriptionsEqual(base, [
+      base[0],
+      { ...base[1], thumbnail: 'https://x/b-v2.jpg' },
+    ])).toBe(false);
+  });
+
+  it('returns false when titles diverge', () => {
+    expect(subscriptionsEqual(base, [
+      { ...base[0], title: 'Alpha Renamed' },
+      base[1],
+    ])).toBe(false);
+  });
+
+  it('returns false when an id disappears', () => {
+    expect(subscriptionsEqual(base, [base[0]])).toBe(false);
   });
 });

@@ -9,6 +9,7 @@ const {
     CHANNEL_REFRESH_INTERVAL_MS,
     DEFAULT_SCHEDULED_REFRESH_INTERVAL_MS,
     getChannelsDueForRefresh,
+    getNextChannelsForRefresh,
     getScheduledRefreshConfig,
     mergeChannelRefreshes,
     summarizeFailedChannels,
@@ -419,6 +420,19 @@ function createFeedAggregator() {
             scheduledRefresh: { ...scheduledRefreshStatus },
         };
     }
+
+    async function getActiveChannels({ limit = 5 } = {}) {
+        try {
+            const [data, videoCache] = await Promise.all([
+                appStore.readData(DEFAULT_DATA),
+                appStore.readVideoCache({ videos: [] }),
+            ]);
+            return getNextChannelsForRefresh(data.subscriptions || [], videoCache.channelRefreshes || {}, { limit });
+        } catch (error) {
+            console.warn('Failed to compute active channels:', error.message);
+            return [];
+        }
+    }
     
     async function aggregateOnStartupIfStale() {
         const scheduledConfig = getScheduledRefreshConfig();
@@ -541,6 +555,7 @@ function createFeedAggregator() {
     return {
         aggregateFeeds,
         aggregateOnStartupIfStale,
+        getActiveChannels,
         getAggregationStatus,
         getChannelsDueForRefresh,
         getScheduledRefreshConfig,
@@ -567,6 +582,7 @@ module.exports = {
     ...aggregator,
     buildVideoFromFeedItem,
     fetchChannelFeed,
+    getNextChannelsForRefresh,
     resolveYouTubeShortsStatus,
     enrichVideosWithShortsStatus,
     backfillArchivedShortsStatus,
@@ -574,6 +590,7 @@ module.exports = {
     applyLocalShortsMetadata,
     looksLikeShortByLocalMetadata,
     __test__: {
+        getActiveChannels: aggregator.getActiveChannels,
         refreshBatch: aggregator.refreshBatch,
         setRunningAggregationStatus: aggregator.setRunningAggregationStatus,
         getAggregationStatus: aggregator.getAggregationStatus,

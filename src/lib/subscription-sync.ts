@@ -70,3 +70,25 @@ export function areStringSetsEqual(left: string[], right: string[]) {
   const rightSet = new Set(right);
   return left.every((value) => rightSet.has(value));
 }
+
+export function subscriptionsEqual(
+  left: StoredSubscription[],
+  right: StoredSubscription[]
+): boolean {
+  if (left === right) return true;
+  if (left.length !== right.length) return false;
+
+  const rightById = new Map(right.map((sub) => [sub.id, sub]));
+  for (const sub of left) {
+    const other = rightById.get(sub.id);
+    if (!other) return false;
+    if (sub.title !== other.title) return false;
+    if ((sub.thumbnail ?? '') !== (other.thumbnail ?? '')) return false;
+    if ((sub.description ?? '') !== (other.description ?? '')) return false;
+    if ((sub.customUrl ?? '') !== (other.customUrl ?? '')) return false;
+    if (Boolean(sub.isFavorite) !== Boolean(other.isFavorite)) return false;
+    if (Boolean(sub.isMuted) !== Boolean(other.isMuted)) return false;
+    if ((sub.group ?? '') !== (other.group ?? '')) return false;
+  }
+  return true;
+}

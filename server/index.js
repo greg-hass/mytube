@@ -338,7 +338,20 @@ app.get('/api/videos', asyncHandler(async (req, res) => {
 
 // GET /api/videos/status - Retrieve current aggregation progress
 app.get('/api/videos/status', asyncHandler(async (req, res) => {
-    res.json(feedAggregator.getAggregationStatus());
+    const requestedLimit = Number.parseInt(req.query.limit, 10);
+    const limit = Number.isFinite(requestedLimit) && requestedLimit > 0
+        ? Math.min(requestedLimit, 50)
+        : 5;
+
+    const [status, activeChannels] = await Promise.all([
+        Promise.resolve(feedAggregator.getAggregationStatus()),
+        feedAggregator.getActiveChannels({ limit }),
+    ]);
+
+    res.json({
+        ...status,
+        activeChannels,
+    });
 }, 'Failed to read aggregation status'));
 
 // POST /api/videos/refresh - Trigger immediate refresh (async)
