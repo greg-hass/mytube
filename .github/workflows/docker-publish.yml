@@ -103,7 +103,7 @@ jobs:
           docker run -d --rm \
             --name youtube-subscriptions-smoke \
             -p 8080:8080 \
-            -e PORT=8080 \
+            -e PORT=3001 \
             -e ALLOW_INSECURE_UNAUTHENTICATED_API=true \
             -e NODE_ENV=production \
             youtube-subscriptions:smoke
@@ -141,4 +141,3 @@ jobs:
       - name: Stop and remove container
         if: always()
         run: docker rm -f youtube-subscriptions-smoke || true
-
