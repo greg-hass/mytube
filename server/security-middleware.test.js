@@ -187,7 +187,7 @@ describe('security middleware', () => {
         const callback = vi.fn();
 
         opts.origin('https://evil.example', callback);
-        expect(callback).toHaveBeenCalledWith(expect.any(Error));
+        expect(callback).toHaveBeenCalledWith(null, false);
 
         callback.mockClear();
         opts.origin('http://localhost:5173', callback);

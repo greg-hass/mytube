@@ -72,7 +72,7 @@ function createCorsOptions({ allowedOrigins = [] } = {}) {
                 return;
             }
 
-            callback(new Error('Origin not allowed'));
+            callback(null, false);
         },
     };
 }
