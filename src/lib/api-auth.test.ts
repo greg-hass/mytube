@@ -96,4 +96,65 @@ describe('api auth fetch wrapper', () => {
 
     expect(fetchMock).toHaveBeenCalledWith('https://www.youtube.com/results', undefined);
   });
+
+  it('does not add bearer auth to cross-origin URLs that mimic the api path', async () => {
+    window.localStorage.setItem(SERVER_API_TOKEN_STORAGE_KEY, 'secret-token');
+    const fetchMock = vi.fn().mockResolvedValue(new Response('{}'));
+    globalThis.fetch = fetchMock;
+
+    installAuthenticatedFetch();
+    await fetch('https://evil.example.com/api/sync');
+    await fetch('https://attacker.test/api/videos?token=steal', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+    });
+
+    for (const call of fetchMock.mock.calls) {
+      const init = call[1] as RequestInit | undefined;
+      const headers = init?.headers as Headers | undefined;
+      const auth = headers instanceof Headers ? headers.get('Authorization') : undefined;
+      expect(auth, `URL ${call[0]} leaked the token`).toBeFalsy();
+    }
+  });
+
+  it('does not add bearer auth to URL object inputs that are cross-origin', async () => {
+    window.localStorage.setItem(SERVER_API_TOKEN_STORAGE_KEY, 'secret-token');
+    const fetchMock = vi.fn().mockResolvedValue(new Response('{}'));
+    globalThis.fetch = fetchMock;
+
+    installAuthenticatedFetch();
+    await fetch(new URL('https://evil.example.com/api/sync'));
+
+    const init = fetchMock.mock.calls[0][1] as RequestInit | undefined;
+    const headers = init?.headers as Headers | undefined;
+    const auth = headers instanceof Headers ? headers.get('Authorization') : undefined;
+    expect(auth).toBeFalsy();
+  });
+
+  it('does not add bearer auth to Request inputs that are cross-origin', async () => {
+    window.localStorage.setItem(SERVER_API_TOKEN_STORAGE_KEY, 'secret-token');
+    const fetchMock = vi.fn().mockResolvedValue(new Response('{}'));
+    globalThis.fetch = fetchMock;
+
+    installAuthenticatedFetch();
+    await fetch(new Request('https://evil.example.com/api/sync'));
+
+    const init = fetchMock.mock.calls[0][1] as RequestInit | undefined;
+    const headers = init?.headers as Headers | undefined;
+    const auth = headers instanceof Headers ? headers.get('Authorization') : undefined;
+    expect(auth).toBeFalsy();
+  });
+
+  it('does not add bearer auth when the token is not configured', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(new Response('{}'));
+    globalThis.fetch = fetchMock;
+
+    installAuthenticatedFetch();
+    await fetch('/api/sync');
+
+    const init = fetchMock.mock.calls[0][1] as RequestInit | undefined;
+    const headers = init?.headers as Headers | undefined;
+    const auth = headers instanceof Headers ? headers.get('Authorization') : undefined;
+    expect(auth).toBeFalsy();
+  });
 });

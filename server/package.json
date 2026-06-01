@@ -6,6 +6,7 @@
     "scripts": {
         "start": "node index.js",
         "dev": "node --watch index.js",
+        "migrate": "node migrations-runner.js",
         "backup:sqlite": "node sqlite-backup.js backup",
         "restore:sqlite": "node sqlite-backup.js restore"
     },

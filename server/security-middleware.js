@@ -19,12 +19,55 @@ function parseAllowedOrigins(value) {
         .filter(Boolean);
 }
 
+const LOOPBACK_HOSTS = new Set(['localhost', '127.0.0.1', '::1', '0.0.0.0']);
+
+function isPrivateV4Host(hostname) {
+    if (!hostname) return false;
+    const parts = hostname.split('.');
+    if (parts.length !== 4 || parts.some(p => !/^\d+$/.test(p))) return false;
+    const [a, b] = parts.map(Number);
+    if (a === 10) return true;
+    if (a === 192 && b === 168) return true;
+    if (a === 172 && b >= 16 && b <= 31) return true;
+    if (a === 169 && b === 254) return true;
+    return false;
+}
+
+function isLocalNetworkHost(hostname) {
+    if (!hostname) return false;
+    const lower = hostname.toLowerCase();
+    if (LOOPBACK_HOSTS.has(lower)) return true;
+    if (isPrivateV4Host(lower)) return true;
+    if (lower.endsWith('.local')) return true;
+    return false;
+}
+
+function originMatchesPolicy(origin, configuredOrigins) {
+    if (!origin) return true;
+    if (configuredOrigins.has(origin)) return true;
+    try {
+        const url = new URL(origin);
+        if (configuredOrigins.has(url.origin)) return true;
+        if (isLocalNetworkHost(url.hostname)) return true;
+    } catch {
+        return false;
+    }
+    return false;
+}
+
+function describeAllowlist(configuredOrigins) {
+    if (configuredOrigins.size === 0) {
+        return 'loopback + private networks (override with ALLOWED_ORIGINS)';
+    }
+    return Array.from(configuredOrigins).join(', ');
+}
+
 function createCorsOptions({ allowedOrigins = [] } = {}) {
     const origins = new Set(parseAllowedOrigins(allowedOrigins));
 
     return {
         origin(origin, callback) {
-            if (!origin || origins.size === 0 || origins.has(origin)) {
+            if (originMatchesPolicy(origin, origins)) {
                 callback(null, true);
                 return;
             }
@@ -38,13 +81,8 @@ function createOriginGuardMiddleware({ allowedOrigins = [] } = {}) {
     const origins = new Set(parseAllowedOrigins(allowedOrigins));
 
     return function originGuard(req, res, next) {
-        if (origins.size === 0) {
-            next();
-            return;
-        }
-
         const origin = req.header('origin');
-        if (!origin || origins.has(origin)) {
+        if (originMatchesPolicy(origin, origins)) {
             next();
             return;
         }
@@ -257,6 +295,7 @@ module.exports = {
     createCorsOptions,
     createOriginGuardMiddleware,
     createRateLimitMiddleware,
+    describeAllowlist,
     parseAllowedOrigins,
     validateSyncPayload,
 };
