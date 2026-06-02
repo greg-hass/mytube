@@ -501,12 +501,14 @@ describe('Dashboard', () => {
 
     const pageChrome = screen.getByTestId('dashboard-page-chrome');
     const tabBar = screen.getByTestId('floating-tab-bar');
+    const tabBarInner = screen.getByTestId('floating-tab-bar-inner');
 
     expect(pageChrome.className).toContain('pt-[var(--app-sticky-gap)]');
     expect(pageChrome.className).toContain('pb-[calc(5rem+env(safe-area-inset-bottom))]');
     expect(tabBar.className).toContain('fixed');
     expect(tabBar.className).toContain('bottom-0');
     expect(tabBar.className).toContain('z-50');
+    expect(tabBarInner.className).toContain('max-w-7xl');
   });
 
   it('keeps the iPhone latest controls in one compact row', () => {

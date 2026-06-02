@@ -63,17 +63,17 @@ export const FloatingTabBar = ({
 }: FloatingTabBarProps) => {
   const props = { subscriptionCount, activeChannelCount, queueCount, favoriteCount };
 
-  return (
-    <motion.nav
+    return (
+      <motion.nav
       initial={{ y: 100, opacity: 0 }}
       animate={{ y: 0, opacity: 1 }}
       transition={{ type: 'spring', stiffness: 300, damping: 30, delay: 0.2 }}
       data-testid="floating-tab-bar"
       className="fixed bottom-0 left-0 right-0 z-50 pb-[env(safe-area-inset-bottom)] pointer-events-none"
     >
-        <div className="flex items-center justify-center px-4 pb-1.5 pt-2">
+        <div data-testid="floating-tab-bar-inner" className="mx-auto flex w-full max-w-7xl items-center px-4 pb-1.5 pt-2">
         {/* Tab Bar Pill */}
-        <div className="pointer-events-auto flex items-center gap-0.5 rounded-[2rem] bg-white/70 px-2 py-2 shadow-[0_8px_32px_rgba(0,0,0,0.12)] ring-1 ring-white/40 backdrop-blur-2xl dark:bg-gray-950/70 dark:shadow-[0_8px_32px_rgba(0,0,0,0.4)] dark:ring-white/10 mx-4">
+        <div className="pointer-events-auto flex w-full items-center gap-0.5 rounded-[2rem] bg-white/70 px-2 py-2 shadow-[0_8px_32px_rgba(0,0,0,0.12)] ring-1 ring-white/40 backdrop-blur-2xl dark:bg-gray-950/70 dark:shadow-[0_8px_32px_rgba(0,0,0,0.4)] dark:ring-white/10">
           {TABS.map((tab) => {
             const isActive = activeTab === tab.id;
             const badge = tab.getBadge?.(props) ?? null;
@@ -83,7 +83,7 @@ export const FloatingTabBar = ({
               <button
                 key={tab.id}
                 onClick={() => onTabChange(tab.id)}
-                className="relative flex flex-col items-center justify-center min-w-[3rem] sm:min-w-[4rem] px-1.5 py-1 rounded-full transition-all duration-200"
+                className="relative flex flex-1 flex-col items-center justify-center min-w-[3rem] rounded-full px-1.5 py-1 transition-all duration-200 sm:min-w-[4rem]"
                 aria-label={tab.label}
                 aria-pressed={isActive}
               >
@@ -128,7 +128,7 @@ export const FloatingTabBar = ({
             whileHover={{ scale: 1.1 }}
             whileTap={{ scale: 0.9 }}
             onClick={onAddChannel}
-            className="relative flex flex-col items-center justify-center min-w-[3rem] sm:min-w-[4rem] px-1.5 py-1 rounded-full transition-all duration-200"
+            className="relative flex flex-1 flex-col items-center justify-center min-w-[3rem] rounded-full px-1.5 py-1 transition-all duration-200 sm:min-w-[4rem]"
             title="Add channel"
             aria-label="Add channel"
           >
