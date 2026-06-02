@@ -44,6 +44,7 @@ const LATEST_TIMELINE_SCROLL_STORAGE_KEY = 'latest-videos-scroll';
 const LATEST_DOUBLE_TAP_INTERVAL_MS = 350;
 
 type PersistedQualityFilters = {
+  showShorts?: boolean;
   durationFilter?: DurationFilter;
   hideLiveReplays?: boolean;
   hidePremieres?: boolean;
@@ -65,6 +66,7 @@ const readPersistedQualityFilters = (): PersistedQualityFilters => {
     const parsedFilters = JSON.parse(rawFilters) as PersistedQualityFilters;
 
     return {
+      showShorts: typeof parsedFilters.showShorts === 'boolean' ? parsedFilters.showShorts : false,
       durationFilter: isDurationFilter(parsedFilters.durationFilter) ? parsedFilters.durationFilter : undefined,
       hideLiveReplays: Boolean(parsedFilters.hideLiveReplays),
       hidePremieres: Boolean(parsedFilters.hidePremieres),
@@ -219,7 +221,7 @@ export const Dashboard = () => {
   const [activeTab, setActiveTab] = useState<Tab>(() => readDashboardTabFromUrl());
   const [isAddChannelModalOpen, setIsAddChannelModalOpen] = useState(false);
   const [showShortcutsHelp, setShowShortcutsHelp] = useState(false);
-  const [showShorts, setShowShorts] = useState(true);
+  const [showShorts, setShowShorts] = useState(Boolean(persistedQualityFilters.showShorts));
   const [hideWatched, setHideWatched] = useState(false);
   const [durationFilter, setDurationFilter] = useState<DurationFilter>(persistedQualityFilters.durationFilter || 'any');
   const [hideLiveReplays, setHideLiveReplays] = useState(Boolean(persistedQualityFilters.hideLiveReplays));
@@ -506,6 +508,7 @@ export const Dashboard = () => {
 
   useEffect(() => {
     window.localStorage.setItem(QUALITY_FILTERS_STORAGE_KEY, JSON.stringify({
+      showShorts,
       durationFilter,
       hideLiveReplays,
       hidePremieres,
@@ -513,7 +516,7 @@ export const Dashboard = () => {
       mutedKeywordText,
       boostedKeywordText,
     }));
-  }, [durationFilter, hideLiveReplays, hidePremieres, hideDuplicateTitles, mutedKeywordText, boostedKeywordText]);
+  }, [showShorts, durationFilter, hideLiveReplays, hidePremieres, hideDuplicateTitles, mutedKeywordText, boostedKeywordText]);
 
   useEffect(() => {
     const syncFeedViewPresets = () => {

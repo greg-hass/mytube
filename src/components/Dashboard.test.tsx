@@ -309,6 +309,17 @@ describe('Dashboard', () => {
     expect(screen.queryByText('Subscriptions list content')).not.toBeInTheDocument();
   });
 
+  it('hides Shorts by default and remembers the choice after remounting', () => {
+    const { rerender } = render(<Dashboard />);
+
+    expect(screen.getByTestId('shorts-toggle')).toHaveAttribute('aria-label', 'Show Shorts');
+    expect(localStorage.getItem('feed-quality-filters')).toContain('"showShorts":false');
+
+    rerender(<Dashboard />);
+
+    expect(screen.getByTestId('shorts-toggle')).toHaveAttribute('aria-label', 'Show Shorts');
+  });
+
   it('shows first-run onboarding when no subscriptions have been added', async () => {
     mockAllSubscriptions = [];
 
@@ -872,12 +883,12 @@ describe('Dashboard', () => {
     render(<Dashboard />);
 
     expect(screen.getByText('Normal upload')).toBeInTheDocument();
-    expect(screen.getByText('Quick tip AJ#shorts')).toBeInTheDocument();
+    expect(screen.queryByText('Quick tip AJ#shorts')).not.toBeInTheDocument();
 
     fireEvent.click(screen.getByTestId('shorts-toggle'));
 
     expect(screen.getByText('Normal upload')).toBeInTheDocument();
-    expect(screen.queryByText('Quick tip AJ#shorts')).not.toBeInTheDocument();
+    expect(screen.getByText('Quick tip AJ#shorts')).toBeInTheDocument();
   });
 
   it('hides videos marked as Shorts even when the title has no Shorts text', () => {
@@ -908,12 +919,12 @@ describe('Dashboard', () => {
 
     render(<Dashboard />);
 
-    expect(screen.getByText('Harry Maguire Said NO')).toBeInTheDocument();
+    expect(screen.getByText('Normal upload')).toBeInTheDocument();
+    expect(screen.queryByText('Harry Maguire Said NO')).not.toBeInTheDocument();
 
     fireEvent.click(screen.getByTestId('shorts-toggle'));
 
-    expect(screen.getByText('Normal upload')).toBeInTheDocument();
-    expect(screen.queryByText('Harry Maguire Said NO')).not.toBeInTheDocument();
+    expect(screen.getByText('Harry Maguire Said NO')).toBeInTheDocument();
   });
 
   it('can hide watched videos from Latest', () => {
