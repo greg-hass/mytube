@@ -32,8 +32,8 @@ describe('MobileLandscapeGate', () => {
       </MemoryRouter>
     );
 
-    expect(screen.queryByText('Rotate back to portrait')).not.toBeInTheDocument();
-    expect(screen.getByText('Feed UI')).toBeInTheDocument();
+    expect(screen.getByText('Rotate back to portrait')).toBeInTheDocument();
+    expect(screen.queryByText('Feed UI')).not.toBeInTheDocument();
   });
 
   it('allows the video player route to use phone landscape', () => {
