@@ -419,10 +419,11 @@ describe('VideoCard', () => {
       configurable: true,
       value: 844,
     });
+    const lock = vi.fn().mockResolvedValue(undefined);
     const unlock = vi.fn();
     Object.defineProperty(window.screen, 'orientation', {
       configurable: true,
-      value: { lock: vi.fn().mockResolvedValue(undefined), unlock },
+      value: { lock, unlock },
     });
     const playerConstructed = vi.fn();
     const destroy = vi.fn();
@@ -486,7 +487,7 @@ describe('VideoCard', () => {
     expect(playerConstructed).toHaveBeenCalledTimes(1);
     expect(destroy).not.toHaveBeenCalled();
     expect(unlock).not.toHaveBeenCalled();
-    expect(window.screen.orientation.lock).toHaveBeenCalledWith('portrait');
+    expect(lock).toHaveBeenCalledWith('portrait');
   });
 
   it('saves inline playback progress so queued videos can resume', async () => {
