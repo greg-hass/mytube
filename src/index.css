@@ -65,37 +65,6 @@
   }
 }
 
-@media (orientation: landscape) and (max-height: 500px) and (max-width: 960px) {
-  :root {
-    --app-header-height: 4rem;
-  }
-
-  .desktop-header-controls {
-    display: none !important;
-  }
-
-  .mobile-header-controls {
-    display: flex !important;
-  }
-
-  .mobile-header-search,
-  .mobile-menu-overlay {
-    display: block !important;
-  }
-
-  .mobile-landscape-grid {
-    grid-template-columns: repeat(1, minmax(0, 1fr)) !important;
-  }
-
-  .mobile-landscape-lock {
-    display: flex !important;
-  }
-
-  .mobile-landscape-lock-content {
-    display: none !important;
-  }
-}
-
 /* Custom scrollbar */
 ::-webkit-scrollbar {
   width: 8px;
