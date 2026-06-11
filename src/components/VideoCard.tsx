@@ -12,7 +12,6 @@ import { allowEnhancedMediaPlayback, loadYouTubeIframeApi, type YouTubePlayer } 
 import { useStore } from '../store/useStore';
 import { isLiveVideo } from '../lib/video-live';
 import { isShortVideo } from '../lib/video-feed-index';
-import { reportInlineVideoPlaybackChange } from '../lib/mobile-viewport';
 
 interface Props {
   video: YouTubeVideo;
@@ -72,7 +71,6 @@ const StatefulVideoCard = ({ video, channelThumbnail, onInlinePlaybackChange, on
     if (!isPlayingInline) return;
 
     onInlinePlaybackChange?.(video.id, true);
-    reportInlineVideoPlaybackChange(video.id, true);
     let isMounted = true;
     let hasReachedResumePoint = false;
     let resumeFromSeconds = 0;
@@ -149,7 +147,6 @@ const StatefulVideoCard = ({ video, channelThumbnail, onInlinePlaybackChange, on
       inlinePlayerRef.current?.destroy();
       inlinePlayerRef.current = null;
       onInlinePlaybackChange?.(video.id, false);
-      reportInlineVideoPlaybackChange(video.id, false);
     };
   }, [isPlayingInline, markAsWatched, onInlinePlaybackChange, video.id]);
 
