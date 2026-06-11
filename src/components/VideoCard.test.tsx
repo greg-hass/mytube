@@ -410,7 +410,7 @@ describe('VideoCard', () => {
     expect(screen.getByTestId('location')).toHaveTextContent('/');
   });
 
-  it('keeps inline playback in portrait when the phone rotates to landscape', async () => {
+  it('keeps the expanded inline player mounted and playing when the phone rotates to landscape', async () => {
     Object.defineProperty(window, 'innerWidth', {
       configurable: true,
       value: 390,
@@ -480,12 +480,12 @@ describe('VideoCard', () => {
     fireEvent(window, new Event('resize'));
 
     expect(screen.queryByText('Rotate back to portrait')).not.toBeInTheDocument();
+    expect(screen.queryByText('Dedicated now playing')).not.toBeInTheDocument();
     expect(screen.getByTestId('inline-video-player')).toBeInTheDocument();
     expect(screen.getByTestId('location')).toHaveTextContent('/');
     expect(playerConstructed).toHaveBeenCalledTimes(1);
     expect(destroy).not.toHaveBeenCalled();
-    expect(unlock).not.toHaveBeenCalled();
-    expect(window.screen.orientation.lock).toHaveBeenCalledWith('portrait');
+    expect(unlock).toHaveBeenCalled();
   });
 
   it('saves inline playback progress so queued videos can resume', async () => {
