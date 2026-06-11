@@ -485,7 +485,8 @@ describe('VideoCard', () => {
     expect(screen.getByTestId('location')).toHaveTextContent('/');
     expect(playerConstructed).toHaveBeenCalledTimes(1);
     expect(destroy).not.toHaveBeenCalled();
-    expect(unlock).toHaveBeenCalled();
+    expect(unlock).not.toHaveBeenCalled();
+    expect(window.screen.orientation.lock).toHaveBeenCalledWith('portrait');
   });
 
   it('saves inline playback progress so queued videos can resume', async () => {

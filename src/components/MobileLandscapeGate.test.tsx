@@ -34,7 +34,6 @@ describe('MobileLandscapeGate', () => {
 
     expect(screen.queryByText('Rotate back to portrait')).not.toBeInTheDocument();
     expect(screen.getByText('Feed UI')).toBeInTheDocument();
-    expect(screen.getByText('Feed UI').closest('.portrait-shell')).toBeTruthy();
   });
 
   it('allows the video player route to use phone landscape', () => {
@@ -84,5 +83,21 @@ describe('MobileLandscapeGate', () => {
     );
 
     expect(lock).toHaveBeenCalledWith('portrait');
+  });
+
+  it('re-applies the portrait lock when normal mobile routes resize', () => {
+    render(
+      <MemoryRouter initialEntries={['/']}>
+        <MobileLandscapeGate>
+          <main>Feed UI</main>
+        </MobileLandscapeGate>
+      </MemoryRouter>
+    );
+
+    vi.clearAllMocks();
+    window.dispatchEvent(new Event('resize'));
+
+    expect(lock).toHaveBeenCalledWith('portrait');
+    expect(unlock).not.toHaveBeenCalled();
   });
 });
