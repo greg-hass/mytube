@@ -36,7 +36,7 @@ describe('MobileLandscapeGate', () => {
     expect(screen.getByText('Feed UI')).toBeInTheDocument();
   });
 
-  it('allows the video player route to use phone landscape', () => {
+  it('keeps the app shell portrait-locked on the video player route', () => {
     render(
       <MemoryRouter initialEntries={['/video/video-1']}>
         <MobileLandscapeGate>
@@ -47,8 +47,8 @@ describe('MobileLandscapeGate', () => {
 
     expect(screen.queryByText('Rotate back to portrait')).not.toBeInTheDocument();
     expect(screen.getByText('Now playing').closest('.mobile-landscape-lock-content')).toBeNull();
-    expect(unlock).toHaveBeenCalled();
-    expect(lock).not.toHaveBeenCalled();
+    expect(lock).toHaveBeenCalledWith('portrait');
+    expect(unlock).not.toHaveBeenCalled();
   });
 
   it('allows normal app UI in phone portrait', () => {
