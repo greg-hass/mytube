@@ -8,11 +8,8 @@ interface MobileLandscapeGateProps {
 function getViewportLockState() {
   const width = window.innerWidth;
   const height = window.innerHeight;
-  const rawAngle = window.screen?.orientation?.angle ?? (window as Window & { orientation?: number }).orientation ?? 0;
-  const angle = rawAngle === 0 && width > height ? 90 : rawAngle;
 
   return {
-    angle,
     height,
     isLandscape: width > height,
     width,
@@ -67,7 +64,7 @@ export const MobileLandscapeGate = ({ children }: MobileLandscapeGateProps) => {
         className={viewportLockState.isLandscape ? 'orientation-locked-shell' : 'orientation-unlocked-shell'}
         style={viewportLockState.isLandscape ? {
           height: `${viewportLockState.width}px`,
-          transform: `translate(-50%, -50%) rotate(${viewportLockState.angle}deg)`,
+          transform: 'translate(-50%, -50%) rotate(-90deg)',
           width: `${viewportLockState.height}px`,
         } : undefined}
       >
