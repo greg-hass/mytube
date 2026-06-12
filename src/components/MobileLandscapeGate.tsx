@@ -67,7 +67,7 @@ export const MobileLandscapeGate = ({ children }: MobileLandscapeGateProps) => {
         className={viewportLockState.isLandscape ? 'orientation-locked-shell' : 'orientation-unlocked-shell'}
         style={viewportLockState.isLandscape ? {
           height: `${viewportLockState.width}px`,
-          transform: `translate(-50%, -50%) rotate(${-viewportLockState.angle}deg)`,
+          transform: `translate(-50%, -50%) rotate(${viewportLockState.angle}deg)`,
           width: `${viewportLockState.height}px`,
         } : undefined}
       >
