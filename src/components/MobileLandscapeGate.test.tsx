@@ -36,7 +36,7 @@ describe('MobileLandscapeGate', () => {
     expect(screen.getByText('Feed UI')).toBeInTheDocument();
     const shell = screen.getByText('Feed UI').closest('.orientation-locked-shell');
     expect(shell).toBeTruthy();
-    expect(shell).toHaveStyle({ transform: 'translate(-50%, -50%) rotate(90deg)' });
+    expect(shell).toHaveStyle({ transform: 'translate(-50%, -50%) rotate(-90deg)' });
   });
 
   it('keeps the app shell portrait-locked on the video player route', () => {
