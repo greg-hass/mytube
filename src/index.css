@@ -64,26 +64,21 @@
     @apply transition-all duration-300 hover:scale-105 hover:shadow-2xl;
   }
 
-  .orientation-unlocked-viewport,
-  .orientation-unlocked-shell {
-    display: contents;
+  .mobile-landscape-message {
+    display: none;
   }
 
-  .orientation-locked-viewport {
-    position: fixed;
-    inset: 0;
-    overflow: hidden;
-    background: inherit;
-  }
-
-  .orientation-locked-shell {
-    position: absolute;
-    left: 50%;
-    top: 50%;
-    transform-origin: center;
-    overflow: auto;
-    background: inherit;
-    -webkit-overflow-scrolling: touch;
+  @media (orientation: landscape) and (max-height: 500px) and (max-width: 960px) {
+    .mobile-landscape-message {
+      display: flex;
+      position: fixed;
+      inset: 0;
+      z-index: 200;
+      align-items: center;
+      justify-content: center;
+      padding: 1.5rem;
+      background: #030712;
+    }
   }
 }
 

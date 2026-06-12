@@ -32,11 +32,9 @@ describe('MobileLandscapeGate', () => {
       </MemoryRouter>
     );
 
-    expect(screen.queryByText('Rotate back to portrait')).not.toBeInTheDocument();
+    expect(screen.getByText('UI can only be viewed in portrait mode')).toBeInTheDocument();
     expect(screen.getByText('Feed UI')).toBeInTheDocument();
-    const shell = screen.getByText('Feed UI').closest('.orientation-locked-shell');
-    expect(shell).toBeTruthy();
-    expect(shell).toHaveStyle({ transform: 'translate(-50%, -50%) rotate(-90deg)' });
+    expect(screen.getByText('Feed UI').closest('.orientation-locked-shell')).toBeNull();
   });
 
   it('keeps the app shell portrait-locked on the video player route', () => {
@@ -48,9 +46,9 @@ describe('MobileLandscapeGate', () => {
       </MemoryRouter>
     );
 
-    expect(screen.queryByText('Rotate back to portrait')).not.toBeInTheDocument();
+    expect(screen.getByText('UI can only be viewed in portrait mode')).toBeInTheDocument();
     expect(screen.getByText('Now playing').closest('.mobile-landscape-lock-content')).toBeNull();
-    expect(screen.getByText('Now playing').closest('.orientation-locked-shell')).toBeTruthy();
+    expect(screen.getByText('Now playing').closest('.orientation-locked-shell')).toBeNull();
     expect(lock).toHaveBeenCalledWith('portrait');
     expect(unlock).not.toHaveBeenCalled();
   });
@@ -73,7 +71,7 @@ describe('MobileLandscapeGate', () => {
       </MemoryRouter>
     );
 
-    expect(screen.queryByText('Rotate back to portrait')).not.toBeInTheDocument();
+    expect(screen.getByText('UI can only be viewed in portrait mode')).toBeInTheDocument();
     expect(screen.getByText('Feed UI')).toBeInTheDocument();
     expect(screen.getByText('Feed UI').closest('.orientation-locked-shell')).toBeNull();
   });
