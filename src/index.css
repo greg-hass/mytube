@@ -63,6 +63,28 @@
   .card-hover {
     @apply transition-all duration-300 hover:scale-105 hover:shadow-2xl;
   }
+
+  .orientation-unlocked-viewport,
+  .orientation-unlocked-shell {
+    display: contents;
+  }
+
+  .orientation-locked-viewport {
+    position: fixed;
+    inset: 0;
+    overflow: hidden;
+    background: inherit;
+  }
+
+  .orientation-locked-shell {
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    transform-origin: center;
+    overflow: auto;
+    background: inherit;
+    -webkit-overflow-scrolling: touch;
+  }
 }
 
 /* Custom scrollbar */

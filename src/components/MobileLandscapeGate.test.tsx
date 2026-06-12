@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react';
+import { act, render, screen } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { MobileLandscapeGate } from './MobileLandscapeGate';
@@ -34,6 +34,7 @@ describe('MobileLandscapeGate', () => {
 
     expect(screen.queryByText('Rotate back to portrait')).not.toBeInTheDocument();
     expect(screen.getByText('Feed UI')).toBeInTheDocument();
+    expect(screen.getByText('Feed UI').closest('.orientation-locked-shell')).toBeTruthy();
   });
 
   it('keeps the app shell portrait-locked on the video player route', () => {
@@ -47,6 +48,7 @@ describe('MobileLandscapeGate', () => {
 
     expect(screen.queryByText('Rotate back to portrait')).not.toBeInTheDocument();
     expect(screen.getByText('Now playing').closest('.mobile-landscape-lock-content')).toBeNull();
+    expect(screen.getByText('Now playing').closest('.orientation-locked-shell')).toBeTruthy();
     expect(lock).toHaveBeenCalledWith('portrait');
     expect(unlock).not.toHaveBeenCalled();
   });
@@ -71,6 +73,7 @@ describe('MobileLandscapeGate', () => {
 
     expect(screen.queryByText('Rotate back to portrait')).not.toBeInTheDocument();
     expect(screen.getByText('Feed UI')).toBeInTheDocument();
+    expect(screen.getByText('Feed UI').closest('.orientation-locked-shell')).toBeNull();
   });
 
   it('asks the browser to lock normal mobile routes to portrait', () => {
@@ -95,7 +98,9 @@ describe('MobileLandscapeGate', () => {
     );
 
     vi.clearAllMocks();
-    window.dispatchEvent(new Event('resize'));
+    act(() => {
+      window.dispatchEvent(new Event('resize'));
+    });
 
     expect(lock).toHaveBeenCalledWith('portrait');
     expect(unlock).not.toHaveBeenCalled();
