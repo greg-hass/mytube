@@ -574,9 +574,15 @@ ${outlines}
   }, [pushToServer]);
 
   const syncInProgressRef = useRef(false);
+  const pendingForcePushRef = useRef(false);
 
   const syncWithBackend = useCallback(async ({ importRemoteWatched = false, forcePush = false }: { importRemoteWatched?: boolean, forcePush?: boolean } = {}) => {
-    if (syncInProgressRef.current) return;
+    if (syncInProgressRef.current) {
+      if (forcePush) {
+        pendingForcePushRef.current = true;
+      }
+      return;
+    }
     syncInProgressRef.current = true;
 
     if (forcePush) {
@@ -780,6 +786,15 @@ ${outlines}
       console.error('Sync failed:', err);
     } finally {
       syncInProgressRef.current = false;
+      while (pendingForcePushRef.current) {
+        pendingForcePushRef.current = false;
+        syncInProgressRef.current = true;
+        try {
+          await pushLocalStateToBackend();
+        } finally {
+          syncInProgressRef.current = false;
+        }
+      }
     }
   }, [queryClient, pushLocalStateToBackend, pushToServer]);
 
