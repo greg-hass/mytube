@@ -37,16 +37,16 @@ export const KeyboardShortcutsHelp = ({ isOpen, onClose }: KeyboardShortcutsHelp
                         exit={{ opacity: 0, scale: 0.95, y: 20 }}
                         className="fixed left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-full max-w-md z-50"
                     >
-                        <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-xl border border-gray-200 dark:border-gray-800 overflow-hidden m-4">
+                        <div className="bg-white dark:bg-ios-900 rounded-2xl shadow-xl border border-gray-200 dark:border-ios-800 overflow-hidden m-4">
                             {/* Header */}
-                            <div className="flex items-center justify-between p-6 border-b border-gray-100 dark:border-gray-800">
+                            <div className="flex items-center justify-between p-6 border-b border-gray-100 dark:border-ios-800">
                                 <h2 className="text-xl font-semibold text-gray-900 dark:text-white flex items-center gap-2">
                                     <Keyboard className="w-5 h-5 text-red-600" />
                                     Keyboard Shortcuts
                                 </h2>
                                 <button
                                     onClick={onClose}
-                                    className="p-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+                                    className="p-2 rounded-full hover:bg-gray-100 dark:hover:bg-ios-800 transition-colors"
                                 >
                                     <X className="w-5 h-5 text-gray-500" />
                                 </button>
@@ -57,15 +57,15 @@ export const KeyboardShortcutsHelp = ({ isOpen, onClose }: KeyboardShortcutsHelp
                                 {shortcuts.map((shortcut, index) => (
                                     <div
                                         key={index}
-                                        className="flex items-center justify-between p-3 rounded-lg bg-gray-50 dark:bg-gray-800"
+                                        className="flex items-center justify-between p-3 rounded-lg bg-gray-50 dark:bg-ios-800"
                                     >
-                                        <span className="text-sm text-gray-700 dark:text-gray-300">
+                                        <span className="text-sm text-gray-700 dark:text-ios-300">
                                             {shortcut.description}
                                         </span>
                                         <div className="flex items-center gap-1">
                                             {shortcut.keys.map((key, i) => (
                                                 <span key={i} className="flex items-center gap-1">
-                                                    <kbd className="px-2 py-1 text-xs font-semibold bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-700 rounded shadow-sm">
+                                                    <kbd className="px-2 py-1 text-xs font-semibold bg-white dark:bg-ios-900 border border-gray-300 dark:border-ios-700 rounded shadow-sm">
                                                         {key === 'Ctrl' ? modifierKey : key}
                                                     </kbd>
                                                     {i < shortcut.keys.length - 1 && (
@@ -79,8 +79,8 @@ export const KeyboardShortcutsHelp = ({ isOpen, onClose }: KeyboardShortcutsHelp
                             </div>
 
                             {/* Footer */}
-                            <div className="p-4 bg-gray-50 dark:bg-gray-800/50 border-t border-gray-100 dark:border-gray-800">
-                                <p className="text-xs text-gray-500 dark:text-gray-400 text-center flex items-center justify-center gap-1">
+                            <div className="p-4 bg-gray-50 dark:bg-ios-800/50 border-t border-gray-100 dark:border-ios-800">
+                                <p className="text-xs text-gray-500 dark:text-ios-400 text-center flex items-center justify-center gap-1">
                                     <Command className="w-3 h-3" />
                                     Shortcuts work from anywhere in the app
                                 </p>

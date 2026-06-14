@@ -208,16 +208,16 @@ export const SettingsModal = ({ isOpen, onClose }: SettingsModalProps) => {
                         initial={{ opacity: 0, scale: 0.95, y: 20 }}
                         animate={{ opacity: 1, scale: 1, y: 0 }}
                         exit={{ opacity: 0, scale: 0.95, y: 20 }}
-                        className="fixed inset-0 z-[100] md:inset-auto md:left-1/2 md:top-1/2 md:-translate-x-1/2 md:-translate-y-1/2 md:w-full md:max-w-xl bg-white dark:bg-gray-900 md:rounded-2xl shadow-2xl flex flex-col h-[100dvh] md:h-auto md:max-h-[85vh] overflow-hidden border border-gray-200 dark:border-gray-800 pt-[env(safe-area-inset-top)] md:pt-0"
+                        className="fixed inset-0 z-[100] md:inset-auto md:left-1/2 md:top-1/2 md:-translate-x-1/2 md:-translate-y-1/2 md:w-full md:max-w-xl bg-white dark:bg-ios-900 md:rounded-2xl shadow-2xl flex flex-col h-[100dvh] md:h-auto md:max-h-[85vh] overflow-hidden border border-gray-200 dark:border-ios-800 pt-[env(safe-area-inset-top)] md:pt-0"
                     >
                         {/* Header */}
-                        <div className="flex items-center justify-between p-5 border-b border-gray-100 dark:border-gray-800 bg-white/50 dark:bg-gray-900/50 backdrop-blur-md sticky top-0 z-10">
-                            <h2 className="text-xl font-bold bg-gradient-to-r from-gray-900 to-gray-700 dark:from-white dark:to-gray-300 bg-clip-text text-transparent">
+                        <div className="flex items-center justify-between p-5 border-b border-gray-100 dark:border-ios-800 bg-white/50 dark:bg-ios-900/50 backdrop-blur-md sticky top-0 z-10">
+                            <h2 className="text-xl font-bold bg-gradient-to-r from-gray-900 to-gray-700 dark:from-white dark:to-ios-300 bg-clip-text text-transparent">
                                 Settings
                             </h2>
                             <button
                                 onClick={onClose}
-                                className="p-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors text-gray-500 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white"
+                                className="p-2 rounded-full hover:bg-gray-100 dark:hover:bg-ios-800 transition-colors text-gray-500 hover:text-gray-900 dark:text-ios-400 dark:hover:text-white"
                             >
                                 <X className="w-5 h-5" />
                             </button>
@@ -233,9 +233,9 @@ export const SettingsModal = ({ isOpen, onClose }: SettingsModalProps) => {
                                     <h3 className="font-semibold text-gray-900 dark:text-white">API Configuration</h3>
                                 </div>
 
-                                <div className="bg-gray-50 dark:bg-gray-800/50 rounded-xl p-5 border border-gray-100 dark:border-gray-800 space-y-4">
+                                <div className="bg-gray-50 dark:bg-ios-800/50 rounded-xl p-5 border border-gray-100 dark:border-ios-800 space-y-4">
                                     <div className="space-y-2">
-                                        <label className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                                        <label className="text-sm font-medium text-gray-700 dark:text-ios-300">
                                             YouTube Data API Key
                                         </label>
                                         <div className="relative">
@@ -244,13 +244,13 @@ export const SettingsModal = ({ isOpen, onClose }: SettingsModalProps) => {
                                                 value={inputKey}
                                                 onChange={(e) => setInputKey(e.target.value)}
                                                 placeholder="Enter your API key..."
-                                                className="w-full pl-4 pr-10 py-2.5 rounded-lg bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 focus:border-red-500 focus:ring-2 focus:ring-red-500/20 transition-all outline-none text-sm"
+                                                className="w-full pl-4 pr-10 py-2.5 rounded-lg bg-white dark:bg-ios-900 border border-gray-200 dark:border-ios-700 focus:border-red-500 focus:ring-2 focus:ring-red-500/20 transition-all outline-none text-sm"
                                             />
                                             <div className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400">
                                                 {isSaved ? <CheckCircle2 className="w-4 h-4 text-green-500" /> : <ShieldCheck className="w-4 h-4" />}
                                             </div>
                                         </div>
-                                        <p className="text-xs text-gray-500 dark:text-gray-400">
+                                        <p className="text-xs text-gray-500 dark:text-ios-400">
                                             Optional browser-only fallback for channel handle resolution. Backups and server sync do not include this key.
                                             <a href="https://console.cloud.google.com/apis/credentials" target="_blank" rel="noopener noreferrer" className="text-red-600 hover:underline ml-1">
                                                 Get a key
@@ -259,7 +259,7 @@ export const SettingsModal = ({ isOpen, onClose }: SettingsModalProps) => {
                                     </div>
 
                                     <div className="space-y-2">
-                                        <label className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                                        <label className="text-sm font-medium text-gray-700 dark:text-ios-300">
                                             Server API Token
                                         </label>
                                         <div className="relative">
@@ -268,13 +268,13 @@ export const SettingsModal = ({ isOpen, onClose }: SettingsModalProps) => {
                                                 value={serverApiTokenInput}
                                                 onChange={(e) => setServerApiTokenInput(e.target.value)}
                                                 placeholder="Match the required SERVER_API_TOKEN"
-                                                className="w-full pl-4 pr-10 py-2.5 rounded-lg bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 focus:border-red-500 focus:ring-2 focus:ring-red-500/20 transition-all outline-none text-sm"
+                                                className="w-full pl-4 pr-10 py-2.5 rounded-lg bg-white dark:bg-ios-900 border border-gray-200 dark:border-ios-700 focus:border-red-500 focus:ring-2 focus:ring-red-500/20 transition-all outline-none text-sm"
                                             />
                                             <div className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400">
                                                 <ShieldCheck className="w-4 h-4" />
                                             </div>
                                         </div>
-                                        <p className="text-xs text-gray-500 dark:text-gray-400">
+                                        <p className="text-xs text-gray-500 dark:text-ios-400">
                                             Stored only in this browser and sent as a bearer token to same-origin API requests.
                                         </p>
                                     </div>
@@ -284,7 +284,7 @@ export const SettingsModal = ({ isOpen, onClose }: SettingsModalProps) => {
                                         disabled={isSaved}
                                         className={`w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg font-medium transition-all ${isSaved
                                             ? 'bg-green-500 text-white'
-                                            : 'bg-gray-900 dark:bg-white text-white dark:text-gray-900 hover:opacity-90'
+                                            : 'bg-gray-900 dark:bg-white text-white dark:text-ios-900 hover:opacity-90'
                                             }`}
                                     >
                                         {isSaved ? 'Saved Successfully' : 'Save Changes'}
@@ -298,8 +298,8 @@ export const SettingsModal = ({ isOpen, onClose }: SettingsModalProps) => {
                                     <h3 className="font-semibold text-gray-900 dark:text-white">Backup & Restore</h3>
                                 </div>
 
-                                <div className="bg-gray-50 dark:bg-gray-800/50 rounded-xl p-5 border border-gray-100 dark:border-gray-800 space-y-3">
-                                    <p className="text-sm text-gray-600 dark:text-gray-300">
+                                <div className="bg-gray-50 dark:bg-ios-800/50 rounded-xl p-5 border border-gray-100 dark:border-ios-800 space-y-3">
+                                    <p className="text-sm text-gray-600 dark:text-ios-300">
                                         Subscriptions, watched videos, favorites, queue, feed filters, groups, and settings.
                                     </p>
                                     <input
@@ -312,7 +312,7 @@ export const SettingsModal = ({ isOpen, onClose }: SettingsModalProps) => {
                                     <button
                                         type="button"
                                         onClick={handleDownloadBackup}
-                                        className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg font-medium bg-gray-900 text-white hover:opacity-90 dark:bg-white dark:text-gray-900"
+                                        className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg font-medium bg-gray-900 text-white hover:opacity-90 dark:bg-white dark:text-ios-900"
                                     >
                                         <Download className="h-4 w-4" />
                                         Download Backup
@@ -320,7 +320,7 @@ export const SettingsModal = ({ isOpen, onClose }: SettingsModalProps) => {
                                     <button
                                         type="button"
                                         onClick={() => restoreInputRef.current?.click()}
-                                        className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg font-medium bg-gray-100 text-gray-900 hover:bg-gray-200 dark:bg-gray-900 dark:text-gray-100 dark:hover:bg-gray-700"
+                                        className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg font-medium bg-gray-100 text-gray-900 hover:bg-gray-200 dark:bg-ios-900 dark:text-ios-100 dark:hover:bg-ios-700"
                                     >
                                         <Upload className="h-4 w-4" />
                                         Restore Backup
@@ -328,12 +328,12 @@ export const SettingsModal = ({ isOpen, onClose }: SettingsModalProps) => {
                                     <button
                                         type="button"
                                         onClick={handleResetFeedCache}
-                                        className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg font-medium bg-gray-100 text-gray-900 hover:bg-gray-200 dark:bg-gray-900 dark:text-gray-100 dark:hover:bg-gray-700"
+                                        className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg font-medium bg-gray-100 text-gray-900 hover:bg-gray-200 dark:bg-ios-900 dark:text-ios-100 dark:hover:bg-ios-700"
                                     >
                                         Reset Feed Cache
                                     </button>
                                     {backupStatus && (
-                                        <p className="text-sm text-gray-600 dark:text-gray-300">{backupStatus}</p>
+                                        <p className="text-sm text-gray-600 dark:text-ios-300">{backupStatus}</p>
                                     )}
                                 </div>
                             </section>
@@ -355,7 +355,7 @@ export const SettingsModal = ({ isOpen, onClose }: SettingsModalProps) => {
                                     ].map((item) => (
                                         <div
                                             key={item}
-                                            className="rounded-lg border border-gray-100 bg-gray-50 px-3 py-3 text-sm font-medium text-gray-800 dark:border-gray-800 dark:bg-gray-800/50 dark:text-gray-100"
+                                            className="rounded-lg border border-gray-100 bg-gray-50 px-3 py-3 text-sm font-medium text-gray-800 dark:border-ios-800 dark:bg-ios-800/50 dark:text-ios-100"
                                         >
                                             {item}
                                         </div>
@@ -379,7 +379,7 @@ export const SettingsModal = ({ isOpen, onClose }: SettingsModalProps) => {
                                     ].map((item) => (
                                         <div
                                             key={item}
-                                            className="rounded-lg border border-gray-100 bg-gray-50 px-3 py-3 text-sm font-medium text-gray-800 dark:border-gray-800 dark:bg-gray-800/50 dark:text-gray-100"
+                                            className="rounded-lg border border-gray-100 bg-gray-50 px-3 py-3 text-sm font-medium text-gray-800 dark:border-ios-800 dark:bg-ios-800/50 dark:text-ios-100"
                                         >
                                             {item}
                                         </div>
@@ -407,8 +407,8 @@ export const SettingsModal = ({ isOpen, onClose }: SettingsModalProps) => {
                                                 key={channel.id}
                                                 className="rounded-lg border border-red-100 bg-red-50 px-3 py-3 text-sm dark:border-red-950/60 dark:bg-red-950/20"
                                             >
-                                                <p className="font-medium text-gray-900 dark:text-gray-100">{channel.title}</p>
-                                                <p className="mt-1 text-xs text-gray-600 dark:text-gray-300">{channel.reason}</p>
+                                                <p className="font-medium text-gray-900 dark:text-ios-100">{channel.title}</p>
+                                                <p className="mt-1 text-xs text-gray-600 dark:text-ios-300">{channel.reason}</p>
                                             </div>
                                         ))}
                                     </div>

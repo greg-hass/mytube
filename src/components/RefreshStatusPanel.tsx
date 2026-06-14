@@ -33,10 +33,10 @@ export function RefreshStatusPanel({ status, cacheStatus, onRetryFailed, variant
     : 0;
 
   return (
-    <section className={`${isMenu || isCompact ? 'rounded-lg border border-gray-200 bg-white/70 px-3 py-3 dark:border-gray-800 dark:bg-gray-900/70' : 'mb-4 rounded-lg border border-gray-200 bg-white px-4 py-3 shadow-sm dark:border-gray-800 dark:bg-gray-900'}`}>
+    <section className={`${isMenu || isCompact ? 'rounded-lg border border-gray-200 bg-white/70 px-3 py-3 dark:border-ios-800 dark:bg-ios-900/70' : 'mb-4 rounded-lg border border-gray-200 bg-white px-4 py-3 shadow-sm dark:border-ios-800 dark:bg-ios-900'}`}>
       <div className={`flex flex-col gap-3 ${isMenu ? '' : 'lg:flex-row lg:items-start lg:justify-between'}`}>
         <div className="min-w-0">
-          <div className="flex items-center justify-between gap-3 text-sm font-semibold text-gray-900 dark:text-gray-100">
+          <div className="flex items-center justify-between gap-3 text-sm font-semibold text-gray-900 dark:text-ios-100">
             <div className="flex min-w-0 items-center gap-2">
               {status.isSyncing ? (
                 <Loader2 className="h-4 w-4 shrink-0 animate-spin text-blue-600" />
@@ -56,17 +56,17 @@ export function RefreshStatusPanel({ status, cacheStatus, onRetryFailed, variant
             )}
           </div>
 
-          <div className={`mt-2 grid gap-2 text-xs text-gray-600 dark:text-gray-300 ${isMenu || isCompact ? '' : 'sm:grid-cols-3'}`}>
+          <div className={`mt-2 grid gap-2 text-xs text-gray-600 dark:text-ios-300 ${isMenu || isCompact ? '' : 'sm:grid-cols-3'}`}>
             <span>
-              <span className="font-medium text-gray-800 dark:text-gray-100">Last refresh</span> {formatRelativeAge(lastRefresh)}
+              <span className="font-medium text-gray-800 dark:text-ios-100">Last refresh</span> {formatRelativeAge(lastRefresh)}
             </span>
             {!isCompact && (
               <>
                 <span>
-                  <span className="font-medium text-gray-800 dark:text-gray-100">Next refresh</span> {nextRefresh}
+                  <span className="font-medium text-gray-800 dark:text-ios-100">Next refresh</span> {nextRefresh}
                 </span>
                 <span>
-                  <span className="font-medium text-gray-800 dark:text-gray-100">Cache age</span> {formatDuration(cacheStatus.age)}
+                  <span className="font-medium text-gray-800 dark:text-ios-100">Cache age</span> {formatDuration(cacheStatus.age)}
                   {cacheStatus.isStale ? ' stale' : ''}
                 </span>
               </>

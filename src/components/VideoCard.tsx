@@ -276,7 +276,7 @@ const StatefulVideoCard = ({ video, channelThumbnail, onInlinePlaybackChange, on
       onPointerUp={handlePointerEnd}
       onPointerCancel={handlePointerCancel}
       style={{ transform: `translateX(${dragOffsetX}px)` }}
-      className="group relative flex h-full touch-pan-y flex-col overflow-hidden rounded-xl border border-gray-200 bg-white shadow-md transition-colors duration-200 hover:border-gray-300 dark:border-gray-800 dark:bg-gray-900 dark:hover:border-gray-700 sm:hover:shadow-xl"
+      className="group relative flex h-full touch-pan-y flex-col overflow-hidden rounded-xl border border-gray-200 bg-white shadow-md transition-colors duration-200 hover:border-gray-300 dark:border-ios-800 dark:bg-ios-900 dark:hover:border-ios-700 sm:hover:shadow-xl"
     >
       {Math.abs(dragOffsetX) > 12 && (
         <div className="pointer-events-none absolute inset-0 z-20 flex items-center justify-center bg-emerald-600/15 text-sm font-semibold text-emerald-700 dark:text-emerald-200">
@@ -303,7 +303,7 @@ const StatefulVideoCard = ({ video, channelThumbnail, onInlinePlaybackChange, on
             {!imageLoaded && !thumbnailUnavailable && (
               <div
                 data-testid="video-thumbnail-loading"
-                className="absolute inset-0 animate-pulse bg-gradient-to-r from-gray-200 via-gray-300 to-gray-200 dark:from-gray-800 dark:via-gray-700 dark:to-gray-800"
+                className="absolute inset-0 animate-pulse bg-gradient-to-r from-gray-200 via-gray-300 to-gray-200 dark:from-ios-800 dark:via-ios-700 dark:to-ios-800"
               />
             )}
             <img
@@ -384,7 +384,7 @@ const StatefulVideoCard = ({ video, channelThumbnail, onInlinePlaybackChange, on
               loading="lazy"
             />
           )}
-          <p className="truncate text-xs text-gray-600 dark:text-gray-400">
+          <p className="truncate text-xs text-gray-600 dark:text-ios-400">
             {video.channelTitle}
           </p>
         </div>
@@ -400,7 +400,7 @@ const StatefulVideoCard = ({ video, channelThumbnail, onInlinePlaybackChange, on
             aria-label={isWatched ? 'Mark video as unwatched' : 'Mark video as watched'}
             className={`absolute bottom-3 right-24 flex h-9 w-9 flex-none items-center justify-center rounded-full transition-colors ${isWatched
               ? 'bg-emerald-600/10 text-emerald-500 dark:bg-emerald-500/15 dark:text-emerald-400'
-              : 'text-gray-400 hover:bg-gray-100 hover:text-emerald-500 dark:text-gray-500 dark:hover:bg-gray-800 dark:hover:text-emerald-400'
+              : 'text-gray-400 hover:bg-gray-100 hover:text-emerald-500 dark:text-ios-500 dark:hover:bg-ios-800 dark:hover:text-emerald-400'
               }`}
           >
             <CheckCircle2 className={`h-5 w-5 ${isWatched ? 'fill-current' : ''}`} />
@@ -411,7 +411,7 @@ const StatefulVideoCard = ({ video, channelThumbnail, onInlinePlaybackChange, on
             aria-label={isQueued ? 'Remove video from queue' : 'Add video to queue'}
             className={`absolute bottom-3 right-14 flex h-9 w-9 flex-none items-center justify-center rounded-full transition-colors ${isQueued
               ? 'bg-blue-600/10 text-blue-500 dark:bg-blue-500/15 dark:text-blue-400'
-              : 'text-gray-400 hover:bg-gray-100 hover:text-blue-500 dark:text-gray-500 dark:hover:bg-gray-800 dark:hover:text-blue-400'
+              : 'text-gray-400 hover:bg-gray-100 hover:text-blue-500 dark:text-ios-500 dark:hover:bg-ios-800 dark:hover:text-blue-400'
               }`}
           >
             <ListPlus className={`h-5 w-5 ${isQueued ? 'stroke-[2.5]' : ''}`} />
@@ -422,7 +422,7 @@ const StatefulVideoCard = ({ video, channelThumbnail, onInlinePlaybackChange, on
             aria-label={isFavorite ? 'Remove video from favorites' : 'Add video to favorites'}
             className={`absolute bottom-3 right-3 flex h-9 w-9 flex-none items-center justify-center rounded-full transition-colors ${isFavorite
               ? 'bg-red-600/10 text-red-500 dark:bg-red-500/15 dark:text-red-400'
-              : 'text-gray-400 hover:bg-gray-100 hover:text-red-500 dark:text-gray-500 dark:hover:bg-gray-800 dark:hover:text-red-400'
+              : 'text-gray-400 hover:bg-gray-100 hover:text-red-500 dark:text-ios-500 dark:hover:bg-ios-800 dark:hover:text-red-400'
               }`}
           >
             <Heart className={`h-5 w-5 ${isFavorite ? 'fill-current' : ''}`} />
@@ -430,7 +430,7 @@ const StatefulVideoCard = ({ video, channelThumbnail, onInlinePlaybackChange, on
         </div>
       </div>
       {progressPercent > 0 && (
-        <div className="absolute bottom-0 left-0 right-0 h-1 bg-gray-200 dark:bg-gray-800">
+        <div className="absolute bottom-0 left-0 right-0 h-1 bg-gray-200 dark:bg-ios-800">
           <div
             data-testid="video-progress-bar"
             className="h-full bg-red-600"

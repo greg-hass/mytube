@@ -149,7 +149,7 @@ export const OPMLUpload = ({ onSuccess, minimal = false, showLabelOnMobile = fal
           <h1 className="text-3xl font-bold mb-2 bg-gradient-to-r from-red-600 to-red-500 bg-clip-text text-transparent">
             Import Your Subscriptions
           </h1>
-          <p className="text-gray-600 dark:text-gray-400">
+          <p className="text-gray-600 dark:text-ios-400">
             Get started with your Google Takeout subscriptions.csv file
           </p>
         </div>
@@ -178,14 +178,14 @@ export const OPMLUpload = ({ onSuccess, minimal = false, showLabelOnMobile = fal
                 className={`border-2 border-dashed rounded-2xl p-12 text-center cursor-pointer transition-all ${
                   isDragging
                     ? 'border-red-500 bg-red-50 dark:bg-red-900/20'
-                    : 'border-gray-300 dark:border-gray-700 hover:border-red-400 hover:bg-gray-50 dark:hover:bg-gray-900/50'
+                    : 'border-gray-300 dark:border-ios-700 hover:border-red-400 hover:bg-gray-50 dark:hover:bg-ios-900/50'
                 }`}
               >
                 <Upload className={`w-16 h-16 mx-auto mb-4 ${isDragging ? 'text-red-500' : 'text-gray-400'}`} />
                 <h3 className="text-xl font-semibold mb-2">
                   {isDragging ? 'Drop your subscriptions file here' : 'Drag and drop your subscriptions file'}
                 </h3>
-                <p className="text-gray-600 dark:text-gray-400 mb-4">
+                <p className="text-gray-600 dark:text-ios-400 mb-4">
                   or click to browse
                 </p>
                 <p className="text-sm text-gray-500">
@@ -218,7 +218,7 @@ export const OPMLUpload = ({ onSuccess, minimal = false, showLabelOnMobile = fal
             >
               <Loader2 className="w-16 h-16 text-red-600 animate-spin mx-auto mb-4" />
               <h3 className="text-xl font-semibold mb-2">Processing your file...</h3>
-              <p className="text-gray-600 dark:text-gray-400">
+              <p className="text-gray-600 dark:text-ios-400">
                 This may take a moment
               </p>
             </motion.div>
@@ -234,12 +234,12 @@ export const OPMLUpload = ({ onSuccess, minimal = false, showLabelOnMobile = fal
             >
               <CheckCircle className="w-16 h-16 text-green-500 mx-auto mb-4" />
               <h3 className="text-xl font-semibold mb-2">Successfully imported!</h3>
-              <p className="text-gray-600 dark:text-gray-400 mb-6">
+              <p className="text-gray-600 dark:text-ios-400 mb-6">
                 {importedCount} channel{importedCount !== 1 ? 's' : ''} added to your subscriptions
               </p>
               <button
                 onClick={resetUpload}
-                className="px-6 py-2 rounded-lg bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors"
+                className="px-6 py-2 rounded-lg bg-gray-100 dark:bg-ios-800 hover:bg-gray-200 dark:hover:bg-ios-700 transition-colors"
               >
                 Import More
               </button>

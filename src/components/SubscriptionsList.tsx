@@ -65,7 +65,7 @@ export const SubscriptionsList = ({
   }
 
   return (
-    <div data-testid="subscriptions-list" className="px-4 bg-gray-50 dark:bg-gray-950">
+    <div data-testid="subscriptions-list" className="px-4 bg-gray-50 dark:bg-ios-950">
       <div
         className={
           viewMode === 'grid'

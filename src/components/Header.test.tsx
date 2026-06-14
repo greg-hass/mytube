@@ -130,7 +130,7 @@ describe('Header', () => {
     const menuPanel = screen.getByTestId('mobile-menu-panel');
     expect(menuPanel.closest('header')).toBeNull();
     expect(menuPanel.querySelector('aside')?.className).toContain('safe-top');
-    expect(menuPanel.querySelector('aside')?.className).toContain('dark:bg-gray-950');
+    expect(menuPanel.querySelector('aside')?.className).toContain('dark:bg-ios-950');
     expect(menuPanel.querySelector('aside')?.className).not.toContain('dark:bg-gradient');
   });
 

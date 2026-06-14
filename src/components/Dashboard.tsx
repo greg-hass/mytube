@@ -130,16 +130,16 @@ class DashboardContentBoundary extends Component<{
     if (this.state.hasError) {
       return (
         <div className="px-4 py-12 text-center">
-          <h2 className="text-xl font-semibold text-gray-900 dark:text-gray-100">
+          <h2 className="text-xl font-semibold text-gray-900 dark:text-ios-100">
             Subscriptions unavailable
           </h2>
-          <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">
+          <p className="mt-2 text-sm text-gray-500 dark:text-ios-400">
             This view could not be displayed. You can still use the rest of the app.
           </p>
           <button
             type="button"
             onClick={this.props.onReturnToLatest}
-            className="mt-5 rounded-lg bg-gray-900 px-4 py-2 text-sm font-medium text-white dark:bg-gray-100 dark:text-gray-950"
+            className="mt-5 rounded-lg bg-gray-900 px-4 py-2 text-sm font-medium text-white dark:bg-ios-100 dark:text-ios-950"
           >
             Return to Latest
           </button>
@@ -166,7 +166,7 @@ const FirstRunOnboarding = ({ onAddChannel, onImportSuccess }: { onAddChannel: (
           alt="YouTube RSS"
           className="h-10 w-10 rounded-xl shadow-lg shadow-red-500/20"
         />
-        <h1 className="text-xl font-bold text-gray-950 dark:text-gray-50">
+        <h1 className="text-xl font-bold text-gray-950 dark:text-ios-50">
           YouTube RSS
         </h1>
       </div>
@@ -176,30 +176,30 @@ const FirstRunOnboarding = ({ onAddChannel, onImportSuccess }: { onAddChannel: (
         <button
           type="button"
           onClick={onAddChannel}
-          className="flex items-center gap-3 rounded-xl border border-gray-200 bg-white p-3 text-left shadow-sm transition-all active:scale-[0.98] dark:border-gray-800 dark:bg-gray-900"
+          className="flex items-center gap-3 rounded-xl border border-gray-200 bg-white p-3 text-left shadow-sm transition-all active:scale-[0.98] dark:border-ios-800 dark:bg-ios-900"
         >
-          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-gray-100 dark:bg-gray-800">
-            <Plus className="h-5 w-5 text-gray-700 dark:text-gray-300" />
+          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-gray-100 dark:bg-ios-800">
+            <Plus className="h-5 w-5 text-gray-700 dark:text-ios-300" />
           </div>
           <div>
-            <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100">
+            <h3 className="text-sm font-semibold text-gray-900 dark:text-ios-100">
               Add a channel
             </h3>
-            <p className="text-xs text-gray-500 dark:text-gray-400">
+            <p className="text-xs text-gray-500 dark:text-ios-400">
               Paste a YouTube URL, handle, or channel ID
             </p>
           </div>
         </button>
 
-        <div className="flex items-center gap-3 rounded-xl border border-gray-200 bg-white p-3 shadow-sm dark:border-gray-800 dark:bg-gray-900">
+        <div className="flex items-center gap-3 rounded-xl border border-gray-200 bg-white p-3 shadow-sm dark:border-ios-800 dark:bg-ios-900">
           <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-red-50 dark:bg-red-900/20">
             <Upload className="h-5 w-5 text-red-600 dark:text-red-400" />
           </div>
           <div className="min-w-0 flex-1">
-            <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100">
+            <h3 className="text-sm font-semibold text-gray-900 dark:text-ios-100">
               Import subscriptions
             </h3>
-            <p className="text-xs text-gray-500 dark:text-gray-400">
+            <p className="text-xs text-gray-500 dark:text-ios-400">
               Google Takeout CSV or OPML/XML
             </p>
           </div>
@@ -209,7 +209,7 @@ const FirstRunOnboarding = ({ onAddChannel, onImportSuccess }: { onAddChannel: (
         </div>
       </div>
 
-      <p className="mt-4 text-center text-xs text-gray-400 dark:text-gray-600">
+      <p className="mt-4 text-center text-xs text-gray-400 dark:text-ios-600">
         Your feed refreshes automatically once channels are added.
       </p>
     </motion.div>
@@ -692,7 +692,7 @@ export const Dashboard = () => {
           {activeTab === 'subscriptions' && (
             <div
               data-testid="subscription-groups-toolbar"
-              className="flex items-start gap-2 border-b border-gray-200/70 pb-[var(--app-sticky-gap)] dark:border-gray-800/80 sm:items-center"
+              className="flex items-start gap-2 border-b border-gray-200/70 pb-[var(--app-sticky-gap)] dark:border-ios-800/80 sm:items-center"
             >
               <div className="mr-auto flex min-w-0 flex-1 flex-wrap items-center gap-2">
                 <label htmlFor="subscription-group-filter" className="sr-only">Filter group</label>
@@ -701,7 +701,7 @@ export const Dashboard = () => {
                   aria-label="Filter group"
                   value={selectedSubscriptionGroup}
                   onChange={(e) => setSelectedSubscriptionGroup(e.target.value)}
-                  className="h-10 max-w-[11rem] rounded-lg border border-gray-200 bg-white px-3 text-sm font-medium text-gray-700 outline-none focus:border-red-500 dark:border-gray-800 dark:bg-gray-900 dark:text-gray-200"
+                  className="h-10 max-w-[11rem] rounded-lg border border-gray-200 bg-white px-3 text-sm font-medium text-gray-700 outline-none focus:border-red-500 dark:border-ios-800 dark:bg-ios-900 dark:text-ios-200"
                 >
                   <option value="all">All groups</option>
                   {subscriptionGroups.map((group) => (
@@ -714,7 +714,7 @@ export const Dashboard = () => {
                 <button
                   type="button"
                   onClick={() => setIsNewGroupModalOpen(true)}
-                  className="h-10 rounded-lg bg-gray-800 px-3 text-sm font-medium text-white hover:bg-gray-700 dark:bg-gray-700 dark:hover:bg-gray-600"
+                  className="h-10 rounded-lg bg-gray-800 px-3 text-sm font-medium text-white hover:bg-gray-700 dark:bg-ios-700 dark:hover:bg-ios-600"
                 >
                   Add group
                 </button>
@@ -722,7 +722,7 @@ export const Dashboard = () => {
               <button
                 disabled={isRepairingIcons}
                 onClick={handleRepairChannelIcons}
-                className="inline-flex h-10 w-10 shrink-0 items-center justify-center gap-2 rounded-lg bg-gray-800 px-0 text-sm font-medium text-white transition-colors hover:bg-gray-700 disabled:cursor-not-allowed disabled:opacity-60 dark:bg-gray-700 dark:hover:bg-gray-600 sm:w-auto sm:px-3"
+                className="inline-flex h-10 w-10 shrink-0 items-center justify-center gap-2 rounded-lg bg-gray-800 px-0 text-sm font-medium text-white transition-colors hover:bg-gray-700 disabled:cursor-not-allowed disabled:opacity-60 dark:bg-ios-700 dark:hover:bg-ios-600 sm:w-auto sm:px-3"
                 title="Repair icons"
               >
                 {isRepairingIcons ? <Loader2 className="h-4 w-4 animate-spin" /> : <Image className="h-4 w-4" />}
@@ -737,10 +737,10 @@ export const Dashboard = () => {
               className="flex flex-nowrap items-center justify-between gap-1 sm:gap-2"
             >
               <div className="flex min-w-0 flex-nowrap items-center gap-2 sm:gap-3">
-                <div className="hidden items-center gap-2 text-xs font-medium text-gray-500 dark:text-gray-400 sm:flex">
+                <div className="hidden items-center gap-2 text-xs font-medium text-gray-500 dark:text-ios-400 sm:flex">
                   <span>Last refreshed {formatRefreshAge(syncStatus.lastUpdated)}</span>
                   {scheduledRefreshIntervalMinutes && (
-                    <span className="rounded-full bg-gray-100 px-2 py-1 text-gray-600 dark:bg-gray-800 dark:text-gray-300">
+                    <span className="rounded-full bg-gray-100 px-2 py-1 text-gray-600 dark:bg-ios-800 dark:text-ios-300">
                       Auto {scheduledRefreshIntervalMinutes}m
                     </span>
                   )}
@@ -767,7 +767,7 @@ export const Dashboard = () => {
                         handleBulkWatchedAction(event.target.value);
                         event.target.value = '';
                       }}
-                      className="hidden h-10 rounded-lg border border-gray-200 bg-white px-3 text-sm font-medium text-gray-700 outline-none focus:border-red-500 dark:border-gray-800 dark:bg-gray-900 dark:text-gray-200 sm:block"
+                      className="hidden h-10 rounded-lg border border-gray-200 bg-white px-3 text-sm font-medium text-gray-700 outline-none focus:border-red-500 dark:border-ios-800 dark:bg-ios-900 dark:text-ios-200 sm:block"
                     >
                       <option value="" disabled>Mark watched</option>
                       <option value="shown">Shown videos</option>
@@ -817,35 +817,35 @@ export const Dashboard = () => {
                 videosLoading ? (
                   <div className="text-center py-12">
                     <div className="inline-block w-8 h-8 border-4 border-red-600 border-t-transparent rounded-full animate-spin mb-4" />
-                    <p className="text-gray-800 dark:text-gray-200 text-lg font-semibold">
+                    <p className="text-gray-800 dark:text-ios-200 text-lg font-semibold">
                       Loading your feed
                     </p>
                   </div>
                 ) : syncStatus?.isSyncing ? (
                   <div className="text-center py-12">
                     <div className="inline-block w-8 h-8 border-4 border-red-600 border-t-transparent rounded-full animate-spin mb-4" />
-                    <p className="text-gray-800 dark:text-gray-200 text-lg font-semibold">
+                    <p className="text-gray-800 dark:text-ios-200 text-lg font-semibold">
                       Building your feed
                     </p>
-                    <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">
+                    <p className="mt-2 text-sm text-gray-500 dark:text-ios-400">
                       Your feeds are refreshing. This can take a minute after import.
                     </p>
-                    <p className="text-sm text-gray-500 dark:text-gray-500 mt-2">
+                    <p className="text-sm text-gray-500 dark:text-ios-500 mt-2">
                       {syncStatus.current} / {syncStatus.total} channels checked
                     </p>
-                    <div className="w-full max-w-sm h-2 bg-gray-200 dark:bg-gray-800 rounded-full overflow-hidden mx-auto mt-4">
+                    <div className="w-full max-w-sm h-2 bg-gray-200 dark:bg-ios-800 rounded-full overflow-hidden mx-auto mt-4">
                       <div
                         className="h-full bg-red-600 rounded-full transition-all"
                         style={{ width: `${feedProgressPercent}%` }}
                       />
                     </div>
-                    <p className="text-xs text-gray-500 dark:text-gray-500 mt-3">
+                    <p className="text-xs text-gray-500 dark:text-ios-500 mt-3">
                       {syncStatus.videos} videos found so far
                     </p>
                   </div>
                 ) : hasTemporaryChannels ? (
                   <div className="text-center py-12">
-                    <p className="text-gray-600 dark:text-gray-400 text-lg mb-2">
+                    <p className="text-gray-600 dark:text-ios-400 text-lg mb-2">
                       Some channels need channel IDs to fetch videos
                     </p>
                     <p className="text-sm text-gray-500">
@@ -862,7 +862,7 @@ export const Dashboard = () => {
                 )
               ) : (
                 <div>
-                  <p className="hidden sm:block text-sm text-gray-500 dark:text-gray-400 mb-4">
+                  <p className="hidden sm:block text-sm text-gray-500 dark:text-ios-400 mb-4">
                     Showing {filteredVideos.length} recent videos
                   </p>
                   <VirtualizedVideoGrid
@@ -876,7 +876,7 @@ export const Dashboard = () => {
                       <button
                         type="button"
                         onClick={() => setMobileVideoLimit((count) => count + MOBILE_TIMELINE_INCREMENT)}
-                        className="rounded-lg bg-gray-800 px-4 py-2 text-sm font-medium text-white dark:bg-gray-700"
+                        className="rounded-lg bg-gray-800 px-4 py-2 text-sm font-medium text-white dark:bg-ios-700"
                       >
                         Show older videos
                       </button>
@@ -903,7 +903,7 @@ export const Dashboard = () => {
                 />
               ) : (
                 <div>
-                  <p className="hidden sm:block text-sm text-gray-500 dark:text-gray-400 mb-4">
+                  <p className="hidden sm:block text-sm text-gray-500 dark:text-ios-400 mb-4">
                     {queuedVideos.length} video{queuedVideos.length !== 1 ? 's' : ''} queued
                   </p>
                   <VirtualizedVideoGrid
@@ -936,15 +936,15 @@ export const Dashboard = () => {
                   {(favoriteChannels.length > 0 || favoriteVideos.length > 0) && (
                     <div
                       data-testid="favorite-section-switcher"
-                      className="grid grid-cols-2 gap-1 rounded-xl bg-gray-100 p-1 dark:bg-gray-900 sm:hidden"
+                      className="grid grid-cols-2 gap-1 rounded-xl bg-gray-100 p-1 dark:bg-ios-900 sm:hidden"
                     >
                       <button
                         type="button"
                         aria-pressed={visibleFavoriteSection === 'channels'}
                         onClick={() => setActiveFavoriteSection('channels')}
                         className={`rounded-lg px-3 py-2 text-sm font-medium transition-colors ${visibleFavoriteSection === 'channels'
-                          ? 'bg-white text-gray-950 shadow-sm dark:bg-gray-800 dark:text-gray-50'
-                          : 'text-gray-600 dark:text-gray-300'
+                          ? 'bg-white text-gray-950 shadow-sm dark:bg-ios-800 dark:text-ios-50'
+                          : 'text-gray-600 dark:text-ios-300'
                           }`}
                       >
                         Channels ({favoriteChannels.length})
@@ -954,8 +954,8 @@ export const Dashboard = () => {
                         aria-pressed={visibleFavoriteSection === 'videos'}
                         onClick={() => setActiveFavoriteSection('videos')}
                         className={`rounded-lg px-3 py-2 text-sm font-medium transition-colors ${visibleFavoriteSection === 'videos'
-                          ? 'bg-white text-gray-950 shadow-sm dark:bg-gray-800 dark:text-gray-50'
-                          : 'text-gray-600 dark:text-gray-300'
+                          ? 'bg-white text-gray-950 shadow-sm dark:bg-ios-800 dark:text-ios-50'
+                          : 'text-gray-600 dark:text-ios-300'
                           }`}
                       >
                         Videos ({favoriteVideos.length})
@@ -968,15 +968,15 @@ export const Dashboard = () => {
                     className={`${visibleFavoriteSection === 'channels' ? 'block' : 'hidden sm:block'} ${favoriteChannels.length === 0 ? 'sm:hidden' : ''}`}
                   >
                     <div className="mb-4 flex items-center justify-between gap-3">
-                      <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100">
+                      <h2 className="text-lg font-semibold text-gray-900 dark:text-ios-100">
                         Channels
                       </h2>
-                      <span className="text-sm text-gray-500 dark:text-gray-400">
+                      <span className="text-sm text-gray-500 dark:text-ios-400">
                         {favoriteChannels.length}
                       </span>
                     </div>
                     {favoriteChannels.length === 0 ? (
-                      <div className="rounded-xl border border-dashed border-gray-200 p-6 text-center text-sm text-gray-500 dark:border-gray-800 dark:text-gray-400">
+                      <div className="rounded-xl border border-dashed border-gray-200 p-6 text-center text-sm text-gray-500 dark:border-ios-800 dark:text-ios-400">
                         No favorite channels yet
                       </div>
                     ) : (
@@ -1005,15 +1005,15 @@ export const Dashboard = () => {
                     className={`${visibleFavoriteSection === 'videos' ? 'block' : 'hidden sm:block'} ${favoriteVideos.length === 0 ? 'sm:hidden' : ''}`}
                   >
                     <div className="mb-4 flex items-center justify-between gap-3">
-                      <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100">
+                      <h2 className="text-lg font-semibold text-gray-900 dark:text-ios-100">
                         Videos
                       </h2>
-                      <span className="text-sm text-gray-500 dark:text-gray-400">
+                      <span className="text-sm text-gray-500 dark:text-ios-400">
                         {favoriteVideos.length}
                       </span>
                     </div>
                     {favoriteVideos.length === 0 ? (
-                      <div className="rounded-xl border border-dashed border-gray-200 p-6 text-center text-sm text-gray-500 dark:border-gray-800 dark:text-gray-400">
+                      <div className="rounded-xl border border-dashed border-gray-200 p-6 text-center text-sm text-gray-500 dark:border-ios-800 dark:text-ios-400">
                         No favorite videos yet
                       </div>
                     ) : (
@@ -1047,10 +1047,10 @@ export const Dashboard = () => {
               ) : (
                 <>
                   <div className="mb-4">
-                    <h2 className="text-2xl font-bold text-gray-900 dark:text-gray-100 mb-2">
+                    <h2 className="text-2xl font-bold text-gray-900 dark:text-ios-100 mb-2">
                       Most Active Channels
                     </h2>
-                    <p className="text-sm text-gray-500 dark:text-gray-400">
+                    <p className="text-sm text-gray-500 dark:text-ios-400">
                       Top {activeChannels.length} channels by uploads in the past 7 days
                     </p>
                   </div>
@@ -1059,7 +1059,7 @@ export const Dashboard = () => {
                       <div
                         key={item.channel.id}
                         onClick={() => window.location.href = `/channel/${item.channel.id}`}
-                        className="flex items-center gap-4 p-4 bg-white dark:bg-gray-800 rounded-xl shadow-sm hover:shadow-md transition-all cursor-pointer border border-gray-200 dark:border-gray-700"
+                        className="flex items-center gap-4 p-4 bg-white dark:bg-ios-800 rounded-xl shadow-sm hover:shadow-md transition-all cursor-pointer border border-gray-200 dark:border-ios-700"
                       >
                         <div className="flex-shrink-0 w-12 h-12 bg-gradient-to-br from-green-500 to-emerald-600 rounded-full flex items-center justify-center text-white font-bold text-lg">
                           #{index + 1}
@@ -1070,18 +1070,18 @@ export const Dashboard = () => {
                           className="w-16 h-16 rounded-full object-cover"
                         />
                         <div className="flex-1 min-w-0">
-                          <h3 className="font-semibold text-gray-900 dark:text-gray-100 truncate">
+                          <h3 className="font-semibold text-gray-900 dark:text-ios-100 truncate">
                             {item.channel.title}
                           </h3>
-                          <p className="text-sm text-gray-500 dark:text-gray-400">
+                          <p className="text-sm text-gray-500 dark:text-ios-400">
                             {item.count} video{item.count !== 1 ? 's' : ''} this week
                           </p>
                         </div>
                         <div className="text-right">
-                          <p className="text-xs text-gray-500 dark:text-gray-400">
+                          <p className="text-xs text-gray-500 dark:text-ios-400">
                             Latest upload
                           </p>
-                          <p className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                          <p className="text-sm font-medium text-gray-700 dark:text-ios-300">
                             {formatTimeAgo(item.latestVideo)}
                           </p>
                         </div>
@@ -1138,14 +1138,14 @@ export const Dashboard = () => {
             role="dialog"
             aria-modal="true"
             aria-labelledby="new-group-title"
-            className="absolute bottom-0 left-0 right-0 rounded-t-2xl border-t border-gray-200 bg-white p-4 shadow-2xl dark:border-gray-800 dark:bg-gray-900 sm:bottom-auto sm:left-1/2 sm:right-auto sm:top-28 sm:w-96 sm:-translate-x-1/2 sm:rounded-xl sm:border"
+            className="absolute bottom-0 left-0 right-0 rounded-t-2xl border-t border-gray-200 bg-white p-4 shadow-2xl dark:border-ios-800 dark:bg-ios-900 sm:bottom-auto sm:left-1/2 sm:right-auto sm:top-28 sm:w-96 sm:-translate-x-1/2 sm:rounded-xl sm:border"
             onSubmit={(event) => {
               event.preventDefault();
               createSubscriptionGroup();
             }}
           >
             <div className="mb-4 flex items-center justify-between gap-3">
-              <h2 id="new-group-title" className="text-lg font-semibold text-gray-900 dark:text-gray-100">
+              <h2 id="new-group-title" className="text-lg font-semibold text-gray-900 dark:text-ios-100">
                 New group
               </h2>
               <button
@@ -1155,13 +1155,13 @@ export const Dashboard = () => {
                   setIsNewGroupModalOpen(false);
                   setNewSubscriptionGroupName('');
                 }}
-                className="inline-flex h-10 w-10 items-center justify-center rounded-lg bg-gray-100 text-gray-700 hover:bg-gray-200 dark:bg-gray-800 dark:text-gray-200 dark:hover:bg-gray-700"
+                className="inline-flex h-10 w-10 items-center justify-center rounded-lg bg-gray-100 text-gray-700 hover:bg-gray-200 dark:bg-ios-800 dark:text-ios-200 dark:hover:bg-ios-700"
               >
                 <X className="h-5 w-5" />
               </button>
             </div>
 
-            <label htmlFor="new-subscription-group" className="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300">
+            <label htmlFor="new-subscription-group" className="mb-2 block text-sm font-medium text-gray-700 dark:text-ios-300">
               Group name
             </label>
             <input
@@ -1170,7 +1170,7 @@ export const Dashboard = () => {
               value={newSubscriptionGroupName}
               onChange={(e) => setNewSubscriptionGroupName(e.target.value)}
               placeholder="Linux, News, Apple..."
-              className="h-11 w-full rounded-lg border border-gray-200 bg-white px-3 text-base text-gray-900 outline-none focus:border-red-500 dark:border-gray-800 dark:bg-gray-950 dark:text-gray-100"
+              className="h-11 w-full rounded-lg border border-gray-200 bg-white px-3 text-base text-gray-900 outline-none focus:border-red-500 dark:border-ios-800 dark:bg-ios-950 dark:text-ios-100"
             />
 
             <div className="mt-5 flex gap-2">
@@ -1180,7 +1180,7 @@ export const Dashboard = () => {
                   setIsNewGroupModalOpen(false);
                   setNewSubscriptionGroupName('');
                 }}
-                className="h-10 flex-1 rounded-lg bg-gray-100 px-3 text-sm font-medium text-gray-800 hover:bg-gray-200 dark:bg-gray-800 dark:text-gray-100 dark:hover:bg-gray-700"
+                className="h-10 flex-1 rounded-lg bg-gray-100 px-3 text-sm font-medium text-gray-800 hover:bg-gray-200 dark:bg-ios-800 dark:text-ios-100 dark:hover:bg-ios-700"
               >
                 Cancel
               </button>
@@ -1207,17 +1207,17 @@ export const Dashboard = () => {
             role="dialog"
             aria-modal="true"
             aria-labelledby="feed-filters-title"
-            className="absolute bottom-0 left-0 right-0 rounded-t-2xl border-t border-gray-200 bg-white p-4 shadow-2xl dark:border-gray-800 dark:bg-gray-900 sm:bottom-auto sm:left-1/2 sm:right-auto sm:top-28 sm:w-96 sm:-translate-x-1/2 sm:rounded-xl sm:border"
+            className="absolute bottom-0 left-0 right-0 rounded-t-2xl border-t border-gray-200 bg-white p-4 shadow-2xl dark:border-ios-800 dark:bg-ios-900 sm:bottom-auto sm:left-1/2 sm:right-auto sm:top-28 sm:w-96 sm:-translate-x-1/2 sm:rounded-xl sm:border"
           >
             <div className="mb-4 flex items-center justify-between gap-3">
-              <h2 id="feed-filters-title" className="text-lg font-semibold text-gray-900 dark:text-gray-100">
+              <h2 id="feed-filters-title" className="text-lg font-semibold text-gray-900 dark:text-ios-100">
                 Feed filters
               </h2>
               <button
                 type="button"
                 aria-label="Close feed filters"
                 onClick={() => setIsQualityFiltersOpen(false)}
-                className="inline-flex h-10 w-10 items-center justify-center rounded-lg bg-gray-100 text-gray-700 hover:bg-gray-200 dark:bg-gray-800 dark:text-gray-200 dark:hover:bg-gray-700"
+                className="inline-flex h-10 w-10 items-center justify-center rounded-lg bg-gray-100 text-gray-700 hover:bg-gray-200 dark:bg-ios-800 dark:text-ios-200 dark:hover:bg-ios-700"
               >
                 <X className="h-5 w-5" />
               </button>
@@ -1225,7 +1225,7 @@ export const Dashboard = () => {
 
             <div className="space-y-5">
               <div>
-                <p className="mb-2 text-sm font-medium text-gray-700 dark:text-gray-300">Duration</p>
+                <p className="mb-2 text-sm font-medium text-gray-700 dark:text-ios-300">Duration</p>
                 <div className="grid grid-cols-2 gap-2">
                   {DURATION_FILTER_OPTIONS.map((option) => (
                     <button
@@ -1234,7 +1234,7 @@ export const Dashboard = () => {
                       onClick={() => setDurationFilter(option.value)}
                       className={`h-10 rounded-lg px-3 text-sm font-medium transition-colors ${durationFilter === option.value
                         ? 'bg-red-600 text-white'
-                        : 'bg-gray-100 text-gray-800 hover:bg-gray-200 dark:bg-gray-800 dark:text-gray-100 dark:hover:bg-gray-700'
+                        : 'bg-gray-100 text-gray-800 hover:bg-gray-200 dark:bg-ios-800 dark:text-ios-100 dark:hover:bg-ios-700'
                         }`}
                     >
                       {option.label}
@@ -1243,58 +1243,58 @@ export const Dashboard = () => {
                 </div>
               </div>
 
-              <label className="flex items-center justify-between gap-4 rounded-lg bg-gray-100 px-3 py-3 dark:bg-gray-800">
-                <span className="text-sm font-medium text-gray-800 dark:text-gray-100">Hide livestream replays</span>
+              <label className="flex items-center justify-between gap-4 rounded-lg bg-gray-100 px-3 py-3 dark:bg-ios-800">
+                <span className="text-sm font-medium text-gray-800 dark:text-ios-100">Hide livestream replays</span>
                 <input
                   type="checkbox"
                   aria-label="Hide livestream replays"
                   checked={hideLiveReplays}
                   onChange={(event) => setHideLiveReplays(event.target.checked)}
-                  className="h-5 w-5 rounded border-gray-300 text-red-600 focus:ring-red-500 dark:border-gray-700 dark:bg-gray-900"
+                  className="h-5 w-5 rounded border-gray-300 text-red-600 focus:ring-red-500 dark:border-ios-700 dark:bg-ios-900"
                 />
               </label>
 
-              <label className="flex items-center justify-between gap-4 rounded-lg bg-gray-100 px-3 py-3 dark:bg-gray-800">
-                <span className="text-sm font-medium text-gray-800 dark:text-gray-100">Hide premieres</span>
+              <label className="flex items-center justify-between gap-4 rounded-lg bg-gray-100 px-3 py-3 dark:bg-ios-800">
+                <span className="text-sm font-medium text-gray-800 dark:text-ios-100">Hide premieres</span>
                 <input
                   type="checkbox"
                   aria-label="Hide premieres"
                   checked={hidePremieres}
                   onChange={(event) => setHidePremieres(event.target.checked)}
-                  className="h-5 w-5 rounded border-gray-300 text-red-600 focus:ring-red-500 dark:border-gray-700 dark:bg-gray-900"
+                  className="h-5 w-5 rounded border-gray-300 text-red-600 focus:ring-red-500 dark:border-ios-700 dark:bg-ios-900"
                 />
               </label>
 
-              <label className="flex items-center justify-between gap-4 rounded-lg bg-gray-100 px-3 py-3 dark:bg-gray-800">
-                <span className="text-sm font-medium text-gray-800 dark:text-gray-100">Hide duplicate titles</span>
+              <label className="flex items-center justify-between gap-4 rounded-lg bg-gray-100 px-3 py-3 dark:bg-ios-800">
+                <span className="text-sm font-medium text-gray-800 dark:text-ios-100">Hide duplicate titles</span>
                 <input
                   type="checkbox"
                   aria-label="Hide duplicate titles"
                   checked={hideDuplicateTitles}
                   onChange={(event) => setHideDuplicateTitles(event.target.checked)}
-                  className="h-5 w-5 rounded border-gray-300 text-red-600 focus:ring-red-500 dark:border-gray-700 dark:bg-gray-900"
+                  className="h-5 w-5 rounded border-gray-300 text-red-600 focus:ring-red-500 dark:border-ios-700 dark:bg-ios-900"
                 />
               </label>
 
               <div className="space-y-3">
                 <label className="block">
-                  <span className="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300">Mute keywords</span>
+                  <span className="mb-2 block text-sm font-medium text-gray-700 dark:text-ios-300">Mute keywords</span>
                   <input
                     type="text"
                     value={mutedKeywordText}
                     onChange={(event) => setMutedKeywordText(event.target.value)}
                     placeholder="rumor, spoiler"
-                    className="h-10 w-full rounded-lg border border-gray-200 bg-white px-3 text-sm text-gray-900 outline-none focus:border-red-500 dark:border-gray-800 dark:bg-gray-950 dark:text-gray-100"
+                    className="h-10 w-full rounded-lg border border-gray-200 bg-white px-3 text-sm text-gray-900 outline-none focus:border-red-500 dark:border-ios-800 dark:bg-ios-950 dark:text-ios-100"
                   />
                 </label>
                 <label className="block">
-                  <span className="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300">Boost keywords</span>
+                  <span className="mb-2 block text-sm font-medium text-gray-700 dark:text-ios-300">Boost keywords</span>
                   <input
                     type="text"
                     value={boostedKeywordText}
                     onChange={(event) => setBoostedKeywordText(event.target.value)}
                     placeholder="linux, tactics"
-                    className="h-10 w-full rounded-lg border border-gray-200 bg-white px-3 text-sm text-gray-900 outline-none focus:border-red-500 dark:border-gray-800 dark:bg-gray-950 dark:text-gray-100"
+                    className="h-10 w-full rounded-lg border border-gray-200 bg-white px-3 text-sm text-gray-900 outline-none focus:border-red-500 dark:border-ios-800 dark:bg-ios-950 dark:text-ios-100"
                   />
                 </label>
               </div>
@@ -1303,7 +1303,7 @@ export const Dashboard = () => {
                 <button
                   type="button"
                   onClick={clearQualityFilters}
-                  className="h-10 flex-1 rounded-lg bg-gray-100 px-3 text-sm font-medium text-gray-800 hover:bg-gray-200 dark:bg-gray-800 dark:text-gray-100 dark:hover:bg-gray-700"
+                  className="h-10 flex-1 rounded-lg bg-gray-100 px-3 text-sm font-medium text-gray-800 hover:bg-gray-200 dark:bg-ios-800 dark:text-ios-100 dark:hover:bg-ios-700"
                 >
                   Clear
                 </button>

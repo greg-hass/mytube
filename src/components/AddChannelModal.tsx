@@ -249,21 +249,21 @@ export const AddChannelModal = ({ isOpen, onClose, onAdd, existingSubscriptions 
             initial={{ opacity: 0, scale: 0.95, y: 20 }}
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.95, y: 20 }}
-            className="fixed inset-0 z-[100] md:inset-auto md:left-1/2 md:top-1/2 md:-translate-x-1/2 md:-translate-y-1/2 md:w-full md:max-w-xl bg-white dark:bg-gray-900 md:rounded-2xl shadow-2xl flex flex-col h-[100dvh] md:h-auto md:max-h-[85vh] overflow-hidden border border-gray-200 dark:border-gray-800 pt-[env(safe-area-inset-top)] md:pt-0"
+            className="fixed inset-0 z-[100] md:inset-auto md:left-1/2 md:top-1/2 md:-translate-x-1/2 md:-translate-y-1/2 md:w-full md:max-w-xl bg-white dark:bg-ios-900 md:rounded-2xl shadow-2xl flex flex-col h-[100dvh] md:h-auto md:max-h-[85vh] overflow-hidden border border-gray-200 dark:border-ios-800 pt-[env(safe-area-inset-top)] md:pt-0"
           >
             {/* Header */}
-            <div className="flex items-center justify-between p-5 border-b border-gray-100 dark:border-gray-800 bg-white/50 dark:bg-gray-900/50 backdrop-blur-md shrink-0">
+            <div className="flex items-center justify-between p-5 border-b border-gray-100 dark:border-ios-800 bg-white/50 dark:bg-ios-900/50 backdrop-blur-md shrink-0">
               <div className="flex items-center gap-3">
                 <div className="w-9 h-9 rounded-full bg-gradient-to-br from-red-600 to-red-500 flex items-center justify-center shadow-md">
                   <Youtube className="w-5 h-5 text-white" />
                 </div>
-                <h2 className="text-xl font-bold bg-gradient-to-r from-gray-900 to-gray-700 dark:from-white dark:to-gray-300 bg-clip-text text-transparent">
+                <h2 className="text-xl font-bold bg-gradient-to-r from-gray-900 to-gray-700 dark:from-white dark:to-ios-300 bg-clip-text text-transparent">
                   Add Channel
                 </h2>
               </div>
               <button
                 onClick={onClose}
-                className="p-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors text-gray-500 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white"
+                className="p-2 rounded-full hover:bg-gray-100 dark:hover:bg-ios-800 transition-colors text-gray-500 hover:text-gray-900 dark:text-ios-400 dark:hover:text-white"
               >
                 <X className="w-5 h-5" />
               </button>
@@ -276,7 +276,7 @@ export const AddChannelModal = ({ isOpen, onClose, onAdd, existingSubscriptions 
                 <section className="space-y-3">
                   <label
                     htmlFor="channelInput"
-                    className="text-sm font-medium text-gray-700 dark:text-gray-300"
+                    className="text-sm font-medium text-gray-700 dark:text-ios-300"
                   >
                     YouTube Channel
                   </label>
@@ -289,11 +289,11 @@ export const AddChannelModal = ({ isOpen, onClose, onAdd, existingSubscriptions 
                       onChange={handleInputChange}
                       onKeyDown={handleInputKeyDown}
                       placeholder="Search keywords, @handle, channel ID, or URL"
-                      className={`w-full pl-4 pr-10 py-2.5 rounded-lg bg-gray-50 dark:bg-gray-800/50 border transition-all outline-none text-sm ${validationError
+                      className={`w-full pl-4 pr-10 py-2.5 rounded-lg bg-gray-50 dark:bg-ios-800/50 border transition-all outline-none text-sm ${validationError
                         ? 'border-red-300 focus:border-red-500 focus:ring-2 focus:ring-red-500/20 dark:border-red-800'
                         : channelInfo
                           ? 'border-green-300 focus:border-green-500 focus:ring-2 focus:ring-green-500/20 dark:border-green-800'
-                          : 'border-gray-200 dark:border-gray-700 focus:border-red-500 focus:ring-2 focus:ring-red-500/20'
+                          : 'border-gray-200 dark:border-ios-700 focus:border-red-500 focus:ring-2 focus:ring-red-500/20'
                         }`}
                       required
                       autoFocus
@@ -319,7 +319,7 @@ export const AddChannelModal = ({ isOpen, onClose, onAdd, existingSubscriptions 
                   )}
 
                   {parsedInput && parsedInput.type !== 'invalid' && !validationError && channelInfo && (
-                    <p className="text-sm text-gray-600 dark:text-gray-400">
+                    <p className="text-sm text-gray-600 dark:text-ios-400">
                       Detected: {getDisplayText(parsedInput)}
                     </p>
                   )}
@@ -334,17 +334,17 @@ export const AddChannelModal = ({ isOpen, onClose, onAdd, existingSubscriptions 
                       exit={{ opacity: 0 }}
                       className="space-y-3"
                     >
-                      <div className="flex items-center gap-2 text-sm text-gray-500 dark:text-gray-400">
+                      <div className="flex items-center gap-2 text-sm text-gray-500 dark:text-ios-400">
                         <div className="w-4 h-4 border-2 border-red-600 border-t-transparent rounded-full animate-spin" />
                         Searching...
                       </div>
                       <div className="space-y-2 pr-1">
                         {[1, 2, 3].map((i) => (
-                          <div key={i} className="flex items-center gap-3 rounded-xl border border-gray-100 dark:border-gray-800 bg-gray-50 dark:bg-gray-800/30 p-3">
-                            <div className="h-11 w-11 flex-none rounded-full bg-gray-200 dark:bg-gray-700 animate-pulse" />
+                          <div key={i} className="flex items-center gap-3 rounded-xl border border-gray-100 dark:border-ios-800 bg-gray-50 dark:bg-ios-800/30 p-3">
+                            <div className="h-11 w-11 flex-none rounded-full bg-gray-200 dark:bg-ios-700 animate-pulse" />
                             <div className="flex-1 space-y-2">
-                              <div className="h-4 w-3/4 bg-gray-200 dark:bg-gray-700 rounded animate-pulse" />
-                              <div className="h-3 w-1/2 bg-gray-200 dark:bg-gray-700 rounded animate-pulse" />
+                              <div className="h-4 w-3/4 bg-gray-200 dark:bg-ios-700 rounded animate-pulse" />
+                              <div className="h-3 w-1/2 bg-gray-200 dark:bg-ios-700 rounded animate-pulse" />
                             </div>
                           </div>
                         ))}
@@ -383,7 +383,7 @@ export const AddChannelModal = ({ isOpen, onClose, onAdd, existingSubscriptions 
                               key={channel.id}
                               className={`flex w-full items-center gap-3 rounded-xl border p-3 text-left transition-all ${isAdded
                                 ? 'border-green-200 bg-green-50 dark:border-green-900/60 dark:bg-green-950/20'
-                                : 'border-gray-200 bg-gray-50 hover:border-gray-300 hover:bg-gray-100 dark:border-gray-800 dark:bg-gray-800/50 dark:hover:border-gray-700 dark:hover:bg-gray-800'
+                                : 'border-gray-200 bg-gray-50 hover:border-gray-300 hover:bg-gray-100 dark:border-ios-800 dark:bg-ios-800/50 dark:hover:border-ios-700 dark:hover:bg-ios-800'
                                 }`}
                             >
                               <img
@@ -396,7 +396,7 @@ export const AddChannelModal = ({ isOpen, onClose, onAdd, existingSubscriptions 
                               />
                               <span className="min-w-0 flex-1">
                                 <span className="flex items-center gap-2">
-                                  <span className="block truncate font-medium text-gray-900 dark:text-gray-100">
+                                  <span className="block truncate font-medium text-gray-900 dark:text-ios-100">
                                     {channel.title}
                                   </span>
                                   {isAdded && (
@@ -406,7 +406,7 @@ export const AddChannelModal = ({ isOpen, onClose, onAdd, existingSubscriptions 
                                   )}
                                 </span>
                                 {channel.description && (
-                                  <span className="line-clamp-1 text-sm text-gray-500 dark:text-gray-400">
+                                  <span className="line-clamp-1 text-sm text-gray-500 dark:text-ios-400">
                                     {channel.description}
                                   </span>
                                 )}
@@ -446,11 +446,11 @@ export const AddChannelModal = ({ isOpen, onClose, onAdd, existingSubscriptions 
                       exit={{ opacity: 0 }}
                       className="text-center py-8"
                     >
-                      <Search className="w-12 h-12 text-gray-300 dark:text-gray-700 mx-auto mb-3" />
-                      <p className="text-sm text-gray-500 dark:text-gray-400">
+                      <Search className="w-12 h-12 text-gray-300 dark:text-ios-700 mx-auto mb-3" />
+                      <p className="text-sm text-gray-500 dark:text-ios-400">
                         No channels found for "{input.trim()}"
                       </p>
-                      <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">
+                      <p className="text-xs text-gray-400 dark:text-ios-500 mt-1">
                         Try a different search term or enter a YouTube URL
                       </p>
                     </motion.div>
@@ -464,7 +464,7 @@ export const AddChannelModal = ({ isOpen, onClose, onAdd, existingSubscriptions 
                       initial={{ opacity: 0, y: 10 }}
                       animate={{ opacity: 1, y: 0 }}
                       exit={{ opacity: 0, y: 10 }}
-                      className="rounded-xl border border-gray-200 dark:border-gray-800 bg-gray-50 dark:bg-gray-800/50 p-4"
+                      className="rounded-xl border border-gray-200 dark:border-ios-800 bg-gray-50 dark:bg-ios-800/50 p-4"
                     >
                       <h3 className="text-sm font-semibold text-gray-900 dark:text-white mb-3 flex items-center gap-2">
                         <Check className="w-4 h-4 text-green-600" />
@@ -481,14 +481,14 @@ export const AddChannelModal = ({ isOpen, onClose, onAdd, existingSubscriptions 
                           }}
                         />
                         <div className="flex-1 min-w-0">
-                          <h4 className="font-semibold text-gray-900 dark:text-gray-100 truncate">
+                          <h4 className="font-semibold text-gray-900 dark:text-ios-100 truncate">
                             {channelInfo.title}
                           </h4>
-                          <p className="text-sm text-gray-500 dark:text-gray-400 line-clamp-2 mt-0.5">
+                          <p className="text-sm text-gray-500 dark:text-ios-400 line-clamp-2 mt-0.5">
                             {channelInfo.description || 'No description available'}
                           </p>
                           {channelInfo.subscriberCount && (
-                            <p className="text-xs text-gray-400 dark:text-gray-500 mt-1.5">
+                            <p className="text-xs text-gray-400 dark:text-ios-500 mt-1.5">
                               {parseInt(channelInfo.subscriberCount).toLocaleString()} subscribers
                             </p>
                           )}
@@ -517,8 +517,8 @@ export const AddChannelModal = ({ isOpen, onClose, onAdd, existingSubscriptions 
                 </AnimatePresence>
 
                 {!channelInfo && canAddParsedInput && (
-                  <div className="flex items-center gap-3 rounded-xl border border-gray-200 bg-gray-50 p-3 dark:border-gray-800 dark:bg-gray-800/50">
-                    <span className="min-w-0 flex-1 text-sm text-gray-600 dark:text-gray-300">
+                  <div className="flex items-center gap-3 rounded-xl border border-gray-200 bg-gray-50 p-3 dark:border-ios-800 dark:bg-ios-800/50">
+                    <span className="min-w-0 flex-1 text-sm text-gray-600 dark:text-ios-300">
                       {parsedInput ? getDisplayText(parsedInput) : input.trim()}
                     </span>
                     <button
@@ -544,7 +544,7 @@ export const AddChannelModal = ({ isOpen, onClose, onAdd, existingSubscriptions 
                       initial={{ opacity: 0, y: 10 }}
                       animate={{ opacity: 1, y: 0 }}
                       exit={{ opacity: 0, y: 10 }}
-                      className="rounded-xl border border-gray-100 dark:border-gray-800 bg-gray-50 dark:bg-gray-800/30 p-4 space-y-3"
+                      className="rounded-xl border border-gray-100 dark:border-ios-800 bg-gray-50 dark:bg-ios-800/30 p-4 space-y-3"
                     >
                       <h3 className="text-sm font-semibold text-gray-900 dark:text-white">
                         Supported formats
@@ -558,10 +558,10 @@ export const AddChannelModal = ({ isOpen, onClose, onAdd, existingSubscriptions 
                         ].map((format) => (
                           <div
                             key={format.label}
-                            className="rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 px-3 py-2.5"
+                            className="rounded-lg border border-gray-200 dark:border-ios-700 bg-white dark:bg-ios-900 px-3 py-2.5"
                           >
-                            <p className="text-xs font-medium text-gray-500 dark:text-gray-400">{format.label}</p>
-                            <code className="text-xs text-gray-800 dark:text-gray-200 font-mono mt-0.5 block">
+                            <p className="text-xs font-medium text-gray-500 dark:text-ios-400">{format.label}</p>
+                            <code className="text-xs text-gray-800 dark:text-ios-200 font-mono mt-0.5 block">
                               {format.example}
                             </code>
                           </div>

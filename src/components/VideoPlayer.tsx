@@ -239,7 +239,7 @@ export const VideoPlayer = () => {
           initial={{ opacity: 0, x: -20 }}
           animate={{ opacity: 1, x: 0 }}
           onClick={() => navigate(-1)}
-          className="flex items-center gap-2 mb-6 px-4 py-2 rounded-lg bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors shadow-sm"
+          className="flex items-center gap-2 mb-6 px-4 py-2 rounded-lg bg-white dark:bg-ios-800 hover:bg-gray-50 dark:hover:bg-ios-700 transition-colors shadow-sm"
         >
           <ArrowLeft className="w-5 h-5" />
           <span className="font-medium">Back</span>
@@ -249,7 +249,7 @@ export const VideoPlayer = () => {
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.1 }}
-          className="bg-white dark:bg-gray-800 rounded-2xl shadow-xl overflow-hidden"
+          className="bg-white dark:bg-ios-800 rounded-2xl shadow-xl overflow-hidden"
         >
           <div className="relative w-full" style={{ paddingBottom: '56.25%' }}>
             <div
@@ -285,13 +285,13 @@ export const VideoPlayer = () => {
           </div>
 
           {/* Open in YouTube Button */}
-          <div className="flex flex-col gap-3 p-4 border-t border-gray-200 dark:border-gray-700 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex flex-col gap-3 p-4 border-t border-gray-200 dark:border-ios-700 sm:flex-row sm:items-center sm:justify-between">
             {resumeFromSeconds > 0 ? (
-              <p className="text-sm text-gray-500 dark:text-gray-400">
+              <p className="text-sm text-gray-500 dark:text-ios-400">
                 Resuming from {formatResumeTime(resumeFromSeconds)}
               </p>
             ) : (
-              <p className="text-sm text-gray-500 dark:text-gray-400">
+              <p className="text-sm text-gray-500 dark:text-ios-400">
                 Progress is saved automatically while you watch
               </p>
             )}
@@ -314,10 +314,10 @@ export const VideoPlayer = () => {
           >
             <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
               <div className="min-w-0">
-                <h1 className="text-2xl font-bold leading-tight text-gray-950 dark:text-gray-50 sm:text-3xl">
+                <h1 className="text-2xl font-bold leading-tight text-gray-950 dark:text-ios-50 sm:text-3xl">
                   {currentVideo.title}
                 </h1>
-                <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-2 text-sm text-gray-600 dark:text-gray-400">
+                <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-2 text-sm text-gray-600 dark:text-ios-400">
                   <div className="flex min-w-0 items-center gap-2">
                     {channelThumbnail ? (
                       <img
@@ -328,7 +328,7 @@ export const VideoPlayer = () => {
                     ) : (
                       <UserCircle2 className="h-7 w-7 flex-none text-gray-400" />
                     )}
-                    <span className="truncate font-medium text-gray-800 dark:text-gray-200">
+                    <span className="truncate font-medium text-gray-800 dark:text-ios-200">
                       {currentVideo.channelTitle}
                     </span>
                   </div>
@@ -347,7 +347,7 @@ export const VideoPlayer = () => {
                   onClick={handleWatchedClick}
                   className={`inline-flex items-center justify-center gap-2 rounded-lg px-3 py-2 text-sm font-medium transition-colors ${isWatched
                     ? 'bg-emerald-600/10 text-emerald-600 dark:bg-emerald-500/15 dark:text-emerald-300'
-                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200 dark:bg-gray-800 dark:text-gray-200 dark:hover:bg-gray-700'
+                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200 dark:bg-ios-800 dark:text-ios-200 dark:hover:bg-ios-700'
                     }`}
                 >
                   <CheckCircle2 className={`h-4 w-4 ${isWatched ? 'fill-current' : ''}`} />
@@ -358,7 +358,7 @@ export const VideoPlayer = () => {
                   onClick={() => toggleQueuedVideo(currentVideo)}
                   className={`inline-flex items-center justify-center gap-2 rounded-lg px-3 py-2 text-sm font-medium transition-colors ${isQueued
                     ? 'bg-blue-600/10 text-blue-600 dark:bg-blue-500/15 dark:text-blue-300'
-                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200 dark:bg-gray-800 dark:text-gray-200 dark:hover:bg-gray-700'
+                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200 dark:bg-ios-800 dark:text-ios-200 dark:hover:bg-ios-700'
                     }`}
                 >
                   <ListPlus className="h-4 w-4" />
@@ -369,7 +369,7 @@ export const VideoPlayer = () => {
                   onClick={() => toggleFavoriteVideo(currentVideo)}
                   className={`inline-flex items-center justify-center gap-2 rounded-lg px-3 py-2 text-sm font-medium transition-colors ${isFavorite
                     ? 'bg-red-600/10 text-red-600 dark:bg-red-500/15 dark:text-red-300'
-                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200 dark:bg-gray-800 dark:text-gray-200 dark:hover:bg-gray-700'
+                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200 dark:bg-ios-800 dark:text-ios-200 dark:hover:bg-ios-700'
                     }`}
                 >
                   <Heart className={`h-4 w-4 ${isFavorite ? 'fill-current' : ''}`} />
@@ -384,7 +384,7 @@ export const VideoPlayer = () => {
                   type="button"
                   disabled={!previousVideo}
                   onClick={() => previousVideo && navigateToVideo(previousVideo.id)}
-                  className="flex min-h-16 items-center gap-3 rounded-lg border border-gray-200 bg-white p-3 text-left transition-colors enabled:hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50 dark:border-gray-800 dark:bg-gray-900 dark:enabled:hover:bg-gray-800"
+                  className="flex min-h-16 items-center gap-3 rounded-lg border border-gray-200 bg-white p-3 text-left transition-colors enabled:hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50 dark:border-ios-800 dark:bg-ios-900 dark:enabled:hover:bg-ios-800"
                 >
                   <SkipBack className="h-5 w-5 flex-none text-gray-500" />
                   <span className="min-w-0">
@@ -396,7 +396,7 @@ export const VideoPlayer = () => {
                   type="button"
                   disabled={!nextVideo}
                   onClick={() => nextVideo && navigateToVideo(nextVideo.id)}
-                  className="flex min-h-16 items-center gap-3 rounded-lg border border-gray-200 bg-white p-3 text-left transition-colors enabled:hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50 dark:border-gray-800 dark:bg-gray-900 dark:enabled:hover:bg-gray-800"
+                  className="flex min-h-16 items-center gap-3 rounded-lg border border-gray-200 bg-white p-3 text-left transition-colors enabled:hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50 dark:border-ios-800 dark:bg-ios-900 dark:enabled:hover:bg-ios-800"
                 >
                   <SkipForward className="h-5 w-5 flex-none text-gray-500" />
                   <span className="min-w-0">
@@ -409,7 +409,7 @@ export const VideoPlayer = () => {
 
             {relatedVideos.length > 0 && (
               <div>
-                <h2 className="mb-3 text-lg font-semibold text-gray-950 dark:text-gray-50">
+                <h2 className="mb-3 text-lg font-semibold text-gray-950 dark:text-ios-50">
                   More from {currentVideo.channelTitle}
                 </h2>
                 <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
@@ -418,9 +418,9 @@ export const VideoPlayer = () => {
                       key={video.id}
                       type="button"
                       onClick={() => navigateToVideo(video.id)}
-                      className="overflow-hidden rounded-lg border border-gray-200 bg-white text-left transition-colors hover:bg-gray-50 dark:border-gray-800 dark:bg-gray-900 dark:hover:bg-gray-800"
+                      className="overflow-hidden rounded-lg border border-gray-200 bg-white text-left transition-colors hover:bg-gray-50 dark:border-ios-800 dark:bg-ios-900 dark:hover:bg-ios-800"
                     >
-                      <div className="aspect-video bg-gray-200 dark:bg-gray-800">
+                      <div className="aspect-video bg-gray-200 dark:bg-ios-800">
                         <img
                           src={getHighResolutionVideoThumbnail(video.thumbnail)}
                           alt=""
@@ -429,7 +429,7 @@ export const VideoPlayer = () => {
                         />
                       </div>
                       <div className="space-y-2 p-3">
-                        <p className="line-clamp-2 text-sm font-medium text-gray-950 dark:text-gray-50">
+                        <p className="line-clamp-2 text-sm font-medium text-gray-950 dark:text-ios-50">
                           {video.title}
                         </p>
                         <p className="flex items-center gap-1 text-xs text-gray-500">

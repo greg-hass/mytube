@@ -73,7 +73,7 @@ export const FloatingTabBar = ({
     >
         <div data-testid="floating-tab-bar-inner" className="mx-auto flex w-full max-w-7xl items-center px-4 pb-1.5 pt-2">
         {/* Tab Bar Pill */}
-        <div className="pointer-events-auto flex w-full items-center gap-0.5 rounded-[2rem] bg-white/70 px-2 py-2 shadow-[0_8px_32px_rgba(0,0,0,0.12)] ring-1 ring-white/40 backdrop-blur-2xl dark:bg-gray-950/70 dark:shadow-[0_8px_32px_rgba(0,0,0,0.4)] dark:ring-white/10">
+        <div className="pointer-events-auto flex w-full items-center gap-0.5 rounded-[2rem] bg-white/70 px-2 py-2 shadow-[0_8px_32px_rgba(0,0,0,0.12)] ring-1 ring-white/40 backdrop-blur-2xl dark:bg-ios-950/70 dark:shadow-[0_8px_32px_rgba(0,0,0,0.4)] dark:ring-white/10">
           {TABS.map((tab) => {
             const isActive = activeTab === tab.id;
             const badge = tab.getBadge?.(props) ?? null;
@@ -90,7 +90,7 @@ export const FloatingTabBar = ({
                 {isActive && (
                   <motion.div
                     layoutId="active-tab-indicator"
-                    className="absolute inset-0 rounded-full bg-gray-100 dark:bg-gray-800/80 shadow-sm"
+                    className="absolute inset-0 rounded-full bg-gray-100 dark:bg-ios-800/80 shadow-sm"
                     transition={{ type: 'spring', stiffness: 400, damping: 30 }}
                   />
                 )}
@@ -98,8 +98,8 @@ export const FloatingTabBar = ({
                   <Icon
                     className={`w-6 h-6 sm:w-7 sm:h-7 transition-colors duration-200 ${
                       isActive
-                        ? 'text-gray-900 dark:text-gray-100'
-                        : 'text-gray-400 dark:text-gray-500'
+                        ? 'text-gray-900 dark:text-ios-100'
+                        : 'text-gray-400 dark:text-ios-500'
                     }`}
                     strokeWidth={isActive ? 2.5 : 2}
                   />
@@ -112,8 +112,8 @@ export const FloatingTabBar = ({
                 <span
                   className={`relative mt-0.5 text-[10px] sm:text-[11px] font-semibold transition-colors duration-200 ${
                     isActive
-                      ? 'text-gray-900 dark:text-gray-100'
-                      : 'text-gray-400 dark:text-gray-500'
+                      ? 'text-gray-900 dark:text-ios-100'
+                      : 'text-gray-400 dark:text-ios-500'
                   }`}
                 >
                   {tab.label}
@@ -123,7 +123,7 @@ export const FloatingTabBar = ({
           })}
 
           {/* Add Channel Button */}
-          <div className="w-px h-8 bg-gray-200 dark:bg-gray-700 mx-0.5" />
+          <div className="w-px h-8 bg-gray-200 dark:bg-ios-700 mx-0.5" />
           <motion.button
             whileHover={{ scale: 1.1 }}
             whileTap={{ scale: 0.9 }}

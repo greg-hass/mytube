@@ -18,11 +18,11 @@
   }
 
   html {
-    @apply bg-white dark:bg-gray-950;
+    @apply bg-white dark:bg-ios-950;
   }
 
   body {
-    @apply bg-white dark:bg-gray-950 text-gray-900 dark:text-[#e5e5ea];
+    @apply bg-white dark:bg-ios-950 text-gray-900 dark:text-ios-100;
     font-family: 'Inter', system-ui, -apple-system, sans-serif;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
@@ -41,11 +41,11 @@
   }
 
   .glass {
-    @apply bg-white/80 dark:bg-gray-950/90 backdrop-blur-xl;
+    @apply bg-white/80 dark:bg-ios-950/90 backdrop-blur-xl;
   }
 
   .app-shell {
-    @apply bg-gray-50 dark:bg-gray-950;
+    @apply bg-gray-50 dark:bg-ios-950;
   }
 
   .safe-top {
@@ -77,7 +77,7 @@
       align-items: center;
       justify-content: center;
       padding: 1.5rem;
-      background: #030712;
+      background: #050506;
     }
   }
 }
@@ -89,13 +89,13 @@
 }
 
 ::-webkit-scrollbar-track {
-  @apply bg-gray-100 dark:bg-gray-950;
+  @apply bg-gray-100 dark:bg-ios-950;
 }
 
 ::-webkit-scrollbar-thumb {
-  @apply bg-gray-300 dark:bg-[#3a3a3c] rounded-full;
+  @apply bg-gray-300 dark:bg-ios-700 rounded-full;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  @apply bg-gray-400 dark:bg-gray-600;
+  @apply bg-gray-400 dark:bg-ios-600;
 }

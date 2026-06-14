@@ -7,6 +7,19 @@ export default {
   theme: {
     extend: {
       colors: {
+        ios: {
+          50: '#f2f2f7',
+          100: '#e5e5ea',
+          200: '#d1d1d6',
+          300: '#c7c7cc',
+          400: '#aeaeb2',
+          500: '#8e8e93',
+          600: '#636366',
+          700: '#3a3a3c',
+          800: '#2c2c2e',
+          900: '#1c1c1e',
+          950: '#050506',
+        },
         youtube: {
           red: '#FF0000',
           dark: '#0F0F0F',

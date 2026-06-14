@@ -133,7 +133,7 @@ export const Header = ({
         ref={headerRef}
         initial={{ y: -100 }}
         animate={{ y: 0 }}
-        className="sticky top-0 z-50 glass safe-top border-b border-gray-200 dark:border-gray-800/80 shadow-sm"
+        className="sticky top-0 z-50 glass safe-top border-b border-gray-200 dark:border-ios-800/80 shadow-sm"
       >
         <div className="max-w-7xl mx-auto px-4">
           <div className="flex h-[var(--app-header-height)] items-center justify-between gap-3 xl:gap-4">
@@ -151,7 +151,7 @@ export const Header = ({
               <h1 className="text-lg md:text-xl font-bold bg-gradient-to-r from-red-600 to-red-500 bg-clip-text text-transparent">
                 YouTube RSS
               </h1>
-              <p className="text-xs text-gray-500 dark:text-gray-400">
+              <p className="text-xs text-gray-500 dark:text-ios-400">
                 {count} channels
               </p>
             </div>
@@ -167,12 +167,12 @@ export const Header = ({
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 onKeyDown={handleSearchKeyDown}
-                className="w-full pl-10 pr-10 py-2 rounded-full bg-gray-100 dark:bg-gray-800 border-2 border-transparent focus:border-red-500 focus:bg-white dark:focus:bg-gray-900 transition-all outline-none"
+                className="w-full pl-10 pr-10 py-2 rounded-full bg-gray-100 dark:bg-ios-800 border-2 border-transparent focus:border-red-500 focus:bg-white dark:focus:bg-ios-900 transition-all outline-none"
               />
               {searchQuery && (
                 <button
                   onClick={clearSearch}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 rounded-full p-0.5 text-gray-400 hover:bg-gray-200 hover:text-gray-700 dark:hover:bg-gray-700 dark:hover:text-gray-200"
+                  className="absolute right-3 top-1/2 -translate-y-1/2 rounded-full p-0.5 text-gray-400 hover:bg-gray-200 hover:text-gray-700 dark:hover:bg-ios-700 dark:hover:text-ios-200"
                   title="Clear search"
                 >
                   <X className="h-4 w-4" />
@@ -191,7 +191,7 @@ export const Header = ({
                 onClick={onOpenFilters}
                 className={`p-2 rounded-lg transition-colors ${activeFilterCount > 0
                   ? 'bg-red-600 text-white hover:bg-red-700'
-                  : 'bg-gray-100 text-gray-800 hover:bg-gray-200 dark:bg-gray-800 dark:text-gray-100 dark:hover:bg-gray-700'
+                  : 'bg-gray-100 text-gray-800 hover:bg-gray-200 dark:bg-ios-800 dark:text-ios-100 dark:hover:bg-ios-700'
                   }`}
                 title="Feed filters"
               >
@@ -211,7 +211,7 @@ export const Header = ({
                 className={`p-2 rounded-lg transition-colors ${
                   showShorts
                     ? 'bg-red-100 text-red-600 dark:bg-red-900/30 dark:text-red-400'
-                    : 'bg-gray-100 text-gray-500 dark:bg-gray-800 dark:text-gray-400'
+                    : 'bg-gray-100 text-gray-500 dark:bg-ios-800 dark:text-ios-400'
                 }`}
                 title={showShorts ? 'Hide Shorts' : 'Show Shorts'}
               >
@@ -228,7 +228,7 @@ export const Header = ({
                 className={`p-2 rounded-lg transition-colors ${
                   hideWatched
                     ? 'bg-emerald-100 text-emerald-600 dark:bg-emerald-900/30 dark:text-emerald-400'
-                    : 'bg-gray-100 text-gray-500 dark:bg-gray-800 dark:text-gray-400'
+                    : 'bg-gray-100 text-gray-500 dark:bg-ios-800 dark:text-ios-400'
                 }`}
                 title={hideWatched ? 'Show Watched' : 'Hide Watched'}
               >
@@ -244,7 +244,7 @@ export const Header = ({
             <select
               value={sortBy}
               onChange={(e) => setSortBy(e.target.value as SortBy)}
-              className="hidden sm:block px-3 py-2 rounded-lg bg-gray-100 dark:bg-gray-800 border-2 border-transparent focus:border-red-500 transition-all outline-none cursor-pointer"
+              className="hidden sm:block px-3 py-2 rounded-lg bg-gray-100 dark:bg-ios-800 border-2 border-transparent focus:border-red-500 transition-all outline-none cursor-pointer"
             >
               <option value="name">A-Z</option>
               <option value="recent">Recent</option>
@@ -252,12 +252,12 @@ export const Header = ({
             </select>
 
             {/* View Mode */}
-            <div className="hidden sm:flex items-center gap-1 p-1 rounded-lg bg-gray-100 dark:bg-gray-800">
+            <div className="hidden sm:flex items-center gap-1 p-1 rounded-lg bg-gray-100 dark:bg-ios-800">
               <button
                 onClick={() => setViewMode('grid')}
                 className={`p-2 rounded ${viewMode === 'grid'
-                  ? 'bg-white dark:bg-gray-900 shadow'
-                  : 'hover:bg-gray-200 dark:hover:bg-gray-700'
+                  ? 'bg-white dark:bg-ios-900 shadow'
+                  : 'hover:bg-gray-200 dark:hover:bg-ios-700'
                   } transition-all`}
               >
                 <Grid3x3 className="w-5 h-5" />
@@ -265,8 +265,8 @@ export const Header = ({
               <button
                 onClick={() => setViewMode('list')}
                 className={`p-2 rounded ${viewMode === 'list'
-                  ? 'bg-white dark:bg-gray-900 shadow'
-                  : 'hover:bg-gray-200 dark:hover:bg-gray-700'
+                  ? 'bg-white dark:bg-ios-900 shadow'
+                  : 'hover:bg-gray-200 dark:hover:bg-ios-700'
                   } transition-all`}
               >
                 <List className="w-5 h-5" />
@@ -284,7 +284,7 @@ export const Header = ({
                 whileHover={{ scale: 1.05 }}
                 whileTap={{ scale: 0.95 }}
                 onClick={() => setShowExportMenu(!showExportMenu)}
-                className="flex items-center gap-2 px-4 py-2 rounded-lg bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors"
+                className="flex items-center gap-2 px-4 py-2 rounded-lg bg-gray-100 dark:bg-ios-800 hover:bg-gray-200 dark:hover:bg-ios-700 transition-colors"
               >
                 <Download className="w-4 h-4" />
                 <span className="hidden sm:inline">Export</span>
@@ -296,16 +296,16 @@ export const Header = ({
                     className="fixed inset-0 z-40"
                     onClick={() => setShowExportMenu(false)}
                   />
-                  <div className="absolute right-0 top-12 w-40 bg-white dark:bg-gray-900 rounded-lg shadow-xl border border-gray-200 dark:border-gray-800 z-50 overflow-hidden">
+                  <div className="absolute right-0 top-12 w-40 bg-white dark:bg-ios-900 rounded-lg shadow-xl border border-gray-200 dark:border-ios-800 z-50 overflow-hidden">
                     <button
                       onClick={() => handleExport('opml')}
-                      className="w-full px-4 py-2 text-left hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+                      className="w-full px-4 py-2 text-left hover:bg-gray-100 dark:hover:bg-ios-800 transition-colors"
                     >
                       OPML
                     </button>
                     <button
                       onClick={() => handleExport('json')}
-                      className="w-full px-4 py-2 text-left hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+                      className="w-full px-4 py-2 text-left hover:bg-gray-100 dark:hover:bg-ios-800 transition-colors"
                     >
                       JSON
                     </button>
@@ -319,7 +319,7 @@ export const Header = ({
               whileHover={{ scale: 1.1 }}
               whileTap={{ scale: 0.9 }}
               onClick={() => setIsSettingsOpen(true)}
-              className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+              className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-ios-800 transition-colors"
               title="Settings"
             >
               <Settings className="w-5 h-5" />
@@ -330,7 +330,7 @@ export const Header = ({
               whileHover={{ scale: 1.1 }}
               whileTap={{ scale: 0.9 }}
               onClick={toggleTheme}
-              className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+              className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-ios-800 transition-colors"
             >
               {theme === 'light' ? (
                 <Moon className="w-5 h-5" />
@@ -347,7 +347,7 @@ export const Header = ({
                 onClick={onOpenFilters}
                 className={`p-2 rounded-lg transition-colors ${activeFilterCount > 0
                   ? 'bg-red-600 text-white hover:bg-red-700'
-                  : 'bg-gray-100 text-gray-800 hover:bg-gray-200 dark:bg-gray-800 dark:text-gray-100 dark:hover:bg-gray-700'
+                  : 'bg-gray-100 text-gray-800 hover:bg-gray-200 dark:bg-ios-800 dark:text-ios-100 dark:hover:bg-ios-700'
                   }`}
                 title="Feed filters"
               >
@@ -361,7 +361,7 @@ export const Header = ({
                 className={`p-2 rounded-lg transition-colors ${
                   showShorts
                     ? 'bg-red-100 text-red-600 dark:bg-red-900/30 dark:text-red-400'
-                    : 'bg-gray-100 text-gray-500 dark:bg-gray-800 dark:text-gray-400'
+                    : 'bg-gray-100 text-gray-500 dark:bg-ios-800 dark:text-ios-400'
                 }`}
                 title={showShorts ? 'Hide Shorts' : 'Show Shorts'}
               >
@@ -375,7 +375,7 @@ export const Header = ({
                 className={`p-2 rounded-lg transition-colors ${
                   hideWatched
                     ? 'bg-emerald-100 text-emerald-600 dark:bg-emerald-900/30 dark:text-emerald-400'
-                    : 'bg-gray-100 text-gray-500 dark:bg-gray-800 dark:text-gray-400'
+                    : 'bg-gray-100 text-gray-500 dark:bg-ios-800 dark:text-ios-400'
                 }`}
                 title={hideWatched ? 'Show Watched' : 'Hide Watched'}
               >
@@ -390,7 +390,7 @@ export const Header = ({
               <button
                 data-testid="mobile-search-button"
                 onClick={() => setShowMobileSearchPanel((isOpen) => !isOpen)}
-                className="p-2 rounded-lg bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors"
+                className="p-2 rounded-lg bg-gray-100 dark:bg-ios-800 hover:bg-gray-200 dark:hover:bg-ios-700 transition-colors"
                 title="Search"
               >
                 {showMobileSearchPanel ? <X className="w-5 h-5" /> : <Search className="w-5 h-5" />}
@@ -399,7 +399,7 @@ export const Header = ({
             <button
               data-testid="mobile-menu-button"
               onClick={() => setShowMobileMenu(true)}
-              className="p-2 rounded-lg bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors"
+              className="p-2 rounded-lg bg-gray-100 dark:bg-ios-800 hover:bg-gray-200 dark:hover:bg-ios-700 transition-colors"
               title="Open menu"
             >
               <Menu className="w-5 h-5" />
@@ -417,14 +417,14 @@ export const Header = ({
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               onKeyDown={handleSearchKeyDown}
-              className="w-full pl-10 pr-10 py-2 rounded-full bg-gray-100 dark:bg-gray-800 border-2 border-transparent focus:border-red-500 focus:bg-white dark:focus:bg-gray-900 transition-all outline-none"
+              className="w-full pl-10 pr-10 py-2 rounded-full bg-gray-100 dark:bg-ios-800 border-2 border-transparent focus:border-red-500 focus:bg-white dark:focus:bg-ios-900 transition-all outline-none"
             />
             <button
               onClick={() => {
                 clearSearch();
                 setShowMobileSearchPanel(false);
               }}
-              className="absolute right-2 top-1/2 -translate-y-1/2 rounded-full p-1 text-gray-400 hover:bg-gray-200 hover:text-gray-700 dark:hover:bg-gray-700 dark:hover:text-gray-200"
+              className="absolute right-2 top-1/2 -translate-y-1/2 rounded-full p-1 text-gray-400 hover:bg-gray-200 hover:text-gray-700 dark:hover:bg-ios-700 dark:hover:text-ios-200"
               title="Clear search"
             >
               <X className="h-4 w-4" />
@@ -451,15 +451,15 @@ export const Header = ({
             aria-label="Close menu"
             onClick={() => setShowMobileMenu(false)}
           />
-          <aside className="safe-top absolute right-0 top-0 h-full w-[82vw] max-w-sm overflow-y-auto border-l border-gray-200 bg-gray-50 p-4 shadow-2xl dark:border-gray-800/80 dark:bg-gray-950">
+          <aside className="safe-top absolute right-0 top-0 h-full w-[82vw] max-w-sm overflow-y-auto border-l border-gray-200 bg-gray-50 p-4 shadow-2xl dark:border-ios-800/80 dark:bg-ios-950">
             <div className="mb-5 flex items-center justify-between">
               <div>
-                <p className="text-lg font-semibold text-gray-900 dark:text-gray-100">Menu</p>
-                <p className="text-sm text-gray-500 dark:text-gray-400">{count} channels</p>
+                <p className="text-lg font-semibold text-gray-900 dark:text-ios-100">Menu</p>
+                <p className="text-sm text-gray-500 dark:text-ios-400">{count} channels</p>
               </div>
               <button
                 onClick={() => setShowMobileMenu(false)}
-                className="rounded-lg p-2 text-gray-600 hover:bg-gray-100 dark:text-gray-200 dark:hover:bg-gray-800"
+                className="rounded-lg p-2 text-gray-600 hover:bg-gray-100 dark:text-ios-200 dark:hover:bg-ios-800"
                 title="Close menu"
               >
                 <X className="h-5 w-5" />
@@ -475,13 +475,13 @@ export const Header = ({
                   }}
                   className={`flex w-full items-center justify-center gap-2 rounded-lg px-4 py-3 font-semibold shadow-lg transition-colors ${activeFilterCount > 0
                     ? 'bg-red-600 text-white shadow-red-950/20 hover:bg-red-700'
-                    : 'bg-gray-100 text-gray-800 hover:bg-gray-200 dark:bg-gray-800/90 dark:text-gray-100 dark:hover:bg-gray-700'
+                    : 'bg-gray-100 text-gray-800 hover:bg-gray-200 dark:bg-ios-800/90 dark:text-ios-100 dark:hover:bg-ios-700'
                     }`}
                 >
                   <SlidersHorizontal className="h-4 w-4" />
                   Filters
                   {activeFilterCount > 0 && (
-                    <span className="ml-1 rounded-full bg-white px-2 py-0.5 text-xs text-red-700 dark:bg-gray-700 dark:text-gray-200">
+                    <span className="ml-1 rounded-full bg-white px-2 py-0.5 text-xs text-red-700 dark:bg-ios-700 dark:text-ios-200">
                       {activeFilterCount}
                     </span>
                   )}
@@ -497,7 +497,7 @@ export const Header = ({
                   className={`flex w-full items-center justify-center gap-2 rounded-lg px-4 py-3 font-medium transition-colors ${
                     showShorts
                       ? 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400'
-                      : 'bg-gray-100 text-gray-700 dark:bg-gray-800/90 dark:text-gray-300'
+                      : 'bg-gray-100 text-gray-700 dark:bg-ios-800/90 dark:text-ios-300'
                   }`}
                 >
                   <Play className="h-4 w-4" />
@@ -514,7 +514,7 @@ export const Header = ({
                   className={`flex w-full items-center justify-center gap-2 rounded-lg px-4 py-3 font-medium transition-colors ${
                     hideWatched
                       ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400'
-                      : 'bg-gray-100 text-gray-700 dark:bg-gray-800/90 dark:text-gray-300'
+                      : 'bg-gray-100 text-gray-700 dark:bg-ios-800/90 dark:text-ios-300'
                   }`}
                 >
                   {hideWatched ? (
@@ -528,7 +528,7 @@ export const Header = ({
 
               {syncStatus && cacheStatus && onRetryFailed && (
                 <div className="space-y-2 pt-1">
-                  <p className="text-xs font-medium uppercase tracking-wide text-gray-500 dark:text-gray-400">
+                  <p className="text-xs font-medium uppercase tracking-wide text-gray-500 dark:text-ios-400">
                     Feed health
                   </p>
                   <RefreshStatusPanel
@@ -541,13 +541,13 @@ export const Header = ({
               )}
 
               <div>
-                <label className="mb-2 block text-xs font-medium uppercase tracking-wide text-gray-500 dark:text-gray-400">
+                <label className="mb-2 block text-xs font-medium uppercase tracking-wide text-gray-500 dark:text-ios-400">
                   Sort
                 </label>
                 <select
                   value={sortBy}
                   onChange={(e) => setSortBy(e.target.value as SortBy)}
-                  className="w-full rounded-lg border border-transparent bg-gray-100 px-3 py-3 outline-none transition-all focus:border-red-500 dark:bg-gray-800/90"
+                  className="w-full rounded-lg border border-transparent bg-gray-100 px-3 py-3 outline-none transition-all focus:border-red-500 dark:bg-ios-800/90"
                 >
                   <option value="name">A-Z</option>
                   <option value="recent">Recent</option>
@@ -555,12 +555,12 @@ export const Header = ({
                 </select>
               </div>
 
-              <div className="flex items-center gap-1 rounded-lg bg-gray-100 p-1 dark:bg-gray-800/90">
+              <div className="flex items-center gap-1 rounded-lg bg-gray-100 p-1 dark:bg-ios-800/90">
                 <button
                   onClick={() => setViewMode('grid')}
                   className={`flex flex-1 items-center justify-center gap-2 rounded px-3 py-3 ${viewMode === 'grid'
-                    ? 'bg-white shadow dark:bg-gray-950'
-                    : 'hover:bg-gray-200 dark:hover:bg-gray-700'
+                    ? 'bg-white shadow dark:bg-ios-950'
+                    : 'hover:bg-gray-200 dark:hover:bg-ios-700'
                     } transition-all`}
                 >
                   <Grid3x3 className="h-4 w-4" />
@@ -569,8 +569,8 @@ export const Header = ({
                 <button
                   onClick={() => setViewMode('list')}
                   className={`flex flex-1 items-center justify-center gap-2 rounded px-3 py-3 ${viewMode === 'list'
-                    ? 'bg-white shadow dark:bg-gray-950'
-                    : 'hover:bg-gray-200 dark:hover:bg-gray-700'
+                    ? 'bg-white shadow dark:bg-ios-950'
+                    : 'hover:bg-gray-200 dark:hover:bg-ios-700'
                     } transition-all`}
                 >
                   <List className="h-4 w-4" />
@@ -587,14 +587,14 @@ export const Header = ({
               <div className="grid grid-cols-2 gap-2">
                 <button
                   onClick={() => handleExport('opml')}
-                  className="flex items-center justify-center gap-2 rounded-lg bg-gray-100 px-3 py-3 hover:bg-gray-200 dark:bg-gray-800/90 dark:hover:bg-gray-700"
+                  className="flex items-center justify-center gap-2 rounded-lg bg-gray-100 px-3 py-3 hover:bg-gray-200 dark:bg-ios-800/90 dark:hover:bg-ios-700"
                 >
                   <Download className="h-4 w-4" />
                   OPML
                 </button>
                 <button
                   onClick={() => handleExport('json')}
-                  className="flex items-center justify-center gap-2 rounded-lg bg-gray-100 px-3 py-3 hover:bg-gray-200 dark:bg-gray-800/90 dark:hover:bg-gray-700"
+                  className="flex items-center justify-center gap-2 rounded-lg bg-gray-100 px-3 py-3 hover:bg-gray-200 dark:bg-ios-800/90 dark:hover:bg-ios-700"
                 >
                   <Download className="h-4 w-4" />
                   JSON
@@ -604,14 +604,14 @@ export const Header = ({
               <div className="grid grid-cols-2 gap-2 pt-2">
                 <button
                   onClick={() => setIsSettingsOpen(true)}
-                  className="flex items-center justify-center gap-2 rounded-lg bg-gray-100 px-3 py-3 hover:bg-gray-200 dark:bg-gray-800/90 dark:hover:bg-gray-700"
+                  className="flex items-center justify-center gap-2 rounded-lg bg-gray-100 px-3 py-3 hover:bg-gray-200 dark:bg-ios-800/90 dark:hover:bg-ios-700"
                 >
                   <Settings className="h-4 w-4" />
                   Settings
                 </button>
                 <button
                   onClick={toggleTheme}
-                  className="flex items-center justify-center gap-2 rounded-lg bg-gray-100 px-3 py-3 hover:bg-gray-200 dark:bg-gray-800/90 dark:hover:bg-gray-700"
+                  className="flex items-center justify-center gap-2 rounded-lg bg-gray-100 px-3 py-3 hover:bg-gray-200 dark:bg-ios-800/90 dark:hover:bg-ios-700"
                 >
                   {theme === 'light' ? <Moon className="h-4 w-4" /> : <Sun className="h-4 w-4" />}
                   Theme
