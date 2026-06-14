@@ -44,7 +44,7 @@ export function SavedFeedViews({ presets, onApply, onSave, onDelete }: SavedFeed
         id="saved-feed-view"
         value={selectValue}
         onChange={(event) => handleApply(event.target.value)}
-        className="h-10 max-w-[10rem] rounded-lg border border-gray-200 bg-white px-3 text-sm font-medium text-gray-700 outline-none focus:border-red-500 dark:border-gray-800 dark:bg-gray-900 dark:text-gray-200"
+        className="h-10 max-w-[10rem] rounded-lg border border-gray-200 bg-white px-3 text-sm font-medium text-gray-700 outline-none focus:border-red-500 dark:border-ios-800 dark:bg-ios-900 dark:text-ios-200"
       >
         <option value="">Saved views</option>
         {presets.map((preset) => (
@@ -60,7 +60,7 @@ export function SavedFeedViews({ presets, onApply, onSave, onDelete }: SavedFeed
         value={newViewName}
         onChange={(event) => setNewViewName(event.target.value)}
         placeholder="Name view"
-        className="h-10 w-28 rounded-lg border border-gray-200 bg-white px-3 text-sm text-gray-700 outline-none focus:border-red-500 dark:border-gray-800 dark:bg-gray-900 dark:text-gray-200 sm:w-36"
+        className="h-10 w-28 rounded-lg border border-gray-200 bg-white px-3 text-sm text-gray-700 outline-none focus:border-red-500 dark:border-ios-800 dark:bg-ios-900 dark:text-ios-200 sm:w-36"
       />
 
       <button
@@ -68,7 +68,7 @@ export function SavedFeedViews({ presets, onApply, onSave, onDelete }: SavedFeed
         aria-label="Save view"
         onClick={handleSave}
         disabled={!newViewName.trim()}
-        className="inline-flex h-10 items-center justify-center gap-2 rounded-lg bg-gray-800 px-3 text-sm font-medium text-white transition-colors hover:bg-gray-700 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-gray-700 dark:hover:bg-gray-600"
+        className="inline-flex h-10 items-center justify-center gap-2 rounded-lg bg-gray-800 px-3 text-sm font-medium text-white transition-colors hover:bg-gray-700 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-ios-700 dark:hover:bg-ios-600"
       >
         <Bookmark className="h-4 w-4" aria-hidden="true" />
         <span className="hidden sm:inline">Save view</span>
@@ -79,7 +79,7 @@ export function SavedFeedViews({ presets, onApply, onSave, onDelete }: SavedFeed
         aria-label="Delete saved view"
         onClick={handleDelete}
         disabled={!selectedPreset}
-        className="inline-flex h-10 w-10 items-center justify-center rounded-lg bg-gray-100 text-gray-700 transition-colors hover:bg-gray-200 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-gray-800 dark:text-gray-200 dark:hover:bg-gray-700"
+        className="inline-flex h-10 w-10 items-center justify-center rounded-lg bg-gray-100 text-gray-700 transition-colors hover:bg-gray-200 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-ios-800 dark:text-ios-200 dark:hover:bg-ios-700"
       >
         <Trash2 className="h-4 w-4" aria-hidden="true" />
       </button>

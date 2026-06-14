@@ -108,7 +108,7 @@ export const ChannelViewer = () => {
           initial={{ opacity: 0, x: -20 }}
           animate={{ opacity: 1, x: 0 }}
           onClick={() => navigate(-1)}
-          className="mb-4 flex items-center gap-2 rounded-lg bg-gray-100 px-3 py-2 text-sm font-medium transition-colors hover:bg-gray-200 dark:bg-gray-800 dark:hover:bg-gray-700 sm:mb-6"
+          className="mb-4 flex items-center gap-2 rounded-lg bg-gray-100 px-3 py-2 text-sm font-medium transition-colors hover:bg-gray-200 dark:bg-ios-800 dark:hover:bg-ios-700 sm:mb-6"
         >
           <ArrowLeft className="w-4 h-4" />
           <span>Back</span>
@@ -134,10 +134,10 @@ export const ChannelViewer = () => {
             }}
           />
           <div className="min-w-0">
-            <h1 className="truncate text-xl font-bold text-gray-900 dark:text-gray-100 sm:text-2xl">
+            <h1 className="truncate text-xl font-bold text-gray-900 dark:text-ios-100 sm:text-2xl">
               {resolvedChannelInfo?.title || 'Unknown Channel'}
             </h1>
-            <p className="text-sm text-gray-600 dark:text-gray-400 sm:text-base">
+            <p className="text-sm text-gray-600 dark:text-ios-400 sm:text-base">
               {channelVideos.length} videos
             </p>
           </div>
@@ -151,13 +151,13 @@ export const ChannelViewer = () => {
           {isLoading ? (
             <div className="text-center py-12">
               <div className="inline-block w-8 h-8 border-4 border-red-600 border-t-transparent rounded-full animate-spin mb-4" />
-              <p className="text-gray-600 dark:text-gray-400">
+              <p className="text-gray-600 dark:text-ios-400">
                 Loading videos...
               </p>
             </div>
           ) : channelVideos.length === 0 ? (
             <div className="text-center py-12">
-              <p className="text-gray-600 dark:text-gray-400 text-lg mb-2">
+              <p className="text-gray-600 dark:text-ios-400 text-lg mb-2">
                 No videos found
               </p>
               <p className="text-sm text-gray-500">
@@ -167,7 +167,7 @@ export const ChannelViewer = () => {
           ) : (
             <div>
               <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-                <p className="text-sm text-gray-500 dark:text-gray-400">
+                <p className="text-sm text-gray-500 dark:text-ios-400">
                   Showing {videos.length} videos
                 </p>
                 <div className="flex flex-wrap items-center gap-3">
@@ -179,9 +179,9 @@ export const ChannelViewer = () => {
                         onChange={(e) => setHideWatched(e.target.checked)}
                         className="sr-only peer"
                       />
-                      <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-emerald-300 dark:peer-focus:ring-emerald-800 rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-gray-600 peer-checked:bg-emerald-600"></div>
+                      <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-emerald-300 dark:peer-focus:ring-emerald-800 rounded-full peer dark:bg-ios-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-ios-600 peer-checked:bg-emerald-600"></div>
                     </div>
-                    <span className="text-sm font-medium text-gray-700 dark:text-gray-300">Hide watched</span>
+                    <span className="text-sm font-medium text-gray-700 dark:text-ios-300">Hide watched</span>
                   </label>
                   <button
                     onClick={() => refresh()}
@@ -196,7 +196,7 @@ export const ChannelViewer = () => {
                       type="button"
                       onClick={() => unwatchedChannelVideos.forEach((video) => markAsWatched(video.id))}
                       aria-label="Mark channel watched"
-                      className="flex items-center gap-2 rounded-lg bg-gray-100 px-3 py-2 text-sm font-medium text-gray-800 transition-all hover:bg-gray-200 dark:bg-gray-800 dark:text-gray-100 dark:hover:bg-gray-700 sm:px-4"
+                      className="flex items-center gap-2 rounded-lg bg-gray-100 px-3 py-2 text-sm font-medium text-gray-800 transition-all hover:bg-gray-200 dark:bg-ios-800 dark:text-ios-100 dark:hover:bg-ios-700 sm:px-4"
                     >
                       <CheckCircle2 className="w-4 h-4" />
                       <span>Mark watched</span>
@@ -206,7 +206,7 @@ export const ChannelViewer = () => {
               </div>
               {videos.length === 0 ? (
                 <div className="text-center py-12">
-                  <p className="text-gray-600 dark:text-gray-400 text-lg mb-2">
+                  <p className="text-gray-600 dark:text-ios-400 text-lg mb-2">
                     No unwatched videos
                   </p>
                   <p className="text-sm text-gray-500">

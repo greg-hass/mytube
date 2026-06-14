@@ -114,7 +114,7 @@ export const PullToRefresh = ({
                 className={`flex items-center justify-center w-8 h-8 rounded-full ${
                   shouldTrigger || isRefreshing
                     ? 'bg-red-500 text-white'
-                    : 'bg-gray-200 dark:bg-gray-800 text-gray-500 dark:text-gray-400'
+                    : 'bg-gray-200 dark:bg-ios-800 text-gray-500 dark:text-ios-400'
                 }`}
               >
                 <RefreshCw className="w-4 h-4" />

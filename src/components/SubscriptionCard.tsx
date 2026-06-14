@@ -31,12 +31,12 @@ export const SubscriptionCard = memo(({ channel, groups = [], onRemove, onToggle
       transition={{ duration: 0.16 }}
       whileHover={{ y: -8, scale: 1.02 }}
       onClick={openChannel}
-      className="group cursor-pointer bg-white dark:bg-gray-900 rounded-2xl overflow-hidden shadow-lg hover:shadow-2xl transition-all duration-300 border border-gray-200 dark:border-gray-800"
+      className="group cursor-pointer bg-white dark:bg-ios-900 rounded-2xl overflow-hidden shadow-lg hover:shadow-2xl transition-all duration-300 border border-gray-200 dark:border-ios-800"
     >
       {/* Thumbnail */}
-      <div className="relative aspect-video bg-gray-200 dark:bg-gray-800 overflow-hidden">
+      <div className="relative aspect-video bg-gray-200 dark:bg-ios-800 overflow-hidden">
         {!imageLoaded && (
-          <div className="absolute inset-0 animate-pulse bg-gradient-to-r from-gray-200 via-gray-300 to-gray-200 dark:from-gray-800 dark:via-gray-700 dark:to-gray-800" />
+          <div className="absolute inset-0 animate-pulse bg-gradient-to-r from-gray-200 via-gray-300 to-gray-200 dark:from-ios-800 dark:via-ios-700 dark:to-ios-800" />
         )}
         <img
           src={getDisplayThumbnail(channel.thumbnail, channel.title || channel.id)}
@@ -114,7 +114,7 @@ export const SubscriptionCard = memo(({ channel, groups = [], onRemove, onToggle
             initial={{ scale: 0 }}
             whileHover={{ scale: 1 }}
             transition={{ type: 'spring', stiffness: 300 }}
-            className="bg-white/90 dark:bg-gray-900/90 rounded-full p-3"
+            className="bg-white/90 dark:bg-ios-900/90 rounded-full p-3"
           >
             <ExternalLink className="w-6 h-6 text-red-600" />
           </motion.div>
@@ -143,18 +143,18 @@ export const SubscriptionCard = memo(({ channel, groups = [], onRemove, onToggle
           onClick={() => setConfirmOpen(false)}
         >
           <div
-            className="w-72 rounded-xl bg-white dark:bg-gray-900 shadow-2xl border border-gray-200 dark:border-gray-700 p-4 space-y-3"
+            className="w-72 rounded-xl bg-white dark:bg-ios-900 shadow-2xl border border-gray-200 dark:border-ios-700 p-4 space-y-3"
             onClick={(e) => e.stopPropagation()}
           >
-            <h4 className="text-sm font-semibold text-gray-900 dark:text-gray-100">
+            <h4 className="text-sm font-semibold text-gray-900 dark:text-ios-100">
               Unsubscribe?
             </h4>
-            <p className="text-sm text-gray-600 dark:text-gray-400">
+            <p className="text-sm text-gray-600 dark:text-ios-400">
               Remove <span className="font-medium">{channel.title}</span> from your subscriptions.
             </p>
             <div className="flex justify-end gap-2">
               <button
-                className="px-3 py-1.5 rounded-lg text-sm bg-gray-100 hover:bg-gray-200 text-gray-800 dark:bg-gray-800 dark:hover:bg-gray-700 dark:text-gray-200 transition-colors"
+                className="px-3 py-1.5 rounded-lg text-sm bg-gray-100 hover:bg-gray-200 text-gray-800 dark:bg-ios-800 dark:hover:bg-ios-700 dark:text-ios-200 transition-colors"
                 onClick={(e) => {
                   e.stopPropagation();
                   setConfirmOpen(false);
@@ -197,7 +197,7 @@ export const SubscriptionCard = memo(({ channel, groups = [], onRemove, onToggle
                 e.stopPropagation();
                 onSetGroup?.(channel.id, e.target.value);
               }}
-              className="min-w-0 flex-1 rounded-lg border border-gray-200 bg-gray-50 px-2 py-1.5 text-xs font-medium text-gray-700 outline-none transition-colors hover:bg-gray-100 focus:border-red-500 dark:border-gray-800 dark:bg-gray-800 dark:text-gray-200 dark:hover:bg-gray-700"
+              className="min-w-0 flex-1 rounded-lg border border-gray-200 bg-gray-50 px-2 py-1.5 text-xs font-medium text-gray-700 outline-none transition-colors hover:bg-gray-100 focus:border-red-500 dark:border-ios-800 dark:bg-ios-800 dark:text-ios-200 dark:hover:bg-ios-700"
             >
               <option value="">Ungrouped</option>
               {groups.map((group) => (
@@ -210,13 +210,13 @@ export const SubscriptionCard = memo(({ channel, groups = [], onRemove, onToggle
         )}
 
         {channel.description && (
-          <p className="text-sm text-gray-600 dark:text-gray-400 line-clamp-2 mb-3">
+          <p className="text-sm text-gray-600 dark:text-ios-400 line-clamp-2 mb-3">
             {channel.description}
           </p>
         )}
 
         {(channel.subscriberCount || channel.videoCount) && (
-          <div className="flex items-center gap-4 text-xs text-gray-500 dark:text-gray-500">
+          <div className="flex items-center gap-4 text-xs text-gray-500 dark:text-ios-500">
             {channel.subscriberCount && (
               <div className="flex items-center gap-1">
                 <Users className="w-4 h-4" />
