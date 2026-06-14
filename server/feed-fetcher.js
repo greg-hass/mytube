@@ -344,14 +344,31 @@ async function fetchChannelThumbnail(channelId) {
         });
 
         const html = response.data;
+
+        // og:image is a standard Open Graph tag and is relatively stable.
         const avatarMatch = html.match(/<meta property="og:image" content="([^"]+)"/);
         if (avatarMatch) {
             return avatarMatch[1];
         }
 
-        const jsonMatch = html.match(/"avatar":\s*{\s*"thumbnails":\s*\[\s*{\s*"url":\s*"([^"]+)"/);
-        if (jsonMatch) {
-            return jsonMatch[1].replace(/\\u0026/g, '&');
+        // Fall back to structured extraction from ytInitialData rather than a
+        // raw regex on the embedded JSON, which breaks on nested/escaped values.
+        const initialData = parseYtInitialData(html);
+        if (initialData) {
+            let avatarUrl = null;
+            walkYouTubeRenderers(initialData, (node) => {
+                if (avatarUrl) return;
+                const thumbnails = node.avatar?.thumbnails || node.thumbnail?.thumbnails;
+                if (Array.isArray(thumbnails) && thumbnails.length > 0) {
+                    const best = thumbnails[thumbnails.length - 1];
+                    if (best?.url) {
+                        avatarUrl = best.url;
+                    }
+                }
+            });
+            if (avatarUrl) {
+                return avatarUrl.replace(/\\u0026/g, '&');
+            }
         }
 
         return null;

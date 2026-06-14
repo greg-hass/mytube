@@ -73,8 +73,11 @@ async function resolveTemporarySubscriptions(subscriptions = [], options = {}) {
                     resolveUrl = `https://www.googleapis.com/youtube/v3/channels?part=id,snippet&forUsername=${encodeURIComponent(param)}&key=${apiKey}`;
                 }
 
-                const res = await httpClient.get(resolveUrl);
+                // Count the attempt before the call so the quota cap holds even
+                // when requests fail; the check at the top of the loop then sees
+                // an accurate count.
                 resolverQuotaUsed += 1;
+                const res = await httpClient.get(resolveUrl);
 
                 if (res.data.items?.[0]) {
                     const realId = res.data.items[0].id;

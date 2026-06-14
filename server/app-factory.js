@@ -36,6 +36,8 @@ const THUMBNAIL_PROXY_RATE_WINDOW_MS = 60 * 1000;
 const THUMBNAIL_PROXY_RATE_MAX = 60;
 const ACTIVE_CHANNELS_DEFAULT_LIMIT = 5;
 const ACTIVE_CHANNELS_MAX_LIMIT = 50;
+const CHANNEL_SEARCH_RATE_WINDOW_MS = 60 * 1000;
+const CHANNEL_SEARCH_RATE_MAX = 20;
 
 function asyncHandler(handler, errorMessage) {
     return async (req, res, next) => {
@@ -76,6 +78,14 @@ function createApp({
     const thumbnailRateLimiter = createBucketRateLimiter({
         windowMs: THUMBNAIL_PROXY_RATE_WINDOW_MS,
         max: THUMBNAIL_PROXY_RATE_MAX,
+    });
+
+    // Channel search fans out to multiple external services per request, so it
+    // needs its own GET rate limit (the general limiter only covers writes).
+    const channelSearchRateLimiter = createRateLimitMiddleware({
+        windowMs: CHANNEL_SEARCH_RATE_WINDOW_MS,
+        max: CHANNEL_SEARCH_RATE_MAX,
+        methods: ['GET'],
     });
 
     app.use(cors(createCorsOptions({ allowedOrigins })));
@@ -198,7 +208,7 @@ function createApp({
         }
     });
 
-    app.get('/api/channel-search', asyncHandler(async (req, res) => {
+    app.get('/api/channel-search', channelSearchRateLimiter, asyncHandler(async (req, res) => {
         const query = String(req.query.q || '').trim();
         if (query.length < 2) {
             return res.json({ results: [] });
@@ -338,6 +348,8 @@ function createApp({
 module.exports = {
     ACTIVE_CHANNELS_DEFAULT_LIMIT,
     ACTIVE_CHANNELS_MAX_LIMIT,
+    CHANNEL_SEARCH_RATE_MAX,
+    CHANNEL_SEARCH_RATE_WINDOW_MS,
     THUMBNAIL_PROXY_MAX_BYTES,
     THUMBNAIL_PROXY_RATE_MAX,
     THUMBNAIL_PROXY_RATE_WINDOW_MS,

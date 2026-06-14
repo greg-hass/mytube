@@ -9,14 +9,6 @@ let feedAggregator = null;
 let server = null;
 let shutdownPromise = null;
 
-const PORT = process.env.PORT || 3001;
-const ALLOWED_ORIGINS = parseAllowedOrigins(process.env.ALLOWED_ORIGINS);
-const API_WRITE_RATE_LIMIT_WINDOW_MS = Number(process.env.API_WRITE_RATE_LIMIT_WINDOW_MS) || 60 * 1000;
-const API_WRITE_RATE_LIMIT_MAX = Number(process.env.API_WRITE_RATE_LIMIT_MAX) || 30;
-const ALLOW_INSECURE_UNAUTHENTICATED_API = process.env.ALLOW_INSECURE_UNAUTHENTICATED_API === 'true';
-
-console.log(`[startup] Allowed browser origins: ${describeAllowlist(new Set(ALLOWED_ORIGINS))}`);
-
 async function init() {
     try {
         await fs.mkdir(path.dirname(appStore.DEFAULT_DATA_FILE), { recursive: true });
@@ -82,6 +74,14 @@ process.on('SIGINT', () => {
 });
 
 init().then(() => {
+    const PORT = process.env.PORT || 3001;
+    const ALLOWED_ORIGINS = parseAllowedOrigins(process.env.ALLOWED_ORIGINS);
+    const API_WRITE_RATE_LIMIT_WINDOW_MS = Number(process.env.API_WRITE_RATE_LIMIT_WINDOW_MS) || 60 * 1000;
+    const API_WRITE_RATE_LIMIT_MAX = Number(process.env.API_WRITE_RATE_LIMIT_MAX) || 30;
+    const ALLOW_INSECURE_UNAUTHENTICATED_API = process.env.ALLOW_INSECURE_UNAUTHENTICATED_API === 'true';
+
+    console.log(`[startup] Allowed browser origins: ${describeAllowlist(new Set(ALLOWED_ORIGINS))}`);
+
     feedAggregator = feedAggregatorModule;
     feedAggregator.start();
     const { app } = createApp({

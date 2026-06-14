@@ -167,12 +167,19 @@ function createBucketRateLimiter({ windowMs = DEFAULT_WRITE_WINDOW_MS, max = DEF
     return { checkLimit, getBucket, buckets, getBucketStats };
 }
 
+const DEFAULT_RATE_LIMIT_METHODS = ['POST', 'PUT', 'PATCH', 'DELETE'];
+
 function createRateLimitMiddleware(opts) {
     const { checkLimit, getBucket } = createBucketRateLimiter(opts);
-    const { windowMs = DEFAULT_WRITE_WINDOW_MS, max = DEFAULT_WRITE_LIMIT } = opts || {};
+    const {
+        windowMs = DEFAULT_WRITE_WINDOW_MS,
+        max = DEFAULT_WRITE_LIMIT,
+        methods = DEFAULT_RATE_LIMIT_METHODS,
+    } = opts || {};
+    const methodSet = new Set(methods);
 
     return function rateLimit(req, res, next) {
-        if (!['POST', 'PUT', 'PATCH', 'DELETE'].includes(req.method)) {
+        if (!methodSet.has(req.method)) {
             next();
             return;
         }
