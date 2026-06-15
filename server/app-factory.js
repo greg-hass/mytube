@@ -307,6 +307,9 @@ function createApp({
         if (!type || !value) {
             return res.status(400).json({ error: 'Missing type or value' });
         }
+        if (typeof value !== 'string' || value.length > 256 || !/^[\w.@\-/]+$/.test(value)) {
+            return res.status(400).json({ error: 'Invalid value' });
+        }
         let url;
         if (type === 'handle') {
             const handle = value.startsWith('@') ? value : `@${value}`;
@@ -316,7 +319,7 @@ function createApp({
         } else {
             return res.status(400).json({ error: 'Invalid type' });
         }
-        const response = await axios.get(url, { headers: { 'User-Agent': 'Mozilla/5.0' } });
+        const response = await axios.get(url, { headers: { 'User-Agent': 'Mozilla/5.0' }, timeout: 10000 });
         const { channelId, title, disabled } = extractYouTubeChannelMetadata(response.data);
         if (disabled) {
             return res.status(503).json({ error: 'YouTube HTML parsing is disabled' });

@@ -321,7 +321,6 @@ async function resolveChannelId(
   try {
     const useApi = useStore.getState().useApiForVideos;
     if (!useApi) {
-      console.log('API disabled, skipping handle resolution via API');
       return null;
     }
 
@@ -331,8 +330,6 @@ async function resolveChannelId(
       const handleValue = parsedInput.value.startsWith('@')
         ? parsedInput.value.substring(1)
         : parsedInput.value;
-
-      console.log('Resolving handle:', handleValue);
 
       const response = await fetch(
         `${YOUTUBE_API_BASE}/channels?part=snippet&forHandle=${encodeURIComponent(handleValue)}&key=${apiKey}`
@@ -346,7 +343,6 @@ async function resolveChannelId(
       }
 
       const data = await response.json();
-      console.log('Handle resolution response:', data);
 
       if (!data.items || data.items.length === 0) {
         console.warn('No channel found for handle:', handleValue);
@@ -354,7 +350,6 @@ async function resolveChannelId(
       }
 
       const channel = data.items[0];
-      console.log('Resolved channel ID:', channel.id);
       return channel.id;
     } else if (parsedInput.type === 'custom_url') {
       // Search by custom URL or channel name
@@ -438,12 +433,12 @@ export async function resolveTemporaryChannelFromRSS(
   }
 
   const searchTerm = tempChannelId.replace(/^(handle_|custom_)/, '');
-  console.log(`🔍 Attempting to resolve temporary channel: ${tempChannelId} -> ${searchTerm}`);
+
 
   try {
     const effectiveApiKey = getAutomaticResolverApiKey(apiKey);
 
-    console.log(`🔑 Resolution API Key available: ${!!effectiveApiKey}`);
+
 
     if (effectiveApiKey) {
       try {
@@ -451,7 +446,6 @@ export async function resolveTemporaryChannelFromRSS(
           // Resolve using channels endpoint with forHandle
           // Ensure @ prefix is present for the API call
           const handleForApi = searchTerm.startsWith('@') ? searchTerm : `@${searchTerm}`;
-          console.log(`🔍 Fetching handle: ${handleForApi}`);
           const response = await fetch(`${YOUTUBE_API_BASE}/channels?part=snippet&forHandle=${encodeURIComponent(handleForApi)}&key=${effectiveApiKey}`);
           useStore.getState().incrementQuota(1);
 
