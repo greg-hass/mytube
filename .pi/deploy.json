@@ -1,0 +1,6 @@
+{
+  "stackName": "youtube-subscriptions",
+  "imageName": "ghcr.io/greg-hass/youtube-subscriptions",
+  "serviceName": "youtube-subscriptions",
+  "healthUrl": "http://localhost:5173/api/healthz"
+}

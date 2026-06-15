@@ -1,10 +1,40 @@
 # AGENTS.md
 
-## Purpose
+## Project Overview
 
-This repository is a self-hosted/server/infrastructure project intended for long-term production use.
+YouTube RSS Subscriptions — a self-hosted, RSS-first YouTube feed reader. Tracks watched state, filters Shorts, queues videos for later, and stays RSS-first so routine refreshes don't burn YouTube API quota.
 
-Priorities:
+It's a feed reader, not a video archive. Videos still play through YouTube.
+
+### Tech Stack
+
+- **Frontend:** React 19, TypeScript, Vite 7, Tailwind CSS 3, Zustand, TanStack Query
+- **Server:** Node.js, Express (implied), SQLite (WAL mode)
+- **Container:** `ghcr.io/greg-hass/youtube-subscriptions:latest`
+- **Port mapping:** Host `5173` → Container `8080`
+- **Volume:** `youtube-subscriptions-data` → `/app/server/data`
+- **Health check:** `http://localhost:8080/api/healthz`
+
+### Key Environment Variables
+
+| Variable | Required | Purpose |
+|----------|----------|---------|
+| `SERVER_API_TOKEN` | Yes | Bearer token for all `/api/*` requests |
+| `YOUTUBE_API_KEY` | No | Capped fallback for channel handle resolution |
+| `FEED_REFRESH_ENABLED` | No | Enable background feed refresh (default: `true`) |
+| `FEED_REFRESH_INTERVAL_MINUTES` | No | Refresh interval (default: `15`) |
+| `ALLOWED_ORIGINS` | No | Comma-separated browser origin allowlist |
+
+### Deployment
+
+```bash
+export SERVER_API_TOKEN="$(openssl rand -hex 32)"
+docker compose up -d
+```
+
+---
+
+## Priorities
 
 1. Correctness
 2. Reliability
@@ -12,8 +42,7 @@ Priorities:
 4. Security
 5. Performance
 
-Prefer simple, explicit solutions.
-Do not optimize prematurely.
+Prefer simple, explicit solutions. Do not optimize prematurely.
 
 ---
 
@@ -59,7 +88,6 @@ Security:
 - Do not hardcode credentials, API keys, or tokens.
 - Do not expose internal/admin services publicly unless explicitly required.
 - Prefer least-privilege access.
-- Prefer automatic HTTPS where supported.
 - Avoid disabling security features for convenience.
 
 Networking:
@@ -74,7 +102,8 @@ Persistence:
 - Database migrations must be backwards compatible.
 - Never drop volumes, tables, or columns without backup and rollback plans.
 - Preserve persistent mount paths and storage layouts.
-- SQLite should use WAL mode where concurrent access is expected.
+- SQLite uses WAL mode — do not disable it.
+- Backup/restore uses SQLite backup API: `npm run backup:sqlite` / `npm run restore:sqlite`
 
 ---
 
@@ -112,43 +141,24 @@ Files:
 
 - Dockerfile
 - docker-compose.yml
-- compose.yml
 
 Commands:
-bash docker compose config docker compose build docker compose up -d docker compose ps
 
-Failure inspection:
-bash docker compose logs
+```bash
+docker compose config
+docker compose build
+docker compose up -d
+docker compose ps
+docker compose logs
+```
 
 Rules:
 
-- docker compose config must pass before changing compose files.
+- `docker compose config` must pass before changing compose files.
 - Verify containers are healthy before declaring success.
 - Check logs when containers fail or restart.
-- Prefer minimal images.
-- Pin image versions where practical.
-- Preserve persistent volume mappings.
-- Avoid breaking existing container names, networks, or mounts.
-- Avoid privileged containers unless explicitly required.
-
----
-
-## Reverse Proxy / Ingress
-
-Files:
-
-- Caddyfile
-- nginx.conf
-- traefik.yml
-- traefik.toml
-
-Rules:
-
-- Do not commit TLS certificates or private keys.
-- Preserve existing hostnames, routes, and middleware unless required.
-- Do not expose admin interfaces publicly.
-- Auth endpoints should have rate limiting where practical.
-- Avoid unnecessary public ports.
+- Preserve the existing container name (`youtube-subscriptions`) and volume (`youtube-subscriptions-data`).
+- Watchtower is enabled via label — do not remove `com.centurylinklabs.watchtower.enable=true`.
 
 ---
 
@@ -156,56 +166,40 @@ Rules:
 
 Files:
 
-- package.json
+- `package.json` (root — frontend)
+- `server/package.json` (server)
 
 Preferred commands:
-bash npm run lint npm run typecheck npm test npm run build
 
-Fallbacks:
-bash npx eslint . npx tsc --noEmit
+```bash
+npm run lint        # ESLint — max 0 warnings
+npm run type-check  # tsc --noEmit
+npm run test        # Vitest
+npm run build       # tsc -b && vite build
+```
+
+Server:
+
+```bash
+cd server && npm run dev
+```
 
 Rules:
 
-- Prefer scripts defined in package.json.
+- Prefer scripts defined in `package.json`.
 - Do not add dependencies when existing tooling can solve the problem.
+- Max warnings set to 0 — lint must be clean.
 
 ---
 
-## Python
+## Reverse Proxy / Ingress
 
-Files:
+The app serves from port `5173` on the host. If behind a reverse proxy (Caddy, nginx, Traefik):
 
-- pyproject.toml
-- requirements.txt
-
-Preferred commands:
-bash pytest ruff check . mypy .
-
-Fallback:
-bash python -m build
-
-Rules:
-
-- Prefer pyproject.toml configuration when present.
-- Do not mix dependency managers unless already established.
-
----
-
-## Shell Scripts
-
-Files:
-
-- *.sh
-
-Commands:
-bash shellcheck .
-
-Rules:
-
-- Use set -euo pipefail where appropriate.
-- Quote variables safely.
-- Avoid destructive commands without explicit confirmation.
-- Avoid curl | bash patterns unless already established.
+- Preserve existing hostnames, routes, and middleware unless required.
+- Do not commit TLS certificates or private keys.
+- Do not expose admin interfaces publicly.
+- The app requires `Authorization: Bearer <token>` on API requests — ensure the proxy passes auth headers.
 
 ---
 
@@ -220,19 +214,12 @@ When making changes:
 - List commands run and results
 - Keep explanations concise
 
-For audits and reviews:
-
-- Prioritize systemic issues
-- Provide evidence-based findings
-- Focus on foundational problems first
-
 ---
 
-## Repository Notes
+## Architecture Notes
 
-- Environment variables must not be hardcoded.
-- Secrets must never be committed.
-- Prefer configuration through environment variables or config files.
-- Healthchecks and graceful shutdowns are required for long-running services.
-- Preserve backwards compatibility for APIs and persistent storage.
-- Avoid infrastructure changes without clear operational justification.
+- **RSS-first design:** All feed data comes from YouTube RSS by default. The `YOUTUBE_API_KEY` is optional and only used as a capped fallback for channel handle resolution.
+- **SQLite for state:** Subscriptions, watched state, favorites, queue, feed cache, channel refresh state all live in `server/data/youtube-subscriptions.sqlite`.
+- **No OAuth required.** The app uses RSS feeds and optionally a server-side API key for channel resolution.
+- **PWA-capable:** Frontend supports PWA install via `vite-plugin-pwa`.
+- **Rate limiting:** Mutating API requests are rate-limited (`30 req / 60s window` by default).
