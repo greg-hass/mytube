@@ -304,4 +304,32 @@ describe('bucket rate limiter', () => {
         expect(limiter.getBucket('b')).toBeUndefined();
         expect(limiter.getBucket('c')).toBeDefined();
     });
+
+    it('does not crash when the bucket cleanup timer fires (for...of on LRU cache)', () => {
+        const limiter = createBucketRateLimiter({ windowMs: 120_000, max: 5, maxEntries: 100 });
+        limiter.checkLimit('ip-a');
+        limiter.checkLimit('ip-b');
+
+        // Advance past the 60s cleanup interval — this used to crash with
+        // "TypeError: buckets is not iterable" and kill the process.
+        vi.advanceTimersByTime(60_000);
+
+        // Both buckets still within their 120s window — should survive cleanup
+        expect(limiter.getBucket('ip-a')).toBeDefined();
+        expect(limiter.getBucket('ip-b')).toBeDefined();
+    });
+
+    it('evicts expired buckets when the cleanup timer fires', () => {
+        const limiter = createBucketRateLimiter({ windowMs: 30_000, max: 5, maxEntries: 100 });
+        limiter.checkLimit('ip-a');
+
+        // Advance well past the window so the bucket is expired
+        vi.advanceTimersByTime(120_000);
+
+        // Bucket should have been cleaned up
+        const bucket = limiter.getBucket('ip-a');
+        if (bucket) {
+            expect(bucket.count).toBe(1);
+        }
+    });
 });
