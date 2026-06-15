@@ -59,6 +59,9 @@ function createLruCache({ maxEntries, onEvict } = {}) {
         entries() {
             return entries.entries();
         },
+        [Symbol.iterator]() {
+            return entries.entries();
+        },
     };
 }
 
