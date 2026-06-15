@@ -219,7 +219,7 @@ function createSqliteStore({ databaseFile, legacyDataFile, legacyVideosFile }) {
     function applySubscriptionFieldUpdate(id, field, value) {
         const database = getDb();
         database.prepare(`
-            UPDATE subscriptions SET value_json = json_set(value_json, ?, ?) WHERE id = ?
+            UPDATE subscriptions SET value_json = json_set(value_json, ?, json(?)) WHERE id = ?
         `).run(`$.${field}`, JSON.stringify(value), id);
     }
 

@@ -1,3 +1,5 @@
+const crypto = require('crypto');
+
 const DEFAULT_WRITE_WINDOW_MS = 60 * 1000;
 const DEFAULT_WRITE_LIMIT = 30;
 const MAX_SUBSCRIPTIONS = 5000;
@@ -97,6 +99,13 @@ function getBearerToken(req) {
     return match ? match[1] : null;
 }
 
+function timingSafeCompare(a, b) {
+    const aBuf = Buffer.from(String(a));
+    const bBuf = Buffer.from(String(b));
+    if (aBuf.length !== bBuf.length) return false;
+    return crypto.timingSafeEqual(aBuf, bBuf);
+}
+
 function createApiKeyAuthMiddleware({ token = '', allowInsecureUnauthenticatedApi = false } = {}) {
     const configuredToken = String(token || '').trim();
 
@@ -118,7 +127,7 @@ function createApiKeyAuthMiddleware({ token = '', allowInsecureUnauthenticatedAp
             return;
         }
 
-        if (getBearerToken(req) === configuredToken) {
+        if (timingSafeCompare(getBearerToken(req), configuredToken)) {
             next();
             return;
         }
