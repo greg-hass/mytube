@@ -93,10 +93,10 @@ export const FloatingTabBar = ({
 		>
 			<div
 				data-testid="floating-tab-bar-inner"
-				className="mx-auto flex w-full max-w-7xl items-center px-4 pb-0 pt-2"
+				className="mx-auto flex w-full max-w-7xl items-center px-4 pb-0 pt-0"
 			>
 				{/* Tab Bar Pill */}
-				<div className="pointer-events-auto flex w-full items-center gap-0.5 rounded-[2rem] bg-white/70 px-2 py-2 shadow-[0_8px_32px_rgba(0,0,0,0.12)] ring-1 ring-white/40 backdrop-blur-2xl dark:bg-ios-950/70 dark:shadow-[0_8px_32px_rgba(0,0,0,0.4)] dark:ring-white/10">
+				<div className="pointer-events-auto flex w-full items-center gap-0.5 rounded-[2rem] bg-white/70 px-2 py-1 shadow-[0_8px_32px_rgba(0,0,0,0.12)] ring-1 ring-white/40 backdrop-blur-2xl dark:bg-ios-950/70 dark:shadow-[0_8px_32px_rgba(0,0,0,0.4)] dark:ring-white/10">
 					{TABS.map((tab) => {
 						const isActive = activeTab === tab.id;
 						const badge = tab.getBadge?.(props) ?? null;
