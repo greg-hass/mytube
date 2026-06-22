@@ -4,12 +4,12 @@ const LEGACY_SERVER_API_TOKEN_STORAGE_KEY = 'youtube-subscriptions.serverApiToke
 let installed = false;
 let originalFetch: typeof fetch | null = null;
 
-function getDefaultStorage(): Pick<Storage, 'getItem'> | null {
+function getDefaultStorage(): Pick<Storage, 'getItem' | 'setItem' | 'removeItem'> | null {
   if (typeof window === 'undefined' || !window.localStorage) return null;
   return window.localStorage;
 }
 
-export function getServerApiToken(storage: Pick<Storage, 'getItem'> | null = getDefaultStorage()): string {
+export function getServerApiToken(storage: Pick<Storage, 'getItem' | 'setItem' | 'removeItem'> | null = getDefaultStorage()): string {
   if (!storage) return '';
   const token = (storage.getItem(SERVER_API_TOKEN_STORAGE_KEY) || storage.getItem(LEGACY_SERVER_API_TOKEN_STORAGE_KEY) || '').trim();
 
