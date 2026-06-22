@@ -18,10 +18,9 @@ import {
 	Image,
 	ListVideo,
 	X,
-	Upload,
-	Plus,
 } from "lucide-react";
 import { toast } from "sonner";
+import { FirstRunOnboarding } from "./FirstRunOnboarding";
 import { Header } from "./Header";
 import { FloatingTabBar } from "./FloatingTabBar";
 import { PullToRefresh } from "./PullToRefresh";
@@ -68,14 +67,15 @@ import type { YouTubeChannel } from "../types/youtube";
 
 type Tab = "subscriptions" | "latest" | "queue" | "activity" | "favorites";
 type FavoriteSection = "channels" | "videos";
+const TAB_LATEST: Tab = "latest";
+const BTN = "button" as const;
 const DASHBOARD_TABS: Tab[] = [
 	"subscriptions",
-	"latest",
+	TAB_LATEST,
 	"queue",
 	"activity",
 	"favorites",
 ];
-const DEFAULT_TAB: Tab = "latest";
 const DURATION_FILTER_OPTIONS: Array<{ value: DurationFilter; label: string }> =
 	[
 		{ value: "any", label: "Any" },
@@ -144,10 +144,10 @@ const isDashboardTab = (value: string | null): value is Tab => {
 };
 
 const readDashboardTabFromUrl = (): Tab => {
-	if (typeof window === "undefined") return DEFAULT_TAB;
+	if (typeof window === "undefined") return TAB_LATEST;
 
 	const tab = new URLSearchParams(window.location.search).get("tab");
-	return isDashboardTab(tab) ? tab : DEFAULT_TAB;
+	return isDashboardTab(tab) ? tab : TAB_LATEST;
 };
 
 const writeDashboardTabToUrl = (tab: Tab) => {
@@ -166,9 +166,6 @@ const AddChannelModal = lazy(() =>
 	import("./AddChannelModal").then((module) => ({
 		default: module.AddChannelModal,
 	})),
-);
-const OPMLUpload = lazy(() =>
-	import("./OPMLUpload").then((module) => ({ default: module.OPMLUpload })),
 );
 
 const getErrorDescription = (error: unknown) =>
@@ -212,7 +209,7 @@ class DashboardContentBoundary extends Component<
 						app.
 					</p>
 					<button
-						type="button"
+						type={BTN}
 						onClick={this.props.onReturnToLatest}
 						className="mt-5 rounded-lg bg-gray-900 px-4 py-2 text-sm font-medium text-white dark:bg-ios-100 dark:text-ios-950"
 					>
@@ -225,80 +222,6 @@ class DashboardContentBoundary extends Component<
 		return this.props.children;
 	}
 }
-
-const FirstRunOnboarding = ({
-	onAddChannel,
-	onImportSuccess,
-}: {
-	onAddChannel: () => void;
-	onImportSuccess?: () => void;
-}) => (
-	<main
-		data-testid="first-run-onboarding"
-		className="mx-auto flex h-[calc(100dvh-var(--app-header-height))] max-w-lg flex-col items-center justify-center px-4 py-2"
-	>
-		<motion.div
-			initial={{ opacity: 0, y: 10 }}
-			animate={{ opacity: 1, y: 0 }}
-			transition={{ duration: 0.4 }}
-			className="w-full"
-		>
-			{/* Title */}
-			<div className="mb-5 flex items-center gap-3">
-				<img
-					src="/icon-192.png"
-					alt="YouTube RSS"
-					className="h-10 w-10 rounded-xl shadow-lg shadow-red-500/20"
-				/>
-				<h1 className="text-xl font-bold text-gray-950 dark:text-ios-50">
-					YouTube RSS
-				</h1>
-			</div>
-
-			{/* Action Cards */}
-			<div className="grid gap-2">
-				<button
-					type="button"
-					onClick={onAddChannel}
-					className="flex items-center gap-3 rounded-xl border border-gray-200 bg-white p-3 text-left shadow-sm transition-all active:scale-[0.98] dark:border-ios-800 dark:bg-ios-900"
-				>
-					<div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-gray-100 dark:bg-ios-800">
-						<Plus className="h-5 w-5 text-gray-700 dark:text-ios-300" />
-					</div>
-					<div>
-						<h3 className="text-sm font-semibold text-gray-900 dark:text-ios-100">
-							Add a channel
-						</h3>
-						<p className="text-xs text-gray-500 dark:text-ios-400">
-							Paste a YouTube URL, handle, or channel ID
-						</p>
-					</div>
-				</button>
-
-				<div className="flex items-center gap-3 rounded-xl border border-gray-200 bg-white p-3 shadow-sm dark:border-ios-800 dark:bg-ios-900">
-					<div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-red-50 dark:bg-red-900/20">
-						<Upload className="h-5 w-5 text-red-600 dark:text-red-400" />
-					</div>
-					<div className="min-w-0 flex-1">
-						<h3 className="text-sm font-semibold text-gray-900 dark:text-ios-100">
-							Import subscriptions
-						</h3>
-						<p className="text-xs text-gray-500 dark:text-ios-400">
-							Google Takeout CSV or OPML/XML
-						</p>
-					</div>
-					<Suspense fallback={null}>
-						<OPMLUpload minimal showLabelOnMobile onSuccess={onImportSuccess} />
-					</Suspense>
-				</div>
-			</div>
-
-			<p className="mt-4 text-center text-xs text-gray-400 dark:text-ios-600">
-				Your feed refreshes automatically once channels are added.
-			</p>
-		</motion.div>
-	</main>
-);
 
 export const Dashboard = () => {
 	const persistedQualityFilters = useMemo(
@@ -465,6 +388,7 @@ export const Dashboard = () => {
 		// Only process recent videos to avoid iterating over thousands of old videos
 		// Assuming videos are somewhat sorted by date, but we'll check the first 500 just in case
 		const recentVideos = videos.slice(0, 1000);
+		const channelById = new Map(allSubscriptions.map((sub) => [sub.id, sub]));
 
 		for (const video of recentVideos) {
 			const videoDate = new Date(video.publishedAt).getTime();
@@ -474,9 +398,7 @@ export const Dashboard = () => {
 			if (videoDate < oneWeekAgo) continue;
 
 			const existing = channelActivity.get(video.channelId);
-			const channel = allSubscriptions.find(
-				(sub) => sub.id === video.channelId,
-			);
+			const channel = channelById.get(video.channelId);
 
 			if (channel) {
 				if (existing) {
@@ -602,9 +524,9 @@ export const Dashboard = () => {
 	const handleLatestTabClick = () => {
 		const now = Date.now();
 
-		if (activeTab !== "latest") {
+		if (activeTab !== TAB_LATEST) {
 			lastActiveLatestTapAtRef.current = null;
-			changeTab("latest");
+			changeTab(TAB_LATEST);
 			return;
 		}
 
@@ -620,7 +542,7 @@ export const Dashboard = () => {
 			lastActiveLatestTapAtRef.current = now;
 		}
 
-		changeTab("latest");
+		changeTab(TAB_LATEST);
 	};
 
 	const createSubscriptionGroup = () => {
@@ -891,11 +813,11 @@ export const Dashboard = () => {
 			<Header
 				showMobileSearch={
 					activeTab === "subscriptions" ||
-					activeTab === "latest" ||
+					activeTab === TAB_LATEST ||
 					activeTab === "queue"
 				}
 				searchPlaceholder={
-					activeTab === "latest" || activeTab === "queue"
+					activeTab === TAB_LATEST || activeTab === "queue"
 						? "Search videos..."
 						: "Search channels..."
 				}
@@ -907,7 +829,7 @@ export const Dashboard = () => {
 				hideWatched={hideWatched}
 				onToggleWatched={() => setHideWatched((prev) => !prev)}
 				showFilters={
-					activeTab === "latest" ||
+					activeTab === TAB_LATEST ||
 					activeTab === "queue" ||
 					activeTab === "favorites"
 				}
@@ -966,7 +888,7 @@ export const Dashboard = () => {
 									</select>
 
 									<button
-										type="button"
+										type={BTN}
 										onClick={() => setIsNewGroupModalOpen(true)}
 										className="h-10 rounded-lg bg-gray-800 px-3 text-sm font-medium text-white hover:bg-gray-700 dark:bg-ios-700 dark:hover:bg-ios-600"
 									>
@@ -991,7 +913,7 @@ export const Dashboard = () => {
 							</div>
 						)}
 
-						{activeTab === "latest" && (
+						{activeTab === TAB_LATEST && (
 							<div
 								data-testid="latest-toolbar"
 								className="flex flex-nowrap items-center justify-between gap-1 sm:gap-2"
@@ -1067,7 +989,7 @@ export const Dashboard = () => {
 									transition={{ duration: 0.3 }}
 								>
 									<DashboardContentBoundary
-										onReturnToLatest={() => changeTab("latest")}
+										onReturnToLatest={() => changeTab(TAB_LATEST)}
 									>
 										<SubscriptionsList
 											selectedGroup={selectedSubscriptionGroup}
@@ -1075,9 +997,9 @@ export const Dashboard = () => {
 										/>
 									</DashboardContentBoundary>
 								</motion.div>
-							) : activeTab === "latest" ? (
+							) : activeTab === TAB_LATEST ? (
 								<motion.div
-									key="latest"
+									key={TAB_LATEST}
 									initial={{ opacity: 0, x: 20 }}
 									animate={{ opacity: 1, x: 0 }}
 									exit={{ opacity: 0, x: -20 }}
@@ -1129,7 +1051,7 @@ export const Dashboard = () => {
 										) : (
 											<EmptyState
 												icon={TrendingUp}
-												iconName="latest"
+												iconName={TAB_LATEST}
 												title="No videos found"
 												detail="New uploads from your subscriptions will appear here."
 											/>
@@ -1148,7 +1070,7 @@ export const Dashboard = () => {
 											{visibleLatestVideos.length < filteredVideos.length && (
 												<div className="mt-4 flex justify-center pb-8 sm:hidden">
 													<button
-														type="button"
+														type={BTN}
 														onClick={() =>
 															setMobileVideoLimit(
 																(count) => count + MOBILE_TIMELINE_INCREMENT,
@@ -1220,7 +1142,7 @@ export const Dashboard = () => {
 													className="grid grid-cols-2 gap-1 rounded-xl bg-gray-100 p-1 dark:bg-ios-900 sm:hidden"
 												>
 													<button
-														type="button"
+														type={BTN}
 														aria-pressed={visibleFavoriteSection === "channels"}
 														onClick={() => setActiveFavoriteSection("channels")}
 														className={`rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
@@ -1232,7 +1154,7 @@ export const Dashboard = () => {
 														Channels ({favoriteChannels.length})
 													</button>
 													<button
-														type="button"
+														type={BTN}
 														aria-pressed={visibleFavoriteSection === "videos"}
 														onClick={() => setActiveFavoriteSection("videos")}
 														className={`rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
@@ -1389,7 +1311,7 @@ export const Dashboard = () => {
 					<FloatingTabBar
 						activeTab={activeTab}
 						onTabChange={(tab) => {
-							if (tab === "latest") {
+							if (tab === TAB_LATEST) {
 								handleLatestTabClick();
 							} else {
 								changeTab(tab);
@@ -1417,7 +1339,7 @@ export const Dashboard = () => {
 			{isNewGroupModalOpen && (
 				<div className="fixed inset-0 z-[120]">
 					<button
-						type="button"
+						type={BTN}
 						aria-label="Close new group dialog"
 						className="absolute inset-0 bg-gray-950/60"
 						onClick={() => {
@@ -1443,7 +1365,7 @@ export const Dashboard = () => {
 								New group
 							</h2>
 							<button
-								type="button"
+								type={BTN}
 								aria-label="Close new group dialog"
 								onClick={() => {
 									setIsNewGroupModalOpen(false);
@@ -1472,7 +1394,7 @@ export const Dashboard = () => {
 
 						<div className="mt-5 flex gap-2">
 							<button
-								type="button"
+								type={BTN}
 								onClick={() => {
 									setIsNewGroupModalOpen(false);
 									setNewSubscriptionGroupName("");
@@ -1495,7 +1417,7 @@ export const Dashboard = () => {
 			{isQualityFiltersOpen && (
 				<div className="fixed inset-0 z-[120]">
 					<button
-						type="button"
+						type={BTN}
 						aria-label="Close feed filters"
 						className="absolute inset-0 bg-gray-950/60"
 						onClick={() => setIsQualityFiltersOpen(false)}
@@ -1514,7 +1436,7 @@ export const Dashboard = () => {
 								Feed filters
 							</h2>
 							<button
-								type="button"
+								type={BTN}
 								aria-label="Close feed filters"
 								onClick={() => setIsQualityFiltersOpen(false)}
 								className="inline-flex h-10 w-10 items-center justify-center rounded-lg bg-gray-100 text-gray-700 hover:bg-gray-200 dark:bg-ios-800 dark:text-ios-200 dark:hover:bg-ios-700"
@@ -1532,7 +1454,7 @@ export const Dashboard = () => {
 									{DURATION_FILTER_OPTIONS.map((option) => (
 										<button
 											key={option.value}
-											type="button"
+											type={BTN}
 											onClick={() => setDurationFilter(option.value)}
 											className={`h-10 rounded-lg px-3 text-sm font-medium transition-colors ${
 												durationFilter === option.value
@@ -1620,14 +1542,14 @@ export const Dashboard = () => {
 
 							<div className="flex gap-2">
 								<button
-									type="button"
+									type={BTN}
 									onClick={clearQualityFilters}
 									className="h-10 flex-1 rounded-lg bg-gray-100 px-3 text-sm font-medium text-gray-800 hover:bg-gray-200 dark:bg-ios-800 dark:text-ios-100 dark:hover:bg-ios-700"
 								>
 									Clear
 								</button>
 								<button
-									type="button"
+									type={BTN}
 									onClick={() => setIsQualityFiltersOpen(false)}
 									className="h-10 flex-1 rounded-lg bg-red-600 px-3 text-sm font-medium text-white hover:bg-red-700"
 								>
