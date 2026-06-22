@@ -1,210 +1,210 @@
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { act, renderHook, waitFor } from '@testing-library/react';
-import type { ReactNode } from 'react';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { toast } from 'sonner';
-import { useRSSVideos } from './useRSSVideos';
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { act, renderHook, waitFor } from "@testing-library/react";
+import type { ReactNode } from "react";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import { toast } from "sonner";
+import { useRSSVideos } from "./useRSSVideos";
 
-vi.mock('sonner', () => ({
-  toast: {
-    loading: vi.fn(),
-    success: vi.fn(),
-    error: vi.fn(),
-    dismiss: vi.fn(),
-  },
+vi.mock("sonner", () => ({
+	toast: {
+		loading: vi.fn(),
+		success: vi.fn(),
+		error: vi.fn(),
+		dismiss: vi.fn(),
+	},
 }));
 
 const createWrapper = () => {
-  const queryClient = new QueryClient({
-    defaultOptions: {
-      queries: { retry: false },
-      mutations: { retry: false },
-    },
-  });
+	const queryClient = new QueryClient({
+		defaultOptions: {
+			queries: { retry: false },
+			mutations: { retry: false },
+		},
+	});
 
-  return ({ children }: { children: ReactNode }) => (
-    <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
-  );
+	return ({ children }: { children: ReactNode }) => (
+		<QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
+	);
 };
 
-describe('useRSSVideos', () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-    vi.useRealTimers();
-  });
+// ── Shared mock builders ────────────────────────────────────
 
-  it('keeps manual refresh quiet and leaves cached videos visible', async () => {
-    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
-      const url = String(input);
+function statusResponse(overrides: Record<string, unknown> = {}) {
+	return new Response(
+		JSON.stringify({
+			state: "idle",
+			current: 1,
+			total: 1,
+			videos: 1,
+			errors: 0,
+			startedAt: null,
+			completedAt: null,
+			lastUpdated: "2026-05-06T20:00:00.000Z",
+			...overrides,
+		}),
+	);
+}
 
-      if (url.startsWith('/api/videos/status')) {
-        return new Response(JSON.stringify({
-          state: 'idle',
-          current: 1,
-          total: 1,
-          videos: 1,
-          errors: 0,
-          startedAt: null,
-          completedAt: null,
-          lastUpdated: '2026-05-06T20:00:00.000Z',
-        }));
-      }
+function videosResponse(
+	videos: unknown[],
+	lastUpdated: string,
+	totalChannels = 1,
+) {
+	return new Response(
+		JSON.stringify({
+			videos,
+			lastUpdated,
+			totalChannels,
+			totalVideos: videos.length,
+		}),
+	);
+}
 
-      if (url.startsWith('/api/videos?')) {
-        return new Response(JSON.stringify({
-          videos: [{
-            id: 'video-1',
-            title: 'Cached video',
-            description: '',
-            thumbnail: '',
-            channelId: 'UC123',
-            channelTitle: 'Test Channel',
-            publishedAt: '2026-05-06T20:00:00.000Z',
-          }],
-          lastUpdated: '2026-05-06T20:00:00.000Z',
-          totalChannels: 1,
-          totalVideos: 1,
-        }));
-      }
+function video(title: string, id: string, publishedAt: string) {
+	return {
+		id,
+		title,
+		description: "",
+		thumbnail: "",
+		channelId: "UC123",
+		channelTitle: "Test Channel",
+		publishedAt,
+	};
+}
 
-      if (url === '/api/videos/refresh') {
-        return new Response(JSON.stringify({ success: true }));
-      }
+// ── Test suite ──────────────────────────────────────────────
 
-      throw new Error(`Unexpected fetch ${url}`);
-    });
+describe("useRSSVideos", () => {
+	beforeEach(() => {
+		vi.clearAllMocks();
+		vi.useRealTimers();
+	});
 
-    vi.stubGlobal('fetch', fetchMock);
+	it("keeps manual refresh quiet and leaves cached videos visible", async () => {
+		const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+			const url = String(input);
+			if (url.startsWith("/api/videos/status")) return statusResponse();
+			if (url === "/api/videos" || url.startsWith("/api/videos?"))
+				return videosResponse(
+					[video("Cached video", "video-1", "2026-05-06T20:00:00.000Z")],
+					"2026-05-06T20:00:00.000Z",
+				);
+			if (url === "/api/videos/refresh")
+				return new Response(JSON.stringify({ success: true }));
+			throw new Error(`Unexpected fetch ${url}`);
+		});
 
-    const { result } = renderHook(() => useRSSVideos(), {
-      wrapper: createWrapper(),
-    });
+		vi.stubGlobal("fetch", fetchMock);
 
-    await waitFor(() => {
-      expect(result.current.videos).toHaveLength(1);
-    });
+		const { result } = renderHook(() => useRSSVideos(), {
+			wrapper: createWrapper(),
+		});
 
-    result.current.refresh();
+		await waitFor(() => {
+			expect(result.current.videos).toHaveLength(1);
+		});
 
-    await waitFor(() => {
-      expect(fetchMock).toHaveBeenCalledWith('/api/videos/refresh', { method: 'POST' });
-    });
+		result.current.refresh();
 
-    expect(result.current.videos[0].title).toBe('Cached video');
-    expect(toast.loading).not.toHaveBeenCalled();
-    expect(toast.success).not.toHaveBeenCalled();
-  });
+		await waitFor(() => {
+			expect(fetchMock).toHaveBeenCalledWith("/api/videos/refresh", {
+				method: "POST",
+			});
+		});
 
-  it('refetches videos when server status reports a newer completed cache', async () => {
-    let statusCalls = 0;
-    let videoCalls = 0;
+		expect(result.current.videos[0].title).toBe("Cached video");
+		expect(toast.loading).not.toHaveBeenCalled();
+		expect(toast.success).not.toHaveBeenCalled();
+	});
 
-    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
-      const url = String(input);
+	it("refetches videos when server status reports a newer completed cache", async () => {
+		let statusCalls = 0;
+		let videoCalls = 0;
 
-      if (url.startsWith('/api/videos/status')) {
-        statusCalls += 1;
-        return new Response(JSON.stringify({
-          state: statusCalls <= 1 ? 'running' : 'idle',
-          current: 1,
-          total: 1,
-          videos: 1,
-          errors: 0,
-          startedAt: statusCalls <= 1 ? '2026-05-09T10:00:00.000Z' : null,
-          completedAt: statusCalls <= 1 ? null : '2026-05-09T10:15:00.000Z',
-          lastUpdated: statusCalls <= 1 ? '2026-05-09T10:00:00.000Z' : '2026-05-09T10:15:00.000Z',
-        }));
-      }
+		const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+			const url = String(input);
 
-      if (url.startsWith('/api/videos?')) {
-        videoCalls += 1;
-        const isFresh = videoCalls > 1;
-        return new Response(JSON.stringify({
-          videos: [{
-            id: isFresh ? 'fresh-video' : 'old-video',
-            title: isFresh ? 'Fresh scheduled video' : 'Old cached video',
-            description: '',
-            thumbnail: '',
-            channelId: 'UC123',
-            channelTitle: 'Test Channel',
-            publishedAt: isFresh ? '2026-05-09T10:15:00.000Z' : '2026-05-09T10:00:00.000Z',
-          }],
-          lastUpdated: isFresh ? '2026-05-09T10:15:00.000Z' : '2026-05-09T10:00:00.000Z',
-          totalChannels: 1,
-          totalVideos: 1,
-        }));
-      }
+			if (url.startsWith("/api/videos/status")) {
+				statusCalls += 1;
+				const isFirstCall = statusCalls <= 1;
+				return statusResponse({
+					state: isFirstCall ? "running" : "idle",
+					startedAt: isFirstCall ? "2026-05-09T10:00:00.000Z" : null,
+					completedAt: isFirstCall ? null : "2026-05-09T10:15:00.000Z",
+					lastUpdated: isFirstCall
+						? "2026-05-09T10:00:00.000Z"
+						: "2026-05-09T10:15:00.000Z",
+				});
+			}
 
-      throw new Error(`Unexpected fetch ${url}`);
-    });
+			if (url === "/api/videos" || url.startsWith("/api/videos?")) {
+				videoCalls += 1;
+				const isFresh = videoCalls > 1;
+				return videosResponse(
+					[
+						video(
+							isFresh ? "Fresh scheduled video" : "Old cached video",
+							isFresh ? "fresh-video" : "old-video",
+							isFresh ? "2026-05-09T10:15:00.000Z" : "2026-05-09T10:00:00.000Z",
+						),
+					],
+					isFresh ? "2026-05-09T10:15:00.000Z" : "2026-05-09T10:00:00.000Z",
+				);
+			}
 
-    vi.stubGlobal('fetch', fetchMock);
+			throw new Error(`Unexpected fetch ${url}`);
+		});
 
-    const { result } = renderHook(() => useRSSVideos(), {
-      wrapper: createWrapper(),
-    });
+		vi.stubGlobal("fetch", fetchMock);
 
-    await waitFor(() => {
-      expect(result.current.videos[0]?.title).toBe('Old cached video');
-    });
+		const { result } = renderHook(() => useRSSVideos(), {
+			wrapper: createWrapper(),
+		});
 
-    await act(async () => {
-      await new Promise((resolve) => setTimeout(resolve, 2100));
-    });
+		await waitFor(() => {
+			expect(result.current.videos[0]?.title).toBe("Old cached video");
+		});
 
-    await waitFor(() => {
-      expect(result.current.videos[0]?.title).toBe('Fresh scheduled video');
-    });
-  });
+		await act(async () => {
+			await new Promise((resolve) => setTimeout(resolve, 2100));
+		});
 
-  it('exposes scheduled refresh timing from the server status', async () => {
-    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
-      const url = String(input);
+		await waitFor(() => {
+			expect(result.current.videos[0]?.title).toBe("Fresh scheduled video");
+		});
+	});
 
-      if (url.startsWith('/api/videos/status')) {
-        return new Response(JSON.stringify({
-          state: 'idle',
-          current: 1,
-          total: 1,
-          videos: 1,
-          errors: 0,
-          startedAt: null,
-          completedAt: '2026-05-09T10:00:00.000Z',
-          lastUpdated: '2026-05-09T10:00:00.000Z',
-          scheduledRefresh: {
-            enabled: true,
-            intervalMs: 15 * 60 * 1000,
-            nextRunAt: '2026-05-09T10:15:00.000Z',
-            lastRunAt: '2026-05-09T10:00:00.000Z',
-          },
-        }));
-      }
+	it("exposes scheduled refresh timing from the server status", async () => {
+		const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+			const url = String(input);
+			if (url.startsWith("/api/videos/status"))
+				return statusResponse({
+					completedAt: "2026-05-09T10:00:00.000Z",
+					scheduledRefresh: {
+						enabled: true,
+						intervalMs: 15 * 60 * 1000,
+						nextRunAt: "2026-05-09T10:15:00.000Z",
+						lastRunAt: "2026-05-09T10:00:00.000Z",
+					},
+				});
+			if (url === "/api/videos" || url.startsWith("/api/videos?"))
+				return videosResponse([], "2026-05-09T10:00:00.000Z");
+			throw new Error(`Unexpected fetch ${url}`);
+		});
 
-      if (url.startsWith('/api/videos?')) {
-        return new Response(JSON.stringify({
-          videos: [],
-          lastUpdated: '2026-05-09T10:00:00.000Z',
-          totalChannels: 1,
-          totalVideos: 1,
-        }));
-      }
+		vi.stubGlobal("fetch", fetchMock);
 
-      throw new Error(`Unexpected fetch ${url}`);
-    });
+		const { result } = renderHook(() => useRSSVideos(), {
+			wrapper: createWrapper(),
+		});
 
-    vi.stubGlobal('fetch', fetchMock);
-
-    const { result } = renderHook(() => useRSSVideos(), {
-      wrapper: createWrapper(),
-    });
-
-    await waitFor(() => {
-      expect(result.current.syncStatus.scheduledRefresh).toEqual({
-        enabled: true,
-        intervalMs: 15 * 60 * 1000,
-        nextRunAt: '2026-05-09T10:15:00.000Z',
-        lastRunAt: '2026-05-09T10:00:00.000Z',
-      });
-    });
-  });
+		await waitFor(() => {
+			expect(result.current.syncStatus.scheduledRefresh).toEqual({
+				enabled: true,
+				intervalMs: 15 * 60 * 1000,
+				nextRunAt: "2026-05-09T10:15:00.000Z",
+				lastRunAt: "2026-05-09T10:00:00.000Z",
+			});
+		});
+	});
 });
