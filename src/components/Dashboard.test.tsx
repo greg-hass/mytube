@@ -93,6 +93,7 @@ const headerMockState = vi.hoisted(() => ({
     syncStatus?: MockRSSVideosState['syncStatus'];
     cacheStatus?: MockRSSVideosState['cacheStatus'];
     onRetryFailed?: () => void;
+    scrollHidden?: boolean;
   },
 }));
 const toastMockState = vi.hoisted(() => ({
