@@ -1,106 +1,121 @@
-const fs = require('fs').promises;
-const path = require('path');
-const appStore = require('./app-store');
-const feedAggregatorModule = require('./feed-aggregator');
-const { createApp } = require('./app-factory');
-const { describeAllowlist, parseAllowedOrigins } = require('./security-middleware');
+const fs = require("fs").promises;
+const path = require("path");
+const appStore = require("./app-store");
+const feedAggregatorModule = require("./feed-aggregator");
+const { createApp } = require("./app-factory");
+const {
+	describeAllowlist,
+	parseAllowedOrigins,
+} = require("./security-middleware");
 
 let feedAggregator = null;
 let server = null;
 let shutdownPromise = null;
 
 async function init() {
-    try {
-        await fs.mkdir(path.dirname(appStore.DEFAULT_DATA_FILE), { recursive: true });
-        await appStore.init();
-        const data = await appStore.readData(appStore.DEFAULT_DATA);
+	try {
+		await fs.mkdir(path.dirname(appStore.DEFAULT_DATA_FILE), {
+			recursive: true,
+		});
+		await appStore.init();
+		const data = await appStore.readData(appStore.DEFAULT_DATA);
 
-        try {
-            const staticRedirectsFile = path.join(__dirname, 'redirects.json');
-            const staticRedirectsContent = await fs.readFile(staticRedirectsFile, 'utf8');
-            const staticRedirects = JSON.parse(staticRedirectsContent);
-            data.redirects = { ...data.redirects, ...staticRedirects };
-            console.log('✅ Merged static redirects:', Object.keys(staticRedirects));
-            await appStore.writeData(data);
-        } catch (err) {
-            // No static redirects or error reading, ignore
-        }
-    } catch (err) {
-        console.error('Failed to initialize data storage:', err);
-        throw err;
-    }
+		try {
+			const staticRedirectsFile = path.join(__dirname, "redirects.json");
+			const staticRedirectsContent = await fs.readFile(
+				staticRedirectsFile,
+				"utf8",
+			);
+			const staticRedirects = JSON.parse(staticRedirectsContent);
+			data.redirects = { ...data.redirects, ...staticRedirects };
+			console.log("✅ Merged static redirects:", Object.keys(staticRedirects));
+			await appStore.writeData(data);
+		} catch (_err) {
+			// No static redirects or error reading, ignore
+		}
+	} catch (err) {
+		console.error("Failed to initialize data storage:", err);
+		throw err;
+	}
 }
 
 function closeHttpServer() {
-    if (!server) {
-        return Promise.resolve();
-    }
-    return new Promise((resolve, reject) => {
-        server.close((error) => {
-            if (error) {
-                reject(error);
-                return;
-            }
-            resolve();
-        });
-    });
+	if (!server) {
+		return Promise.resolve();
+	}
+	return new Promise((resolve, reject) => {
+		server.close((error) => {
+			if (error) {
+				reject(error);
+				return;
+			}
+			resolve();
+		});
+	});
 }
 
 async function shutdown(signal) {
-    if (shutdownPromise) {
-        return shutdownPromise;
-    }
-    console.log(`Received ${signal}, shutting down gracefully`);
-    shutdownPromise = (async () => {
-        feedAggregator?.stopScheduledRefresh?.();
-        await closeHttpServer();
-        appStore.close();
-    })();
-    try {
-        await shutdownPromise;
-        process.exit(0);
-    } catch (error) {
-        console.error('Graceful shutdown failed:', error);
-        process.exit(1);
-    }
+	if (shutdownPromise) {
+		return shutdownPromise;
+	}
+	console.log(`Received ${signal}, shutting down gracefully`);
+	shutdownPromise = (async () => {
+		feedAggregator?.stopScheduledRefresh?.();
+		await closeHttpServer();
+		appStore.close();
+	})();
+	try {
+		await shutdownPromise;
+		process.exit(0);
+	} catch (error) {
+		console.error("Graceful shutdown failed:", error);
+		process.exit(1);
+	}
 }
 
-process.on('SIGTERM', () => {
-    shutdown('SIGTERM');
+process.on("SIGTERM", () => {
+	shutdown("SIGTERM");
 });
 
-process.on('SIGINT', () => {
-    shutdown('SIGINT');
+process.on("SIGINT", () => {
+	shutdown("SIGINT");
 });
 
-init().then(() => {
-    const PORT = process.env.PORT || 3001;
-    const ALLOWED_ORIGINS = parseAllowedOrigins(process.env.ALLOWED_ORIGINS);
-    const API_WRITE_RATE_LIMIT_WINDOW_MS = Number(process.env.API_WRITE_RATE_LIMIT_WINDOW_MS) || 60 * 1000;
-    const API_WRITE_RATE_LIMIT_MAX = Number(process.env.API_WRITE_RATE_LIMIT_MAX) || 30;
-    const ALLOW_INSECURE_UNAUTHENTICATED_API = process.env.ALLOW_INSECURE_UNAUTHENTICATED_API === 'true';
+init()
+	.then(() => {
+		const PORT = process.env.PORT || 3001;
+		const ALLOWED_ORIGINS = parseAllowedOrigins(process.env.ALLOWED_ORIGINS);
+		const API_WRITE_RATE_LIMIT_WINDOW_MS =
+			Number(process.env.API_WRITE_RATE_LIMIT_WINDOW_MS) || 60 * 1000;
+		const API_WRITE_RATE_LIMIT_MAX =
+			Number(process.env.API_WRITE_RATE_LIMIT_MAX) || 30;
+		const ALLOW_INSECURE_UNAUTHENTICATED_API =
+			process.env.ALLOW_INSECURE_UNAUTHENTICATED_API === "true";
 
-    console.log(`[startup] Allowed browser origins: ${describeAllowlist(new Set(ALLOWED_ORIGINS))}`);
+		console.log(
+			`[startup] Allowed browser origins: ${describeAllowlist(new Set(ALLOWED_ORIGINS))}`,
+		);
 
-    feedAggregator = feedAggregatorModule;
-    feedAggregator.start();
-    const { app } = createApp({
-        appStore,
-        feedAggregator,
-        config: {
-            allowedOrigins: ALLOWED_ORIGINS,
-            apiKey: process.env.SERVER_API_TOKEN,
-            allowInsecureUnauthenticatedApi: ALLOW_INSECURE_UNAUTHENTICATED_API,
-            rateLimitWindowMs: API_WRITE_RATE_LIMIT_WINDOW_MS,
-            rateLimitMax: API_WRITE_RATE_LIMIT_MAX,
-            defaultData: appStore.DEFAULT_DATA,
-            defaultVideoCache: appStore.DEFAULT_VIDEO_CACHE,
-        },
-    });
-    server = app.listen(PORT, () => {
-        console.log(`Sync server running on port ${PORT}`);
-    });
-}).catch((error) => {
-    console.error('Server startup failed:', error);
-    process.exitCode = 1;
-});
+		feedAggregator = feedAggregatorModule;
+		feedAggregator.start();
+		const { app } = createApp({
+			appStore,
+			feedAggregator,
+			config: {
+				allowedOrigins: ALLOWED_ORIGINS,
+				apiKey: process.env.SERVER_API_TOKEN,
+				allowInsecureUnauthenticatedApi: ALLOW_INSECURE_UNAUTHENTICATED_API,
+				rateLimitWindowMs: API_WRITE_RATE_LIMIT_WINDOW_MS,
+				rateLimitMax: API_WRITE_RATE_LIMIT_MAX,
+				defaultData: appStore.DEFAULT_DATA,
+				defaultVideoCache: appStore.DEFAULT_VIDEO_CACHE,
+			},
+		});
+		server = app.listen(PORT, () => {
+			console.log(`Sync server running on port ${PORT}`);
+		});
+	})
+	.catch((error) => {
+		console.error("Server startup failed:", error);
+		process.exitCode = 1;
+	});
