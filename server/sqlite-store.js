@@ -76,23 +76,32 @@ function createSqliteStore({ databaseFile, legacyDataFile, legacyVideosFile }) {
 		};
 	}
 
-	function replaceSubscriptions(subscriptions, updatedAt) {
+	function upsertSubscriptions(subscriptions, updatedAt) {
 		const database = getDb();
-		const insert = database.prepare(`
+		const upsert = database.prepare(`
             INSERT INTO subscriptions (id, value_json, updated_at)
             VALUES (?, ?, ?)
             ON CONFLICT(id) DO UPDATE SET
                 value_json = excluded.value_json,
                 updated_at = excluded.updated_at
         `);
+		const clearTombstone = database.prepare(
+			"DELETE FROM subscription_tombstones WHERE id = ?",
+		);
 
-		database.prepare("DELETE FROM subscriptions").run();
 		for (const subscription of subscriptions || []) {
 			if (!subscription?.id) continue;
-			insert.run(subscription.id, JSON.stringify(subscription), updatedAt);
-			database
-				.prepare("DELETE FROM subscription_tombstones WHERE id = ?")
-				.run(subscription.id);
+			upsert.run(subscription.id, JSON.stringify(subscription), updatedAt);
+			clearTombstone.run(subscription.id);
+		}
+	}
+
+	function deleteSubscriptions(ids) {
+		if (!ids || ids.length === 0) return;
+		const database = getDb();
+		const del = database.prepare("DELETE FROM subscriptions WHERE id = ?");
+		for (const id of ids) {
+			del.run(id);
 		}
 	}
 
@@ -102,7 +111,7 @@ function createSqliteStore({ databaseFile, legacyDataFile, legacyVideosFile }) {
 
 	function writeDataSnapshot(
 		data,
-		{ previousSubscriptions = [], trackSubscriptionChanges = false } = {},
+		{ previousSubscriptions = null, trackSubscriptionChanges = false } = {},
 	) {
 		const database = getDb();
 		const updatedAt = ISO_NOW();
@@ -112,12 +121,19 @@ function createSqliteStore({ databaseFile, legacyDataFile, legacyVideosFile }) {
 		const nextIds = new Set(
 			nextSubscriptions.map((subscription) => subscription.id),
 		);
-		const removedIds = previousSubscriptions
+		// When previousSubscriptions is not provided (writeData path),
+		// compute removedIds from the current DB state so stale rows are evicted.
+		const previousList =
+			previousSubscriptions !== null
+				? previousSubscriptions
+				: getSubscriptionRows();
+		const removedIds = previousList
 			.map((subscription) => subscription.id)
 			.filter((id) => id && !nextIds.has(id));
 
 		const write = database.transaction(() => {
-			replaceSubscriptions(nextSubscriptions, updatedAt);
+			upsertSubscriptions(nextSubscriptions, updatedAt);
+			deleteSubscriptions(removedIds);
 			const {
 				subscriptions,
 				settings,
@@ -185,15 +201,18 @@ function createSqliteStore({ databaseFile, legacyDataFile, legacyVideosFile }) {
 		const database = getDb();
 		const updatedAt = ISO_NOW();
 		const write = database.transaction(() => {
-			database.prepare("DELETE FROM videos").run();
-			database.prepare("DELETE FROM channel_refreshes").run();
-			const insertVideo = database.prepare(`
+			const upsertVideo = database.prepare(`
                 INSERT INTO videos (id, channel_id, published_at, value_json, updated_at)
                 VALUES (?, ?, ?, ?, ?)
+                ON CONFLICT(id) DO UPDATE SET
+                    channel_id = excluded.channel_id,
+                    published_at = excluded.published_at,
+                    value_json = excluded.value_json,
+                    updated_at = excluded.updated_at
             `);
 			for (const video of cache.videos || []) {
 				if (!video?.id || !video.channelId) continue;
-				insertVideo.run(
+				upsertVideo.run(
 					video.id,
 					video.channelId,
 					video.publishedAt || null,
@@ -202,15 +221,37 @@ function createSqliteStore({ databaseFile, legacyDataFile, legacyVideosFile }) {
 				);
 			}
 
-			const insertRefresh = database.prepare(`
+			const upsertRefresh = database.prepare(`
                 INSERT INTO channel_refreshes (channel_id, value_json, updated_at)
                 VALUES (?, ?, ?)
+                ON CONFLICT(channel_id) DO UPDATE SET
+                    value_json = excluded.value_json,
+                    updated_at = excluded.updated_at
             `);
 			for (const [channelId, refresh] of Object.entries(
 				cache.channelRefreshes || {},
 			)) {
-				insertRefresh.run(channelId, JSON.stringify(refresh), updatedAt);
+				upsertRefresh.run(channelId, JSON.stringify(refresh), updatedAt);
 			}
+
+			// Evict rows no longer in the incoming cache by comparing actual IDs.
+			// json_each is immune to timestamp collisions and is a single statement.
+			const validVideoIds = JSON.stringify(
+				(cache.videos || []).filter((v) => v?.id).map((v) => v.id),
+			);
+			database
+				.prepare(
+					"DELETE FROM videos WHERE id NOT IN (SELECT value FROM json_each(?, '$'))",
+				)
+				.run(validVideoIds);
+			const validChannelIds = JSON.stringify(
+				Object.keys(cache.channelRefreshes || {}),
+			);
+			database
+				.prepare(
+					"DELETE FROM channel_refreshes WHERE channel_id NOT IN (SELECT value FROM json_each(?, '$'))",
+				)
+				.run(validChannelIds);
 
 			const { videos, channelRefreshes, ...metadata } = cache;
 			writeAppState("video_cache_metadata", metadata, updatedAt);

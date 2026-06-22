@@ -331,4 +331,33 @@ describe("createApp integration", () => {
 		expect(response.status).toBe(200);
 		expect(response.body).toEqual({ status: "ok" });
 	});
+
+	it("GET /api/videos returns an ETag and 304 on matching If-None-Match", async () => {
+		await resources.appStore.writeVideoCache({
+			...resources.appStore.DEFAULT_VIDEO_CACHE,
+			videos: [
+				{
+					id: "vid-1",
+					channelId: "UC123",
+					publishedAt: "2026-06-22T10:00:00.000Z",
+					title: "Video",
+				},
+			],
+			lastUpdated: "2026-06-22T12:00:00.000Z",
+			totalChannels: 1,
+			totalVideos: 1,
+		});
+
+		const first = await request(resources.app)
+			.get("/api/videos")
+			.set("Authorization", `Bearer ${TEST_TOKEN}`);
+		expect(first.status).toBe(200);
+		expect(first.headers.etag).toBe('"2026-06-22T12:00:00.000Z"');
+
+		const cached = await request(resources.app)
+			.get("/api/videos")
+			.set("Authorization", `Bearer ${TEST_TOKEN}`)
+			.set("If-None-Match", first.headers.etag);
+		expect(cached.status).toBe(304);
+	});
 });
