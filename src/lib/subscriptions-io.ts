@@ -18,10 +18,10 @@ export function exportSubscriptionsAsOPML(
 	return `<?xml version="1.0" encoding="UTF-8"?>
 <opml version="1.1">
   <head>
-    <title>YouTube Subscriptions</title>
+    <title>MyTube Subscriptions</title>
   </head>
   <body>
-    <outline text="YouTube Subscriptions" title="YouTube Subscriptions">
+    <outline text="MyTube Subscriptions" title="MyTube Subscriptions">
 ${outlines}
     </outline>
   </body>
@@ -46,7 +46,7 @@ export function downloadOPML(subscriptions: StoredSubscription[]): void {
 	if (subscriptions.length === 0) throw new Error("No subscriptions to export");
 	const opml = exportSubscriptionsAsOPML(subscriptions);
 	const date = new Date().toISOString().split("T")[0];
-	downloadBlob(opml, `youtube-subscriptions-${date}.opml`, "text/xml");
+	downloadBlob(opml, `mytube-${date}.opml`, "text/xml");
 }
 
 /** Export subscriptions + data as JSON file download. */
@@ -64,7 +64,7 @@ export function downloadJSON(
 	};
 	const json = JSON.stringify(exportData, null, 2);
 	const date = new Date().toISOString().split("T")[0];
-	downloadBlob(json, `youtube-subscriptions-${date}.json`, "application/json");
+	downloadBlob(json, `mytube-${date}.json`, "application/json");
 }
 
 /** Parsed JSON import result. */

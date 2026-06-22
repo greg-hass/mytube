@@ -6,6 +6,9 @@ describe('docker compose persistence', () => {
   it('uses an image-initialized named volume for writable SQLite state', () => {
     const compose = readFileSync('docker-compose.yml', 'utf8');
 
+    expect(compose).toContain('mytube:');
+    expect(compose).toContain('container_name: mytube');
+    expect(compose).toContain('image: ghcr.io/greg-hass/mytube:latest');
     expect(compose).toContain('youtube-subscriptions-data:/app/server/data');
     expect(compose).toContain('\nvolumes:\n  youtube-subscriptions-data:\n');
     expect(compose).not.toContain('./server/data:/app/server/data');

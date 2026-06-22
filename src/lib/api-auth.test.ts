@@ -43,14 +43,24 @@ describe('api auth fetch wrapper', () => {
     expect(getServerApiToken()).toBe('token-value');
   });
 
+  it('migrates a legacy server API token key on read', () => {
+    window.localStorage.setItem('youtube-subscriptions.serverApiToken', '  legacy-token  ');
+
+    expect(getServerApiToken()).toBe('legacy-token');
+    expect(window.localStorage.getItem(SERVER_API_TOKEN_STORAGE_KEY)).toBe('legacy-token');
+    expect(window.localStorage.getItem('youtube-subscriptions.serverApiToken')).toBeNull();
+  });
+
   it('stores and clears the configured server API token', () => {
     setServerApiToken('  token-value  ');
 
     expect(window.localStorage.getItem(SERVER_API_TOKEN_STORAGE_KEY)).toBe('token-value');
+    expect(window.localStorage.getItem('youtube-subscriptions.serverApiToken')).toBeNull();
 
     setServerApiToken('');
 
     expect(window.localStorage.getItem(SERVER_API_TOKEN_STORAGE_KEY)).toBeNull();
+    expect(window.localStorage.getItem('youtube-subscriptions.serverApiToken')).toBeNull();
   });
 
   it('adds bearer auth to same-origin api requests when a token is stored', async () => {

@@ -1,6 +1,6 @@
-# YouTube RSS Subscriptions
+# MyTube
 
-YouTube's subscription feed is algorithmically curated and can hide videos. FreshRSS reads feeds but does not understand YouTube. YouTube RSS Subscriptions is a YouTube-native feed reader that tracks watched state, filters Shorts, queues videos for later, and stays RSS-first so routine refreshes do not burn YouTube API quota.
+YouTube's subscription feed is algorithmically curated and can hide videos. FreshRSS reads feeds but does not understand YouTube. MyTube is a YouTube-native feed reader that tracks watched state, filters Shorts, queues videos for later, and stays RSS-first so routine refreshes do not burn YouTube API quota.
 
 It is a feed reader, not a video archive. Videos still play through YouTube, so deleted, private, age-restricted, or region-blocked videos may become unavailable.
 
@@ -19,7 +19,7 @@ export SERVER_API_TOKEN="$(openssl rand -hex 32)"
 docker compose up -d
 ```
 
-The included compose file runs `ghcr.io/greg-hass/youtube-subscriptions:latest`, serves the app on `http://localhost:5173`, and stores user data in the `youtube-subscriptions-data` Docker volume. After the first start, open Settings and save the same Server API Token in that browser.
+The included compose file runs `ghcr.io/greg-hass/mytube:latest`, serves the app on `http://localhost:5173`, and stores user data in the `youtube-subscriptions-data` Docker volume. After the first start, open Settings and save the same Server API Token in that browser.
 
 ### Local Development
 
@@ -73,7 +73,7 @@ Suggested first set:
 
 ## How It Compares
 
-| Capability | YouTube RSS Subscriptions | FreshRSS/Miniflux | YouTube Native |
+| Capability | MyTube | FreshRSS/Miniflux | YouTube Native |
 | --- | --- | --- | --- |
 | Chronological subscriptions | Yes | Yes | Not reliably |
 | YouTube watched state | Yes | No | Yes |
@@ -88,7 +88,7 @@ Suggested first set:
 
 The server stores runtime application data in SQLite:
 
-- `server/data/youtube-subscriptions.sqlite` for subscriptions, settings, watched state, feed cache metadata, channel refresh state, and subscription deletion tombstones
+- `server/data/mytube.sqlite` for subscriptions, settings, watched state, feed cache metadata, channel refresh state, and subscription deletion tombstones. The legacy `server/data/youtube-subscriptions.sqlite` file is migrated automatically on first launch if it still exists.
 
 Existing `server/data/db.json` and `server/data/videos.json` files are imported once during the SQLite migration and left in place as legacy recovery material. JSON writes used temporary-file replacement and rotating backups before the migration.
 
@@ -105,7 +105,7 @@ Restore while the server is stopped:
 
 ```bash
 cd server
-npm run restore:sqlite -- --file data/backups/youtube-subscriptions.YYYY-MM-DDTHH-MM-SS.sssZ.backup.sqlite
+npm run restore:sqlite -- --file data/backups/mytube.YYYY-MM-DDTHH-MM-SS.sssZ.backup.sqlite
 ```
 
 Restore validates the backup before replacement, writes a `*.pre-restore.sqlite` recovery snapshot of the current database, and removes old SQLite WAL sidecars before the restored database is activated.

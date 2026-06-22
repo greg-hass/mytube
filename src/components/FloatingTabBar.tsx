@@ -161,7 +161,7 @@ export const FloatingTabBar = ({
 								strokeWidth={2.5}
 							/>
 						</div>
-						<span className="relative mt-0.5 text-[10px] sm:text-[11px] font-semibold text-red-600 dark:text-red-500">
+						<span className="relative mt-0.5 text-[10px] sm:text-[11px] font-semibold text-gray-400 dark:text-ios-500">
 							Add
 						</span>
 					</motion.button>

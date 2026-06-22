@@ -125,7 +125,7 @@ describe('Header', () => {
     );
 
     expect(screen.getByText('261 channels')).toBeInTheDocument();
-    expect(screen.getByAltText('YouTube RSS')).toBeInTheDocument();
+    expect(screen.getByAltText('MyTube')).toBeInTheDocument();
     expect(document.querySelector('.bg-emerald-500.animate-pulse')).toBeInTheDocument();
   });
 

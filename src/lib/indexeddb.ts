@@ -6,7 +6,8 @@
  * - videos-cache: Cached videos from RSS feeds with TTL
  */
 
-const DB_NAME = 'youtube-subscriptions-db';
+const DB_NAME = 'mytube-db';
+const LEGACY_DB_NAME = 'youtube-subscriptions-db';
 const DB_VERSION = 1;
 
 // Store names
@@ -42,12 +43,33 @@ export interface CachedVideo {
   cachedAt: number;        // Timestamp when we fetched this
 }
 
-/**
- * Initialize and upgrade database schema
- */
-function initDB(): Promise<IDBDatabase> {
+function createSchema(db: IDBDatabase): void {
+  // Create subscriptions store if it doesn't exist
+  if (!db.objectStoreNames.contains(SUBSCRIPTIONS_STORE)) {
+    const subscriptionsStore = db.createObjectStore(SUBSCRIPTIONS_STORE, {
+      keyPath: 'id'
+    });
+    // Index by addedAt for sorting
+    subscriptionsStore.createIndex('addedAt', 'addedAt', { unique: false });
+  }
+
+  // Create videos cache store if it doesn't exist
+  if (!db.objectStoreNames.contains(VIDEOS_CACHE_STORE)) {
+    const videosStore = db.createObjectStore(VIDEOS_CACHE_STORE, {
+      keyPath: 'id'
+    });
+    // Index by channelId for fetching videos by channel
+    videosStore.createIndex('channelId', 'channelId', { unique: false });
+    // Index by cachedAt for TTL cleanup
+    videosStore.createIndex('cachedAt', 'cachedAt', { unique: false });
+    // Index by publishedAt for sorting
+    videosStore.createIndex('publishedAt', 'publishedAt', { unique: false });
+  }
+}
+
+function openDatabase(name: string): Promise<IDBDatabase> {
   return new Promise((resolve, reject) => {
-    const request = indexedDB.open(DB_NAME, DB_VERSION);
+    const request = indexedDB.open(name, DB_VERSION);
 
     request.onerror = () => {
       reject(new Error(`Failed to open database: ${request.error?.message}`));
@@ -59,28 +81,7 @@ function initDB(): Promise<IDBDatabase> {
 
     request.onupgradeneeded = (event) => {
       const db = (event.target as IDBOpenDBRequest).result;
-
-      // Create subscriptions store if it doesn't exist
-      if (!db.objectStoreNames.contains(SUBSCRIPTIONS_STORE)) {
-        const subscriptionsStore = db.createObjectStore(SUBSCRIPTIONS_STORE, {
-          keyPath: 'id'
-        });
-        // Index by addedAt for sorting
-        subscriptionsStore.createIndex('addedAt', 'addedAt', { unique: false });
-      }
-
-      // Create videos cache store if it doesn't exist
-      if (!db.objectStoreNames.contains(VIDEOS_CACHE_STORE)) {
-        const videosStore = db.createObjectStore(VIDEOS_CACHE_STORE, {
-          keyPath: 'id'
-        });
-        // Index by channelId for fetching videos by channel
-        videosStore.createIndex('channelId', 'channelId', { unique: false });
-        // Index by cachedAt for TTL cleanup
-        videosStore.createIndex('cachedAt', 'cachedAt', { unique: false });
-        // Index by publishedAt for sorting
-        videosStore.createIndex('publishedAt', 'publishedAt', { unique: false });
-      }
+      createSchema(db);
     };
   });
 }
@@ -89,7 +90,110 @@ function initDB(): Promise<IDBDatabase> {
  * Get database connection
  */
 async function getDB(): Promise<IDBDatabase> {
-  return initDB();
+  const db = await openDatabase(DB_NAME);
+  await migrateLegacyDatabaseIfNeeded(db);
+  return db;
+}
+
+async function databaseExists(name: string): Promise<boolean> {
+  return new Promise((resolve, reject) => {
+    const request = indexedDB.open(name, DB_VERSION);
+    let didUpgrade = false;
+
+    request.onupgradeneeded = () => {
+      didUpgrade = true;
+      request.transaction?.abort();
+    };
+
+    request.onsuccess = () => {
+      request.result.close();
+      resolve(true);
+    };
+
+    request.onerror = () => {
+      if (didUpgrade) {
+        resolve(false);
+        return;
+      }
+      reject(new Error(`Failed to probe database: ${request.error?.message}`));
+    };
+  });
+}
+
+function readAllFromStore<T>(db: IDBDatabase, storeName: string): Promise<T[]> {
+  return new Promise((resolve, reject) => {
+    try {
+      const transaction = db.transaction(storeName, 'readonly');
+      const store = transaction.objectStore(storeName);
+      const request = store.getAll();
+
+      request.onsuccess = () => {
+        resolve(request.result as T[]);
+      };
+
+      request.onerror = () => {
+        reject(new Error(`Failed to read ${storeName}: ${request.error?.message}`));
+      };
+    } catch (error) {
+      reject(error);
+    }
+  });
+}
+
+function writeAllToStore<T>(db: IDBDatabase, storeName: string, rows: T[]): Promise<void> {
+  return new Promise((resolve, reject) => {
+    try {
+      const transaction = db.transaction(storeName, 'readwrite');
+      const store = transaction.objectStore(storeName);
+
+      for (const row of rows) {
+        store.put(row);
+      }
+
+      transaction.oncomplete = () => {
+        resolve();
+      };
+
+      transaction.onerror = () => {
+        reject(new Error(`Failed to write ${storeName}: ${transaction.error?.message}`));
+      };
+    } catch (error) {
+      reject(error);
+    }
+  });
+}
+
+async function hasDatabaseContent(db: IDBDatabase): Promise<boolean> {
+  const [subscriptions, videos] = await Promise.all([
+    readAllFromStore<StoredSubscription>(db, SUBSCRIPTIONS_STORE),
+    readAllFromStore<CachedVideo>(db, VIDEOS_CACHE_STORE),
+  ]);
+
+  return subscriptions.length > 0 || videos.length > 0;
+}
+
+async function migrateLegacyDatabaseIfNeeded(targetDb: IDBDatabase): Promise<void> {
+  if (targetDb.name !== DB_NAME) return;
+  if (!(await databaseExists(LEGACY_DB_NAME))) return;
+  if (await hasDatabaseContent(targetDb)) return;
+
+  const legacyDb = await openDatabase(LEGACY_DB_NAME);
+  try {
+    if (!(await hasDatabaseContent(legacyDb))) return;
+
+    await writeAllToStore(
+      targetDb,
+      SUBSCRIPTIONS_STORE,
+      await readAllFromStore<StoredSubscription>(legacyDb, SUBSCRIPTIONS_STORE),
+    );
+    await writeAllToStore(
+      targetDb,
+      VIDEOS_CACHE_STORE,
+      await readAllFromStore<CachedVideo>(legacyDb, VIDEOS_CACHE_STORE),
+    );
+  } finally {
+    legacyDb.close();
+  }
 }
 
 /**
@@ -527,19 +631,37 @@ export function isIndexedDBSupported(): boolean {
  */
 export async function deleteDatabase(): Promise<void> {
   return new Promise((resolve, reject) => {
-    const request = indexedDB.deleteDatabase(DB_NAME);
+    const names = [DB_NAME, LEGACY_DB_NAME];
+    let remaining = names.length;
+    let settled = false;
 
-    request.onsuccess = () => {
-      resolve();
+    const finish = () => {
+      remaining -= 1;
+      if (!settled && remaining === 0) {
+        settled = true;
+        resolve();
+      }
     };
 
-    request.onerror = () => {
-      reject(new Error(`Failed to delete database: ${request.error?.message}`));
-    };
+    for (const name of names) {
+      const request = indexedDB.deleteDatabase(name);
 
-    request.onblocked = () => {
-      reject(new Error('Database deletion blocked - close all tabs using this database'));
-    };
+      request.onsuccess = () => {
+        finish();
+      };
+
+      request.onerror = () => {
+        if (settled) return;
+        settled = true;
+        reject(new Error(`Failed to delete database: ${request.error?.message}`));
+      };
+
+      request.onblocked = () => {
+        if (settled) return;
+        settled = true;
+        reject(new Error(`Database deletion blocked for ${name} - close all tabs using this database`));
+      };
+    }
   });
 }
 

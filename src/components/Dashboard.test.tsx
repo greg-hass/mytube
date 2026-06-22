@@ -330,7 +330,7 @@ describe('Dashboard', () => {
 
     render(<Dashboard />);
 
-    expect(screen.getByText('YouTube RSS')).toBeInTheDocument();
+    expect(screen.getByText('MyTube')).toBeInTheDocument();
     expect(await screen.findByText('Import subscriptions')).toBeInTheDocument();
     expect(screen.getByText('Add a channel')).toBeInTheDocument();
     expect(screen.queryByTestId('dashboard-tabs')).not.toBeInTheDocument();
@@ -928,6 +928,22 @@ describe('Dashboard', () => {
 
     expect(screen.getByText('Normal upload')).toBeInTheDocument();
     expect(screen.getByText('Quick tip AJ#shorts')).toBeInTheDocument();
+  });
+
+  it('hides the header after scrolling down past 8px', async () => {
+    render(<Dashboard />);
+
+    expect(headerMockState.latestProps?.scrollHidden).toBe(false);
+
+    Object.defineProperty(window, 'scrollY', {
+      configurable: true,
+      value: 9,
+    });
+    fireEvent.scroll(window);
+
+    await waitFor(() => {
+      expect(headerMockState.latestProps?.scrollHidden).toBe(true);
+    });
   });
 
   it('hides videos marked as Shorts even when the title has no Shorts text', () => {

@@ -14,12 +14,91 @@ function parseJson(value, fallback) {
 	}
 }
 
-function createSqliteStore({ databaseFile, legacyDataFile, legacyVideosFile }) {
+function createSqliteStore({ databaseFile, legacyDatabaseFile, legacyDataFile, legacyVideosFile }) {
 	let db = null;
 
 	function getDb() {
 		if (!db) throw new Error("SQLite store has not been initialized");
 		return db;
+	}
+
+	async function copyTableRows(sourceDb, targetDb, tableName) {
+		const columns = sourceDb
+			.prepare(`PRAGMA table_info(${tableName})`)
+			.all()
+			.map((row) => row.name);
+
+		if (columns.length === 0) return;
+
+		const rows = sourceDb.prepare(`SELECT ${columns.join(", ")} FROM ${tableName}`).all();
+		if (rows.length === 0) return;
+
+		const placeholders = columns.map(() => "?").join(", ");
+		const insert = targetDb.prepare(
+			`INSERT OR REPLACE INTO ${tableName} (${columns.join(", ")}) VALUES (${placeholders})`,
+		);
+		const write = targetDb.transaction(() => {
+			for (const row of rows) {
+				insert.run(...columns.map((column) => row[column]));
+			}
+		});
+		write();
+	}
+
+	function hasDatabaseContent(database) {
+		const tableHasRows = (tableName) => {
+			try {
+				return Boolean(database.prepare(`SELECT 1 FROM ${tableName} LIMIT 1`).get());
+			} catch {
+				return false;
+			}
+		};
+
+		return tableHasRows("subscriptions") || tableHasRows("videos") || tableHasRows("app_state");
+	}
+
+	async function migrateLegacyDatabaseIfNeeded() {
+		if (!legacyDatabaseFile || path.resolve(legacyDatabaseFile) === path.resolve(databaseFile)) {
+			return;
+		}
+
+		try {
+			await fsPromises.access(databaseFile);
+			const existingDb = new Database(databaseFile, { fileMustExist: true, readonly: true });
+			try {
+				if (hasDatabaseContent(existingDb)) return;
+			} finally {
+				existingDb.close();
+			}
+		} catch (error) {
+			if (error.code !== "ENOENT") throw error;
+		}
+
+		try {
+			await fsPromises.access(legacyDatabaseFile);
+		} catch (error) {
+			if (error.code === "ENOENT") return;
+			throw error;
+		}
+
+		const sourceDb = new Database(legacyDatabaseFile, { fileMustExist: true, readonly: true });
+		try {
+			if (!hasDatabaseContent(sourceDb)) return;
+
+			await fsPromises.mkdir(path.dirname(databaseFile), { recursive: true });
+			db = new Database(databaseFile);
+			db.pragma("foreign_keys = ON");
+			db.pragma("journal_mode = WAL");
+			runMigrations(db);
+
+			await copyTableRows(sourceDb, db, "app_state");
+			await copyTableRows(sourceDb, db, "subscriptions");
+			await copyTableRows(sourceDb, db, "videos");
+			await copyTableRows(sourceDb, db, "channel_refreshes");
+			await copyTableRows(sourceDb, db, "subscription_tombstones");
+		} finally {
+			sourceDb.close();
+		}
 	}
 
 	function writeAppState(key, value, updatedAt = ISO_NOW()) {
@@ -299,10 +378,13 @@ function createSqliteStore({ databaseFile, legacyDataFile, legacyVideosFile }) {
 	return {
 		async init({ defaultData, defaultVideoCache }) {
 			await fsPromises.mkdir(path.dirname(databaseFile), { recursive: true });
-			db = new Database(databaseFile);
-			db.pragma("foreign_keys = ON");
-			db.pragma("journal_mode = WAL");
-			runMigrations(db);
+			await migrateLegacyDatabaseIfNeeded();
+			if (!db) {
+				db = new Database(databaseFile);
+				db.pragma("foreign_keys = ON");
+				db.pragma("journal_mode = WAL");
+				runMigrations(db);
+			}
 			await importLegacyJson({ defaultData, defaultVideoCache });
 		},
 		getRevision() {
