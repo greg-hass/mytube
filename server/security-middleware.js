@@ -1,4 +1,4 @@
-const crypto = require('crypto');
+const crypto = require("crypto");
 
 const DEFAULT_WRITE_WINDOW_MS = 60 * 1000;
 const DEFAULT_WRITE_LIMIT = 30;
@@ -7,320 +7,384 @@ const MAX_WATCHED_VIDEOS = 50000;
 const MAX_REDIRECTS = 10000;
 const MAX_STRING_LENGTH = 2048;
 const MAX_API_KEY_LENGTH = 256;
-const CHANNEL_ID_PATTERN = /^(UC[a-zA-Z0-9_-]{22}|handle_[a-zA-Z0-9_.@-]{1,128}|custom_[a-zA-Z0-9_./@-]{1,160})$/;
+const CHANNEL_ID_PATTERN =
+	/^(UC[a-zA-Z0-9_-]{22}|handle_[a-zA-Z0-9_.@-]{1,128}|custom_[a-zA-Z0-9_./@-]{1,160})$/;
 const VIDEO_ID_PATTERN = /^[a-zA-Z0-9_-]{6,32}$/;
 
 function parseAllowedOrigins(value) {
-    if (Array.isArray(value)) {
-        return value.map(String).map(origin => origin.trim()).filter(Boolean);
-    }
+	if (Array.isArray(value)) {
+		return value
+			.map(String)
+			.map((origin) => origin.trim())
+			.filter(Boolean);
+	}
 
-    return String(value || '')
-        .split(',')
-        .map(origin => origin.trim())
-        .filter(Boolean);
+	return String(value || "")
+		.split(",")
+		.map((origin) => origin.trim())
+		.filter(Boolean);
 }
 
-const LOOPBACK_HOSTS = new Set(['localhost', '127.0.0.1', '::1', '0.0.0.0']);
+const LOOPBACK_HOSTS = new Set(["localhost", "127.0.0.1", "::1", "0.0.0.0"]);
 
 function isPrivateV4Host(hostname) {
-    if (!hostname) return false;
-    const parts = hostname.split('.');
-    if (parts.length !== 4 || parts.some(p => !/^\d+$/.test(p))) return false;
-    const [a, b] = parts.map(Number);
-    if (a === 10) return true;
-    if (a === 192 && b === 168) return true;
-    if (a === 172 && b >= 16 && b <= 31) return true;
-    if (a === 169 && b === 254) return true;
-    return false;
+	if (!hostname) return false;
+	const parts = hostname.split(".");
+	if (parts.length !== 4 || parts.some((p) => !/^\d+$/.test(p))) return false;
+	const [a, b] = parts.map(Number);
+	if (a === 10) return true;
+	if (a === 192 && b === 168) return true;
+	if (a === 172 && b >= 16 && b <= 31) return true;
+	if (a === 169 && b === 254) return true;
+	return false;
 }
 
 function isLocalNetworkHost(hostname) {
-    if (!hostname) return false;
-    const lower = hostname.toLowerCase();
-    if (LOOPBACK_HOSTS.has(lower)) return true;
-    if (isPrivateV4Host(lower)) return true;
-    if (lower.endsWith('.local')) return true;
-    return false;
+	if (!hostname) return false;
+	const lower = hostname.toLowerCase();
+	if (LOOPBACK_HOSTS.has(lower)) return true;
+	if (isPrivateV4Host(lower)) return true;
+	if (lower.endsWith(".local")) return true;
+	return false;
 }
 
 function originMatchesPolicy(origin, configuredOrigins) {
-    if (!origin) return true;
-    if (configuredOrigins.has(origin)) return true;
-    try {
-        const url = new URL(origin);
-        if (configuredOrigins.has(url.origin)) return true;
-        if (isLocalNetworkHost(url.hostname)) return true;
-    } catch {
-        return false;
-    }
-    return false;
+	if (!origin) return true;
+	if (configuredOrigins.has(origin)) return true;
+	try {
+		const url = new URL(origin);
+		if (configuredOrigins.has(url.origin)) return true;
+		if (isLocalNetworkHost(url.hostname)) return true;
+	} catch {
+		return false;
+	}
+	return false;
 }
 
 function describeAllowlist(configuredOrigins) {
-    if (configuredOrigins.size === 0) {
-        return 'loopback + private networks (override with ALLOWED_ORIGINS)';
-    }
-    return Array.from(configuredOrigins).join(', ');
+	if (configuredOrigins.size === 0) {
+		return "loopback + private networks (override with ALLOWED_ORIGINS)";
+	}
+	return Array.from(configuredOrigins).join(", ");
 }
 
 function createCorsOptions({ allowedOrigins = [] } = {}) {
-    const origins = new Set(parseAllowedOrigins(allowedOrigins));
+	const origins = new Set(parseAllowedOrigins(allowedOrigins));
 
-    return {
-        origin(origin, callback) {
-            if (originMatchesPolicy(origin, origins)) {
-                callback(null, true);
-                return;
-            }
+	return {
+		origin(origin, callback) {
+			if (originMatchesPolicy(origin, origins)) {
+				callback(null, true);
+				return;
+			}
 
-            callback(null, false);
-        },
-    };
+			callback(null, false);
+		},
+	};
 }
 
 function createOriginGuardMiddleware({ allowedOrigins = [] } = {}) {
-    const origins = new Set(parseAllowedOrigins(allowedOrigins));
+	const origins = new Set(parseAllowedOrigins(allowedOrigins));
 
-    return function originGuard(req, res, next) {
-        const origin = req.header('origin');
-        if (originMatchesPolicy(origin, origins)) {
-            next();
-            return;
-        }
+	return function originGuard(req, res, next) {
+		const origin = req.header("origin");
+		if (originMatchesPolicy(origin, origins)) {
+			next();
+			return;
+		}
 
-        res.status(403).json({ error: 'Origin not allowed' });
-    };
+		res.status(403).json({ error: "Origin not allowed" });
+	};
 }
 
 function getBearerToken(req) {
-    const authorization = req.header('authorization') || '';
-    const match = authorization.match(/^Bearer\s+(.+)$/i);
-    return match ? match[1] : null;
+	const authorization = req.header("authorization") || "";
+	const match = authorization.match(/^Bearer\s+(.+)$/i);
+	return match ? match[1] : null;
 }
 
 function timingSafeCompare(a, b) {
-    const aBuf = Buffer.from(String(a));
-    const bBuf = Buffer.from(String(b));
-    if (aBuf.length !== bBuf.length) return false;
-    return crypto.timingSafeEqual(aBuf, bBuf);
+	const aBuf = Buffer.from(String(a));
+	const bBuf = Buffer.from(String(b));
+	if (aBuf.length !== bBuf.length) return false;
+	return crypto.timingSafeEqual(aBuf, bBuf);
 }
 
-function createApiKeyAuthMiddleware({ token = '', allowInsecureUnauthenticatedApi = false } = {}) {
-    const configuredToken = String(token || '').trim();
+function createApiKeyAuthMiddleware({
+	token = "",
+	allowInsecureUnauthenticatedApi = false,
+} = {}) {
+	const configuredToken = String(token || "").trim();
 
-    return function apiKeyAuth(req, res, next) {
-        const isPublicGet = req.method === 'GET'
-            && (req.path === '/healthz' || req.path === '/channel-thumbnail');
-        if (isPublicGet) {
-            next();
-            return;
-        }
+	return function apiKeyAuth(req, res, next) {
+		const isPublicGet =
+			req.method === "GET" &&
+			(req.path === "/healthz" || req.path === "/channel-thumbnail");
+		if (isPublicGet) {
+			next();
+			return;
+		}
 
-        if (!configuredToken) {
-            if (allowInsecureUnauthenticatedApi) {
-                next();
-                return;
-            }
+		if (!configuredToken) {
+			if (allowInsecureUnauthenticatedApi) {
+				next();
+				return;
+			}
 
-            res.status(503).json({ error: 'Server API token is not configured' });
-            return;
-        }
+			res.status(503).json({ error: "Server API token is not configured" });
+			return;
+		}
 
-        if (timingSafeCompare(getBearerToken(req), configuredToken)) {
-            next();
-            return;
-        }
+		if (timingSafeCompare(getBearerToken(req), configuredToken)) {
+			next();
+			return;
+		}
 
-        res.status(401).json({ error: 'Unauthorized' });
-    };
+		res.status(401).json({ error: "Unauthorized" });
+	};
 }
 
 function getClientKey(req) {
-    return req.ip
-        || req.socket?.remoteAddress
-        || 'unknown';
+	return req.ip || req.socket?.remoteAddress || "unknown";
 }
 
-const { createLruCache, startBucketCleanup } = require('./utils');
+const { createLruCache, startBucketCleanup } = require("./utils");
 
 const DEFAULT_BUCKET_MAX_ENTRIES = 10000;
 
-function createBucketRateLimiter({ windowMs = DEFAULT_WRITE_WINDOW_MS, max = DEFAULT_WRITE_LIMIT, maxEntries = DEFAULT_BUCKET_MAX_ENTRIES } = {}) {
-    const buckets = createLruCache({ maxEntries });
-    startBucketCleanup(buckets);
+function createBucketRateLimiter({
+	windowMs = DEFAULT_WRITE_WINDOW_MS,
+	max = DEFAULT_WRITE_LIMIT,
+	maxEntries = DEFAULT_BUCKET_MAX_ENTRIES,
+} = {}) {
+	const buckets = createLruCache({ maxEntries });
+	startBucketCleanup(buckets);
 
-    function checkLimit(key) {
-        const now = Date.now();
-        const existing = buckets.get(key);
-        const bucket = existing && existing.resetAt > now
-            ? existing
-            : { count: 0, resetAt: now + windowMs };
+	function checkLimit(key) {
+		const now = Date.now();
+		const existing = buckets.get(key);
+		const bucket =
+			existing && existing.resetAt > now
+				? existing
+				: { count: 0, resetAt: now + windowMs };
 
-        bucket.count += 1;
-        buckets.set(key, bucket);
-        return bucket.count <= max;
-    }
+		bucket.count += 1;
+		buckets.set(key, bucket);
+		return bucket.count <= max;
+	}
 
-    function getBucket(key) {
-        return buckets.get(key);
-    }
+	function getBucket(key) {
+		return buckets.get(key);
+	}
 
-    function getBucketStats() {
-        return {
-            size: buckets.size,
-            maxEntries: buckets.maxEntries,
-        };
-    }
+	function getBucketStats() {
+		return {
+			size: buckets.size,
+			maxEntries: buckets.maxEntries,
+		};
+	}
 
-    return { checkLimit, getBucket, buckets, getBucketStats };
+	return { checkLimit, getBucket, buckets, getBucketStats };
 }
 
-const DEFAULT_RATE_LIMIT_METHODS = ['POST', 'PUT', 'PATCH', 'DELETE'];
+const DEFAULT_RATE_LIMIT_METHODS = ["POST", "PUT", "PATCH", "DELETE"];
 
 function createRateLimitMiddleware(opts) {
-    const { checkLimit, getBucket } = createBucketRateLimiter(opts);
-    const {
-        windowMs = DEFAULT_WRITE_WINDOW_MS,
-        max = DEFAULT_WRITE_LIMIT,
-        methods = DEFAULT_RATE_LIMIT_METHODS,
-    } = opts || {};
-    const methodSet = new Set(methods);
+	const { checkLimit, getBucket } = createBucketRateLimiter(opts);
+	const { max = DEFAULT_WRITE_LIMIT, methods = DEFAULT_RATE_LIMIT_METHODS } =
+		opts || {};
+	const methodSet = new Set(methods);
 
-    return function rateLimit(req, res, next) {
-        if (!methodSet.has(req.method)) {
-            next();
-            return;
-        }
+	return function rateLimit(req, res, next) {
+		if (!methodSet.has(req.method)) {
+			next();
+			return;
+		}
 
-        const key = getClientKey(req);
-        const allowed = checkLimit(key);
-        const bucket = getBucket(key);
+		const key = getClientKey(req);
+		const allowed = checkLimit(key);
+		const bucket = getBucket(key);
 
-        res.setHeader?.('X-RateLimit-Limit', String(max));
-        res.setHeader?.('X-RateLimit-Remaining', String(Math.max(0, max - (bucket?.count || 0))));
-        res.setHeader?.('X-RateLimit-Reset', bucket ? new Date(bucket.resetAt).toISOString() : '');
+		res.setHeader?.("X-RateLimit-Limit", String(max));
+		res.setHeader?.(
+			"X-RateLimit-Remaining",
+			String(Math.max(0, max - (bucket?.count || 0))),
+		);
+		res.setHeader?.(
+			"X-RateLimit-Reset",
+			bucket ? new Date(bucket.resetAt).toISOString() : "",
+		);
 
-        if (!allowed) {
-            res.status(429).json({ error: 'Too many requests' });
-            return;
-        }
+		if (!allowed) {
+			res.status(429).json({ error: "Too many requests" });
+			return;
+		}
 
-        next();
-    };
+		next();
+	};
 }
 
 function isPlainObject(value) {
-    return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
+	return Boolean(value) && typeof value === "object" && !Array.isArray(value);
 }
 
-function isReasonableString(value, { required = false, max = MAX_STRING_LENGTH } = {}) {
-    if (value === undefined || value === null) return !required;
-    return typeof value === 'string' && value.length <= max && (!required || value.trim().length > 0);
+function isReasonableString(
+	value,
+	{ required = false, max = MAX_STRING_LENGTH } = {},
+) {
+	if (value === undefined || value === null) return !required;
+	return (
+		typeof value === "string" &&
+		value.length <= max &&
+		(!required || value.trim().length > 0)
+	);
 }
 
 function validateSubscription(subscription, index) {
-    if (!isPlainObject(subscription)) return `subscriptions[${index}] must be an object`;
-    if (!isReasonableString(subscription.id, { required: true, max: 192 }) || !CHANNEL_ID_PATTERN.test(subscription.id)) {
-        return `subscription ${index} has an invalid id`;
-    }
-    if (!isReasonableString(subscription.title, { required: true })) {
-        return `subscription ${index} has an invalid title`;
-    }
+	if (!isPlainObject(subscription))
+		return `subscriptions[${index}] must be an object`;
+	if (
+		!isReasonableString(subscription.id, { required: true, max: 192 }) ||
+		!CHANNEL_ID_PATTERN.test(subscription.id)
+	) {
+		return `subscription ${index} has an invalid id`;
+	}
+	if (!isReasonableString(subscription.title, { required: true })) {
+		return `subscription ${index} has an invalid title`;
+	}
 
-    for (const field of ['thumbnail', 'customUrl', 'description', 'group']) {
-        if (!isReasonableString(subscription[field])) {
-            return `subscription ${index} has an invalid ${field}`;
-        }
-    }
+	for (const field of ["thumbnail", "customUrl", "description", "group"]) {
+		if (!isReasonableString(subscription[field])) {
+			return `subscription ${index} has an invalid ${field}`;
+		}
+	}
 
-    for (const field of ['isFavorite', 'isMuted']) {
-        if (subscription[field] !== undefined && typeof subscription[field] !== 'boolean') {
-            return `subscription ${index} has an invalid ${field}`;
-        }
-    }
+	for (const field of ["isFavorite", "isMuted"]) {
+		if (
+			subscription[field] !== undefined &&
+			typeof subscription[field] !== "boolean"
+		) {
+			return `subscription ${index} has an invalid ${field}`;
+		}
+	}
 
-    if (subscription.addedAt !== undefined && !Number.isFinite(Number(subscription.addedAt))) {
-        return `subscription ${index} has an invalid addedAt`;
-    }
+	if (
+		subscription.addedAt !== undefined &&
+		!Number.isFinite(Number(subscription.addedAt))
+	) {
+		return `subscription ${index} has an invalid addedAt`;
+	}
 
-    return null;
+	return null;
 }
 
 function validateSettings(settings) {
-    if (settings === undefined) return null;
-    if (!isPlainObject(settings)) return 'settings must be an object';
+	if (settings === undefined) return null;
+	if (!isPlainObject(settings)) return "settings must be an object";
 
-    const stringFields = ['searchQuery', 'sortBy'];
-    for (const field of stringFields) {
-        if (!isReasonableString(settings[field], { max: 512 })) {
-            return `settings.${field} is invalid`;
-        }
-    }
+	const stringFields = ["searchQuery", "sortBy"];
+	for (const field of stringFields) {
+		if (!isReasonableString(settings[field], { max: 512 })) {
+			return `settings.${field} is invalid`;
+		}
+	}
 
-    if (!isReasonableString(settings.apiKey, { max: MAX_API_KEY_LENGTH })) {
-        return 'settings.apiKey is invalid';
-    }
+	if (!isReasonableString(settings.apiKey, { max: MAX_API_KEY_LENGTH })) {
+		return "settings.apiKey is invalid";
+	}
 
-    if (settings.quotaUsed !== undefined && !Number.isFinite(Number(settings.quotaUsed))) {
-        return 'settings.quotaUsed is invalid';
-    }
+	if (
+		settings.quotaUsed !== undefined &&
+		!Number.isFinite(Number(settings.quotaUsed))
+	) {
+		return "settings.quotaUsed is invalid";
+	}
 
-    if (settings.apiExhausted !== undefined && typeof settings.apiExhausted !== 'boolean') {
-        return 'settings.apiExhausted is invalid';
-    }
+	if (
+		settings.apiExhausted !== undefined &&
+		typeof settings.apiExhausted !== "boolean"
+	) {
+		return "settings.apiExhausted is invalid";
+	}
 
-    return null;
+	return null;
 }
 
 function validateSyncPayload(data) {
-    if (!isPlainObject(data)) return { valid: false, error: 'Invalid data format' };
+	if (!isPlainObject(data))
+		return { valid: false, error: "Invalid data format" };
 
-    if (!Array.isArray(data.subscriptions)) return { valid: false, error: 'subscriptions must be an array' };
-    if (data.subscriptions.length > MAX_SUBSCRIPTIONS) {
-        return { valid: false, error: `subscriptions must contain ${MAX_SUBSCRIPTIONS} or fewer items` };
-    }
+	if (!Array.isArray(data.subscriptions))
+		return { valid: false, error: "subscriptions must be an array" };
+	if (data.subscriptions.length > MAX_SUBSCRIPTIONS) {
+		return {
+			valid: false,
+			error: `subscriptions must contain ${MAX_SUBSCRIPTIONS} or fewer items`,
+		};
+	}
 
-    for (let index = 0; index < data.subscriptions.length; index += 1) {
-        const error = validateSubscription(data.subscriptions[index], index);
-        if (error) return { valid: false, error };
-    }
+	for (let index = 0; index < data.subscriptions.length; index += 1) {
+		const error = validateSubscription(data.subscriptions[index], index);
+		if (error) return { valid: false, error };
+	}
 
-    if (!Array.isArray(data.watchedVideos)) return { valid: false, error: 'watchedVideos must be an array' };
-    if (data.watchedVideos.length > MAX_WATCHED_VIDEOS) {
-        return { valid: false, error: `watchedVideos must contain ${MAX_WATCHED_VIDEOS} or fewer items` };
-    }
-    if (data.watchedVideos.some(videoId => typeof videoId !== 'string' || !VIDEO_ID_PATTERN.test(videoId))) {
-        return { valid: false, error: 'watchedVideos contains an invalid video id' };
-    }
+	if (!Array.isArray(data.watchedVideos))
+		return { valid: false, error: "watchedVideos must be an array" };
+	if (data.watchedVideos.length > MAX_WATCHED_VIDEOS) {
+		return {
+			valid: false,
+			error: `watchedVideos must contain ${MAX_WATCHED_VIDEOS} or fewer items`,
+		};
+	}
+	if (
+		data.watchedVideos.some(
+			(videoId) =>
+				typeof videoId !== "string" || !VIDEO_ID_PATTERN.test(videoId),
+		)
+	) {
+		return {
+			valid: false,
+			error: "watchedVideos contains an invalid video id",
+		};
+	}
 
-    if (data.redirects !== undefined) {
-        if (!isPlainObject(data.redirects)) return { valid: false, error: 'redirects must be an object' };
-        const entries = Object.entries(data.redirects);
-        if (entries.length > MAX_REDIRECTS) {
-            return { valid: false, error: `redirects must contain ${MAX_REDIRECTS} or fewer items` };
-        }
+	if (data.redirects !== undefined) {
+		if (!isPlainObject(data.redirects))
+			return { valid: false, error: "redirects must be an object" };
+		const entries = Object.entries(data.redirects);
+		if (entries.length > MAX_REDIRECTS) {
+			return {
+				valid: false,
+				error: `redirects must contain ${MAX_REDIRECTS} or fewer items`,
+			};
+		}
 
-        for (const [sourceId, targetId] of entries) {
-            if (!CHANNEL_ID_PATTERN.test(sourceId) || !CHANNEL_ID_PATTERN.test(String(targetId))) {
-                return { valid: false, error: 'redirects contains an invalid channel id' };
-            }
-        }
-    }
+		for (const [sourceId, targetId] of entries) {
+			if (
+				!CHANNEL_ID_PATTERN.test(sourceId) ||
+				!CHANNEL_ID_PATTERN.test(String(targetId))
+			) {
+				return {
+					valid: false,
+					error: "redirects contains an invalid channel id",
+				};
+			}
+		}
+	}
 
-    const settingsError = validateSettings(data.settings);
-    if (settingsError) return { valid: false, error: settingsError };
+	const settingsError = validateSettings(data.settings);
+	if (settingsError) return { valid: false, error: settingsError };
 
-    return { valid: true };
+	return { valid: true };
 }
 
 module.exports = {
-    createApiKeyAuthMiddleware,
-    createBucketRateLimiter,
-    createCorsOptions,
-    createOriginGuardMiddleware,
-    createRateLimitMiddleware,
-    describeAllowlist,
-    parseAllowedOrigins,
-    validateSyncPayload,
+	createApiKeyAuthMiddleware,
+	createBucketRateLimiter,
+	createCorsOptions,
+	createOriginGuardMiddleware,
+	createRateLimitMiddleware,
+	describeAllowlist,
+	parseAllowedOrigins,
+	validateSyncPayload,
 };
