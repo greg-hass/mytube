@@ -108,6 +108,34 @@ describe('Header', () => {
     expect(document.documentElement.style.getPropertyValue('--app-current-header-height')).toBe('');
   });
 
+  it('shows a pulsing refresh dot next to the channel count while syncing', () => {
+    render(
+      <Header
+        syncStatus={{
+          total: 1,
+          current: 1,
+          isSyncing: true,
+          lastUpdated: Date.now(),
+          errors: 0,
+          videos: 1,
+          state: 'running',
+          failedChannels: [],
+        }}
+      />
+    );
+
+    expect(screen.getByText('261 channels')).toBeInTheDocument();
+    expect(screen.getByAltText('YouTube RSS')).toBeInTheDocument();
+    expect(document.querySelector('.bg-emerald-500.animate-pulse')).toBeInTheDocument();
+  });
+
+  it('hides the refresh dot when not syncing', () => {
+    render(<Header />);
+
+    expect(screen.getByText('261 channels')).toBeInTheDocument();
+    expect(document.querySelector('.bg-emerald-500.animate-pulse')).not.toBeInTheDocument();
+  });
+
   it('opens feed filters from the mobile header filter button', () => {
     const onOpenFilters = vi.fn();
     render(

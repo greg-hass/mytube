@@ -108,7 +108,7 @@ export const SubscriptionCard = memo(({ channel, groups = [], onRemove, onToggle
         <motion.div
           initial={{ opacity: 0 }}
           whileHover={{ opacity: 1 }}
-          className="absolute inset-0 flex items-center justify-center bg-black/40"
+          className="absolute inset-0 flex items-center justify-center bg-black/40 pointer-events-none"
         >
           <motion.div
             initial={{ scale: 0 }}
@@ -128,7 +128,7 @@ export const SubscriptionCard = memo(({ channel, groups = [], onRemove, onToggle
               e.stopPropagation();
               setConfirmOpen(true);
             }}
-            className="absolute top-2 right-2 p-2 rounded-full bg-red-600 text-white shadow-lg hover:bg-red-700 transition-all opacity-0 group-hover:opacity-100 group-hover:translate-y-0 translate-y-1"
+            className="absolute top-2 right-2 p-2 rounded-full bg-red-600 text-white shadow-lg hover:bg-red-700 transition-all opacity-100 sm:opacity-0 sm:group-hover:opacity-100 translate-y-0 sm:translate-y-1 sm:group-hover:translate-y-0"
             title="Unsubscribe from this channel"
           >
             <Trash2 className="w-4 h-4" />

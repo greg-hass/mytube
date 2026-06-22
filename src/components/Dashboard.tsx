@@ -288,7 +288,7 @@ export const Dashboard = () => {
 	const { favoriteVideoIds, favoriteVideos: savedFavoriteVideos } =
 		useFavoriteVideos();
 	const { queuedVideoIds, queuedVideos: savedQueuedVideos } = useQueuedVideos();
-	const { searchQuery, watchedVideos, markAsWatched } = useStore();
+	const { searchQuery, watchedVideos, markAsWatched, setSearchQuery } = useStore();
 
 	// Check if any channels have temporary IDs (can't fetch videos)
 	const hasTemporaryChannels = rawSubscriptions.some(
@@ -575,6 +575,11 @@ export const Dashboard = () => {
 		} finally {
 			setIsRepairingIcons(false);
 		}
+	};
+
+	const openChannel = (channelId: string) => {
+		setSearchQuery("");
+		window.location.href = `/channel/${channelId}`;
 	};
 
 	useEffect(() => {
@@ -1268,9 +1273,7 @@ export const Dashboard = () => {
 												{activeChannels.map((item, index) => (
 													<div
 														key={item.channel.id}
-														onClick={() =>
-															(window.location.href = `/channel/${item.channel.id}`)
-														}
+														onClick={() => openChannel(item.channel.id)}
 														className="flex items-center gap-4 p-4 bg-white dark:bg-ios-800 rounded-xl shadow-sm hover:shadow-md transition-all cursor-pointer border border-gray-200 dark:border-ios-700"
 													>
 														<div className="flex-shrink-0 w-12 h-12 bg-gradient-to-br from-green-500 to-emerald-600 rounded-full flex items-center justify-center text-white font-bold text-lg">

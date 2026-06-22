@@ -121,7 +121,7 @@ This is intended for a personal, self-hosted deployment. SQLite improves integri
 | `YOUTUBE_API_KEY` | unset | Optional server-only key for capped background handle/custom URL resolution |
 | `FEED_REFRESH_ENABLED` | `true` | Enables scheduled background feed refreshes |
 | `FEED_REFRESH_ON_START` | `true` | Refreshes on server startup when the cache is stale |
-| `FEED_REFRESH_INTERVAL_MINUTES` | `15` | Scheduled refresh interval |
+| `FEED_REFRESH_INTERVAL_MINUTES` | `5` | Scheduled refresh interval |
 | `SERVER_API_TOKEN` | unset | Bearer token required by default for all `/api/*` requests except `/api/healthz` |
 | `ALLOW_INSECURE_UNAUTHENTICATED_API` | `false` | Explicit opt-out for trusted local deployments without a server API token |
 | `ALLOWED_ORIGINS` | unset | Optional comma-separated browser origin allowlist, for example `https://feeds.example.com` |

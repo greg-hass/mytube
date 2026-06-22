@@ -13,7 +13,7 @@ export const ChannelViewer = () => {
   const { channelId } = useParams<{ channelId: string }>();
   const navigate = useNavigate();
   const { allSubscriptions } = useSubscriptionStorage();
-  const { watchedVideos, markAsWatched } = useStore();
+  const { watchedVideos, markAsWatched, setSearchQuery } = useStore();
   const [hideWatched, setHideWatched] = useState(false);
 
   // Get channel info from subscriptions
@@ -50,6 +50,10 @@ export const ChannelViewer = () => {
       navigate('/', { replace: true });
     }
   }, [channelId, navigate]);
+
+  useEffect(() => {
+    setSearchQuery('');
+  }, [setSearchQuery]);
 
   useEffect(() => {
     if (!channelInfo && channelVideos.length > 0) {
@@ -107,7 +111,10 @@ export const ChannelViewer = () => {
         <motion.button
           initial={{ opacity: 0, x: -20 }}
           animate={{ opacity: 1, x: 0 }}
-          onClick={() => navigate(-1)}
+          onClick={() => {
+            setSearchQuery('');
+            navigate(-1);
+          }}
           className="mb-4 flex items-center gap-2 rounded-lg bg-gray-100 px-3 py-2 text-sm font-medium transition-colors hover:bg-gray-200 dark:bg-ios-800 dark:hover:bg-ios-700 sm:mb-6"
         >
           <ArrowLeft className="w-4 h-4" />

@@ -109,4 +109,28 @@ describe('SubscriptionCard', () => {
 
     expect(onToggleFavorite).toHaveBeenCalledWith('UC123');
   });
+
+  it('opens the unsubscribe confirmation and removes the channel', () => {
+    const onRemove = vi.fn();
+
+    render(
+      <MemoryRouter>
+        <SubscriptionCard
+          index={0}
+          channel={{
+            id: 'UC123',
+            title: 'Fast Channel',
+            description: '',
+            thumbnail: 'https://example.com/thumb.jpg',
+          }}
+          onRemove={onRemove}
+        />
+      </MemoryRouter>
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Unsubscribe from this channel' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Unsubscribe' }));
+
+    expect(onRemove).toHaveBeenCalledWith('UC123');
+  });
 });

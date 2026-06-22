@@ -2,7 +2,6 @@ import { Play, Clock, Heart, CheckCircle2, ListPlus } from 'lucide-react';
 import type { YouTubeVideo } from '../types/youtube';
 import { useEffect, useRef, useState } from 'react';
 import type { MouseEvent, PointerEvent } from 'react';
-import { useLocation, useNavigate } from 'react-router-dom';
 import { getDisplayThumbnail } from '../lib/icon-loader';
 import { getHighResolutionVideoThumbnail, getNextVideoThumbnailFallback, isLikelyLowResolutionYouTubePlaceholder } from '../lib/video-thumbnails';
 import { useFavoriteVideos } from '../hooks/useFavoriteVideos';
@@ -21,16 +20,10 @@ interface Props {
   onUnavailable?: (videoId: string) => void;
 }
 
-const getDashboardScrollStorageKey = (search: string) => {
-  const tab = new URLSearchParams(search).get('tab');
-
-  if (tab === 'queue') return 'queued-videos-scroll';
-  if (tab === 'favorites') return 'favorite-videos-scroll';
-  return 'latest-videos-scroll';
-};
-
 const SWIPE_TO_WATCHED_THRESHOLD = 80;
+const SWIPE_TO_QUEUE_THRESHOLD = 80;
 const SWIPE_VERTICAL_CANCEL_THRESHOLD = 48;
+const SWIPE_HINT_THRESHOLD = 12;
 const WATCHED_PERCENT_THRESHOLD = 0.5;
 const WATCHED_SECONDS_THRESHOLD = 30;
 
@@ -45,9 +38,6 @@ const StatefulVideoCard = ({ video, channelThumbnail, onInlinePlaybackChange, on
   const [dragOffsetX, setDragOffsetX] = useState(0);
   const thumbnailFallbackCountRef = useRef(0);
   const pointerStartRef = useRef<{ x: number; y: number; pointerId: number } | null>(null);
-  const suppressNextClickRef = useRef(false);
-  const navigate = useNavigate();
-  const location = useLocation();
   const { isFavoriteVideo, toggleFavoriteVideo } = useFavoriteVideos();
   const { isQueuedVideo, toggleQueuedVideo } = useQueuedVideos();
   const { watchedVideos, markAsWatched, markAsUnwatched } = useStore();
@@ -150,16 +140,6 @@ const StatefulVideoCard = ({ video, channelThumbnail, onInlinePlaybackChange, on
     };
   }, [isPlayingInline, markAsWatched, onInlinePlaybackChange, video.id]);
 
-  const openVideo = () => {
-    if (suppressNextClickRef.current) {
-      suppressNextClickRef.current = false;
-      return;
-    }
-
-    sessionStorage.setItem(getDashboardScrollStorageKey(location.search), String(Math.round(window.scrollY)));
-    navigate(`/video/${video.id}`);
-  };
-
   const playInline = () => {
     setIsPlayingInline(true);
   };
@@ -198,16 +178,18 @@ const StatefulVideoCard = ({ video, channelThumbnail, onInlinePlaybackChange, on
     if (!pointerStart || pointerStart.pointerId !== event.pointerId) return;
 
     const deltaX = event.clientX - pointerStart.x;
-    const shouldMarkWatched = Math.abs(deltaX) >= SWIPE_TO_WATCHED_THRESHOLD;
+    const shouldMarkWatched = deltaX <= -SWIPE_TO_WATCHED_THRESHOLD;
+    const shouldToggleQueue = deltaX >= SWIPE_TO_QUEUE_THRESHOLD;
 
     pointerStartRef.current = null;
     setDragOffsetX(0);
 
     if (shouldMarkWatched) {
-      suppressNextClickRef.current = true;
       if (!isWatched) {
         markAsWatched(video.id);
       }
+    } else if (shouldToggleQueue) {
+      toggleQueuedVideo(video);
     }
   };
 
@@ -278,10 +260,33 @@ const StatefulVideoCard = ({ video, channelThumbnail, onInlinePlaybackChange, on
       style={{ transform: `translateX(${dragOffsetX}px)` }}
       className="group relative flex h-full touch-pan-y flex-col overflow-hidden rounded-xl border border-gray-200 bg-white shadow-md transition-colors duration-200 hover:border-gray-300 dark:border-ios-800 dark:bg-ios-900 dark:hover:border-ios-700 sm:hover:shadow-xl"
     >
-      {Math.abs(dragOffsetX) > 12 && (
-        <div className="pointer-events-none absolute inset-0 z-20 flex items-center justify-center bg-emerald-600/15 text-sm font-semibold text-emerald-700 dark:text-emerald-200">
-          <CheckCircle2 className="mr-2 h-5 w-5" />
-          <span>{isWatched ? 'Watched' : 'Mark watched'}</span>
+      {Math.abs(dragOffsetX) > SWIPE_HINT_THRESHOLD && (
+        <div
+          className={`pointer-events-none absolute inset-0 z-20 flex items-center justify-center text-sm font-semibold ${
+            dragOffsetX < 0
+              ? 'bg-emerald-600/15 text-emerald-700 dark:text-emerald-200'
+              : 'bg-blue-600/15 text-blue-700 dark:text-blue-200'
+          }`}
+        >
+          <div
+            className={`flex items-center gap-2 rounded-full px-3 py-1.5 shadow-sm ${
+              dragOffsetX < 0
+                ? 'bg-emerald-600/90 text-white'
+                : 'bg-blue-600/90 text-white'
+            }`}
+          >
+            {dragOffsetX < 0 ? (
+              <>
+                <CheckCircle2 className="h-5 w-5" />
+                <span>{isWatched ? 'Watched' : 'Mark watched'}</span>
+              </>
+            ) : (
+              <>
+                <ListPlus className="h-5 w-5" />
+                <span>{isQueued ? 'Remove from queue' : 'Add to queue'}</span>
+              </>
+            )}
+          </div>
         </div>
       )}
       {/* Thumbnail */}
@@ -352,6 +357,15 @@ const StatefulVideoCard = ({ video, channelThumbnail, onInlinePlaybackChange, on
           </div>
         )}
 
+        {!isPlayingInline && isWatched && (
+          <div
+            className={`absolute left-2 ${isLive ? 'top-10' : 'top-2'} z-10 flex items-center gap-1.5 rounded bg-emerald-600 px-2 py-1 text-[11px] font-bold uppercase tracking-wide text-white shadow-sm`}
+          >
+            <CheckCircle2 className="h-3.5 w-3.5 fill-current" />
+            <span>Watched</span>
+          </div>
+        )}
+
         {!isPlayingInline && video.duration && (
           <div className="absolute bottom-2 right-2 bg-black/80 px-2 py-1 rounded text-xs text-white font-medium">
             {video.duration}
@@ -364,14 +378,9 @@ const StatefulVideoCard = ({ video, channelThumbnail, onInlinePlaybackChange, on
       <div data-testid="video-card-info" className="flex h-28 flex-col p-3">
         <div className="mb-1 h-10">
           <h4 className="font-medium text-sm line-clamp-2 group-hover:text-red-600 dark:group-hover:text-red-400 transition-colors">
-            <button
-              type="button"
-              onClick={openVideo}
-              aria-label={`Open ${video.title}`}
-              className="line-clamp-2 text-left transition-colors hover:text-red-600 dark:hover:text-red-400"
-            >
+            <span className="line-clamp-2 text-left transition-colors">
               {video.title}
-            </button>
+            </span>
           </h4>
         </div>
 
