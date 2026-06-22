@@ -145,7 +145,7 @@ export const useRSSVideos = () => {
 		},
 		placeholderData: (previousData) => previousData,
 		staleTime: 1000 * 60, // 1 minute
-		refetchInterval: isAggregating ? 5000 : 1000 * 60 * 5,
+		refetchInterval: isAggregating ? 5000 : 1000 * 30,
 	});
 
 	useEffect(() => {
