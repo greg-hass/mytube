@@ -5,7 +5,6 @@ import { useStore } from './store/useStore';
 import { MobileLandscapeGate } from './components/MobileLandscapeGate';
 import { Toaster } from 'sonner';
 
-const VideoPlayer = lazy(() => import('./components/VideoPlayer').then((module) => ({ default: module.VideoPlayer })));
 const ChannelViewer = lazy(() => import('./components/ChannelViewer').then((module) => ({ default: module.ChannelViewer })));
 
 const AppFallback = () => (
@@ -46,7 +45,6 @@ function App() {
           <MobileLandscapeGate>
             <Routes>
               <Route path="/" element={<Dashboard />} />
-              <Route path="/video/:videoId" element={<VideoPlayer />} />
               <Route path="/channel/:channelId" element={<ChannelViewer />} />
               <Route path="*" element={<Navigate to="/" replace />} />
             </Routes>

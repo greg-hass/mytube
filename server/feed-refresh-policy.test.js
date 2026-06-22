@@ -525,7 +525,7 @@ describe('feed refresh policy', () => {
     });
 
     it('treats the refresh interval as a 5 minute default', () => {
-        expect(DEFAULT_SCHEDULED_REFRESH_INTERVAL_MS).toBe(15 * 60 * 1000);
+        expect(DEFAULT_SCHEDULED_REFRESH_INTERVAL_MS).toBe(5 * 60 * 1000);
         expect(CHANNEL_REFRESH_INTERVAL_MS).toBe(15 * 60 * 1000);
     });
 

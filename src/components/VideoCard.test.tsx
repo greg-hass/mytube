@@ -1,5 +1,5 @@
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
-import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom';
+import { MemoryRouter, useLocation } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { VideoCard } from './VideoCard';
 import { MobileLandscapeGate } from './MobileLandscapeGate';
@@ -359,47 +359,31 @@ describe('VideoCard', () => {
     expect(card?.className).not.toContain('transition-all');
   });
 
-  it('saves the latest timeline scroll before opening a video', () => {
+  it('does not navigate away when the title is clicked', () => {
     vi.stubGlobal('scrollY', 432);
 
     render(
       <MemoryRouter initialEntries={['/?tab=latest']}>
-        <Routes>
-          <Route
-            path="/"
-            element={(
-              <>
-                <VideoCard video={video} index={0} />
-                <LocationProbe />
-              </>
-            )}
-          />
-          <Route path="/video/:videoId" element={<LocationProbe />} />
-        </Routes>
+        <>
+          <VideoCard video={video} index={0} />
+          <LocationProbe />
+        </>
       </MemoryRouter>
     );
 
     fireEvent.click(screen.getByText('A useful video'));
 
-    expect(sessionStorage.getItem('latest-videos-scroll')).toBe('432');
-    expect(screen.getByTestId('location')).toHaveTextContent('/video/video-1');
+    expect(sessionStorage.getItem('latest-videos-scroll')).toBeNull();
+    expect(screen.getByTestId('location')).toHaveTextContent('/');
   });
 
   it('plays the video inline when the thumbnail is clicked', () => {
     render(
       <MemoryRouter initialEntries={['/?tab=latest']}>
-        <Routes>
-          <Route
-            path="/"
-            element={(
-              <>
-                <VideoCard video={video} index={0} />
-                <LocationProbe />
-              </>
-            )}
-          />
-          <Route path="/video/:videoId" element={<LocationProbe />} />
-        </Routes>
+        <>
+          <VideoCard video={video} index={0} />
+          <LocationProbe />
+        </>
       </MemoryRouter>
     );
 
@@ -441,26 +425,10 @@ describe('VideoCard', () => {
     render(
       <MemoryRouter initialEntries={['/?tab=latest']}>
         <MobileLandscapeGate>
-          <Routes>
-            <Route
-              path="/"
-              element={(
-                <>
-                  <VideoCard video={video} index={0} />
-                  <LocationProbe />
-                </>
-              )}
-            />
-            <Route
-              path="/video/:videoId"
-              element={(
-                <>
-                  <p>Dedicated now playing</p>
-                  <LocationProbe />
-                </>
-              )}
-            />
-          </Routes>
+          <>
+            <VideoCard video={video} index={0} />
+            <LocationProbe />
+          </>
         </MobileLandscapeGate>
       </MemoryRouter>
     );
@@ -508,18 +476,10 @@ describe('VideoCard', () => {
 
     render(
       <MemoryRouter initialEntries={['/?tab=latest']}>
-        <Routes>
-          <Route
-            path="/"
-            element={(
-              <>
-                <VideoCard video={video} index={0} />
-                <LocationProbe />
-              </>
-            )}
-          />
-          <Route path="/video/:videoId" element={<LocationProbe />} />
-        </Routes>
+        <>
+          <VideoCard video={video} index={0} />
+          <LocationProbe />
+        </>
       </MemoryRouter>
     );
 
@@ -601,18 +561,10 @@ describe('VideoCard', () => {
 
     render(
       <MemoryRouter initialEntries={['/?tab=queue']}>
-        <Routes>
-          <Route
-            path="/"
-            element={(
-              <>
-                <VideoCard video={video} index={0} />
-                <LocationProbe />
-              </>
-            )}
-          />
-          <Route path="/video/:videoId" element={<LocationProbe />} />
-        </Routes>
+        <>
+          <VideoCard video={video} index={0} />
+          <LocationProbe />
+        </>
       </MemoryRouter>
     );
 
@@ -627,32 +579,6 @@ describe('VideoCard', () => {
         duration: 300,
       },
     });
-  });
-
-  it('opens the full player view when the title is clicked', () => {
-    vi.stubGlobal('scrollY', 432);
-
-    render(
-      <MemoryRouter initialEntries={['/?tab=latest']}>
-        <Routes>
-          <Route
-            path="/"
-            element={(
-              <>
-                <VideoCard video={video} index={0} />
-                <LocationProbe />
-              </>
-            )}
-          />
-          <Route path="/video/:videoId" element={<LocationProbe />} />
-        </Routes>
-      </MemoryRouter>
-    );
-
-    fireEvent.click(screen.getByRole('button', { name: 'Open A useful video' }));
-
-    expect(sessionStorage.getItem('latest-videos-scroll')).toBe('432');
-    expect(screen.getByTestId('location')).toHaveTextContent('/video/video-1');
   });
 
   it('can favorite a video without opening it', () => {
@@ -680,21 +606,26 @@ describe('VideoCard', () => {
     expect(mockStore.markAsWatched).toHaveBeenCalledWith('video-1');
   });
 
-  it('marks a video watched when swiped on touch without opening it', () => {
+  it('shows a watched badge when the video is watched', () => {
+    mockStore.watchedVideos = new Set(['video-1']);
+
+    render(
+      <MemoryRouter>
+        <VideoCard video={video} index={0} />
+      </MemoryRouter>
+    );
+
+    expect(screen.getByText('Watched')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Mark video as unwatched' })).toBeInTheDocument();
+  });
+
+  it('marks a video watched when swiped left without opening it', () => {
     render(
       <MemoryRouter initialEntries={['/?tab=latest']}>
-        <Routes>
-          <Route
-            path="/"
-            element={(
-              <>
-                <VideoCard video={video} index={0} />
-                <LocationProbe />
-              </>
-            )}
-          />
-          <Route path="/video/:videoId" element={<LocationProbe />} />
-        </Routes>
+        <>
+          <VideoCard video={video} index={0} />
+          <LocationProbe />
+        </>
       </MemoryRouter>
     );
 
@@ -703,13 +634,13 @@ describe('VideoCard', () => {
     fireEvent.pointerDown(card, {
       pointerId: 1,
       pointerType: 'touch',
-      clientX: 12,
+      clientX: 112,
       clientY: 20,
     });
     fireEvent.pointerMove(card, {
       pointerId: 1,
       pointerType: 'touch',
-      clientX: 112,
+      clientX: 12,
       clientY: 22,
     });
 
@@ -718,13 +649,11 @@ describe('VideoCard', () => {
     fireEvent.pointerUp(card, {
       pointerId: 1,
       pointerType: 'touch',
-      clientX: 112,
+      clientX: 12,
       clientY: 22,
     });
-    fireEvent.click(card);
 
     expect(mockStore.markAsWatched).toHaveBeenCalledWith('video-1');
-    expect(screen.getByTestId('location')).toHaveTextContent('/');
   });
 
   it('does not treat vertical scrolling as a watched swipe', () => {
@@ -756,6 +685,41 @@ describe('VideoCard', () => {
     });
 
     expect(mockStore.markAsWatched).not.toHaveBeenCalled();
+  });
+
+  it('queues a video when swiped right without favoriting it', () => {
+    render(
+      <MemoryRouter>
+        <VideoCard video={video} index={0} />
+      </MemoryRouter>
+    );
+
+    const card = screen.getByTestId('video-card');
+
+    fireEvent.pointerDown(card, {
+      pointerId: 1,
+      pointerType: 'touch',
+      clientX: 12,
+      clientY: 20,
+    });
+    fireEvent.pointerMove(card, {
+      pointerId: 1,
+      pointerType: 'touch',
+      clientX: 112,
+      clientY: 22,
+    });
+
+    expect(screen.getByText('Add to queue')).toBeInTheDocument();
+
+    fireEvent.pointerUp(card, {
+      pointerId: 1,
+      pointerType: 'touch',
+      clientX: 112,
+      clientY: 22,
+    });
+
+    expect(JSON.parse(localStorage.getItem('queued-video-ids') || '[]')).toEqual(['video-1']);
+    expect(JSON.parse(localStorage.getItem('favorite-video-ids') || '[]')).toEqual([]);
   });
 
   it('can queue a video without favoriting it', () => {

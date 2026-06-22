@@ -17,6 +17,7 @@ let mockVideos = [
 
 let mockWatchedVideos = new Set<string>();
 const mockMarkAsWatched = vi.fn();
+const mockSetSearchQuery = vi.fn();
 
 vi.mock('./Header', () => ({
   Header: () => <header>Header</header>,
@@ -50,6 +51,7 @@ vi.mock('../store/useStore', () => ({
     watchedVideos: mockWatchedVideos,
     markAsWatched: mockMarkAsWatched,
     markAsUnwatched: vi.fn(),
+    setSearchQuery: mockSetSearchQuery,
   }),
 }));
 
@@ -57,6 +59,7 @@ describe('ChannelViewer', () => {
   beforeEach(() => {
     mockWatchedVideos = new Set<string>();
     mockMarkAsWatched.mockClear();
+    mockSetSearchQuery.mockClear();
 
     mockVideos = [
       {
@@ -115,6 +118,18 @@ describe('ChannelViewer', () => {
     );
 
     expect(window.scrollTo).toHaveBeenCalledWith({ top: 0 });
+  });
+
+  it('clears the channel search state when the channel view opens', () => {
+    render(
+      <MemoryRouter initialEntries={['/channel/UC123']}>
+        <Routes>
+          <Route path="/channel/:channelId" element={<ChannelViewer />} />
+        </Routes>
+      </MemoryRouter>
+    );
+
+    expect(mockSetSearchQuery).toHaveBeenCalledWith('');
   });
 
   it('shows the latest channel video first', () => {

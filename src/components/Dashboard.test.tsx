@@ -71,6 +71,9 @@ let mockWatchedVideos = new Set<string>();
 const mockMarkAsWatched = vi.fn((videoId: string) => {
   mockWatchedVideos = new Set([...mockWatchedVideos, videoId]);
 });
+const mockSetSearchQuery = vi.fn((query: string) => {
+  mockSearchQuery = query;
+});
 let mockAllSubscriptions = [
   {
     id: 'UC123',
@@ -236,6 +239,7 @@ vi.mock('../store/useStore', () => ({
     searchQuery: mockSearchQuery,
     watchedVideos: mockWatchedVideos,
     markAsWatched: mockMarkAsWatched,
+    setSearchQuery: mockSetSearchQuery,
   }),
 }));
 
@@ -253,6 +257,7 @@ describe('Dashboard', () => {
     toastMockState.message.mockClear();
     mockWatchedVideos = new Set<string>();
     mockMarkAsWatched.mockClear();
+    mockSetSearchQuery.mockClear();
     mockToggleChannelFavorite.mockClear();
     mockSubscriptionsInitialSyncing = false;
     throwSubscriptionsListError = false;
@@ -402,6 +407,39 @@ describe('Dashboard', () => {
     });
   });
 
+  it('clears the feed search when opening an activity channel', () => {
+    mockRSSVideosState = {
+      ...mockRSSVideosState,
+      videos: [{
+        id: 'video-1',
+        title: 'Visible video',
+        description: '',
+        thumbnail: '',
+        channelId: 'UC123',
+        channelTitle: 'Test Channel',
+        publishedAt: new Date().toISOString(),
+      }],
+      syncStatus: {
+        ...mockRSSVideosState.syncStatus,
+        total: 1,
+        current: 1,
+        videos: 1,
+      },
+    };
+    mockSearchQuery = 'search term';
+
+    render(<Dashboard />);
+
+    fireEvent.click(screen.getByRole('button', { name: /activity/i }));
+
+    return screen.findByText('Test Channel').then(() => {
+      fireEvent.click(screen.getByText('Test Channel'));
+
+      expect(mockSetSearchQuery).toHaveBeenCalledWith('');
+      expect(mockSearchQuery).toBe('');
+    });
+  });
+
   it('scrolls the active Latest timeline to the top after a double tap', () => {
     vi.spyOn(Date, 'now')
       .mockReturnValueOnce(1_000)
@@ -519,6 +557,7 @@ describe('Dashboard', () => {
     expect(tabBar.className).toContain('fixed');
     expect(tabBar.className).toContain('bottom-0');
     expect(tabBar.className).toContain('z-50');
+    expect(tabBar.className).toContain('pb-[var(--app-tab-bar-bottom-offset)]');
     expect(tabBarInner.className).toContain('max-w-7xl');
   });
 

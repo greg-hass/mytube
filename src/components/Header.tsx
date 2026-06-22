@@ -119,9 +119,15 @@ export const Header = ({
 								<h1 className="text-lg md:text-xl font-bold bg-gradient-to-r from-red-600 to-red-500 bg-clip-text text-transparent">
 									YouTube RSS
 								</h1>
-								<p className="text-xs text-gray-500 dark:text-ios-400">
-									{count} channels
-								</p>
+								<div className="mt-0.5 flex items-center gap-1.5 text-xs text-gray-500 dark:text-ios-400">
+									{syncStatus?.isSyncing && (
+										<span
+											aria-hidden="true"
+											className="h-2 w-2 rounded-full bg-emerald-500 shadow-[0_0_0_4px_rgba(16,185,129,0.15)] animate-pulse"
+										/>
+									)}
+									<p>{count} channels</p>
+								</div>
 							</div>
 						</motion.div>
 
