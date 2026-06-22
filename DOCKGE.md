@@ -3,18 +3,18 @@
 This app is published as a single GitHub Container Registry image:
 
 ```text
-ghcr.io/greg-hass/youtube-subscriptions:latest
+ghcr.io/greg-hass/mytube:latest
 ```
 
 ## Dockge Stack
 
-Create a new stack named `youtube-subscriptions` and use:
+Create a new stack named `mytube` and use:
 
 ```yaml
 services:
-  youtube-subscriptions:
-    image: ghcr.io/greg-hass/youtube-subscriptions:latest
-    container_name: youtube-subscriptions
+  mytube:
+    image: ghcr.io/greg-hass/mytube:latest
+    container_name: mytube
     ports:
       - "5173:8080"
     volumes:

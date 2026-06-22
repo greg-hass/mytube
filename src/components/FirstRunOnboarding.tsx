@@ -29,11 +29,11 @@ export const FirstRunOnboarding = ({
 			<div className="mb-5 flex items-center gap-3">
 				<img
 					src="/icon-192.png"
-					alt="YouTube RSS"
+					alt="MyTube"
 					className="h-10 w-10 rounded-xl shadow-lg shadow-red-500/20"
 				/>
 				<h1 className="text-xl font-bold text-gray-950 dark:text-ios-50">
-					YouTube RSS
+					MyTube
 				</h1>
 			</div>
 

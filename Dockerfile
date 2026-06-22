@@ -32,9 +32,9 @@ COPY --from=backend-deps /app/server/node_modules /app/server/node_modules
 COPY server /app/server
 COPY src/lib/external-services.json /app/server/external-services.json
 COPY nginx.conf /etc/nginx/http.d/default.conf
-COPY docker/start.sh /usr/local/bin/start-youtube-subscriptions
+COPY docker/start.sh /usr/local/bin/start-mytube
 
-RUN chmod +x /usr/local/bin/start-youtube-subscriptions \
+RUN chmod +x /usr/local/bin/start-mytube \
   && mkdir -p /run/nginx /app/server/data \
   && chown -R node:node /app /run/nginx /var/lib/nginx /var/log/nginx
 
@@ -46,4 +46,4 @@ VOLUME ["/app/server/data"]
 
 USER node
 
-CMD ["start-youtube-subscriptions"]
+CMD ["start-mytube"]

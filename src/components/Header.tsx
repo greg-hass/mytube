@@ -112,12 +112,13 @@ export const Header = ({
 						>
 							<img
 								src="/icon-192.png"
-								alt="YouTube RSS"
+								alt="MyTube"
 								className="h-10 w-10 rounded-xl shadow-lg"
 							/>
 							<div>
-								<h1 className="text-lg md:text-xl font-bold bg-gradient-to-r from-red-600 to-red-500 bg-clip-text text-transparent">
-									YouTube RSS
+								<h1 className="text-lg md:text-xl font-bold tracking-tight">
+									<span className="text-white dark:text-ios-50">My</span>
+									<span className="text-red-600 dark:text-red-500">Tube</span>
 								</h1>
 								<div className="mt-0.5 flex items-center gap-1.5 text-xs text-gray-500 dark:text-ios-400">
 									{syncStatus?.isSyncing && (

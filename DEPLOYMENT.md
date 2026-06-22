@@ -9,7 +9,7 @@ The production image contains both parts of the app:
 ## GitHub Container Registry Image
 
 ```text
-ghcr.io/greg-hass/youtube-subscriptions:latest
+ghcr.io/greg-hass/mytube:latest
 ```
 
 The GitHub Actions workflow publishes this image on pushes to `main`.
@@ -19,17 +19,17 @@ The GitHub Actions workflow publishes this image on pushes to `main`.
 Create a folder for the stack:
 
 ```bash
-mkdir -p ~/youtube-subscriptions
-cd ~/youtube-subscriptions
+mkdir -p ~/mytube
+cd ~/mytube
 ```
 
 Create `docker-compose.yml`:
 
 ```yaml
 services:
-  youtube-subscriptions:
-    image: ghcr.io/greg-hass/youtube-subscriptions:latest
-    container_name: youtube-subscriptions
+  mytube:
+    image: ghcr.io/greg-hass/mytube:latest
+    container_name: mytube
     ports:
       - "5173:8080"
     volumes:
@@ -83,7 +83,7 @@ docker compose up -d
 ## Updating
 
 ```bash
-cd ~/youtube-subscriptions
+cd ~/mytube
 docker compose pull
 docker compose up -d
 docker image prune -f
@@ -116,21 +116,21 @@ The persistent `youtube-subscriptions-data` volume contains the SQLite database 
 For a live container, create a SQLite snapshot through the app's tested backup command:
 
 ```bash
-docker compose exec youtube-subscriptions sh -lc 'cd /app/server && npm run backup:sqlite'
+docker compose exec mytube sh -lc 'cd /app/server && npm run backup:sqlite'
 ```
 
 Copy the resulting `data/backups/*.backup.sqlite` file to your backup target:
 
 ```bash
-docker compose cp youtube-subscriptions:/app/server/data/backups/your-backup.backup.sqlite .
+docker compose cp mytube:/app/server/data/backups/your-backup.backup.sqlite .
 ```
 
 For restore, copy the backup into the volume, stop the app, then run the restore command in a one-off container:
 
 ```bash
-docker compose cp ./your-backup.backup.sqlite youtube-subscriptions:/app/server/data/backups/your-backup.backup.sqlite
-docker compose stop youtube-subscriptions
-docker compose run --rm youtube-subscriptions sh -lc 'cd /app/server && npm run restore:sqlite -- --file data/backups/your-backup.backup.sqlite'
+docker compose cp ./your-backup.backup.sqlite mytube:/app/server/data/backups/your-backup.backup.sqlite
+docker compose stop mytube
+docker compose run --rm mytube sh -lc 'cd /app/server && npm run restore:sqlite -- --file data/backups/your-backup.backup.sqlite'
 docker compose up -d
 ```
 

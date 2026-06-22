@@ -269,7 +269,7 @@ describe('SettingsModal', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Save Changes' }));
 
     expect(localStorage.setItem).toHaveBeenCalledWith(
-      'youtube-subscriptions.serverApiToken',
+      'mytube.serverApiToken',
       'new-browser-token'
     );
     expect(subscriptionMocks.syncWithBackend).toHaveBeenCalledWith({ importRemoteWatched: true });

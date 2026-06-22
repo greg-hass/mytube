@@ -661,9 +661,9 @@ export const Dashboard = () => {
 					const currentY = window.scrollY;
 					const delta = currentY - headerScrollYRef.current;
 
-					if (currentY < 20) {
+					if (currentY < 8) {
 						setHeaderVisible(true);
-					} else if (delta > 12) {
+					} else if (delta > 8) {
 						setHeaderVisible(false);
 					} else if (delta < -3) {
 						setHeaderVisible(true);

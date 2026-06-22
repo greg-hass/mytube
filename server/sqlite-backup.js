@@ -1,7 +1,7 @@
 const fs = require('fs').promises;
 const path = require('path');
 const Database = require('better-sqlite3');
-const { DEFAULT_DATABASE_FILE } = require('./app-store');
+const { resolveDatabaseFile } = require('./app-store');
 
 const BUSY_AGGREGATOR_STATES = new Set(['running', 'queued']);
 const DEFAULT_AGGREGATOR_STATUS_URL = `http://127.0.0.1:${process.env.PORT || 3001}/api/videos/status`;
@@ -92,7 +92,7 @@ async function validateSqliteDatabase(databaseFile) {
 }
 
 async function backupSqliteDatabase({
-    databaseFile = DEFAULT_DATABASE_FILE,
+    databaseFile = resolveDatabaseFile({ preferLegacy: true }),
     backupFile,
     aggregatorStatusUrl,
     waitForAggregator = true,
@@ -134,7 +134,7 @@ async function removeSqliteSidecars(databaseFile) {
 }
 
 async function restoreSqliteDatabase({
-    databaseFile = DEFAULT_DATABASE_FILE,
+    databaseFile = resolveDatabaseFile({ preferLegacy: true }),
     backupFile,
     recoveryDir = path.join(path.dirname(databaseFile), 'backups'),
     timestamp = makeTimestamp(),
@@ -204,7 +204,7 @@ function parseFlagValue(args, flag) {
 
 async function runCli(args = process.argv.slice(2)) {
     const [command] = args;
-    const databaseFile = parseFlagValue(args, '--database') || process.env.SQLITE_DATABASE_FILE || DEFAULT_DATABASE_FILE;
+    const databaseFile = parseFlagValue(args, '--database') || process.env.SQLITE_DATABASE_FILE || resolveDatabaseFile({ preferLegacy: true });
 
     if (command === 'backup') {
         const backupDir = parseFlagValue(args, '--dir') || path.join(path.dirname(databaseFile), 'backups');

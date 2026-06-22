@@ -5,6 +5,7 @@ import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 const require = createRequire(import.meta.url);
+const Database = require("better-sqlite3");
 const { createSqliteStore } = require("./sqlite-store");
 
 let tempDir;
@@ -89,6 +90,39 @@ describe("sqlite store", () => {
 		});
 		await expect(fs.access(legacyDataFile)).resolves.toBeUndefined();
 		await expect(fs.access(legacyVideosFile)).resolves.toBeUndefined();
+	});
+
+	it("copies a legacy sqlite database into the new default location when needed", async () => {
+		const legacyDatabaseFile = path.join(tempDir, "youtube-subscriptions.sqlite");
+		const databaseFile = path.join(tempDir, "mytube.sqlite");
+		const legacyDb = new Database(legacyDatabaseFile);
+		legacyDb.exec(`
+			CREATE TABLE app_state (
+				key TEXT PRIMARY KEY NOT NULL,
+				value_json TEXT NOT NULL,
+				updated_at TEXT NOT NULL
+			);
+			INSERT INTO app_state (key, value_json, updated_at)
+			VALUES ('custom_marker', '"legacy"', '2026-06-23T00:00:00.000Z');
+		`);
+		legacyDb.close();
+
+		store = createSqliteStore({
+			databaseFile,
+			legacyDatabaseFile,
+			legacyDataFile: path.join(tempDir, "missing-db.json"),
+			legacyVideosFile: path.join(tempDir, "missing-videos.json"),
+		});
+		await store.init({ defaultData, defaultVideoCache });
+
+		const copiedDb = new Database(databaseFile, { readonly: true });
+		try {
+			expect(copiedDb.prepare("SELECT value_json FROM app_state WHERE key = 'custom_marker'").get().value_json).toBe('"legacy"');
+		} finally {
+			copiedDb.close();
+		}
+
+		await expect(fs.access(legacyDatabaseFile)).resolves.toBeUndefined();
 	});
 
 	it("creates revisioned subscription tombstones when a sync removes channels", async () => {

@@ -74,8 +74,8 @@ module.exports = {
 
 if (require.main === module) {
     const Database = require('better-sqlite3');
-    const { DEFAULT_DATABASE_FILE } = require('./app-store');
-    const databaseFile = process.env.SQLITE_DATABASE_FILE || DEFAULT_DATABASE_FILE;
+    const { resolveDatabaseFile } = require('./app-store');
+    const databaseFile = resolveDatabaseFile({ preferLegacy: true });
     const db = new Database(databaseFile);
     try {
         const result = runMigrations(db);

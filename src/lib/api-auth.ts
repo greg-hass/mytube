@@ -1,4 +1,5 @@
-export const SERVER_API_TOKEN_STORAGE_KEY = 'youtube-subscriptions.serverApiToken';
+export const SERVER_API_TOKEN_STORAGE_KEY = 'mytube.serverApiToken';
+const LEGACY_SERVER_API_TOKEN_STORAGE_KEY = 'youtube-subscriptions.serverApiToken';
 
 let installed = false;
 let originalFetch: typeof fetch | null = null;
@@ -10,7 +11,14 @@ function getDefaultStorage(): Pick<Storage, 'getItem'> | null {
 
 export function getServerApiToken(storage: Pick<Storage, 'getItem'> | null = getDefaultStorage()): string {
   if (!storage) return '';
-  return (storage.getItem(SERVER_API_TOKEN_STORAGE_KEY) || '').trim();
+  const token = (storage.getItem(SERVER_API_TOKEN_STORAGE_KEY) || storage.getItem(LEGACY_SERVER_API_TOKEN_STORAGE_KEY) || '').trim();
+
+  if (token && storage.getItem(SERVER_API_TOKEN_STORAGE_KEY) !== token) {
+    storage.setItem(SERVER_API_TOKEN_STORAGE_KEY, token);
+    storage.removeItem(LEGACY_SERVER_API_TOKEN_STORAGE_KEY);
+  }
+
+  return token;
 }
 
 export function setServerApiToken(
@@ -22,8 +30,10 @@ export function setServerApiToken(
   const trimmedToken = token.trim();
   if (trimmedToken) {
     storage.setItem(SERVER_API_TOKEN_STORAGE_KEY, trimmedToken);
+    storage.removeItem(LEGACY_SERVER_API_TOKEN_STORAGE_KEY);
   } else {
     storage.removeItem(SERVER_API_TOKEN_STORAGE_KEY);
+    storage.removeItem(LEGACY_SERVER_API_TOKEN_STORAGE_KEY);
   }
 }
 

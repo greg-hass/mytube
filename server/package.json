@@ -1,5 +1,5 @@
 {
-    "name": "youtube-subscriptions-api",
+    "name": "mytube-api",
     "version": "1.0.0",
     "description": "RSS-first API for a self-hosted YouTube subscription feed reader",
     "main": "index.js",

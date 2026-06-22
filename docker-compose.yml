@@ -1,7 +1,7 @@
 services:
-  youtube-subscriptions:
-    image: ghcr.io/greg-hass/youtube-subscriptions:latest
-    container_name: youtube-subscriptions
+  mytube:
+    image: ghcr.io/greg-hass/mytube:latest
+    container_name: mytube
     ports:
       - "5173:8080"
     volumes:
