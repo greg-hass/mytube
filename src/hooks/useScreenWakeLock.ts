@@ -18,11 +18,9 @@ type WakeLockManagerLike = {
 	request: (type: "screen") => Promise<WakeLockSentinelLike>;
 };
 
-declare global {
-	interface Navigator {
-		wakeLock?: WakeLockManagerLike;
-	}
-}
+type NavigatorWithWakeLock = Navigator & {
+	wakeLock?: WakeLockManagerLike;
+};
 
 export function useScreenWakeLock() {
 	const wakeLockRef = useRef<WakeLockSentinelLike | null>(null);
@@ -45,12 +43,14 @@ export function useScreenWakeLock() {
 
 		const acquireWakeLock = async () => {
 			if (cancelled) return;
-			if (typeof navigator === "undefined" || !navigator.wakeLock) return;
+			if (typeof navigator === "undefined") return;
+			const wakeLock = (navigator as NavigatorWithWakeLock).wakeLock;
+			if (!wakeLock) return;
 			if (document.visibilityState !== "visible") return;
 			if (wakeLockRef.current) return;
 
 			try {
-				const sentinel = await navigator.wakeLock.request("screen");
+				const sentinel = await wakeLock.request("screen");
 				if (cancelled) {
 					await sentinel.release().catch(() => {});
 					return;
