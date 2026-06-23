@@ -44,11 +44,16 @@ const SERVER_VIDEOS_KEY = ["server-videos"] as const;
 const SERVER_VIDEOS_STATUS_KEY = ["server-videos-status"] as const;
 
 async function deleteSubscriptionOnServer(channelId: string): Promise<void> {
-	const response = await fetch(`/api/subscriptions/${encodeURIComponent(channelId)}`, {
-		method: "DELETE",
-	});
+	const response = await fetch(
+		`/api/subscriptions/${encodeURIComponent(channelId)}`,
+		{
+			method: "DELETE",
+		},
+	);
 	if (response.ok || response.status === 404) return;
-	throw new Error(`Failed to delete subscription on server (${response.status})`);
+	throw new Error(
+		`Failed to delete subscription on server (${response.status})`,
+	);
 }
 
 // ---------------------------------------------------------------------------
@@ -165,7 +170,12 @@ function useSubscriptionMutations(deps: MutationDeps) {
 			await addSubscriptions(newSubscriptions);
 			return newSubscriptions;
 		},
-		onSuccess: () => {
+		onSuccess: async () => {
+			// Push imported subscriptions to the server so the server-side
+			// aggregator can fetch videos. forcePush because the OPML/CSV is
+			// the authoritative source — local IndexedDB must win over any
+			// stale server snapshot. Mirrors clearAllMutation.
+			await syncWithBackend({ forcePush: true });
 			invalidateQueries();
 			queryClient.invalidateQueries({ queryKey: RSS_VIDEOS_KEY });
 			queryClient.invalidateQueries({ queryKey: SERVER_VIDEOS_KEY });
