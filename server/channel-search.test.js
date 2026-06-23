@@ -12,38 +12,33 @@ const {
 } = require('./channel-search');
 
 describe('channel search ranking', () => {
-    it('builds YouTube-style query variants for natural language channel search', () => {
+  	it('builds query variants prioritizing the meaningful phrase', () => {
+        // No stopwords in "Level One Techs" → all tokens are meaningful.
+        // The meaningful phrase and its variants come first; abbreviations
+        // are kept as lower-priority fallbacks.
         expect(buildChannelSearchQueries('Level One Techs')).toEqual([
+            'level one techs',
+            'level one techs channel',
+            'levelonetechs',
             'levelt',
             '@levelt',
-            'levelonetechs',
-            'Level One Techs',
-            'level one techs',
-            'Level One Techs channel',
         ]);
     });
 
-    it('strips English stopwords before generating abbreviations for natural language queries', () => {
-        // Regression: natural-language queries like "the best woodworking channels"
-        // used to generate nonsense abbreviations ("thec", "@thec", "tbtwc") that
-        // matched random "The X" channels. After stripping "the", "best", and
-        // "channels", only "woodworking" remains as a meaningful token so the
-        // single-token branch runs and only the original / compact / suffixed
-        // queries are produced — no nonsense abbreviations.
+  	it('prioritizes the meaningful token for natural language queries', () => {
+        // "the best woodworking channels" → meaningful token "woodworking".
+        // The meaningful token and its "channel" variant come first; the
+        // original phrase is kept as a full-text fallback.
         const queries = buildChannelSearchQueries('the best woodworking channels');
 
+        expect(queries[0]).toBe('woodworking');
+        expect(queries).toContain('woodworking channel');
+        // No stopword-based abbreviations.
         expect(queries).not.toContain('thec');
         expect(queries).not.toContain('@thec');
         expect(queries).not.toContain('tbtwc');
-        // Original phrasing must still be present so backends can do full-text matching.
+        // Original phrase kept for full-text matching.
         expect(queries).toContain('the best woodworking channels');
-        expect(queries).toContain('thebestwoodworkingchannels');
-        expect(queries).toContain('the best woodworking channels channel');
-        // No abbreviations built from stopwords.
-        for (const query of queries) {
-            expect(query).not.toMatch(/^[a-z]c$/);
-            expect(query).not.toMatch(/^[a-z]{1,5}$/);
-        }
     });
 
     it('returns an empty query list when the input is only stopwords', () => {
@@ -54,14 +49,15 @@ describe('channel search ranking', () => {
         expect(buildChannelSearchQueries('channels')).toEqual([]);
     });
 
-    it('keeps meaningful content tokens when stripping stopwords from multi-token queries', () => {
+  	it('prioritizes meaningful multi-token phrases over abbreviations', () => {
         // "best tech review channels" → meaningful tokens ["tech", "review"]
-        // → abbreviation "techr" instead of "btrc".
+        // → meaningful phrase "tech review" first, abbreviation "techr" later.
         const queries = buildChannelSearchQueries('best tech review channels');
 
         expect(queries).not.toContain('btrc');
-        expect(queries[0]).toBe('techr');
-        expect(queries[1]).toBe('@techr');
+        expect(queries[0]).toBe('tech review');
+        expect(queries).toContain('tech review channel');
+        expect(queries).toContain('techr');
         expect(queries).toContain('best tech review channels');
     });
 
@@ -97,12 +93,26 @@ describe('channel search ranking', () => {
         })).toBeGreaterThan(60);
     });
 
-    it('scores compact natural language matches against channel names', () => {
+  	it('scores compact natural language matches against channel names', () => {
         expect(scoreChannelResult('level one techs', {
             id: 'UC1234567890123456789012',
             title: 'Level1Techs',
             customUrl: '/@level1techs',
         })).toBeGreaterThan(60);
+    });
+
+    it('scores meaningful-token matches above stopword noise', () => {
+        // "the best woodworking channels" → meaningful "woodworking"
+        expect(scoreChannelResult('the best woodworking channels', {
+            id: 'UC1234567890123456789012',
+            title: 'Woodworking Art',
+        })).toBeGreaterThan(50);
+
+        // A channel with no woodworking connection scores 0.
+        expect(scoreChannelResult('the best woodworking channels', {
+            id: 'UC2222222222222222222222',
+            title: 'The Big Bang Theory',
+        })).toBe(0);
     });
 
     it('parses channel results from YouTube search markup', () => {
@@ -123,7 +133,7 @@ describe('channel search ranking', () => {
 });
 
 describe('channel search cache', () => {
-    it('searches generated query variants and ranks them against the original phrase', async () => {
+  	it('searches generated query variants and ranks them against the original phrase', async () => {
         const requestedUrls = [];
         const fetchImpl = async (url) => {
             requestedUrls.push(String(url));
@@ -155,6 +165,45 @@ describe('channel search cache', () => {
             title: 'Level1Techs',
         }));
         expect(requestedUrls.some((url) => url.includes('levelt'))).toBe(true);
+    });
+
+    it('finds channels via the meaningful query when the original phrase fails', async () => {
+        const getUrlQuery = (url) => {
+            const u = new URL(String(url), 'http://dummy');
+            return u.searchParams.get('q') || u.searchParams.get('search_query') || '';
+        };
+
+        const fetchImpl = async (url) => {
+            // Only the bare meaningful query "woodworking" returns results.
+            // The original phrase "the best woodworking channels" returns 500,
+            // proving that the meaningful query is what finds the channel.
+            if (getUrlQuery(url) === 'woodworking') {
+                return {
+                    ok: true,
+                    json: async () => ({
+                        items: [
+                            {
+                                url: '/channel/UC3333333333333333333333',
+                                name: 'Woodworking Art',
+                                description: 'Fine woodworking tutorials',
+                                thumbnail: 'https://example.com/ww.jpg',
+                                subscribers: 500000,
+                            },
+                        ],
+                    }),
+                    text: async () => '',
+                };
+            }
+
+            return { ok: false, status: 500, json: async () => ([]), text: async () => '' };
+        };
+
+        const results = await searchChannels('the best woodworking channels', { fetchImpl, limit: 3 });
+
+        expect(results[0]).toEqual(expect.objectContaining({
+            id: 'UC3333333333333333333333',
+            title: 'Woodworking Art',
+        }));
     });
 
     it('caps cached results at the configured LRU size', async () => {

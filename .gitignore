@@ -28,3 +28,4 @@ server/data/**/*.sqlite-*
 *.sln
 *.sw?
 .worktrees/
+.playwright-mcp/
