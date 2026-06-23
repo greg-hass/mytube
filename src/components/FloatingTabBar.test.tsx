@@ -14,10 +14,11 @@ describe('FloatingTabBar', () => {
         queueCount={1}
         favoriteCount={3}
       />,
-    );
+  );
 
-    const addButton = screen.getByRole('button', { name: 'Add channel' });
-    expect(addButton.firstElementChild?.className).toContain('rounded-xl');
-    expect(addButton.firstElementChild?.className).toContain('backdrop-blur-xl');
-  });
+  const addButton = screen.getByRole('button', { name: 'Add channel' });
+  expect(addButton.firstElementChild?.className).toContain('rounded-full');
+  expect(addButton.firstElementChild?.className).toContain('bg-red-600');
+  expect(screen.queryByText('Add')).not.toBeInTheDocument();
+});
 });

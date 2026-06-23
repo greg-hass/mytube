@@ -43,6 +43,14 @@ const RSS_VIDEOS_KEY = ["rss-videos"] as const;
 const SERVER_VIDEOS_KEY = ["server-videos"] as const;
 const SERVER_VIDEOS_STATUS_KEY = ["server-videos-status"] as const;
 
+async function deleteSubscriptionOnServer(channelId: string): Promise<void> {
+	const response = await fetch(`/api/subscriptions/${encodeURIComponent(channelId)}`, {
+		method: "DELETE",
+	});
+	if (response.ok || response.status === 404) return;
+	throw new Error(`Failed to delete subscription on server (${response.status})`);
+}
+
 // ---------------------------------------------------------------------------
 // Module-level helpers (keep hook body free of control flow)
 // ---------------------------------------------------------------------------
@@ -178,6 +186,7 @@ function useSubscriptionMutations(deps: MutationDeps) {
 
 	const removeSubscriptionMutation = useMutation({
 		mutationFn: async (channelId: string) => {
+			await deleteSubscriptionOnServer(channelId);
 			const { removeSubscription } = await import("../lib/indexeddb");
 			await removeSubscription(channelId);
 			return channelId;
@@ -185,7 +194,7 @@ function useSubscriptionMutations(deps: MutationDeps) {
 		onSuccess: async (removedChannelId: string) => {
 			handleRemovalCacheUpdate(queryClient, removedChannelId);
 			queryClient.invalidateQueries({ queryKey: RSS_VIDEOS_KEY });
-			await syncWithBackend({ forcePush: true });
+			await syncWithBackend();
 		},
 	});
 

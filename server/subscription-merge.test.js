@@ -95,6 +95,29 @@ describe('mergeIncomingSubscriptions', () => {
             },
         ]);
     });
+
+    it('skips tombstoned subscriptions during sync', () => {
+        const existing = [
+            {
+                id: 'UC_DELETE',
+                title: 'Deleted Title',
+                thumbnail: 'https://yt3.googleusercontent.com/avatar=s900-c-k-c0x00ffffff-no-rj',
+            },
+        ];
+        const incoming = [
+            {
+                id: 'UC_DELETE',
+                title: 'Incoming Title',
+                thumbnail: '',
+            },
+        ];
+
+        const merged = mergeIncomingSubscriptions(incoming, existing, {}, [
+            { id: 'UC_DELETE', revision: 3 },
+        ]);
+
+        expect(merged).toEqual([]);
+    });
 });
 
 describe('removeSensitiveSyncSettings', () => {

@@ -20,6 +20,7 @@
 
   html {
     @apply bg-white dark:bg-ios-950;
+    overscroll-behavior-y: none;
   }
 
   body {
@@ -28,6 +29,12 @@
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
     min-height: 100dvh;
+    overscroll-behavior-y: none;
+  }
+
+  #root {
+    min-height: 100dvh;
+    overscroll-behavior-y: none;
   }
 }
 

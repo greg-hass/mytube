@@ -314,6 +314,7 @@ function createApp({
 							data.subscriptions,
 							existingData.subscriptions || [],
 							redirects,
+							existingData.subscriptionTombstones || [],
 						);
 					}
 					data.redirects = { ...redirects, ...(data.redirects || {}) };
@@ -333,6 +334,40 @@ function createApp({
 				syncRevision: newRevision,
 			});
 		}, "Failed to save data"),
+	);
+
+	app.delete(
+		"/api/subscriptions/:id",
+		asyncHandler(async (req, res) => {
+			const { id } = req.params;
+			const current = await appStore.readData(defaultData);
+			const found = current.subscriptions.some((subscription) => subscription.id === id);
+			if (!found) {
+				return res.status(404).json({ error: "Subscription not found" });
+			}
+
+			const savedData = await appStore.updateData(
+				defaultData,
+				(data) => ({
+					...data,
+					subscriptions: (data.subscriptions || []).filter(
+						(subscription) => subscription.id !== id,
+					),
+				}),
+				{ trackSubscriptionChanges: true },
+			);
+			feedAggregator
+				.aggregateFeeds()
+				.catch((err) => console.error("Aggregation trigger failed:", err));
+			const newRevision =
+				savedData.syncRevision ?? appStore.getCurrentRevision();
+			res.setHeader("ETag", `"${newRevision}"`);
+			res.json({
+				success: true,
+				deletedId: id,
+				syncRevision: newRevision,
+			});
+		}, "Failed to delete subscription"),
 	);
 
 	app.get(
