@@ -17,12 +17,8 @@ const SMART_SEARCH_STOP_WORDS = new Set([
   'in',
   'is',
   'my',
-  'news',
   'of',
-  'official',
   'on',
-  'podcast',
-  'show',
   'the',
   'to',
   'tube',
@@ -83,6 +79,39 @@ function scoreSearchResult(query: string, channel: YouTubeChannel) {
   return score;
 }
 
+function dedupeChannels(channels: YouTubeChannel[]) {
+  const byId = new Map<string, YouTubeChannel>();
+
+  for (const channel of channels) {
+    if (!channel?.id) continue;
+    const existing = byId.get(channel.id);
+    if (!existing) {
+      byId.set(channel.id, channel);
+      continue;
+    }
+
+    byId.set(channel.id, {
+      ...existing,
+      ...channel,
+      description: channel.description || existing.description,
+      thumbnail: channel.thumbnail || existing.thumbnail,
+      subscriberCount: channel.subscriberCount || existing.subscriberCount,
+      customUrl: channel.customUrl || existing.customUrl,
+    });
+  }
+
+  return Array.from(byId.values());
+}
+
+function formatSubscriberCount(value?: string) {
+  if (!value) return null;
+
+  const parsed = Number.parseInt(value, 10);
+  if (!Number.isFinite(parsed)) return value;
+
+  return `${parsed.toLocaleString()} subscribers`;
+}
+
 interface AddChannelModalProps {
   isOpen: boolean;
   onClose: () => void;
@@ -113,7 +142,6 @@ export const AddChannelModal = ({ isOpen, onClose, onAdd, existingSubscriptions 
           channel,
           score: scoreSearchResult(smartSearchQuery || input.trim(), channel),
         }))
-        .filter(({ score }) => score > 0)
         .sort((a, b) => b.score - a.score || a.channel.title.localeCompare(b.channel.title))
         .map(({ channel }) => channel),
     [addedChannelIds, existingIds, input, searchResults, smartSearchQuery]
@@ -166,18 +194,24 @@ export const AddChannelModal = ({ isOpen, onClose, onAdd, existingSubscriptions 
     const timeout = window.setTimeout(async () => {
       setIsSearching(true);
       try {
-        const searchQuery = buildSmartSearchQuery(query) || query;
-        const response = await fetch(`/api/channel-search?q=${encodeURIComponent(searchQuery)}`, {
-          signal: controller.signal,
-        });
+        const smartQuery = buildSmartSearchQuery(query) || query;
+        const queries = Array.from(new Set([smartQuery, query].filter(Boolean)));
+        const responses = await Promise.all(
+          queries.map(async (searchQuery) => {
+            const response = await fetch(`/api/channel-search?q=${encodeURIComponent(searchQuery)}`, {
+              signal: controller.signal,
+            });
 
-        if (!response.ok) {
-          throw new Error(`Search failed with ${response.status}`);
-        }
+            if (!response.ok) {
+              throw new Error(`Search failed with ${response.status}`);
+            }
 
-        const data = await response.json();
-        const results = Array.isArray(data.results) ? data.results : [];
-        setSearchResults(results);
+            const data = await response.json();
+            return Array.isArray(data.results) ? data.results : [];
+          })
+        );
+
+        setSearchResults(dedupeChannels(responses.flat()));
       } catch (error) {
         if ((error as Error).name !== 'AbortError') {
           console.error('Channel keyword search failed:', error);
@@ -341,8 +375,74 @@ export const AddChannelModal = ({ isOpen, onClose, onAdd, existingSubscriptions 
   const activePreviewChannel = previewChannel ?? channelInfo;
   const previewChannelIsAdded = activePreviewChannel ? addedChannelIds.has(activePreviewChannel.id) || existingIds.has(activePreviewChannel.id) : false;
   const activePreviewSubscriberCount = activePreviewChannel?.subscriberCount
-    ? Number.parseInt(activePreviewChannel.subscriberCount, 10)
+    ? formatSubscriberCount(activePreviewChannel.subscriberCount)
     : null;
+
+  const renderChannelPreview = (channel: YouTubeChannel) => {
+    const channelIsAdded = addedChannelIds.has(channel.id) || existingIds.has(channel.id);
+    const subscriberCount = formatSubscriberCount(channel.subscriberCount);
+
+    return (
+      <motion.section
+        initial={{ opacity: 0, y: -4 }}
+        animate={{ opacity: 1, y: 0 }}
+        exit={{ opacity: 0, y: -4 }}
+        className="rounded-b-xl border-x border-b border-gray-200 bg-white p-4 shadow-sm dark:border-ios-800 dark:bg-ios-900"
+      >
+        <h3 className="mb-3 flex items-center gap-2 text-sm font-semibold text-gray-900 dark:text-white">
+          <Youtube className="w-4 h-4 text-red-600" />
+          Channel Preview
+        </h3>
+        <div className="flex items-start gap-3">
+          <img
+            src={channel.thumbnail || `https://ui-avatars.com/api/?name=${encodeURIComponent(channel.title)}&background=random&color=fff`}
+            alt={channel.title}
+            className="w-16 h-16 rounded-full object-cover flex-none"
+            onError={(event) => {
+              event.currentTarget.src = `https://ui-avatars.com/api/?name=${encodeURIComponent(channel.title)}&background=random&color=fff`;
+            }}
+          />
+          <div className="flex-1 min-w-0">
+            <h4 className="font-semibold text-gray-900 dark:text-ios-100">
+              {channel.title}
+            </h4>
+            <div className="mt-1 flex flex-wrap gap-x-3 gap-y-1 text-xs text-gray-500 dark:text-ios-400">
+              {subscriberCount && <span>{subscriberCount}</span>}
+              {channel.customUrl && <span>{channel.customUrl}</span>}
+              <span className="font-mono">{channel.id}</span>
+            </div>
+            <p className="text-sm text-gray-600 dark:text-ios-300 mt-2">
+              {channel.description || 'No description available from the search provider.'}
+            </p>
+          </div>
+        </div>
+        <div className="mt-4 grid grid-cols-2 gap-2">
+          <button
+            type="button"
+            onClick={handleAddPreviewChannel}
+            disabled={isLoading || channelIsAdded}
+            className="inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-red-600 px-4 text-sm font-semibold text-white transition-colors hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            {isLoading ? (
+              <span className="h-4 w-4 rounded-full border-2 border-white/40 border-t-white animate-spin" />
+            ) : channelIsAdded ? (
+              <Check className="h-4 w-4" />
+            ) : (
+              <Plus className="h-4 w-4" />
+            )}
+            {channelIsAdded ? 'Added' : 'Add'}
+          </button>
+          <button
+            type="button"
+            onClick={handleDismissPreview}
+            className="inline-flex h-11 items-center justify-center rounded-xl bg-gray-100 px-4 text-sm font-semibold text-gray-800 ring-1 ring-gray-200 transition-colors hover:bg-gray-200 dark:bg-ios-800 dark:text-ios-100 dark:ring-ios-700 dark:hover:bg-ios-700"
+          >
+            Dismiss
+          </button>
+        </div>
+      </motion.section>
+    );
+  };
 
   return (
     <AnimatePresence>
@@ -362,7 +462,7 @@ export const AddChannelModal = ({ isOpen, onClose, onAdd, existingSubscriptions 
             initial={{ opacity: 0, scale: 0.95, y: 20 }}
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.95, y: 20 }}
-            className="fixed inset-0 z-[100] md:inset-auto md:left-1/2 md:top-1/2 md:-translate-x-1/2 md:-translate-y-1/2 md:w-full md:max-w-xl bg-white dark:bg-ios-900 md:rounded-2xl shadow-2xl flex flex-col h-[100dvh] md:h-auto md:max-h-[85vh] overflow-hidden border border-gray-200 dark:border-ios-800 pt-[env(safe-area-inset-top)] md:pt-0"
+            className="app-shell fixed inset-0 z-[100] md:inset-auto md:left-1/2 md:top-1/2 md:-translate-x-1/2 md:-translate-y-1/2 md:w-full md:max-w-xl md:rounded-2xl shadow-2xl flex flex-col h-[100dvh] md:h-auto md:max-h-[85vh] overflow-hidden border border-gray-200 dark:border-ios-800"
           >
             {/* Header */}
             <div className="sticky top-0 z-10 glass safe-top border-b border-gray-200 dark:border-ios-800/80 shadow-sm shrink-0">
@@ -378,14 +478,12 @@ export const AddChannelModal = ({ isOpen, onClose, onAdd, existingSubscriptions 
                       className="h-10 w-10 rounded-xl shadow-lg flex-none"
                     />
                     <div className="min-w-0">
-                      <h1 className="text-lg md:text-xl font-bold tracking-tight leading-none">
+                      <h1 className="text-lg md:text-xl font-bold tracking-tight">
                         <span className="text-white dark:text-ios-50">My</span>
                         <span className="text-red-600 dark:text-red-500">Tube</span>
                       </h1>
                       <div className="mt-0.5 flex items-center gap-1.5 text-xs text-gray-500 dark:text-ios-400">
-                        <span className="rounded-full bg-red-500/15 px-2 py-0.5 font-medium text-red-600 dark:text-red-400">
-                          Add Channel
-                        </span>
+                        <p>Add Channel</p>
                       </div>
                     </div>
                   </motion.div>
@@ -509,51 +607,53 @@ export const AddChannelModal = ({ isOpen, onClose, onAdd, existingSubscriptions 
                       <div className="space-y-2 pr-1">
                         {visibleSearchResults.map((channel) => {
                           const isAdded = addedChannelIds.has(channel.id);
+                          const isPreviewing = previewChannel?.id === channel.id;
                           return (
-                            <button
-                              type="button"
-                              key={channel.id}
-                              onClick={() => handleSelectPreviewChannel(channel)}
-                              aria-label={`Preview ${channel.title}`}
-                              className={`flex w-full items-center gap-3 rounded-xl border p-3 text-left transition-all ${isAdded
-                                ? 'border-green-200 bg-green-50 dark:border-green-900/60 dark:bg-green-950/20'
-                                : 'border-gray-200 bg-gray-50 hover:border-gray-300 hover:bg-gray-100 dark:border-ios-800 dark:bg-ios-800/50 dark:hover:border-ios-700 dark:hover:bg-ios-800'
-                                }`}
-                            >
-                              <img
-                                src={channel.thumbnail || `https://ui-avatars.com/api/?name=${encodeURIComponent(channel.title)}&background=random&color=fff`}
-                                alt={channel.title}
-                                className="h-11 w-11 flex-none rounded-full object-cover"
-                                onError={(event) => {
-                                  event.currentTarget.src = `https://ui-avatars.com/api/?name=${encodeURIComponent(channel.title)}&background=random&color=fff`;
-                                }}
-                              />
-                              <span className="min-w-0 flex-1">
-                                <span className="flex items-center gap-2">
-                                  <span className="block truncate font-medium text-gray-900 dark:text-ios-100">
-                                    {channel.title}
+                            <div key={channel.id} className="overflow-hidden rounded-xl">
+                              <button
+                                type="button"
+                                onClick={() => handleSelectPreviewChannel(channel)}
+                                aria-label={`Preview ${channel.title}`}
+                                className={`flex w-full items-center gap-3 border p-3 text-left transition-all ${isPreviewing
+                                  ? 'rounded-t-xl border-red-500 bg-red-50 dark:border-red-500/70 dark:bg-red-950/20'
+                                  : isAdded
+                                    ? 'rounded-xl border-green-200 bg-green-50 dark:border-green-900/60 dark:bg-green-950/20'
+                                    : 'rounded-xl border-gray-200 bg-white hover:border-gray-300 hover:bg-gray-50 dark:border-ios-800 dark:bg-ios-900 dark:hover:border-ios-700 dark:hover:bg-ios-800'
+                                  }`}
+                              >
+                                <img
+                                  src={channel.thumbnail || `https://ui-avatars.com/api/?name=${encodeURIComponent(channel.title)}&background=random&color=fff`}
+                                  alt={channel.title}
+                                  className="h-11 w-11 flex-none rounded-full object-cover"
+                                  onError={(event) => {
+                                    event.currentTarget.src = `https://ui-avatars.com/api/?name=${encodeURIComponent(channel.title)}&background=random&color=fff`;
+                                  }}
+                                />
+                                <span className="min-w-0 flex-1">
+                                  <span className="flex items-center gap-2">
+                                    <span className="block truncate font-medium text-gray-900 dark:text-ios-100">
+                                      {channel.title}
+                                    </span>
+                                    {isAdded && (
+                                      <span className="shrink-0 inline-flex items-center rounded-full bg-green-100 dark:bg-green-900/30 px-2 py-0.5 text-xs font-medium text-green-700 dark:text-green-400">
+                                        Added
+                                      </span>
+                                    )}
                                   </span>
-                                  {isAdded && (
-                                    <span className="shrink-0 inline-flex items-center rounded-full bg-green-100 dark:bg-green-900/30 px-2 py-0.5 text-xs font-medium text-green-700 dark:text-green-400">
-                                      Added
+                                  {channel.description && (
+                                    <span className="line-clamp-1 text-sm text-gray-500 dark:text-ios-400">
+                                      {channel.description}
                                     </span>
                                   )}
-                                </span>
-                                {channel.description && (
-                                  <span className="line-clamp-1 text-sm text-gray-500 dark:text-ios-400">
-                                    {channel.description}
+                                  <span className="mt-1 inline-flex items-center text-xs font-medium text-red-600 dark:text-red-400">
+                                    View preview
                                   </span>
-                                )}
-                                <span className="mt-1 inline-flex items-center text-xs font-medium text-red-600 dark:text-red-400">
-                                  View preview
                                 </span>
-                              </span>
-                              {isAdded && (
-                                <span className="ml-auto shrink-0 inline-flex items-center rounded-full bg-green-100 dark:bg-green-900/30 px-2 py-0.5 text-xs font-medium text-green-700 dark:text-green-400">
-                                  Added
-                                </span>
-                              )}
-                            </button>
+                              </button>
+                              <AnimatePresence>
+                                {isPreviewing && renderChannelPreview(channel)}
+                              </AnimatePresence>
+                            </div>
                           );
                         })}
                       </div>
@@ -583,7 +683,7 @@ export const AddChannelModal = ({ isOpen, onClose, onAdd, existingSubscriptions 
 
                 {/* Channel Preview */}
                 <AnimatePresence>
-                  {activePreviewChannel && (
+                  {channelInfo && !previewChannel && (
                     <motion.section
                       initial={{ opacity: 0, y: 10 }}
                       animate={{ opacity: 1, y: 0 }}
@@ -611,21 +711,19 @@ export const AddChannelModal = ({ isOpen, onClose, onAdd, existingSubscriptions 
                           <p className="text-sm text-gray-500 dark:text-ios-400 line-clamp-2 mt-0.5">
                             {activePreviewChannel.description || 'No description available'}
                           </p>
-                          {(activePreviewSubscriberCount !== null || activePreviewChannel.customUrl) && (
+                          {(activePreviewSubscriberCount || activePreviewChannel.customUrl) && (
                             <p className="text-xs text-gray-400 dark:text-ios-500 mt-1.5">
-                              {activePreviewSubscriberCount !== null && Number.isFinite(activePreviewSubscriberCount)
-                                ? `${activePreviewSubscriberCount.toLocaleString()} subscribers`
-                                : activePreviewChannel.customUrl || ''}
+                              {activePreviewSubscriberCount || activePreviewChannel.customUrl || ''}
                             </p>
                           )}
                         </div>
                       </div>
-                      <div className="mt-4 flex flex-col gap-2 sm:flex-row">
+                      <div className="mt-4 grid grid-cols-2 gap-2">
                         <button
                           type="button"
                           onClick={handleAddPreviewChannel}
                           disabled={isLoading || previewChannelIsAdded}
-                          className="inline-flex h-11 flex-1 items-center justify-center gap-2 rounded-xl bg-red-600 px-4 text-sm font-semibold text-white transition-colors hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-60"
+                          className="inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-red-600 px-4 text-sm font-semibold text-white transition-colors hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-60"
                         >
                           {isLoading ? (
                             <span className="h-4 w-4 rounded-full border-2 border-white/40 border-t-white animate-spin" />
@@ -639,7 +737,7 @@ export const AddChannelModal = ({ isOpen, onClose, onAdd, existingSubscriptions 
                         <button
                           type="button"
                           onClick={handleDismissPreview}
-                          className="inline-flex h-11 flex-1 items-center justify-center rounded-xl bg-white px-4 text-sm font-semibold text-gray-700 ring-1 ring-gray-200 transition-colors hover:bg-gray-100 dark:bg-ios-900 dark:text-ios-200 dark:ring-ios-700 dark:hover:bg-ios-800"
+                          className="inline-flex h-11 items-center justify-center rounded-xl bg-white px-4 text-sm font-semibold text-gray-700 ring-1 ring-gray-200 transition-colors hover:bg-gray-100 dark:bg-ios-900 dark:text-ios-200 dark:ring-ios-700 dark:hover:bg-ios-800"
                         >
                           Dismiss
                         </button>
