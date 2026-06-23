@@ -87,7 +87,10 @@ describe("useSubscriptionStorage", () => {
 
 		await waitFor(() => {
 			expect(result.current.allSubscriptions).toEqual([
-				expect.objectContaining({ id: remoteSubscription.id, title: "Server channel" }),
+				expect.objectContaining({
+					id: remoteSubscription.id,
+					title: "Server channel",
+				}),
 			]);
 		});
 	});
@@ -123,7 +126,11 @@ describe("useSubscriptionStorage", () => {
 
 			return {
 				ok: true,
-				json: async () => ({ success: true, syncRevision: 2, timestamp: "now" }),
+				json: async () => ({
+					success: true,
+					syncRevision: 2,
+					timestamp: "now",
+				}),
 			};
 		});
 
@@ -137,7 +144,9 @@ describe("useSubscriptionStorage", () => {
 
 		expect(
 			fetchMock.mock.calls.some(
-				([url, init]) => String(url) === `/api/subscriptions/${remoteSubscription.id}` && init?.method === "DELETE",
+				([url, init]) =>
+					String(url) === `/api/subscriptions/${remoteSubscription.id}` &&
+					init?.method === "DELETE",
 			),
 		).toBe(true);
 	});
@@ -203,5 +212,72 @@ describe("useSubscriptionStorage", () => {
 			},
 			{ timeout: 5000 },
 		);
+	});
+
+	it("force-pushes imported OPML subscriptions to the server so videos can be fetched", async () => {
+		let postCallCount = 0;
+		const fetchMock = vi.fn(async (_url: string, init?: RequestInit) => {
+			const method = init?.method || "GET";
+
+			if (method === "GET") {
+				return {
+					ok: true,
+					json: async () => ({
+						subscriptions: [],
+						watchedVideos: [],
+						redirects: {},
+						syncRevision: 1,
+					}),
+				};
+			}
+
+			if (method === "POST") {
+				postCallCount += 1;
+				return {
+					ok: true,
+					json: async () => ({
+						success: true,
+						syncRevision: 2,
+						timestamp: "now",
+					}),
+				};
+			}
+
+			return {
+				ok: true,
+				json: async () => ({}),
+			};
+		});
+
+		vi.stubGlobal("fetch", fetchMock);
+
+		const { result } = renderHook(() => useSubscriptionStorage(), { wrapper });
+
+		await waitFor(() => {
+			expect(result.current.allSubscriptions).toBeDefined();
+		});
+
+		const opml = `<?xml version="1.0" encoding="UTF-8"?>
+<opml version="1.1">
+  <head><title>YouTube Subscriptions</title></head>
+  <body>
+    <outline text="Sub" title="Sub" type="rss" xmlUrl="https://www.youtube.com/feeds/videos.xml?channel_id=UC1234567890123456789012" />
+  </body>
+</opml>`;
+
+		await act(async () => {
+			await result.current.importOPML(opml);
+		});
+
+		// The importOPML onSuccess must call syncWithBackend({ forcePush: true }),
+		// producing at least one POST to /api/sync so the server-side aggregator
+		// learns about the new channels and starts fetching videos.
+		await waitFor(() => {
+			const pushedSync = fetchMock.mock.calls.some(
+				([url, init]) => String(url) === "/api/sync" && init?.method === "POST",
+			);
+			expect(pushedSync).toBe(true);
+		});
+		expect(postCallCount).toBeGreaterThan(0);
 	});
 });
