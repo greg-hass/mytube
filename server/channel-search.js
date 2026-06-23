@@ -3,6 +3,8 @@ const {
 	invidiousInstances: INVIDIOUS_INSTANCES,
 } = require("./external-services.json");
 const { createLruCache } = require("./utils");
+const { searchYouTubeApiChannels } = require("./youtube-api-search");
+const { searchBraveChannels } = require("./brave-channel-search");
 
 const SEARCH_TIMEOUT_MS = 8000;
 const SEARCH_CACHE_MS = 30000;
@@ -135,17 +137,17 @@ function buildChannelSearchQueries(query, maxQueries = 6) {
 		// search for the actual topic ("tech review"), not stopword-noise
 		// abbreviations. Abbreviations and the original phrasing are kept
 		// as lower-priority fallbacks.
-		add(meaningful);                      // "tech review"
-		add(`${meaningful} channel`);         // "tech review channel"
-		add(meaningfulCompact);               // "techreview"
-		add(firstPlusInitial);                // "techr"
-		add(`@${firstPlusInitial}`);          // "@techr"
-		add(normalized);                      // "best tech review channels"
+		add(meaningful); // "tech review"
+		add(`${meaningful} channel`); // "tech review channel"
+		add(meaningfulCompact); // "techreview"
+		add(firstPlusInitial); // "techr"
+		add(`@${firstPlusInitial}`); // "@techr"
+		add(normalized); // "best tech review channels"
 	} else {
 		// Single meaningful token — prioritize it directly.
-		add(meaningful);                      // "woodworking"
-		add(`${meaningful} channel`);         // "woodworking channel"
-		add(normalized);                      // "the best woodworking channels"
+		add(meaningful); // "woodworking"
+		add(`${meaningful} channel`); // "woodworking channel"
+		add(normalized); // "the best woodworking channels"
 	}
 
 	return queries.slice(0, maxQueries);
@@ -155,7 +157,8 @@ function scoreChannelResult(query, channel) {
 	// Rank against the stopword-stripped meaningful query so that
 	// "the best woodworking channels" scores a "Woodworking Art" channel
 	// highly, instead of losing to channels that merely contain "the".
-	const meaningfulQuery = getMeaningfulSearchText(query) || normalizeText(query);
+	const meaningfulQuery =
+		getMeaningfulSearchText(query) || normalizeText(query);
 	const normalizedQuery = meaningfulQuery;
 	const compactQuery = compactSearchText(meaningfulQuery);
 	const title = normalizeText(channel.title);
@@ -169,7 +172,10 @@ function scoreChannelResult(query, channel) {
 	if (!normalizedQuery || !title) return 0;
 	if (title === normalizedQuery || handle === normalizedQuery) return 100;
 	if (compactTitle === compactQuery || handle === compactQuery) return 95;
-	if (normalizedTitleIdentity && normalizedTitleIdentity === normalizeYouTubeIdentity(query))
+	if (
+		normalizedTitleIdentity &&
+		normalizedTitleIdentity === normalizeYouTubeIdentity(query)
+	)
 		return 92;
 	if (title.startsWith(normalizedQuery) || handle.startsWith(normalizedQuery))
 		return 85;
@@ -359,7 +365,49 @@ async function searchChannels(query, options = {}) {
 
 	const fetchImpl = options.fetchImpl || fetch;
 	const limit = options.limit || 8;
+	const meaningfulQuery = getMeaningfulSearchText(trimmedQuery);
+
+	// ── Primary: YouTube Data API ──
+	// Uses 1 search.list call (100 units) with the meaningful query.
+	// Returns channel IDs + metadata directly — no resolution needed.
+	if (meaningfulQuery) {
+		const apiResults = await searchYouTubeApiChannels(meaningfulQuery, {
+			fetchImpl,
+			apiKey: options.youtubeApiKey,
+		});
+		if (apiResults.length > 0) {
+			const ranked = dedupeAndRankChannels(trimmedQuery, apiResults, limit);
+			if (ranked.length > 0) {
+				setCachedResults(trimmedQuery, ranked);
+				return ranked;
+			}
+		}
+	}
+
+	// ── Secondary: Brave Search API ──
+	// Queries site:youtube.com, resolves handles via channels.list (1 unit each).
+	if (meaningfulQuery) {
+		const braveResults = await searchBraveChannels(meaningfulQuery, {
+			fetchImpl,
+			braveKey: options.braveKey,
+			apiKey: options.youtubeApiKey,
+		});
+		if (braveResults.length > 0) {
+			const ranked = dedupeAndRankChannels(trimmedQuery, braveResults, limit);
+			if (ranked.length > 0) {
+				setCachedResults(trimmedQuery, ranked);
+				return ranked;
+			}
+		}
+	}
+
+	// ── Tertiary: YouTube scrape + Piped + Invidious ──
+	// Free but less reliable. Generates multiple query variants.
 	const searchQueries = buildChannelSearchQueries(trimmedQuery);
+	if (searchQueries.length === 0) {
+		setCachedResults(trimmedQuery, []);
+		return [];
+	}
 
 	// AbortController cancels all in-flight requests after the timeout,
 	// so slow instances don't keep running in the background.
@@ -372,7 +420,11 @@ async function searchChannels(query, options = {}) {
 			searchQueries.map(async (searchQuery) => {
 				const [youtubeResults, pipedResults, invidiousResults] =
 					await Promise.all([
-						searchYouTubePageChannels(searchQuery, fetchImpl, controller.signal),
+						searchYouTubePageChannels(
+							searchQuery,
+							fetchImpl,
+							controller.signal,
+						),
 						searchPipedChannels(searchQuery, fetchImpl, controller.signal),
 						searchInvidiousChannels(searchQuery, fetchImpl, controller.signal),
 					]);
@@ -400,11 +452,30 @@ function getSearchCacheStats() {
 	};
 }
 
+/**
+ * Which search backends are available given the current environment.
+ * Useful for the frontend to display status and for debugging.
+ */
+function getSearchBackendStatus() {
+	const { getQuotaStats } = require("./youtube-api-search");
+	return {
+		youtubeApi: {
+			available: Boolean(process.env.YOUTUBE_API_KEY),
+			quota: getQuotaStats(),
+		},
+		brave: {
+			available: Boolean(process.env.BRAVE_API_KEY),
+		},
+		scrape: { available: true },
+	};
+}
+
 module.exports = {
 	buildChannelSearchQueries,
 	dedupeAndRankChannels,
 	getMeaningfulSearchText,
 	getMeaningfulTokens,
+	getSearchBackendStatus,
 	getSearchCacheStats,
 	parseYouTubeChannelSearchResults,
 	scoreChannelResult,
