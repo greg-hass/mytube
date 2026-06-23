@@ -19,7 +19,7 @@ export SERVER_API_TOKEN="$(openssl rand -hex 32)"
 docker compose up -d
 ```
 
-The included compose file runs `ghcr.io/greg-hass/mytube:latest`, serves the app on `http://localhost:5173`, and stores user data in the `youtube-subscriptions-data` Docker volume. After the first start, open Settings and save the same Server API Token in that browser.
+The included compose file runs `ghcr.io/greg-hass/mytube:latest`, serves the app on `http://localhost:5173`, and stores user data in the `mytube-data` Docker volume. After the first start, open Settings and save the same Server API Token in that browser.
 
 ### Local Development
 

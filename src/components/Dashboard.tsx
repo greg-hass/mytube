@@ -23,7 +23,6 @@ import { toast } from "sonner";
 import { FirstRunOnboarding } from "./FirstRunOnboarding";
 import { Header } from "./Header";
 import { FloatingTabBar } from "./FloatingTabBar";
-import { PullToRefresh } from "./PullToRefresh";
 import { SubscriptionsList } from "./SubscriptionsList";
 import { SubscriptionCard } from "./SubscriptionCard";
 import { VirtualizedVideoGrid } from "./VirtualizedVideoGrid";
@@ -297,15 +296,10 @@ export const Dashboard = () => {
 
 	const {
 		videos,
-		isLoading: videosLoading,
 		refresh: refetchVideos,
 		syncStatus,
-		cacheStatus,
 	} = useRSSVideos();
 	const hasNoSubscriptions = allSubscriptions.length === 0;
-	const feedProgressPercent = syncStatus?.total
-		? Math.round((syncStatus.current / syncStatus.total) * 100)
-		: 0;
 	const channelThumbnails = useMemo(() => {
 		return new Map(
 			allSubscriptions.map((channel) => [channel.id, channel.thumbnail]),
@@ -660,12 +654,17 @@ export const Dashboard = () => {
 				requestAnimationFrame(() => {
 					const currentY = window.scrollY;
 					const delta = currentY - headerScrollYRef.current;
+					const compactMobile = isCompactMobileViewport(
+						getCurrentViewportSize(),
+					);
+					const headerHideThreshold = compactMobile ? 12 : 8;
+					const headerShowThreshold = compactMobile ? -5 : -3;
 
-					if (currentY < 8) {
+					if (currentY < headerHideThreshold) {
 						setHeaderVisible(true);
-					} else if (delta > 8) {
+					} else if (delta > headerHideThreshold) {
 						setHeaderVisible(false);
-					} else if (delta < -3) {
+					} else if (delta < headerShowThreshold) {
 						setHeaderVisible(true);
 					}
 
@@ -827,8 +826,6 @@ export const Dashboard = () => {
 						: "Search channels..."
 				}
 				syncStatus={syncStatus}
-				cacheStatus={cacheStatus}
-				onRetryFailed={refetchVideos}
 				showShorts={showShorts}
 				onToggleShorts={() => setShowShorts((prev) => !prev)}
 				hideWatched={hideWatched}
@@ -841,6 +838,7 @@ export const Dashboard = () => {
 				onOpenFilters={() => setIsQualityFiltersOpen(true)}
 				activeFilterCount={activeQualityFilterCount}
 				scrollHidden={!headerVisible}
+				compactMobile={isMobileTimeline}
 			/>
 
 			{subscriptionsLoading || subscriptionsInitialSyncing ? (
@@ -978,13 +976,7 @@ export const Dashboard = () => {
 					</div>
 
 					{/* Content */}
-					<PullToRefresh
-						onRefresh={() => {
-							refetchVideos();
-						}}
-						isRefreshing={videosLoading || syncStatus?.isSyncing || false}
-					>
-						<AnimatePresence mode="wait" initial={false}>
+					<AnimatePresence mode="wait" initial={false}>
 							{activeTab === "subscriptions" ? (
 								<motion.div
 									key="subscriptions"
@@ -1012,38 +1004,7 @@ export const Dashboard = () => {
 									className="px-4"
 								>
 									{videos.length === 0 ? (
-										videosLoading ? (
-											<div className="text-center py-12">
-												<div className="inline-block w-8 h-8 border-4 border-red-600 border-t-transparent rounded-full animate-spin mb-4" />
-												<p className="text-gray-800 dark:text-ios-200 text-lg font-semibold">
-													Loading your feed
-												</p>
-											</div>
-										) : syncStatus?.isSyncing ? (
-											<div className="text-center py-12">
-												<div className="inline-block w-8 h-8 border-4 border-red-600 border-t-transparent rounded-full animate-spin mb-4" />
-												<p className="text-gray-800 dark:text-ios-200 text-lg font-semibold">
-													Building your feed
-												</p>
-												<p className="mt-2 text-sm text-gray-500 dark:text-ios-400">
-													Your feeds are refreshing. This can take a minute
-													after import.
-												</p>
-												<p className="text-sm text-gray-500 dark:text-ios-500 mt-2">
-													{syncStatus.current} / {syncStatus.total} channels
-													checked
-												</p>
-												<div className="w-full max-w-sm h-2 bg-gray-200 dark:bg-ios-800 rounded-full overflow-hidden mx-auto mt-4">
-													<div
-														className="h-full bg-red-600 rounded-full transition-all"
-														style={{ width: `${feedProgressPercent}%` }}
-													/>
-												</div>
-												<p className="text-xs text-gray-500 dark:text-ios-500 mt-3">
-													{syncStatus.videos} videos found so far
-												</p>
-											</div>
-										) : hasTemporaryChannels ? (
+										hasTemporaryChannels ? (
 											<div className="text-center py-12">
 												<p className="text-gray-600 dark:text-ios-400 text-lg mb-2">
 													Some channels need channel IDs to fetch videos
@@ -1309,7 +1270,6 @@ export const Dashboard = () => {
 								</motion.div>
 							)}
 						</AnimatePresence>
-					</PullToRefresh>
 
 					<FloatingTabBar
 						activeTab={activeTab}

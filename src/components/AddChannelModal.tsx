@@ -5,6 +5,84 @@ import { parseChannelInput, getDisplayText, type ParsedChannelInput } from '../l
 import { fetchChannelInfoWithFallback } from '../lib/youtube-api';
 import type { YouTubeChannel } from '../types/youtube';
 
+const SMART_SEARCH_STOP_WORDS = new Set([
+  'a',
+  'about',
+  'and',
+  'are',
+  'channel',
+  'channels',
+  'for',
+  'from',
+  'in',
+  'is',
+  'my',
+  'news',
+  'of',
+  'official',
+  'on',
+  'podcast',
+  'show',
+  'the',
+  'to',
+  'tube',
+  'videos',
+  'video',
+  'with',
+  'you',
+  'your',
+]);
+
+function normalizeSearchText(value: string) {
+  return String(value || '')
+    .toLowerCase()
+    .replace(/^@/, '')
+    .replace(/[^a-z0-9]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function buildSmartSearchQuery(value: string) {
+  const normalized = normalizeSearchText(value);
+  if (!normalized) return '';
+
+  const tokens = normalized
+    .split(' ')
+    .filter(Boolean)
+    .filter((token) => !SMART_SEARCH_STOP_WORDS.has(token));
+
+  return tokens.length > 0 ? tokens.join(' ') : normalized;
+}
+
+function scoreSearchResult(query: string, channel: YouTubeChannel) {
+  const queryText = normalizeSearchText(query);
+  if (!queryText) return 0;
+
+  const queryTokens = queryText.split(' ').filter(Boolean);
+  if (queryTokens.length === 0) return 0;
+
+  const title = normalizeSearchText(channel.title);
+  const description = normalizeSearchText(channel.description || '');
+  const customUrl = normalizeSearchText(channel.customUrl || '');
+  const haystack = `${title} ${description} ${customUrl}`.trim();
+
+  if (!haystack) return 0;
+
+  let score = 0;
+  if (title === queryText || customUrl === queryText) score += 120;
+  if (title.startsWith(queryText) || customUrl.startsWith(queryText)) score += 60;
+  if (title.includes(queryText)) score += 30;
+  if (description.includes(queryText) || customUrl.includes(queryText)) score += 18;
+
+  const matchedTokens = queryTokens.filter((token) => haystack.includes(token)).length;
+  score += Math.round((matchedTokens / queryTokens.length) * 50);
+
+  if (title.startsWith(queryTokens[0])) score += 8;
+  if (description.includes(queryTokens[0])) score += 4;
+
+  return score;
+}
+
 interface AddChannelModalProps {
   isOpen: boolean;
   onClose: () => void;
@@ -17,8 +95,8 @@ export const AddChannelModal = ({ isOpen, onClose, onAdd, existingSubscriptions 
   const [parsedInput, setParsedInput] = useState<ParsedChannelInput | null>(null);
   const [channelInfo, setChannelInfo] = useState<YouTubeChannel | null>(null);
   const [searchResults, setSearchResults] = useState<YouTubeChannel[]>([]);
+  const [previewChannel, setPreviewChannel] = useState<YouTubeChannel | null>(null);
   const [isLoading, setIsLoading] = useState(false);
-  const [addingChannelIds, setAddingChannelIds] = useState<Set<string>>(new Set());
   const [addedChannelIds, setAddedChannelIds] = useState<Set<string>>(new Set());
   const [isValidating, setIsValidating] = useState(false);
   const [isSearching, setIsSearching] = useState(false);
@@ -26,9 +104,19 @@ export const AddChannelModal = ({ isOpen, onClose, onAdd, existingSubscriptions 
   const inputRef = useRef<HTMLInputElement>(null);
 
   const existingIds = useMemo(() => new Set(existingSubscriptions.map((sub) => sub.id)), [existingSubscriptions]);
+  const smartSearchQuery = useMemo(() => buildSmartSearchQuery(input.trim()), [input]);
   const visibleSearchResults = useMemo(
-    () => searchResults.filter((channel) => !existingIds.has(channel.id) || addedChannelIds.has(channel.id)),
-    [addedChannelIds, existingIds, searchResults]
+    () =>
+      searchResults
+        .filter((channel) => !existingIds.has(channel.id) || addedChannelIds.has(channel.id))
+        .map((channel) => ({
+          channel,
+          score: scoreSearchResult(smartSearchQuery || input.trim(), channel),
+        }))
+        .filter(({ score }) => score > 0)
+        .sort((a, b) => b.score - a.score || a.channel.title.localeCompare(b.channel.title))
+        .map(({ channel }) => channel),
+    [addedChannelIds, existingIds, input, searchResults, smartSearchQuery]
   );
 
   // Validate input whenever it changes
@@ -39,6 +127,7 @@ export const AddChannelModal = ({ isOpen, onClose, onAdd, existingSubscriptions 
       setParsedInput(null);
       setChannelInfo(null);
       setSearchResults([]);
+      setPreviewChannel(null);
       setValidationError('');
       return;
     }
@@ -54,6 +143,7 @@ export const AddChannelModal = ({ isOpen, onClose, onAdd, existingSubscriptions 
     if (parsed.type === 'invalid') {
       setValidationError('Invalid YouTube channel format');
       setChannelInfo(null);
+      setPreviewChannel(null);
     } else if (canResolveDirectly) {
       setValidationError('');
       // Auto-fetch channel info for valid inputs
@@ -76,7 +166,8 @@ export const AddChannelModal = ({ isOpen, onClose, onAdd, existingSubscriptions 
     const timeout = window.setTimeout(async () => {
       setIsSearching(true);
       try {
-        const response = await fetch(`/api/channel-search?q=${encodeURIComponent(query)}`, {
+        const searchQuery = buildSmartSearchQuery(query) || query;
+        const response = await fetch(`/api/channel-search?q=${encodeURIComponent(searchQuery)}`, {
           signal: controller.signal,
         });
 
@@ -180,7 +271,6 @@ export const AddChannelModal = ({ isOpen, onClose, onAdd, existingSubscriptions 
   const addChannel = async (channel: YouTubeChannel) => {
     if (existingIds.has(channel.id) || addedChannelIds.has(channel.id)) return;
 
-    setAddingChannelIds((ids) => new Set(ids).add(channel.id));
     setValidationError('');
     setIsLoading(true);
     try {
@@ -191,11 +281,6 @@ export const AddChannelModal = ({ isOpen, onClose, onAdd, existingSubscriptions 
       console.error('Failed to add channel:', error);
       setValidationError('Failed to add channel. Please try again.');
     } finally {
-      setAddingChannelIds((ids) => {
-        const nextIds = new Set(ids);
-        nextIds.delete(channel.id);
-        return nextIds;
-      });
       setIsLoading(false);
     }
   };
@@ -212,7 +297,30 @@ export const AddChannelModal = ({ isOpen, onClose, onAdd, existingSubscriptions 
   };
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setPreviewChannel(null);
     setInput(e.target.value);
+  };
+
+  const handleSelectPreviewChannel = (channel: YouTubeChannel) => {
+    setPreviewChannel(channel);
+    setValidationError('');
+  };
+
+  const handleDismissPreview = () => {
+    if (previewChannel) {
+      setPreviewChannel(null);
+      return;
+    }
+
+    setChannelInfo(null);
+  };
+
+  const handleAddPreviewChannel = async () => {
+    const channelToAdd = previewChannel ?? channelInfo;
+    if (!channelToAdd) return;
+
+    await addChannel(channelToAdd);
+    setPreviewChannel(null);
   };
 
   const handleInputKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
@@ -230,6 +338,11 @@ export const AddChannelModal = ({ isOpen, onClose, onAdd, existingSubscriptions 
 
   const hasResults = visibleSearchResults.length > 0;
   const showFormats = !hasResults && !channelInfo && !isSearching && input.trim().length < 2;
+  const activePreviewChannel = previewChannel ?? channelInfo;
+  const previewChannelIsAdded = activePreviewChannel ? addedChannelIds.has(activePreviewChannel.id) || existingIds.has(activePreviewChannel.id) : false;
+  const activePreviewSubscriberCount = activePreviewChannel?.subscriberCount
+    ? Number.parseInt(activePreviewChannel.subscriberCount, 10)
+    : null;
 
   return (
     <AnimatePresence>
@@ -377,10 +490,12 @@ export const AddChannelModal = ({ isOpen, onClose, onAdd, existingSubscriptions 
                       <div className="space-y-2 pr-1">
                         {visibleSearchResults.map((channel) => {
                           const isAdded = addedChannelIds.has(channel.id);
-                          const isAdding = addingChannelIds.has(channel.id);
                           return (
-                            <div
+                            <button
+                              type="button"
                               key={channel.id}
+                              onClick={() => handleSelectPreviewChannel(channel)}
+                              aria-label={`Preview ${channel.title}`}
                               className={`flex w-full items-center gap-3 rounded-xl border p-3 text-left transition-all ${isAdded
                                 ? 'border-green-200 bg-green-50 dark:border-green-900/60 dark:bg-green-950/20'
                                 : 'border-gray-200 bg-gray-50 hover:border-gray-300 hover:bg-gray-100 dark:border-ios-800 dark:bg-ios-800/50 dark:hover:border-ios-700 dark:hover:bg-ios-800'
@@ -410,26 +525,16 @@ export const AddChannelModal = ({ isOpen, onClose, onAdd, existingSubscriptions 
                                     {channel.description}
                                   </span>
                                 )}
+                                <span className="mt-1 inline-flex items-center text-xs font-medium text-red-600 dark:text-red-400">
+                                  View preview
+                                </span>
                               </span>
-                              <button
-                                type="button"
-                                onClick={() => addChannel(channel)}
-                                disabled={isAdded || isAdding}
-                                aria-label={isAdded ? `${channel.title} added` : `Add ${channel.title}`}
-                                className={`flex h-10 w-10 flex-none items-center justify-center rounded-full transition-all ${isAdded
-                                  ? 'bg-green-600 text-white'
-                                  : 'bg-red-600 text-white hover:bg-red-700 disabled:opacity-60'
-                                  }`}
-                              >
-                                {isAdding ? (
-                                  <span className="h-4 w-4 rounded-full border-2 border-white/40 border-t-white animate-spin" />
-                                ) : isAdded ? (
-                                  <Check className="h-5 w-5" />
-                                ) : (
-                                  <Plus className="h-5 w-5" />
-                                )}
-                              </button>
-                            </div>
+                              {isAdded && (
+                                <span className="ml-auto shrink-0 inline-flex items-center rounded-full bg-green-100 dark:bg-green-900/30 px-2 py-0.5 text-xs font-medium text-green-700 dark:text-green-400">
+                                  Added
+                                </span>
+                              )}
+                            </button>
                           );
                         })}
                       </div>
@@ -459,21 +564,21 @@ export const AddChannelModal = ({ isOpen, onClose, onAdd, existingSubscriptions 
 
                 {/* Channel Preview */}
                 <AnimatePresence>
-                  {channelInfo && (
+                  {activePreviewChannel && (
                     <motion.section
                       initial={{ opacity: 0, y: 10 }}
                       animate={{ opacity: 1, y: 0 }}
                       exit={{ opacity: 0, y: 10 }}
-                      className="rounded-xl border border-gray-200 dark:border-ios-800 bg-gray-50 dark:bg-ios-800/50 p-4"
+                      className="rounded-2xl border border-gray-200 dark:border-ios-800 bg-gray-50 dark:bg-ios-800/50 p-4 shadow-sm"
                     >
-                      <h3 className="text-sm font-semibold text-gray-900 dark:text-white mb-3 flex items-center gap-2">
-                        <Check className="w-4 h-4 text-green-600" />
+                      <h3 className="mb-3 flex items-center gap-2 text-sm font-semibold text-gray-900 dark:text-white">
+                        <Youtube className="w-4 h-4 text-red-600" />
                         Channel Preview
                       </h3>
                       <div className="flex items-start gap-3">
                         <img
-                          src={channelInfo.thumbnail}
-                          alt={channelInfo.title}
+                          src={activePreviewChannel.thumbnail}
+                          alt={activePreviewChannel.title}
                           className="w-14 h-14 rounded-full object-cover flex-none"
                           onError={(e) => {
                             e.currentTarget.src = '';
@@ -482,34 +587,42 @@ export const AddChannelModal = ({ isOpen, onClose, onAdd, existingSubscriptions 
                         />
                         <div className="flex-1 min-w-0">
                           <h4 className="font-semibold text-gray-900 dark:text-ios-100 truncate">
-                            {channelInfo.title}
+                            {activePreviewChannel.title}
                           </h4>
                           <p className="text-sm text-gray-500 dark:text-ios-400 line-clamp-2 mt-0.5">
-                            {channelInfo.description || 'No description available'}
+                            {activePreviewChannel.description || 'No description available'}
                           </p>
-                          {channelInfo.subscriberCount && (
+                          {(activePreviewSubscriberCount !== null || activePreviewChannel.customUrl) && (
                             <p className="text-xs text-gray-400 dark:text-ios-500 mt-1.5">
-                              {parseInt(channelInfo.subscriberCount).toLocaleString()} subscribers
+                              {activePreviewSubscriberCount !== null && Number.isFinite(activePreviewSubscriberCount)
+                                ? `${activePreviewSubscriberCount.toLocaleString()} subscribers`
+                                : activePreviewChannel.customUrl || ''}
                             </p>
                           )}
                         </div>
+                      </div>
+                      <div className="mt-4 flex flex-col gap-2 sm:flex-row">
                         <button
                           type="button"
-                          onClick={handleAddParsedInput}
-                          disabled={isLoading || existingIds.has(channelInfo.id) || addedChannelIds.has(channelInfo.id)}
-                          aria-label={addedChannelIds.has(channelInfo.id) ? `${channelInfo.title} added` : `Add ${channelInfo.title}`}
-                          className={`flex h-10 w-10 flex-none items-center justify-center rounded-full transition-all ${addedChannelIds.has(channelInfo.id)
-                            ? 'bg-green-600 text-white'
-                            : 'bg-red-600 text-white hover:bg-red-700 disabled:opacity-60'
-                            }`}
+                          onClick={handleAddPreviewChannel}
+                          disabled={isLoading || previewChannelIsAdded}
+                          className="inline-flex h-11 flex-1 items-center justify-center gap-2 rounded-xl bg-red-600 px-4 text-sm font-semibold text-white transition-colors hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-60"
                         >
-                          {addingChannelIds.has(channelInfo.id) ? (
+                          {isLoading ? (
                             <span className="h-4 w-4 rounded-full border-2 border-white/40 border-t-white animate-spin" />
-                          ) : addedChannelIds.has(channelInfo.id) ? (
-                            <Check className="h-5 w-5" />
+                          ) : previewChannelIsAdded ? (
+                            <Check className="h-4 w-4" />
                           ) : (
-                            <Plus className="h-5 w-5" />
+                            <Plus className="h-4 w-4" />
                           )}
+                          {previewChannelIsAdded ? 'Added' : 'Add'}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={handleDismissPreview}
+                          className="inline-flex h-11 flex-1 items-center justify-center rounded-xl bg-white px-4 text-sm font-semibold text-gray-700 ring-1 ring-gray-200 transition-colors hover:bg-gray-100 dark:bg-ios-900 dark:text-ios-200 dark:ring-ios-700 dark:hover:bg-ios-800"
+                        >
+                          Dismiss
                         </button>
                       </div>
                     </motion.section>

@@ -1,4 +1,4 @@
-import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ReactNode } from 'react';
 import { AddChannelModal } from './AddChannelModal';
@@ -60,14 +60,14 @@ describe('AddChannelModal', () => {
     vi.useRealTimers();
   });
 
-  it('adds channels directly from search results and keeps the modal open for more additions', async () => {
+  it('shows a preview before adding a searched channel', async () => {
     const onAdd = vi.fn();
     const onClose = vi.fn();
 
     render(<AddChannelModal isOpen onClose={onClose} onAdd={onAdd} />);
 
     fireEvent.change(screen.getByLabelText('YouTube Channel'), {
-      target: { value: 'linux tech' },
+      target: { value: 'the linux tech channel' },
     });
 
     await act(async () => {
@@ -76,10 +76,22 @@ describe('AddChannelModal', () => {
     vi.useRealTimers();
 
     await waitFor(() => {
-      expect(screen.getByText('Linux Tech Channel')).toBeInTheDocument();
+      expect(fetch).toHaveBeenCalledWith(
+        '/api/channel-search?q=linux%20tech',
+        expect.objectContaining({ signal: expect.any(AbortSignal) })
+      );
     });
 
-    fireEvent.click(screen.getByRole('button', { name: /add linux tech channel/i }));
+    fireEvent.click(screen.getByRole('button', { name: /preview linux tech channel/i }));
+
+    expect(screen.getByText('Channel Preview')).toBeInTheDocument();
+    const previewCard = screen.getByText('Channel Preview').closest('section');
+    expect(previewCard).not.toBeNull();
+    expect(within(previewCard as HTMLElement).getByText('Linux Tech Channel')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Add' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Dismiss' })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Add' }));
 
     await waitFor(() => {
       expect(onAdd).toHaveBeenCalledWith(expect.objectContaining({
@@ -88,18 +100,7 @@ describe('AddChannelModal', () => {
       }));
     });
     expect(onClose).not.toHaveBeenCalled();
-    expect(screen.getByRole('button', { name: /linux tech channel added/i })).toBeDisabled();
-
-    fireEvent.click(screen.getByRole('button', { name: /add kernel notes/i }));
-
-    await waitFor(() => {
-      expect(onAdd).toHaveBeenCalledWith(expect.objectContaining({
-        id: 'UC2222222222222222222222',
-        title: 'Kernel Notes',
-      }));
-    });
-    expect(screen.getByRole('button', { name: /kernel notes added/i })).toBeDisabled();
-    expect(onAdd).toHaveBeenCalledTimes(2);
+    expect(screen.queryByText('Channel Preview')).not.toBeInTheDocument();
   });
 
   it('filters existing subscriptions out of keyword search results', async () => {

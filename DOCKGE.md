@@ -18,7 +18,7 @@ services:
     ports:
       - "5173:8080"
     volumes:
-      - youtube-subscriptions-data:/app/server/data
+      - mytube-data:/app/server/data
     restart: unless-stopped
     environment:
       - NODE_ENV=production
@@ -38,7 +38,7 @@ services:
       - "com.centurylinklabs.watchtower.enable=true"
 
 volumes:
-  youtube-subscriptions-data:
+  mytube-data:
 ```
 
 Open:
@@ -62,7 +62,7 @@ docker compose up -d
 - `/api` is proxied internally from nginx to Node.
 - The API fails closed until `SERVER_API_TOKEN` is set. Save that same token in Settings for each browser.
 - The server refreshes due RSS feeds every 15 minutes by default.
-- Persistent SQLite state for subscriptions, videos, watched state, redirects, and deletion tombstones lives in the `youtube-subscriptions-data` Docker volume.
+- Persistent SQLite state for subscriptions, videos, watched state, redirects, and deletion tombstones lives in the `mytube-data` Docker volume.
 - Use `npm run backup:sqlite` inside the running container for live SQLite snapshots; stop the stack before `npm run restore:sqlite -- --file ...`.
 - A host-path mount such as `./data:/app/server/data` is optional. Create it first and make it writable by container UID `1000` with `mkdir -p data && sudo chown -R 1000:1000 data`; otherwise the non-root container can exit with `SQLITE_CANTOPEN`.
 - If an existing bind mount already contains data you need, fix that directory ownership and keep the bind mount until you intentionally migrate it. Replacing it with the named volume starts with a separate volume.

@@ -9,8 +9,8 @@ describe('docker compose persistence', () => {
     expect(compose).toContain('mytube:');
     expect(compose).toContain('container_name: mytube');
     expect(compose).toContain('image: ghcr.io/greg-hass/mytube:latest');
-    expect(compose).toContain('youtube-subscriptions-data:/app/server/data');
-    expect(compose).toContain('\nvolumes:\n  youtube-subscriptions-data:\n');
+    expect(compose).toContain('mytube-data:/app/server/data');
+    expect(compose).toContain('\nvolumes:\n  mytube-data:\n');
     expect(compose).not.toContain('./server/data:/app/server/data');
   });
 

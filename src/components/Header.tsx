@@ -6,7 +6,6 @@ import { HeaderSearchMobile } from "./HeaderSearchMobile";
 import { MobileHeaderControls } from "./MobileHeaderControls";
 import { MobileMenu } from "./MobileMenu";
 import { SettingsModal } from "./SettingsModal";
-import { RefreshStatusPanel } from "./RefreshStatusPanel";
 import { useStore } from "../store/useStore";
 import { useSubscriptionStorage } from "../hooks/useSubscriptionStorage";
 import { useHeaderHeight } from "../hooks/useHeaderHeight";
@@ -16,13 +15,6 @@ interface HeaderProps {
 	showMobileSearch?: boolean;
 	searchPlaceholder?: string;
 	syncStatus?: SyncStatus;
-	cacheStatus?: {
-		hasCache: boolean;
-		isStale: boolean;
-		age: number;
-		videoCount: number;
-	};
-	onRetryFailed?: () => void;
 	showShorts?: boolean;
 	onToggleShorts?: () => void;
 	hideWatched?: boolean;
@@ -31,14 +23,13 @@ interface HeaderProps {
 	onOpenFilters?: () => void;
 	activeFilterCount?: number;
 	scrollHidden?: boolean;
+	compactMobile?: boolean;
 }
 
 export const Header = ({
 	showMobileSearch = true,
 	searchPlaceholder = "Search channels...",
 	syncStatus,
-	cacheStatus,
-	onRetryFailed,
 	showShorts = true,
 	onToggleShorts,
 	hideWatched = false,
@@ -47,6 +38,7 @@ export const Header = ({
 	onOpenFilters,
 	activeFilterCount = 0,
 	scrollHidden = false,
+	compactMobile = false,
 }: HeaderProps) => {
 	const headerRef = useHeaderHeight();
 	const [isSettingsOpen, setIsSettingsOpen] = useState(false);
@@ -64,10 +56,6 @@ export const Header = ({
 	const [showExportMenu, setShowExportMenu] = useState(false);
 	const [showMobileMenu, setShowMobileMenu] = useState(false);
 	const [showMobileSearchPanel, setShowMobileSearchPanel] = useState(false);
-	const showRefreshHealthPanel = Boolean(
-		syncStatus?.isSyncing && cacheStatus && onRetryFailed,
-	);
-
 	const handleExport = (format: "opml" | "json") => {
 		try {
 			if (format === "opml") {
@@ -100,7 +88,11 @@ export const Header = ({
 				ref={headerRef}
 				initial={{ y: -100 }}
 				animate={scrollHidden ? { y: "-100%" } : { y: 0 }}
-				transition={{ type: "spring", stiffness: 400, damping: 35 }}
+				transition={
+					compactMobile
+						? { type: "spring", stiffness: 260, damping: 38 }
+						: { type: "spring", stiffness: 400, damping: 35 }
+				}
 				className="sticky top-0 z-50 glass safe-top border-b border-gray-200 dark:border-ios-800/80 shadow-sm"
 			>
 				<div className="max-w-7xl mx-auto px-4">
@@ -188,22 +180,6 @@ export const Header = ({
 						}}
 						onKeyDown={handleSearchKeyDown}
 					/>
-					{showRefreshHealthPanel &&
-						syncStatus &&
-						cacheStatus &&
-						onRetryFailed && (
-							<div
-								data-testid="mobile-refresh-health-panel"
-								className="mobile-header-search pb-3 xl:hidden"
-							>
-								<RefreshStatusPanel
-									status={syncStatus}
-									cacheStatus={cacheStatus}
-									onRetryFailed={onRetryFailed}
-									variant="compact"
-								/>
-							</div>
-						)}
 				</div>
 			</motion.header>
 
@@ -218,9 +194,6 @@ export const Header = ({
 				onToggleShorts={onToggleShorts}
 				hideWatched={hideWatched}
 				onToggleWatched={onToggleWatched}
-				syncStatus={syncStatus}
-				cacheStatus={cacheStatus}
-				onRetryFailed={onRetryFailed}
 				sortBy={sortBy}
 				onSortChange={setSortBy}
 				viewMode={viewMode}
