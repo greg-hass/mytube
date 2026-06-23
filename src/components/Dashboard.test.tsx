@@ -88,12 +88,20 @@ let mockSubscriptionsInitialSyncing = false;
 const mockToggleChannelFavorite = vi.fn();
 let throwSubscriptionsListError = false;
 let latestSubscriptionsListProps: { selectedGroup?: string; groups?: string[] } | undefined;
+type HeaderMockProps = {
+  syncStatus?: MockRSSVideosState['syncStatus'];
+  showShorts?: boolean;
+  onToggleShorts?: () => void;
+  hideWatched?: boolean;
+  onToggleWatched?: () => void;
+  showFilters?: boolean;
+  onOpenFilters?: () => void;
+  activeFilterCount?: number;
+  scrollHidden?: boolean;
+  compactMobile?: boolean;
+};
 const headerMockState = vi.hoisted(() => ({
-  latestProps: undefined as undefined | {
-    syncStatus?: MockRSSVideosState['syncStatus'];
-    scrollHidden?: boolean;
-    compactMobile?: boolean;
-  },
+  latestProps: undefined as undefined | HeaderMockProps,
 }));
 const toastMockState = vi.hoisted(() => ({
   success: vi.fn(),
@@ -106,16 +114,7 @@ vi.mock('sonner', () => ({
 }));
 
 vi.mock('./Header', () => ({
-  Header: (props: {
-    syncStatus?: MockRSSVideosState['syncStatus'];
-    showShorts?: boolean;
-    onToggleShorts?: () => void;
-    hideWatched?: boolean;
-    onToggleWatched?: () => void;
-    showFilters?: boolean;
-    onOpenFilters?: () => void;
-    activeFilterCount?: number;
-  }) => {
+  Header: (props: HeaderMockProps) => {
     headerMockState.latestProps = props;
     return (
       <header>
