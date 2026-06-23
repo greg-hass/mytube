@@ -1,6 +1,8 @@
 import { lazy, Suspense } from "react";
 import { Download, Grid3x3, List, Moon, Settings, Sun, X } from "lucide-react";
 import { MenuFilterButtons } from "./MenuFilterButtons";
+import { RefreshStatusPanel } from "./RefreshStatusPanel";
+import type { SyncStatus } from "../hooks/useRSSVideos";
 import type { SortBy } from "../types/youtube";
 
 const OPMLUpload = lazy(() =>
@@ -29,6 +31,14 @@ interface MobileMenuProps {
 	onOpenSettings: () => void;
 	onToggleTheme: () => void;
 	theme: "light" | "dark";
+	syncStatus?: SyncStatus;
+	cacheStatus?: {
+		hasCache: boolean;
+		isStale: boolean;
+		age: number;
+		videoCount: number;
+	};
+	onRetryFailed?: () => void;
 }
 
 export const MobileMenu = ({
@@ -50,6 +60,9 @@ export const MobileMenu = ({
 	onOpenSettings,
 	onToggleTheme,
 	theme,
+	syncStatus,
+	cacheStatus,
+	onRetryFailed,
 }: MobileMenuProps) => {
 	if (!showMobileMenu) return null;
 
@@ -156,6 +169,20 @@ export const MobileMenu = ({
 							JSON
 						</button>
 					</div>
+
+					{syncStatus && cacheStatus && onRetryFailed && (
+						<div className="space-y-2 pt-1">
+							<p className="text-xs font-medium uppercase tracking-wide text-gray-500 dark:text-ios-400">
+								Feed health
+							</p>
+							<RefreshStatusPanel
+								status={syncStatus}
+								cacheStatus={cacheStatus}
+								onRetryFailed={onRetryFailed}
+								variant="menu"
+							/>
+						</div>
+					)}
 
 					<div className="grid grid-cols-2 gap-2 pt-2">
 						<button
