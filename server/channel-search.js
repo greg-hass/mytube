@@ -4,7 +4,7 @@ const {
 } = require("./external-services.json");
 const { createLruCache } = require("./utils");
 
-const SEARCH_TIMEOUT_MS = 4000;
+const SEARCH_TIMEOUT_MS = 8000;
 const SEARCH_CACHE_MS = 30000;
 const SEARCH_CACHE_MAX_ENTRIES = 100;
 
