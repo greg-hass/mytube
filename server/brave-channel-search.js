@@ -122,7 +122,13 @@ async function searchBraveChannels(query, options = {}) {
 	const timeoutId = setTimeout(() => controller.abort(), SEARCH_TIMEOUT_MS);
 
 	try {
-		const braveQuery = `${query} site:youtube.com`;
+		// Target only channel-type URL paths — filters out videos/playlists
+		// at the search level instead of wasting results on them
+		const braveQuery =
+			`${query} site:youtube.com/channel/` +
+			` OR site:youtube.com/@` +
+			` OR site:youtube.com/c/` +
+			` OR site:youtube.com/user/`;
 		const url =
 			`https://api.search.brave.com/res/v1/web/search` +
 			`?q=${encodeURIComponent(braveQuery)}` +
