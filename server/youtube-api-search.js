@@ -73,9 +73,7 @@ function resetQuotaForTesting() {
  */
 async function searchYouTubeApiChannels(query, options = {}) {
 	const apiKey =
-		options.apiKey !== undefined
-			? options.apiKey
-			: process.env.YOUTUBE_API_KEY;
+		options.apiKey !== undefined ? options.apiKey : process.env.YOUTUBE_API_KEY;
 	if (!apiKey || !isQuotaAvailable()) return [];
 
 	const fetchImpl = options.fetchImpl || fetch;

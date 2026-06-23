@@ -115,9 +115,7 @@ async function searchBraveChannels(query, options = {}) {
 	if (!braveKey) return [];
 
 	const apiKey =
-		options.apiKey !== undefined
-			? options.apiKey
-			: process.env.YOUTUBE_API_KEY;
+		options.apiKey !== undefined ? options.apiKey : process.env.YOUTUBE_API_KEY;
 
 	const fetchImpl = options.fetchImpl || fetch;
 	const controller = new AbortController();
@@ -159,8 +157,7 @@ async function searchBraveChannels(query, options = {}) {
 
 				channels.push({
 					id: identity.value,
-					title:
-						result.title?.replace(/\s*[-–—]\s*YouTube\s*$/i, "") || "",
+					title: result.title?.replace(/\s*[-–—]\s*YouTube\s*$/i, "") || "",
 					description: result.description || "",
 					thumbnail: "",
 					customUrl: undefined,

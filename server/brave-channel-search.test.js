@@ -2,7 +2,10 @@ import { createRequire } from "node:module";
 import { describe, expect, it } from "vitest";
 
 const require = createRequire(import.meta.url);
-const { searchBraveChannels, parseYouTubeUrl } = require("./brave-channel-search");
+const {
+	searchBraveChannels,
+	parseYouTubeUrl,
+} = require("./brave-channel-search");
 
 describe("Brave URL parsing", () => {
 	it("parses @handle URLs", () => {
@@ -31,9 +34,7 @@ describe("Brave URL parsing", () => {
 	});
 
 	it("parses /user/ URLs (legacy)", () => {
-		expect(
-			parseYouTubeUrl("https://www.youtube.com/user/woodworker"),
-		).toEqual({
+		expect(parseYouTubeUrl("https://www.youtube.com/user/woodworker")).toEqual({
 			type: "user",
 			value: "woodworker",
 		});
