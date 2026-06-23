@@ -6,16 +6,18 @@ import { AddChannelModal } from './AddChannelModal';
 vi.mock('framer-motion', () => ({
   AnimatePresence: ({ children }: { children: ReactNode }) => <>{children}</>,
   motion: {
-    div: ({ animate, children, exit, initial, ...props }: any) => {
+    div: ({ animate, children, exit, initial, whileHover, ...props }: any) => {
       void animate;
       void exit;
       void initial;
+      void whileHover;
       return <div {...props}>{children}</div>;
     },
-    section: ({ animate, children, exit, initial, ...props }: any) => {
+    section: ({ animate, children, exit, initial, whileHover, ...props }: any) => {
       void animate;
       void exit;
       void initial;
+      void whileHover;
       return <section {...props}>{children}</section>;
     },
   },
@@ -65,6 +67,9 @@ describe('AddChannelModal', () => {
     const onClose = vi.fn();
 
     render(<AddChannelModal isOpen onClose={onClose} onAdd={onAdd} />);
+
+    expect(screen.getByAltText('MyTube')).toBeInTheDocument();
+    expect(screen.getByText('Add Channel')).toBeInTheDocument();
 
     fireEvent.change(screen.getByLabelText('YouTube Channel'), {
       target: { value: 'the linux tech channel' },
