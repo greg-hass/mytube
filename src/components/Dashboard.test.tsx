@@ -550,8 +550,8 @@ describe('Dashboard', () => {
     expect(tabBar.className).toContain('z-50');
     expect(tabBar.className).toContain('pb-[var(--app-tab-bar-bottom-offset)]');
     expect(tabBarInner.className).toContain('max-w-7xl');
-    expect(addChannelButton.firstElementChild?.className).toContain('rounded-xl');
-    expect(addChannelButton.firstElementChild?.className).toContain('backdrop-blur-xl');
+    expect(addChannelButton.firstElementChild?.className).toContain('rounded-full');
+    expect(addChannelButton.firstElementChild?.className).toContain('bg-red-600');
   });
 
   it('keeps the iPhone latest controls in one compact row', () => {
@@ -608,13 +608,11 @@ describe('Dashboard', () => {
     });
   });
 
-  it('triggers refresh via pull-to-refresh gesture', () => {
+  it('does not render pull-to-refresh controls', () => {
     render(<Dashboard />);
 
     expect(mockRSSVideosState.refresh).not.toHaveBeenCalled();
-
-    // Pull-to-refresh is handled by touch events, tested in PullToRefresh.test.tsx
-    // Here we just verify the component is rendered
+    expect(screen.queryByText('Release to refresh')).not.toBeInTheDocument();
     expect(screen.getByTestId('dashboard-page-chrome')).toBeInTheDocument();
   });
 

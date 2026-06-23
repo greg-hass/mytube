@@ -128,6 +128,8 @@ function authedRequest(app) {
 			request(app).get(path).set("Authorization", `Bearer ${TEST_TOKEN}`),
 		post: (path) =>
 			request(app).post(path).set("Authorization", `Bearer ${TEST_TOKEN}`),
+		delete: (path) =>
+			request(app).delete(path).set("Authorization", `Bearer ${TEST_TOKEN}`),
 	};
 	return builder;
 }
@@ -186,6 +188,58 @@ describe("createApp integration", () => {
 		expect(response.status).toBe(200);
 		expect(response.body.syncRevision).toBe(expectedRevision);
 		expect(response.headers.etag).toBe(`"${expectedRevision}"`);
+	});
+
+	it("DELETE /api/subscriptions/:id removes the channel from the backend and tombstones it", async () => {
+		const added = await authedRequest(resources.app)
+			.post("/api/sync")
+			.send({
+				subscriptions: [
+					{
+						id: "UCaaaaaaaaaaaaaaaaaaaaaa",
+						title: "Delete Me",
+						thumbnail: "",
+						description: "",
+					},
+				],
+				settings: {},
+				watchedVideos: [],
+			});
+		expect(added.status).toBe(200);
+
+		const removed = await authedRequest(resources.app).delete(
+			"/api/subscriptions/UCaaaaaaaaaaaaaaaaaaaaaa",
+		);
+		expect(removed.status).toBe(200);
+		expect(removed.body.deletedId).toBe("UCaaaaaaaaaaaaaaaaaaaaaa");
+
+		const afterDelete = await authedRequest(resources.app).get("/api/sync");
+		expect(afterDelete.body.subscriptions).toEqual([]);
+		expect(afterDelete.body.subscriptionTombstones).toEqual([
+			expect.objectContaining({ id: "UCaaaaaaaaaaaaaaaaaaaaaa" }),
+		]);
+
+		const stalePush = await authedRequest(resources.app)
+			.post("/api/sync")
+			.send({
+				subscriptions: [
+					{
+						id: "UCaaaaaaaaaaaaaaaaaaaaaa",
+						title: "Delete Me",
+						thumbnail: "",
+						description: "",
+					},
+				],
+				settings: {},
+				watchedVideos: [],
+			});
+		expect(stalePush.status).toBe(200);
+
+		const afterStalePush = await authedRequest(resources.app).get("/api/sync");
+		expect(afterStalePush.body.subscriptions).toEqual([]);
+		expect(afterStalePush.body.subscriptionTombstones).toEqual([
+			expect.objectContaining({ id: "UCaaaaaaaaaaaaaaaaaaaaaa" }),
+		]);
 	});
 
 	it("POST /api/sync with stale If-Match returns 412 and current ETag", async () => {

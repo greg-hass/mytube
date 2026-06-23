@@ -151,19 +151,16 @@ export const FloatingTabBar = ({
 						whileHover={{ scale: 1.1 }}
 						whileTap={{ scale: 0.9 }}
 						onClick={onAddChannel}
-						className="relative flex flex-1 flex-col items-center justify-center min-w-[3rem] rounded-full px-1.5 py-1 transition-all duration-200 sm:min-w-[4rem]"
+						className="relative flex flex-1 items-center justify-center min-w-[3rem] rounded-full px-1.5 py-1 transition-all duration-200 sm:min-w-[4rem]"
 						title="Add channel"
 						aria-label="Add channel"
 					>
-						<div className="relative flex h-10 w-10 items-center justify-center rounded-xl bg-white/70 shadow-sm ring-1 ring-white/40 backdrop-blur-xl dark:bg-ios-900/80 dark:ring-white/10">
+						<div className="relative flex h-10 w-10 items-center justify-center rounded-full bg-red-600 shadow-sm ring-1 ring-red-500/20 backdrop-blur-xl dark:bg-red-600 dark:ring-red-400/20">
 							<Plus
-								className="w-6 h-6 sm:w-7 sm:h-7 text-red-600 dark:text-red-500"
+								className="w-6 h-6 sm:w-7 sm:h-7 text-white"
 								strokeWidth={2.5}
 							/>
 						</div>
-						<span className="relative mt-0.5 text-[10px] sm:text-[11px] font-semibold text-gray-400 dark:text-ios-500">
-							Add
-						</span>
 					</motion.button>
 				</div>
 			</div>

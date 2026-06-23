@@ -7,13 +7,25 @@ function isUsefulThumbnail(thumbnail) {
     );
 }
 
-function mergeIncomingSubscriptions(incomingSubscriptions = [], existingSubscriptions = [], redirects = {}) {
-    const existingById = new Map(existingSubscriptions.map(sub => [sub.id, sub]));
+function mergeIncomingSubscriptions(incomingSubscriptions = [], existingSubscriptions = [], redirects = {}, tombstones = []) {
+    const tombstonedIds = new Set(
+        Array.isArray(tombstones)
+            ? tombstones
+                .map((tombstone) => tombstone && tombstone.id)
+                .filter(Boolean)
+            : [],
+    );
+    const existingById = new Map(
+        existingSubscriptions
+            .filter((sub) => !tombstonedIds.has(sub.id))
+            .map((sub) => [sub.id, sub]),
+    );
     const seenIds = new Set();
     const merged = [];
 
     for (const incomingSub of incomingSubscriptions) {
         const finalId = redirects[incomingSub.id] || incomingSub.id;
+        if (tombstonedIds.has(finalId)) continue;
         if (seenIds.has(finalId)) continue;
 
         const existingSub = existingById.get(finalId) || existingById.get(incomingSub.id);

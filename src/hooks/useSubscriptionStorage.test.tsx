@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { renderHook, waitFor } from "@testing-library/react";
+import { act, renderHook, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { useSubscriptionStorage } from "./useSubscriptionStorage";
 
@@ -49,7 +49,7 @@ vi.mock("sonner", () => ({
 }));
 
 const remoteSubscription = {
-	id: "UC_REMOTE",
+	id: "UC1234567890123456789012",
 	title: "Server channel",
 	addedAt: 1,
 };
@@ -87,9 +87,59 @@ describe("useSubscriptionStorage", () => {
 
 		await waitFor(() => {
 			expect(result.current.allSubscriptions).toEqual([
-				expect.objectContaining({ id: "UC_REMOTE", title: "Server channel" }),
+				expect.objectContaining({ id: remoteSubscription.id, title: "Server channel" }),
 			]);
 		});
+	});
+
+	it("deletes a subscription on the backend before removing it locally", async () => {
+		let getCallCount = 0;
+		const fetchMock = vi.fn(async (_url: string, init?: RequestInit) => {
+			const method = init?.method || "GET";
+
+			if (method === "GET") {
+				getCallCount += 1;
+				return {
+					ok: true,
+					json: async () => ({
+						subscriptions: getCallCount === 1 ? [remoteSubscription] : [],
+						watchedVideos: [],
+						redirects: {},
+						syncRevision: getCallCount,
+					}),
+				};
+			}
+
+			if (method === "DELETE") {
+				return {
+					ok: true,
+					json: async () => ({
+						success: true,
+						deletedId: remoteSubscription.id,
+						syncRevision: 2,
+					}),
+				};
+			}
+
+			return {
+				ok: true,
+				json: async () => ({ success: true, syncRevision: 2, timestamp: "now" }),
+			};
+		});
+
+		vi.stubGlobal("fetch", fetchMock);
+
+		const { result } = renderHook(() => useSubscriptionStorage(), { wrapper });
+
+		await act(async () => {
+			await result.current.removeSubscription(remoteSubscription.id);
+		});
+
+		expect(
+			fetchMock.mock.calls.some(
+				([url, init]) => String(url) === `/api/subscriptions/${remoteSubscription.id}` && init?.method === "DELETE",
+			),
+		).toBe(true);
 	});
 
 	it("retries force-push after a 412 revision mismatch instead of silently failing", async () => {
