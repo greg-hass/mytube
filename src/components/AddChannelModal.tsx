@@ -372,11 +372,6 @@ export const AddChannelModal = ({ isOpen, onClose, onAdd, existingSubscriptions 
 
   const hasResults = visibleSearchResults.length > 0;
   const showFormats = !hasResults && !channelInfo && !isSearching && input.trim().length < 2;
-  const activePreviewChannel = previewChannel ?? channelInfo;
-  const previewChannelIsAdded = activePreviewChannel ? addedChannelIds.has(activePreviewChannel.id) || existingIds.has(activePreviewChannel.id) : false;
-  const activePreviewSubscriberCount = activePreviewChannel?.subscriberCount
-    ? formatSubscriberCount(activePreviewChannel.subscriberCount)
-    : null;
 
   const renderChannelPreview = (channel: YouTubeChannel) => {
     const channelIsAdded = addedChannelIds.has(channel.id) || existingIds.has(channel.id);
@@ -683,67 +678,7 @@ export const AddChannelModal = ({ isOpen, onClose, onAdd, existingSubscriptions 
 
                 {/* Channel Preview */}
                 <AnimatePresence>
-                  {channelInfo && !previewChannel && (
-                    <motion.section
-                      initial={{ opacity: 0, y: 10 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      exit={{ opacity: 0, y: 10 }}
-                      className="rounded-2xl border border-gray-200 dark:border-ios-800 bg-gray-50 dark:bg-ios-800/50 p-4 shadow-sm"
-                    >
-                      <h3 className="mb-3 flex items-center gap-2 text-sm font-semibold text-gray-900 dark:text-white">
-                        <Youtube className="w-4 h-4 text-red-600" />
-                        Channel Preview
-                      </h3>
-                      <div className="flex items-start gap-3">
-                        <img
-                          src={activePreviewChannel.thumbnail}
-                          alt={activePreviewChannel.title}
-                          className="w-14 h-14 rounded-full object-cover flex-none"
-                          onError={(e) => {
-                            e.currentTarget.src = '';
-                            e.currentTarget.style.display = 'none';
-                          }}
-                        />
-                        <div className="flex-1 min-w-0">
-                          <h4 className="font-semibold text-gray-900 dark:text-ios-100 truncate">
-                            {activePreviewChannel.title}
-                          </h4>
-                          <p className="text-sm text-gray-500 dark:text-ios-400 line-clamp-2 mt-0.5">
-                            {activePreviewChannel.description || 'No description available'}
-                          </p>
-                          {(activePreviewSubscriberCount || activePreviewChannel.customUrl) && (
-                            <p className="text-xs text-gray-400 dark:text-ios-500 mt-1.5">
-                              {activePreviewSubscriberCount || activePreviewChannel.customUrl || ''}
-                            </p>
-                          )}
-                        </div>
-                      </div>
-                      <div className="mt-4 grid grid-cols-2 gap-2">
-                        <button
-                          type="button"
-                          onClick={handleAddPreviewChannel}
-                          disabled={isLoading || previewChannelIsAdded}
-                          className="inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-red-600 px-4 text-sm font-semibold text-white transition-colors hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-60"
-                        >
-                          {isLoading ? (
-                            <span className="h-4 w-4 rounded-full border-2 border-white/40 border-t-white animate-spin" />
-                          ) : previewChannelIsAdded ? (
-                            <Check className="h-4 w-4" />
-                          ) : (
-                            <Plus className="h-4 w-4" />
-                          )}
-                          {previewChannelIsAdded ? 'Added' : 'Add'}
-                        </button>
-                        <button
-                          type="button"
-                          onClick={handleDismissPreview}
-                          className="inline-flex h-11 items-center justify-center rounded-xl bg-white px-4 text-sm font-semibold text-gray-700 ring-1 ring-gray-200 transition-colors hover:bg-gray-100 dark:bg-ios-900 dark:text-ios-200 dark:ring-ios-700 dark:hover:bg-ios-800"
-                        >
-                          Dismiss
-                        </button>
-                      </div>
-                    </motion.section>
-                  )}
+                  {channelInfo && !previewChannel && renderChannelPreview(channelInfo)}
                 </AnimatePresence>
 
                 {!channelInfo && canAddParsedInput && (
