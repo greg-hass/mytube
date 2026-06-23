@@ -7,6 +7,18 @@ const { createLruCache } = require("./utils");
 const SEARCH_TIMEOUT_MS = 4000;
 const SEARCH_CACHE_MS = 30000;
 const SEARCH_CACHE_MAX_ENTRIES = 100;
+const NUMBER_WORDS = {
+	0: "zero",
+	1: "one",
+	2: "two",
+	3: "three",
+	4: "four",
+	5: "five",
+	6: "six",
+	7: "seven",
+	8: "eight",
+	9: "nine",
+};
 
 const searchCache = createLruCache({ maxEntries: SEARCH_CACHE_MAX_ENTRIES });
 
@@ -35,21 +47,78 @@ function normalizeText(value) {
 		.toLowerCase()
 		.replace(/^@/, "")
 		.replace(/[^a-z0-9]+/g, " ")
+		.replace(/\s+/g, " ")
 		.trim();
+}
+
+function compactSearchText(value) {
+	return normalizeText(value).replace(/\s+/g, "");
+}
+
+function normalizeYouTubeIdentity(value) {
+	return compactSearchText(value)
+		.replace(/official|channel|youtube/g, "")
+		.replace(/\d/g, (digit) => NUMBER_WORDS[digit] || "")
+		.trim();
+}
+
+function buildChannelSearchQueries(query, maxQueries = 6) {
+	const normalized = normalizeText(query);
+	if (!normalized) return [];
+
+	const tokens = normalized.split(/\s+/).filter(Boolean);
+	const queries = [];
+	const seen = new Set();
+	const add = (value) => {
+		const trimmed = String(value || "").trim();
+		if (!trimmed || seen.has(trimmed)) return;
+		seen.add(trimmed);
+		queries.push(trimmed);
+	};
+
+	if (tokens.length > 1) {
+		const first = tokens[0];
+		const last = tokens[tokens.length - 1];
+		const firstPlusInitial = `${first}${last[0]}`;
+		const initials = tokens.map((token) => token[0]).join("");
+
+		add(firstPlusInitial);
+		add(`@${firstPlusInitial}`);
+		add(compactSearchText(query));
+		add(query);
+		add(normalized);
+		add(`${query} channel`);
+		add(initials);
+	} else {
+		add(compactSearchText(query));
+		add(query);
+		add(`${query} channel`);
+	}
+
+	return queries.slice(0, maxQueries);
 }
 
 function scoreChannelResult(query, channel) {
 	const normalizedQuery = normalizeText(query);
+	const compactQuery = compactSearchText(query);
 	const title = normalizeText(channel.title);
+	const compactTitle = compactSearchText(channel.title);
+	const normalizedTitleIdentity = normalizeYouTubeIdentity(channel.title);
 	const handle = normalizeText(channel.customUrl || channel.handle || "");
-	const haystack = `${title} ${handle}`.trim();
+	const description = normalizeText(channel.description || "");
+	const haystack = `${title} ${handle} ${description}`.trim();
+	const compactHaystack = compactSearchText(haystack);
 
 	if (!normalizedQuery || !title) return 0;
 	if (title === normalizedQuery || handle === normalizedQuery) return 100;
+	if (compactTitle === compactQuery || handle === compactQuery) return 95;
+	if (normalizedTitleIdentity && normalizedTitleIdentity === normalizeYouTubeIdentity(query))
+		return 92;
 	if (title.startsWith(normalizedQuery) || handle.startsWith(normalizedQuery))
 		return 85;
 	if (title.includes(normalizedQuery) || handle.includes(normalizedQuery))
 		return 70;
+	if (compactQuery && compactHaystack.includes(compactQuery)) return 68;
 
 	const queryTokens = normalizedQuery.split(/\s+/).filter(Boolean);
 	if (queryTokens.length === 0) return 0;
@@ -233,24 +302,32 @@ async function searchChannels(query, options = {}) {
 
 	const fetchImpl = options.fetchImpl || fetch;
 	const limit = options.limit || 8;
+	const searchQueries = buildChannelSearchQueries(trimmedQuery);
 
 	// AbortController cancels all in-flight requests after the timeout,
 	// so slow instances don't keep running in the background.
 	const controller = new AbortController();
 	const timeoutId = setTimeout(() => controller.abort(), SEARCH_TIMEOUT_MS);
 
-	let youtubeResults, pipedResults, invidiousResults;
+	let searchResults;
 	try {
-		[youtubeResults, pipedResults, invidiousResults] = await Promise.all([
-			searchYouTubePageChannels(trimmedQuery, fetchImpl, controller.signal),
-			searchPipedChannels(trimmedQuery, fetchImpl, controller.signal),
-			searchInvidiousChannels(trimmedQuery, fetchImpl, controller.signal),
-		]);
+		searchResults = await Promise.all(
+			searchQueries.map(async (searchQuery) => {
+				const [youtubeResults, pipedResults, invidiousResults] =
+					await Promise.all([
+						searchYouTubePageChannels(searchQuery, fetchImpl, controller.signal),
+						searchPipedChannels(searchQuery, fetchImpl, controller.signal),
+						searchInvidiousChannels(searchQuery, fetchImpl, controller.signal),
+					]);
+
+				return [...youtubeResults, ...pipedResults, ...invidiousResults];
+			}),
+		);
 	} finally {
 		clearTimeout(timeoutId);
 	}
 
-	const allResults = [...youtubeResults, ...pipedResults, ...invidiousResults];
+	const allResults = searchResults.flat();
 	const ranked = dedupeAndRankChannels(trimmedQuery, allResults, limit);
 
 	// Cache the results
@@ -267,6 +344,7 @@ function getSearchCacheStats() {
 }
 
 module.exports = {
+	buildChannelSearchQueries,
 	dedupeAndRankChannels,
 	getSearchCacheStats,
 	parseYouTubeChannelSearchResults,
