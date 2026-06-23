@@ -133,6 +133,20 @@ function formatSubscriberCount(value?: string) {
 	return `${parsed.toLocaleString()} subscribers`;
 }
 
+function formatVideoCount(value?: string) {
+	if (!value) return null;
+
+	const parsed = Number.parseInt(value, 10);
+	if (!Number.isFinite(parsed)) return value;
+
+	return `${parsed.toLocaleString()} videos`;
+}
+
+function subscriberCountForSort(channel: YouTubeChannel): number {
+	const parsed = Number.parseInt(channel.subscriberCount || "", 10);
+	return Number.isFinite(parsed) ? parsed : 0;
+}
+
 interface AddChannelModalProps {
 	isOpen: boolean;
 	onClose: () => void;
@@ -184,7 +198,10 @@ export const AddChannelModal = ({
 				}))
 				.sort(
 					(a, b) =>
-						b.score - a.score || a.channel.title.localeCompare(b.channel.title),
+						b.score - a.score ||
+						subscriberCountForSort(b.channel) -
+							subscriberCountForSort(a.channel) ||
+						a.channel.title.localeCompare(b.channel.title),
 				)
 				.map(({ channel }) => channel),
 		[addedChannelIds, existingIds, input, searchResults],
@@ -435,6 +452,7 @@ export const AddChannelModal = ({
 		const channelIsAdded =
 			addedChannelIds.has(channel.id) || existingIds.has(channel.id);
 		const subscriberCount = formatSubscriberCount(channel.subscriberCount);
+		const videoCount = formatVideoCount(channel.videoCount);
 
 		return (
 			<motion.section
@@ -465,6 +483,7 @@ export const AddChannelModal = ({
 						</h4>
 						<div className="mt-1 flex flex-wrap gap-x-3 gap-y-1 text-xs text-gray-500 dark:text-ios-400">
 							{subscriberCount && <span>{subscriberCount}</span>}
+							{videoCount && <span>{videoCount}</span>}
 							{channel.customUrl && <span>{channel.customUrl}</span>}
 							<span className="font-mono">{channel.id}</span>
 						</div>
@@ -711,6 +730,28 @@ export const AddChannelModal = ({
 																	{channel.description && (
 																		<span className="line-clamp-1 text-sm text-gray-500 dark:text-ios-400">
 																			{channel.description}
+																		</span>
+																	)}
+																	{(formatSubscriberCount(
+																		channel.subscriberCount,
+																	) ||
+																		formatVideoCount(channel.videoCount)) && (
+																		<span className="mt-1 inline-flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-gray-500 dark:text-ios-400">
+																			{formatSubscriberCount(
+																				channel.subscriberCount,
+																			) && (
+																				<span className="font-medium text-gray-600 dark:text-ios-300">
+																					{formatSubscriberCount(
+																						channel.subscriberCount,
+																					)}
+																				</span>
+																			)}
+																			{formatVideoCount(channel.videoCount) && (
+																				<span>
+																					·{" "}
+																					{formatVideoCount(channel.videoCount)}
+																				</span>
+																			)}
 																		</span>
 																	)}
 																	<span className="mt-1 inline-flex items-center text-xs font-medium text-red-600 dark:text-red-400">

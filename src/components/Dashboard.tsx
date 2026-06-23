@@ -298,6 +298,7 @@ export const Dashboard = () => {
 		videos,
 		refresh: refetchVideos,
 		syncStatus,
+		cacheStatus,
 	} = useRSSVideos();
 	const hasNoSubscriptions = allSubscriptions.length === 0;
 	const channelThumbnails = useMemo(() => {
@@ -826,6 +827,8 @@ export const Dashboard = () => {
 						: "Search channels..."
 				}
 				syncStatus={syncStatus}
+				cacheStatus={cacheStatus}
+				onRetryFailed={() => void refetchVideos()}
 				showShorts={showShorts}
 				onToggleShorts={() => setShowShorts((prev) => !prev)}
 				hideWatched={hideWatched}

@@ -15,6 +15,13 @@ interface HeaderProps {
 	showMobileSearch?: boolean;
 	searchPlaceholder?: string;
 	syncStatus?: SyncStatus;
+	cacheStatus?: {
+		hasCache: boolean;
+		isStale: boolean;
+		age: number;
+		videoCount: number;
+	};
+	onRetryFailed?: () => void;
 	showShorts?: boolean;
 	onToggleShorts?: () => void;
 	hideWatched?: boolean;
@@ -30,6 +37,8 @@ export const Header = ({
 	showMobileSearch = true,
 	searchPlaceholder = "Search channels...",
 	syncStatus,
+	cacheStatus,
+	onRetryFailed,
 	showShorts = true,
 	onToggleShorts,
 	hideWatched = false,
@@ -202,6 +211,9 @@ export const Header = ({
 				onOpenSettings={() => setIsSettingsOpen(true)}
 				onToggleTheme={toggleTheme}
 				theme={theme}
+				syncStatus={syncStatus}
+				cacheStatus={cacheStatus}
+				onRetryFailed={onRetryFailed}
 			/>
 
 			<SettingsModal

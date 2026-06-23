@@ -257,6 +257,7 @@ async function searchPipedChannels(query, fetchImpl = fetch, signal) {
 				subscriberCount: item.subscribers
 					? String(item.subscribers)
 					: undefined,
+				videoCount: item.videos ? String(item.videos) : undefined,
 			}));
 		} catch (error) {
 			console.warn(`Channel search failed for ${instance}:`, error.message);
@@ -291,6 +292,7 @@ async function searchInvidiousChannels(query, fetchImpl = fetch, signal) {
 				thumbnail: normalizeThumbnail(item.authorThumbnails?.at(-1)?.url),
 				customUrl: item.authorUrl,
 				subscriberCount: item.subCount ? String(item.subCount) : undefined,
+				videoCount: item.videoCount ? String(item.videoCount) : undefined,
 			}));
 		} catch (error) {
 			console.warn(`Channel search failed for ${instance}:`, error.message);
