@@ -4,6 +4,7 @@ import { Dashboard } from './components/Dashboard';
 import { useStore } from './store/useStore';
 import { MobileLandscapeGate } from './components/MobileLandscapeGate';
 import { Toaster } from 'sonner';
+import { useScreenWakeLock } from './hooks/useScreenWakeLock';
 
 const ChannelViewer = lazy(() => import('./components/ChannelViewer').then((module) => ({ default: module.ChannelViewer })));
 
@@ -15,6 +16,8 @@ const AppFallback = () => (
 
 function App() {
   const { theme, checkQuotaReset } = useStore();
+
+  useScreenWakeLock();
 
   // Check for quota reset on mount
   useEffect(() => {
