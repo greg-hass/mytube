@@ -23,6 +23,48 @@ describe('channel search ranking', () => {
         ]);
     });
 
+    it('strips English stopwords before generating abbreviations for natural language queries', () => {
+        // Regression: natural-language queries like "the best woodworking channels"
+        // used to generate nonsense abbreviations ("thec", "@thec", "tbtwc") that
+        // matched random "The X" channels. After stripping "the", "best", and
+        // "channels", only "woodworking" remains as a meaningful token so the
+        // single-token branch runs and only the original / compact / suffixed
+        // queries are produced — no nonsense abbreviations.
+        const queries = buildChannelSearchQueries('the best woodworking channels');
+
+        expect(queries).not.toContain('thec');
+        expect(queries).not.toContain('@thec');
+        expect(queries).not.toContain('tbtwc');
+        // Original phrasing must still be present so backends can do full-text matching.
+        expect(queries).toContain('the best woodworking channels');
+        expect(queries).toContain('thebestwoodworkingchannels');
+        expect(queries).toContain('the best woodworking channels channel');
+        // No abbreviations built from stopwords.
+        for (const query of queries) {
+            expect(query).not.toMatch(/^[a-z]c$/);
+            expect(query).not.toMatch(/^[a-z]{1,5}$/);
+        }
+    });
+
+    it('returns an empty query list when the input is only stopwords', () => {
+        // "the best" carries no meaningful terms — returning queries built from
+        // stopwords would just spam the backends with junk. Empty list lets the
+        // frontend surface "no channels found" instead of misleading results.
+        expect(buildChannelSearchQueries('the best')).toEqual([]);
+        expect(buildChannelSearchQueries('channels')).toEqual([]);
+    });
+
+    it('keeps meaningful content tokens when stripping stopwords from multi-token queries', () => {
+        // "best tech review channels" → meaningful tokens ["tech", "review"]
+        // → abbreviation "techr" instead of "btrc".
+        const queries = buildChannelSearchQueries('best tech review channels');
+
+        expect(queries).not.toContain('btrc');
+        expect(queries[0]).toBe('techr');
+        expect(queries[1]).toBe('@techr');
+        expect(queries).toContain('best tech review channels');
+    });
+
     it('ranks exact and token matches above weak matches', () => {
         const results = dedupeAndRankChannels('linux tech', [
             { id: 'UC_WEAK________________', title: 'Cooking Tech' },

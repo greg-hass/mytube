@@ -7,6 +7,32 @@ const { createLruCache } = require("./utils");
 const SEARCH_TIMEOUT_MS = 4000;
 const SEARCH_CACHE_MS = 30000;
 const SEARCH_CACHE_MAX_ENTRIES = 100;
+
+// English stopwords that don't help channel search. Filtering them before the
+// multi-token abbreviation logic keeps natural-language queries like
+// "the best woodworking channels" from generating nonsense abbreviations
+// like "thec" or "tbtwc" that match random "The X" channels. The original
+// query and its compact form are still added separately, so full-text
+// matching is preserved.
+const STOPWORDS = new Set([
+	"a",
+	"an",
+	"the",
+	"and",
+	"or",
+	"of",
+	"for",
+	"with",
+	"to",
+	"best",
+	"top",
+	"good",
+	"great",
+	"channels",
+	"channel",
+	"youtube",
+	"videos",
+]);
 const NUMBER_WORDS = {
 	0: "zero",
 	1: "one",
@@ -66,7 +92,15 @@ function buildChannelSearchQueries(query, maxQueries = 6) {
 	const normalized = normalizeText(query);
 	if (!normalized) return [];
 
-	const tokens = normalized.split(/\s+/).filter(Boolean);
+	const allTokens = normalized.split(/\s+/).filter(Boolean);
+	// Strip stopwords before the multi-token abbreviation logic so we don't
+	// build queries like "thec" from "the best woodworking channels". The
+	// original query is still added below, so YouTube/Piped/Invidious can
+	// do full-text matching against the original phrasing.
+	const meaningfulTokens = allTokens.filter((token) => !STOPWORDS.has(token));
+
+	if (meaningfulTokens.length === 0) return [];
+
 	const queries = [];
 	const seen = new Set();
 	const add = (value) => {
@@ -76,11 +110,11 @@ function buildChannelSearchQueries(query, maxQueries = 6) {
 		queries.push(trimmed);
 	};
 
-	if (tokens.length > 1) {
-		const first = tokens[0];
-		const last = tokens[tokens.length - 1];
+	if (meaningfulTokens.length > 1) {
+		const first = meaningfulTokens[0];
+		const last = meaningfulTokens[meaningfulTokens.length - 1];
 		const firstPlusInitial = `${first}${last[0]}`;
-		const initials = tokens.map((token) => token[0]).join("");
+		const initials = meaningfulTokens.map((token) => token[0]).join("");
 
 		add(firstPlusInitial);
 		add(`@${firstPlusInitial}`);
