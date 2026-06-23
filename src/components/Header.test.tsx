@@ -162,7 +162,7 @@ describe('Header', () => {
     expect(menuPanel.querySelector('aside')?.className).not.toContain('dark:bg-gradient');
   });
 
-  it('puts feed health details in the mobile menu', () => {
+  it('does not put feed health details in the mobile menu', () => {
     render(
       <Header
         syncStatus={{
@@ -175,8 +175,6 @@ describe('Header', () => {
           state: 'running',
           failedChannels: [{ id: 'UC_BAD', title: 'Broken Channel', reason: 'RSS feed failed with HTTP 404' }],
         }}
-        cacheStatus={{ hasCache: true, isStale: false, age: 60 * 1000, videoCount: 10 }}
-        onRetryFailed={vi.fn()}
       />
     );
 
@@ -184,11 +182,11 @@ describe('Header', () => {
 
     fireEvent.click(screen.getByTestId('mobile-menu-button'));
 
-    expect(screen.getByText('Feed health')).toBeInTheDocument();
-    expect(screen.getByText('Broken Channel')).toBeInTheDocument();
+    expect(screen.queryByText('Feed health')).not.toBeInTheDocument();
+    expect(screen.queryByText('Broken Channel')).not.toBeInTheDocument();
   });
 
-  it('shows the compact feed health panel only while refresh is running', () => {
+  it('does not show the compact feed health panel while refresh is running', () => {
     const syncingStatus = {
       total: 2,
       current: 1,
@@ -199,24 +197,19 @@ describe('Header', () => {
       state: 'running' as const,
       failedChannels: [],
     };
-    const cacheStatus = { hasCache: true, isStale: false, age: 60 * 1000, videoCount: 10 };
     const { rerender } = render(
       <Header
         syncStatus={syncingStatus}
-        cacheStatus={cacheStatus}
-        onRetryFailed={vi.fn()}
       />
     );
 
-    expect(screen.getByTestId('mobile-refresh-health-panel')).toBeInTheDocument();
-    expect(screen.getByText('Refreshing 1/2')).toBeInTheDocument();
+    expect(screen.queryByTestId('mobile-refresh-health-panel')).not.toBeInTheDocument();
+    expect(screen.queryByText('Refreshing 1/2')).not.toBeInTheDocument();
     expect(screen.queryByText(/Next refresh/i)).not.toBeInTheDocument();
 
     rerender(
       <Header
         syncStatus={{ ...syncingStatus, isSyncing: false, state: 'idle' }}
-        cacheStatus={cacheStatus}
-        onRetryFailed={vi.fn()}
       />
     );
 

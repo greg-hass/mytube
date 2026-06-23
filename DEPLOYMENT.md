@@ -33,7 +33,7 @@ services:
     ports:
       - "5173:8080"
     volumes:
-      - youtube-subscriptions-data:/app/server/data
+      - mytube-data:/app/server/data
     restart: unless-stopped
     environment:
       - NODE_ENV=production
@@ -51,7 +51,7 @@ services:
       start_period: 15s
 
 volumes:
-  youtube-subscriptions-data:
+  mytube-data:
 ```
 
 Start it:
@@ -111,7 +111,7 @@ Set `FEED_REFRESH_INTERVAL_MINUTES=30` or `60` if you want a quieter server.
 
 ## Backup
 
-The persistent `youtube-subscriptions-data` volume contains the SQLite database with subscriptions, cached videos, watched state, redirects, and deletion tombstones. Legacy JSON files may remain after the one-time SQLite import.
+The persistent `mytube-data` volume contains the SQLite database with subscriptions, cached videos, watched state, redirects, and deletion tombstones. Legacy JSON files may remain after the one-time SQLite import.
 
 For a live container, create a SQLite snapshot through the app's tested backup command:
 

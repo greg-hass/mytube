@@ -12,7 +12,7 @@ It's a feed reader, not a video archive. Videos still play through YouTube.
 - **Server:** Node.js, Express (implied), SQLite (WAL mode)
 - **Container:** `ghcr.io/greg-hass/youtube-subscriptions:latest`
 - **Port mapping:** Host `5173` → Container `8080`
-- **Volume:** `youtube-subscriptions-data` → `/app/server/data`
+- **Volume:** `mytube-data` → `/app/server/data`
 - **Health check:** `http://localhost:8080/api/healthz`
 
 ### Key Environment Variables
@@ -157,7 +157,7 @@ Rules:
 - `docker compose config` must pass before changing compose files.
 - Verify containers are healthy before declaring success.
 - Check logs when containers fail or restart.
-- Preserve the existing container name (`youtube-subscriptions`) and volume (`youtube-subscriptions-data`).
+- Preserve the existing container name (`mytube`) and volume (`mytube-data`).
 - Watchtower is enabled via label — do not remove `com.centurylinklabs.watchtower.enable=true`.
 
 ---

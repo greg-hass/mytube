@@ -5,7 +5,7 @@ services:
     ports:
       - "5173:8080"
     volumes:
-      - youtube-subscriptions-data:/app/server/data
+      - mytube-data:/app/server/data
     restart: unless-stopped
     environment:
       - NODE_ENV=production
@@ -28,4 +28,4 @@ services:
       - 8.8.8.8
 
 volumes:
-  youtube-subscriptions-data:
+  mytube-data:

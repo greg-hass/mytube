@@ -1,8 +1,6 @@
 import { lazy, Suspense } from "react";
 import { Download, Grid3x3, List, Moon, Settings, Sun, X } from "lucide-react";
 import { MenuFilterButtons } from "./MenuFilterButtons";
-import { RefreshStatusPanel } from "./RefreshStatusPanel";
-import type { SyncStatus } from "../hooks/useRSSVideos";
 import type { SortBy } from "../types/youtube";
 
 const OPMLUpload = lazy(() =>
@@ -23,14 +21,6 @@ interface MobileMenuProps {
 	onToggleShorts?: () => void;
 	hideWatched: boolean;
 	onToggleWatched?: () => void;
-	syncStatus?: SyncStatus;
-	cacheStatus?: {
-		hasCache: boolean;
-		isStale: boolean;
-		age: number;
-		videoCount: number;
-	};
-	onRetryFailed?: () => void;
 	sortBy: SortBy;
 	onSortChange: (value: SortBy) => void;
 	viewMode: "grid" | "list";
@@ -52,9 +42,6 @@ export const MobileMenu = ({
 	onToggleShorts,
 	hideWatched,
 	onToggleWatched,
-	syncStatus,
-	cacheStatus,
-	onRetryFailed,
 	sortBy,
 	onSortChange,
 	viewMode,
@@ -106,20 +93,6 @@ export const MobileMenu = ({
 						hideWatched={hideWatched}
 						onToggleWatched={onToggleWatched}
 					/>
-
-					{syncStatus && cacheStatus && onRetryFailed && (
-						<div className="space-y-2 pt-1">
-							<p className="text-xs font-medium uppercase tracking-wide text-gray-500 dark:text-ios-400">
-								Feed health
-							</p>
-							<RefreshStatusPanel
-								status={syncStatus}
-								cacheStatus={cacheStatus}
-								onRetryFailed={onRetryFailed}
-								variant="menu"
-							/>
-						</div>
-					)}
 
 					<div>
 						<label className="mb-2 block text-xs font-medium uppercase tracking-wide text-gray-500 dark:text-ios-400">

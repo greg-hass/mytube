@@ -155,7 +155,7 @@ export const FloatingTabBar = ({
 						title="Add channel"
 						aria-label="Add channel"
 					>
-						<div className="relative flex items-center justify-center">
+						<div className="relative flex h-10 w-10 items-center justify-center rounded-xl bg-white/70 shadow-sm ring-1 ring-white/40 backdrop-blur-xl dark:bg-ios-900/80 dark:ring-white/10">
 							<Plus
 								className="w-6 h-6 sm:w-7 sm:h-7 text-red-600 dark:text-red-500"
 								strokeWidth={2.5}

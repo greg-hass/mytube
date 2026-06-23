@@ -91,9 +91,8 @@ let latestSubscriptionsListProps: { selectedGroup?: string; groups?: string[] } 
 const headerMockState = vi.hoisted(() => ({
   latestProps: undefined as undefined | {
     syncStatus?: MockRSSVideosState['syncStatus'];
-    cacheStatus?: MockRSSVideosState['cacheStatus'];
-    onRetryFailed?: () => void;
     scrollHidden?: boolean;
+    compactMobile?: boolean;
   },
 }));
 const toastMockState = vi.hoisted(() => ({
@@ -109,8 +108,6 @@ vi.mock('sonner', () => ({
 vi.mock('./Header', () => ({
   Header: (props: {
     syncStatus?: MockRSSVideosState['syncStatus'];
-    cacheStatus?: MockRSSVideosState['cacheStatus'];
-    onRetryFailed?: () => void;
     showShorts?: boolean;
     onToggleShorts?: () => void;
     hideWatched?: boolean;
@@ -461,7 +458,7 @@ describe('Dashboard', () => {
     expect(window.scrollTo).toHaveBeenCalledWith({ top: 0 });
   });
 
-  it('shows feed build progress instead of an empty state while syncing videos', () => {
+  it('does not show a feed build progress screen while syncing videos', () => {
     mockRSSVideosState = {
       ...mockRSSVideosState,
       syncStatus: {
@@ -477,13 +474,13 @@ describe('Dashboard', () => {
 
     render(<Dashboard />);
 
-    expect(screen.getByText('Building your feed')).toBeInTheDocument();
-    expect(screen.getByText(/Your feeds are refreshing/i)).toBeInTheDocument();
-    expect(screen.getByText('70 / 261 channels checked')).toBeInTheDocument();
-    expect(screen.queryByText('No videos found')).not.toBeInTheDocument();
+    expect(screen.getByText('No videos found')).toBeInTheDocument();
+    expect(screen.queryByText('Building your feed')).not.toBeInTheDocument();
+    expect(screen.queryByText(/Your feeds are refreshing/i)).not.toBeInTheDocument();
+    expect(screen.queryByText('70 / 261 channels checked')).not.toBeInTheDocument();
   });
 
-  it('surfaces failed channel refreshes on the latest feed', () => {
+  it('does not surface failed channel refreshes on the latest feed', () => {
     mockRSSVideosState = {
       ...mockRSSVideosState,
       videos: [{
@@ -510,13 +507,6 @@ describe('Dashboard', () => {
 
     expect(screen.queryByText('1 channel needs attention')).not.toBeInTheDocument();
     expect(screen.queryByText('Broken Channel')).not.toBeInTheDocument();
-    expect(headerMockState.latestProps?.syncStatus?.failedChannels).toEqual([{
-      id: 'UC_BAD',
-      title: 'Broken Channel',
-      reason: 'RSS feed failed with HTTP 404',
-    }]);
-    expect(headerMockState.latestProps?.cacheStatus).toBe(mockRSSVideosState.cacheStatus);
-    expect(headerMockState.latestProps?.onRetryFailed).toBe(mockRSSVideosState.refresh);
   });
 
   it('shows the latest refresh age and scheduled interval', () => {
@@ -552,6 +542,7 @@ describe('Dashboard', () => {
     const pageChrome = screen.getByTestId('dashboard-page-chrome');
     const tabBar = screen.getByTestId('floating-tab-bar');
     const tabBarInner = screen.getByTestId('floating-tab-bar-inner');
+    const addChannelButton = screen.getByRole('button', { name: 'Add channel' });
 
     expect(pageChrome.className).toContain('pt-[var(--app-sticky-gap)]');
     expect(pageChrome.className).toContain('pb-[calc(5rem+env(safe-area-inset-bottom))]');
@@ -560,6 +551,8 @@ describe('Dashboard', () => {
     expect(tabBar.className).toContain('z-50');
     expect(tabBar.className).toContain('pb-[var(--app-tab-bar-bottom-offset)]');
     expect(tabBarInner.className).toContain('max-w-7xl');
+    expect(addChannelButton.firstElementChild?.className).toContain('rounded-xl');
+    expect(addChannelButton.firstElementChild?.className).toContain('backdrop-blur-xl');
   });
 
   it('keeps the iPhone latest controls in one compact row', () => {
@@ -939,6 +932,49 @@ describe('Dashboard', () => {
     Object.defineProperty(window, 'scrollY', {
       configurable: true,
       value: 9,
+    });
+    fireEvent.scroll(window);
+
+    await waitFor(() => {
+      expect(headerMockState.latestProps?.scrollHidden).toBe(true);
+    });
+  });
+
+  it('waits a little longer before hiding the header on compact mobile screens', async () => {
+    Object.defineProperty(window, 'innerWidth', {
+      configurable: true,
+      value: 390,
+    });
+    Object.defineProperty(window, 'innerHeight', {
+      configurable: true,
+      value: 844,
+    });
+
+    const firstRender = render(<Dashboard />);
+
+    expect(headerMockState.latestProps?.compactMobile).toBe(true);
+    expect(headerMockState.latestProps?.scrollHidden).toBe(false);
+
+    Object.defineProperty(window, 'scrollY', {
+      configurable: true,
+      value: 10,
+    });
+    fireEvent.scroll(window);
+
+    await waitFor(() => {
+      expect(headerMockState.latestProps?.scrollHidden).toBe(false);
+    });
+
+    firstRender.unmount();
+    headerMockState.latestProps = undefined;
+
+    render(<Dashboard />);
+
+    expect(headerMockState.latestProps?.compactMobile).toBe(true);
+
+    Object.defineProperty(window, 'scrollY', {
+      configurable: true,
+      value: 25,
     });
     fireEvent.scroll(window);
 
