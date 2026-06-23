@@ -33,8 +33,23 @@ function compactSearchText(value: string) {
 
 // Must match the server-side STOPWORDS in server/channel-search.js.
 const STOPWORDS = new Set([
-	"a", "an", "the", "and", "or", "of", "for", "with", "to",
-	"best", "top", "good", "great", "channels", "channel", "youtube", "videos",
+	"a",
+	"an",
+	"the",
+	"and",
+	"or",
+	"of",
+	"for",
+	"with",
+	"to",
+	"best",
+	"top",
+	"good",
+	"great",
+	"channels",
+	"channel",
+	"youtube",
+	"videos",
 ]);
 
 // Strip stopwords so "the best woodworking channels" ranks against
@@ -47,7 +62,8 @@ function getMeaningfulSearchText(query: string): string {
 }
 
 function scoreSearchResult(query: string, channel: YouTubeChannel) {
-	const queryText = getMeaningfulSearchText(query) || normalizeSearchText(query);
+	const queryText =
+		getMeaningfulSearchText(query) || normalizeSearchText(query);
 	const compactQuery = compactSearchText(queryText);
 	if (!queryText) return 0;
 
