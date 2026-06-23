@@ -950,9 +950,10 @@ describe('Dashboard', () => {
     });
 
     const firstRender = render(<Dashboard />);
+    const firstHeaderProps = headerMockState.latestProps as HeaderMockProps | undefined;
 
-    expect(headerMockState.latestProps?.compactMobile).toBe(true);
-    expect(headerMockState.latestProps?.scrollHidden).toBe(false);
+    expect(firstHeaderProps?.compactMobile).toBe(true);
+    expect(firstHeaderProps?.scrollHidden).toBe(false);
 
     Object.defineProperty(window, 'scrollY', {
       configurable: true,
@@ -968,8 +969,9 @@ describe('Dashboard', () => {
     headerMockState.latestProps = undefined;
 
     render(<Dashboard />);
+    const secondHeaderProps = headerMockState.latestProps as HeaderMockProps | undefined;
 
-    expect(headerMockState.latestProps?.compactMobile).toBe(true);
+    expect(secondHeaderProps?.compactMobile).toBe(true);
 
     Object.defineProperty(window, 'scrollY', {
       configurable: true,
