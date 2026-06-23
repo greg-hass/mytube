@@ -66,10 +66,13 @@ describe('AddChannelModal', () => {
     const onAdd = vi.fn();
     const onClose = vi.fn();
 
-    render(<AddChannelModal isOpen onClose={onClose} onAdd={onAdd} />);
+    const { container } = render(<AddChannelModal isOpen onClose={onClose} onAdd={onAdd} />);
 
     expect(screen.getByAltText('MyTube')).toBeInTheDocument();
     expect(screen.getByText('Add Channel')).toBeInTheDocument();
+    expect(container.querySelector('.bg-black\\/60')).toBeNull();
+    expect(container.querySelector('.shadow-2xl')).toBeNull();
+    expect(screen.getByLabelText('YouTube Channel')).not.toHaveFocus();
 
     fireEvent.change(screen.getByLabelText('YouTube Channel'), {
       target: { value: 'the linux tech channel' },
@@ -82,7 +85,7 @@ describe('AddChannelModal', () => {
 
     await waitFor(() => {
       expect(fetch).toHaveBeenCalledWith(
-        '/api/channel-search?q=linux%20tech',
+        '/api/channel-search?q=the%20linux%20tech%20channel',
         expect.objectContaining({ signal: expect.any(AbortSignal) })
       );
     });
@@ -144,15 +147,9 @@ describe('AddChannelModal', () => {
     expect(screen.queryByText('Linux Tech Channel')).not.toBeInTheDocument();
   });
 
-  it('falls back to the original natural-language query when the smart query has no matches', async () => {
+  it('sends natural-language search phrases to the backend unchanged', async () => {
     vi.stubGlobal('fetch', vi.fn((url: string | URL | Request) => {
       const requestUrl = String(url);
-      if (requestUrl === '/api/channel-search?q=best%20woodworking') {
-        return Promise.resolve({
-          ok: true,
-          json: () => Promise.resolve({ results: [] }),
-        });
-      }
       if (requestUrl === '/api/channel-search?q=the%20best%20woodworking%20channels') {
         return Promise.resolve({
           ok: true,
@@ -186,6 +183,7 @@ describe('AddChannelModal', () => {
     vi.useRealTimers();
 
     expect(await screen.findByText('Workshop Companion')).toBeInTheDocument();
+    expect(fetch).toHaveBeenCalledTimes(1);
 
     fireEvent.click(screen.getByRole('button', { name: /preview workshop companion/i }));
 

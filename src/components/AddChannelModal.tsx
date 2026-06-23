@@ -5,30 +5,6 @@ import { parseChannelInput, getDisplayText, type ParsedChannelInput } from '../l
 import { fetchChannelInfoWithFallback } from '../lib/youtube-api';
 import type { YouTubeChannel } from '../types/youtube';
 
-const SMART_SEARCH_STOP_WORDS = new Set([
-  'a',
-  'about',
-  'and',
-  'are',
-  'channel',
-  'channels',
-  'for',
-  'from',
-  'in',
-  'is',
-  'my',
-  'of',
-  'on',
-  'the',
-  'to',
-  'tube',
-  'videos',
-  'video',
-  'with',
-  'you',
-  'your',
-]);
-
 function normalizeSearchText(value: string) {
   return String(value || '')
     .toLowerCase()
@@ -38,36 +14,33 @@ function normalizeSearchText(value: string) {
     .trim();
 }
 
-function buildSmartSearchQuery(value: string) {
-  const normalized = normalizeSearchText(value);
-  if (!normalized) return '';
-
-  const tokens = normalized
-    .split(' ')
-    .filter(Boolean)
-    .filter((token) => !SMART_SEARCH_STOP_WORDS.has(token));
-
-  return tokens.length > 0 ? tokens.join(' ') : normalized;
+function compactSearchText(value: string) {
+  return normalizeSearchText(value).replace(/\s+/g, '');
 }
 
 function scoreSearchResult(query: string, channel: YouTubeChannel) {
   const queryText = normalizeSearchText(query);
+  const compactQuery = compactSearchText(query);
   if (!queryText) return 0;
 
   const queryTokens = queryText.split(' ').filter(Boolean);
   if (queryTokens.length === 0) return 0;
 
   const title = normalizeSearchText(channel.title);
+  const compactTitle = compactSearchText(channel.title);
   const description = normalizeSearchText(channel.description || '');
   const customUrl = normalizeSearchText(channel.customUrl || '');
   const haystack = `${title} ${description} ${customUrl}`.trim();
+  const compactHaystack = compactSearchText(haystack);
 
   if (!haystack) return 0;
 
   let score = 0;
   if (title === queryText || customUrl === queryText) score += 120;
+  if (compactTitle === compactQuery || customUrl === compactQuery) score += 100;
   if (title.startsWith(queryText) || customUrl.startsWith(queryText)) score += 60;
   if (title.includes(queryText)) score += 30;
+  if (compactQuery && compactHaystack.includes(compactQuery)) score += 28;
   if (description.includes(queryText) || customUrl.includes(queryText)) score += 18;
 
   const matchedTokens = queryTokens.filter((token) => haystack.includes(token)).length;
@@ -133,18 +106,17 @@ export const AddChannelModal = ({ isOpen, onClose, onAdd, existingSubscriptions 
   const inputRef = useRef<HTMLInputElement>(null);
 
   const existingIds = useMemo(() => new Set(existingSubscriptions.map((sub) => sub.id)), [existingSubscriptions]);
-  const smartSearchQuery = useMemo(() => buildSmartSearchQuery(input.trim()), [input]);
   const visibleSearchResults = useMemo(
     () =>
       searchResults
         .filter((channel) => !existingIds.has(channel.id) || addedChannelIds.has(channel.id))
         .map((channel) => ({
           channel,
-          score: scoreSearchResult(smartSearchQuery || input.trim(), channel),
+          score: scoreSearchResult(input.trim(), channel),
         }))
         .sort((a, b) => b.score - a.score || a.channel.title.localeCompare(b.channel.title))
         .map(({ channel }) => channel),
-    [addedChannelIds, existingIds, input, searchResults, smartSearchQuery]
+    [addedChannelIds, existingIds, input, searchResults]
   );
 
   // Validate input whenever it changes
@@ -194,24 +166,17 @@ export const AddChannelModal = ({ isOpen, onClose, onAdd, existingSubscriptions 
     const timeout = window.setTimeout(async () => {
       setIsSearching(true);
       try {
-        const smartQuery = buildSmartSearchQuery(query) || query;
-        const queries = Array.from(new Set([smartQuery, query].filter(Boolean)));
-        const responses = await Promise.all(
-          queries.map(async (searchQuery) => {
-            const response = await fetch(`/api/channel-search?q=${encodeURIComponent(searchQuery)}`, {
-              signal: controller.signal,
-            });
+        const response = await fetch(`/api/channel-search?q=${encodeURIComponent(query)}`, {
+          signal: controller.signal,
+        });
 
-            if (!response.ok) {
-              throw new Error(`Search failed with ${response.status}`);
-            }
+        if (!response.ok) {
+          throw new Error(`Search failed with ${response.status}`);
+        }
 
-            const data = await response.json();
-            return Array.isArray(data.results) ? data.results : [];
-          })
-        );
-
-        setSearchResults(dedupeChannels(responses.flat()));
+        const data = await response.json();
+        const results = Array.isArray(data.results) ? data.results : [];
+        setSearchResults(dedupeChannels(results));
       } catch (error) {
         if ((error as Error).name !== 'AbortError') {
           console.error('Channel keyword search failed:', error);
@@ -443,21 +408,11 @@ export const AddChannelModal = ({ isOpen, onClose, onAdd, existingSubscriptions 
     <AnimatePresence>
       {isOpen && (
         <>
-          {/* Backdrop */}
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            onClick={onClose}
-            className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50"
-          />
-
-          {/* Modal */}
-          <motion.div
-            initial={{ opacity: 0, scale: 0.95, y: 20 }}
-            animate={{ opacity: 1, scale: 1, y: 0 }}
-            exit={{ opacity: 0, scale: 0.95, y: 20 }}
-            className="app-shell fixed inset-0 z-[100] md:inset-auto md:left-1/2 md:top-1/2 md:-translate-x-1/2 md:-translate-y-1/2 md:w-full md:max-w-xl md:rounded-2xl shadow-2xl flex flex-col h-[100dvh] md:h-auto md:max-h-[85vh] overflow-hidden border border-gray-200 dark:border-ios-800"
+            className="app-shell fixed inset-0 z-[100] flex h-[100dvh] flex-col overflow-hidden"
           >
             {/* Header */}
             <div className="sticky top-0 z-10 glass safe-top border-b border-gray-200 dark:border-ios-800/80 shadow-sm shrink-0">
@@ -521,7 +476,6 @@ export const AddChannelModal = ({ isOpen, onClose, onAdd, existingSubscriptions 
                           : 'border-gray-200 dark:border-ios-700 focus:border-red-500 focus:ring-2 focus:ring-red-500/20'
                         }`}
                       required
-                      autoFocus
                     />
                     <div className="absolute right-3 top-1/2 -translate-y-1/2">
                       {isValidating || isSearching ? (
