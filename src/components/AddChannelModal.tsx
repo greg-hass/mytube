@@ -31,9 +31,24 @@ function compactSearchText(value: string) {
 	return normalizeSearchText(value).replace(/\s+/g, "");
 }
 
+// Must match the server-side STOPWORDS in server/channel-search.js.
+const STOPWORDS = new Set([
+	"a", "an", "the", "and", "or", "of", "for", "with", "to",
+	"best", "top", "good", "great", "channels", "channel", "youtube", "videos",
+]);
+
+// Strip stopwords so "the best woodworking channels" ranks against
+// "woodworking", not the full natural-language phrase.
+function getMeaningfulSearchText(query: string): string {
+	const tokens = normalizeSearchText(query)
+		.split(" ")
+		.filter((token) => token && !STOPWORDS.has(token));
+	return tokens.length > 0 ? tokens.join(" ") : "";
+}
+
 function scoreSearchResult(query: string, channel: YouTubeChannel) {
-	const queryText = normalizeSearchText(query);
-	const compactQuery = compactSearchText(query);
+	const queryText = getMeaningfulSearchText(query) || normalizeSearchText(query);
+	const compactQuery = compactSearchText(queryText);
 	if (!queryText) return 0;
 
 	const queryTokens = queryText.split(" ").filter(Boolean);

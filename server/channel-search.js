@@ -88,18 +88,34 @@ function normalizeYouTubeIdentity(value) {
 		.trim();
 }
 
+// Extract meaningful (non-stopword) tokens from a query.
+function getMeaningfulTokens(query) {
+	const normalized = normalizeText(query);
+	if (!normalized) return [];
+	return normalized
+		.split(/\s+/)
+		.filter((token) => token && !STOPWORDS.has(token));
+}
+
+// Return the stopword-stripped search text for ranking / query generation.
+// Falls back to "" when every token is a stopword, signalling "do not search".
+function getMeaningfulSearchText(query) {
+	const tokens = getMeaningfulTokens(query);
+	if (tokens.length === 0) return "";
+	return tokens.join(" ");
+}
+
 function buildChannelSearchQueries(query, maxQueries = 6) {
 	const normalized = normalizeText(query);
 	if (!normalized) return [];
 
 	const allTokens = normalized.split(/\s+/).filter(Boolean);
-	// Strip stopwords before the multi-token abbreviation logic so we don't
-	// build queries like "thec" from "the best woodworking channels". The
-	// original query is still added below, so YouTube/Piped/Invidious can
-	// do full-text matching against the original phrasing.
 	const meaningfulTokens = allTokens.filter((token) => !STOPWORDS.has(token));
 
 	if (meaningfulTokens.length === 0) return [];
+
+	const meaningful = meaningfulTokens.join(" ");
+	const meaningfulCompact = compactSearchText(meaningful);
 
 	const queries = [];
 	const seen = new Set();
@@ -114,27 +130,34 @@ function buildChannelSearchQueries(query, maxQueries = 6) {
 		const first = meaningfulTokens[0];
 		const last = meaningfulTokens[meaningfulTokens.length - 1];
 		const firstPlusInitial = `${first}${last[0]}`;
-		const initials = meaningfulTokens.map((token) => token[0]).join("");
 
-		add(firstPlusInitial);
-		add(`@${firstPlusInitial}`);
-		add(compactSearchText(query));
-		add(query);
-		add(normalized);
-		add(`${query} channel`);
-		add(initials);
+		// Prioritize the meaningful phrase and its variants so the backends
+		// search for the actual topic ("tech review"), not stopword-noise
+		// abbreviations. Abbreviations and the original phrasing are kept
+		// as lower-priority fallbacks.
+		add(meaningful);                      // "tech review"
+		add(`${meaningful} channel`);         // "tech review channel"
+		add(meaningfulCompact);               // "techreview"
+		add(firstPlusInitial);                // "techr"
+		add(`@${firstPlusInitial}`);          // "@techr"
+		add(normalized);                      // "best tech review channels"
 	} else {
-		add(compactSearchText(query));
-		add(query);
-		add(`${query} channel`);
+		// Single meaningful token — prioritize it directly.
+		add(meaningful);                      // "woodworking"
+		add(`${meaningful} channel`);         // "woodworking channel"
+		add(normalized);                      // "the best woodworking channels"
 	}
 
 	return queries.slice(0, maxQueries);
 }
 
 function scoreChannelResult(query, channel) {
-	const normalizedQuery = normalizeText(query);
-	const compactQuery = compactSearchText(query);
+	// Rank against the stopword-stripped meaningful query so that
+	// "the best woodworking channels" scores a "Woodworking Art" channel
+	// highly, instead of losing to channels that merely contain "the".
+	const meaningfulQuery = getMeaningfulSearchText(query) || normalizeText(query);
+	const normalizedQuery = meaningfulQuery;
+	const compactQuery = compactSearchText(meaningfulQuery);
 	const title = normalizeText(channel.title);
 	const compactTitle = compactSearchText(channel.title);
 	const normalizedTitleIdentity = normalizeYouTubeIdentity(channel.title);
@@ -380,6 +403,8 @@ function getSearchCacheStats() {
 module.exports = {
 	buildChannelSearchQueries,
 	dedupeAndRankChannels,
+	getMeaningfulSearchText,
+	getMeaningfulTokens,
 	getSearchCacheStats,
 	parseYouTubeChannelSearchResults,
 	scoreChannelResult,
