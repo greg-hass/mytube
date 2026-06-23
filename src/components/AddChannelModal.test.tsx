@@ -143,4 +143,55 @@ describe('AddChannelModal', () => {
 
     expect(screen.queryByText('Linux Tech Channel')).not.toBeInTheDocument();
   });
+
+  it('falls back to the original natural-language query when the smart query has no matches', async () => {
+    vi.stubGlobal('fetch', vi.fn((url: string | URL | Request) => {
+      const requestUrl = String(url);
+      if (requestUrl === '/api/channel-search?q=best%20woodworking') {
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({ results: [] }),
+        });
+      }
+      if (requestUrl === '/api/channel-search?q=the%20best%20woodworking%20channels') {
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({
+            results: [
+              {
+                id: 'UC3333333333333333333333',
+                title: 'Workshop Companion',
+                description: 'Woodworking plans, tools, and shop projects',
+                thumbnail: 'https://example.com/workshop.jpg',
+                customUrl: '/@workshopcompanion',
+                subscriberCount: '250000',
+              },
+            ],
+          }),
+        });
+      }
+
+      return Promise.resolve({ ok: false, status: 404 });
+    }));
+
+    render(<AddChannelModal isOpen onClose={vi.fn()} onAdd={vi.fn()} />);
+
+    fireEvent.change(screen.getByLabelText('YouTube Channel'), {
+      target: { value: 'the best woodworking channels' },
+    });
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(350);
+    });
+    vi.useRealTimers();
+
+    expect(await screen.findByText('Workshop Companion')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: /preview workshop companion/i }));
+
+    const previewCard = screen.getByText('Channel Preview').closest('section');
+    expect(previewCard).not.toBeNull();
+    expect(within(previewCard as HTMLElement).getByText('250,000 subscribers')).toBeInTheDocument();
+    expect(within(previewCard as HTMLElement).getByText('/@workshopcompanion')).toBeInTheDocument();
+  });
 });
