@@ -365,21 +365,40 @@ export const AddChannelModal = ({ isOpen, onClose, onAdd, existingSubscriptions 
             className="fixed inset-0 z-[100] md:inset-auto md:left-1/2 md:top-1/2 md:-translate-x-1/2 md:-translate-y-1/2 md:w-full md:max-w-xl bg-white dark:bg-ios-900 md:rounded-2xl shadow-2xl flex flex-col h-[100dvh] md:h-auto md:max-h-[85vh] overflow-hidden border border-gray-200 dark:border-ios-800 pt-[env(safe-area-inset-top)] md:pt-0"
           >
             {/* Header */}
-            <div className="flex items-center justify-between p-5 border-b border-gray-100 dark:border-ios-800 bg-white/50 dark:bg-ios-900/50 backdrop-blur-md shrink-0">
-              <div className="flex items-center gap-3">
-                <div className="w-9 h-9 rounded-full bg-gradient-to-br from-red-600 to-red-500 flex items-center justify-center shadow-md">
-                  <Youtube className="w-5 h-5 text-white" />
+            <div className="sticky top-0 z-10 glass safe-top border-b border-gray-200 dark:border-ios-800/80 shadow-sm shrink-0">
+              <div className="max-w-7xl mx-auto px-4">
+                <div className="flex h-[var(--app-header-height)] items-center justify-between gap-3 xl:gap-4">
+                  <motion.div
+                    whileHover={{ scale: 1.03 }}
+                    className="flex items-center gap-3 min-w-0"
+                  >
+                    <img
+                      src="/icon-192.png"
+                      alt="MyTube"
+                      className="h-10 w-10 rounded-xl shadow-lg flex-none"
+                    />
+                    <div className="min-w-0">
+                      <h1 className="text-lg md:text-xl font-bold tracking-tight leading-none">
+                        <span className="text-white dark:text-ios-50">My</span>
+                        <span className="text-red-600 dark:text-red-500">Tube</span>
+                      </h1>
+                      <div className="mt-0.5 flex items-center gap-1.5 text-xs text-gray-500 dark:text-ios-400">
+                        <span className="rounded-full bg-red-500/15 px-2 py-0.5 font-medium text-red-600 dark:text-red-400">
+                          Add Channel
+                        </span>
+                      </div>
+                    </div>
+                  </motion.div>
+
+                  <button
+                    onClick={onClose}
+                    aria-label="Close add channel"
+                    className="rounded-full p-2 text-gray-500 transition-colors hover:bg-gray-100 hover:text-gray-900 dark:text-ios-400 dark:hover:bg-ios-800 dark:hover:text-white"
+                  >
+                    <X className="w-5 h-5" />
+                  </button>
                 </div>
-                <h2 className="text-xl font-bold bg-gradient-to-r from-gray-900 to-gray-700 dark:from-white dark:to-ios-300 bg-clip-text text-transparent">
-                  Add Channel
-                </h2>
               </div>
-              <button
-                onClick={onClose}
-                className="p-2 rounded-full hover:bg-gray-100 dark:hover:bg-ios-800 transition-colors text-gray-500 hover:text-gray-900 dark:text-ios-400 dark:hover:text-white"
-              >
-                <X className="w-5 h-5" />
-              </button>
             </div>
 
             {/* Content — scrollable area */}
