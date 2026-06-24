@@ -160,6 +160,10 @@ function scoreChannelResult(query, channel) {
 	// Rank against the stopword-stripped meaningful query so that
 	// "the best woodworking channels" scores a "Woodworking Art" channel
 	// highly, instead of losing to channels that merely contain "the".
+	const identity = detectChannelIdentity(query);
+	const identityQuery = identity?.value
+		? normalizeYouTubeIdentity(identity.value)
+		: "";
 	const meaningfulQuery =
 		getMeaningfulSearchText(query) || normalizeText(query);
 	const normalizedQuery = meaningfulQuery;
@@ -173,13 +177,18 @@ function scoreChannelResult(query, channel) {
 	const compactHaystack = compactSearchText(haystack);
 
 	if (!normalizedQuery || !title) return 0;
-	if (title === normalizedQuery || handle === normalizedQuery) return 100;
-	if (compactTitle === compactQuery || handle === compactQuery) return 95;
+	if (identityQuery) {
+		if (normalizedTitleIdentity === identityQuery) return 100;
+		if (handle.includes(identityQuery) || title.includes(identityQuery))
+			return 95;
+	}
+	if (title === normalizedQuery || handle === normalizedQuery) return 92;
+	if (compactTitle === compactQuery || handle === compactQuery) return 90;
 	if (
 		normalizedTitleIdentity &&
 		normalizedTitleIdentity === normalizeYouTubeIdentity(query)
 	)
-		return 92;
+		return 88;
 	if (title.startsWith(normalizedQuery) || handle.startsWith(normalizedQuery))
 		return 85;
 	if (title.includes(normalizedQuery) || handle.includes(normalizedQuery))
@@ -396,6 +405,7 @@ async function searchChannels(query, options = {}) {
 	// Channel IDs, @handles, and YouTube URLs are resolved exactly via
 	// channels.list (1 quota unit) instead of search.list (100 units).
 	const identity = detectChannelIdentity(trimmedQuery);
+	const fallbackQuery = identity ? identity.value : trimmedQuery;
 	if (identity) {
 		const directResults = await resolveDirectChannel(identity, {
 			fetchImpl,
@@ -406,7 +416,7 @@ async function searchChannels(query, options = {}) {
 			return directResults;
 		}
 		// Direct resolution failed (no API key, invalid handle) —
-		// fall through to keyword search as a last resort.
+		// fall through to keyword/fallback search using the clean identity.
 	}
 
 	// ── Tier 1: YouTube Data API keyword search ──
@@ -415,7 +425,7 @@ async function searchChannels(query, options = {}) {
 	// by local score, without filtering out score-0 matches (our local
 	// scorer may miss channels YouTube already determined are relevant).
 	{
-		const apiResults = await searchYouTubeApiChannels(trimmedQuery, {
+		const apiResults = await searchYouTubeApiChannels(fallbackQuery, {
 			fetchImpl,
 			apiKey: options.youtubeApiKey,
 		});
@@ -436,7 +446,7 @@ async function searchChannels(query, options = {}) {
 	// ── Tier 2: Brave Search API ──
 	// Queries site:youtube.com, resolves handles via channels.list (1 unit each).
 	{
-		const braveResults = await searchBraveChannels(trimmedQuery, {
+		const braveResults = await searchBraveChannels(fallbackQuery, {
 			fetchImpl,
 			braveKey: options.braveKey,
 			apiKey: options.youtubeApiKey,
@@ -452,7 +462,7 @@ async function searchChannels(query, options = {}) {
 
 	// ── Tier 3: YouTube scrape + Piped + Invidious ──
 	// Free but less reliable. Generates multiple query variants.
-	const searchQueries = buildChannelSearchQueries(trimmedQuery, 3);
+	const searchQueries = buildChannelSearchQueries(fallbackQuery, 3);
 	if (searchQueries.length === 0) {
 		setCachedResults(trimmedQuery, []);
 		return [];

@@ -1,5 +1,23 @@
-const fs = require("fs").promises;
+const fs = require("fs");
+const fsPromises = require("fs").promises;
 const path = require("path");
+
+// Load .env from the project root for local dev. In production (Docker),
+// env vars are injected by docker-compose — existing values are NOT overridden.
+(function loadEnv() {
+	const envPath = path.join(__dirname, "..", ".env");
+	try {
+		const content = fs.readFileSync(envPath, "utf8");
+		for (const line of content.split("\n")) {
+			const match = line.match(/^([A-Z_][A-Z0-9_]*)=(.*)$/);
+			if (match && !(match[1] in process.env)) {
+				process.env[match[1]] = match[2].trim();
+			}
+		}
+	} catch {
+		// No .env file — env vars come from the environment (Docker/CI)
+	}
+})();
 const appStore = require("./app-store");
 const feedAggregatorModule = require("./feed-aggregator");
 const { createApp } = require("./app-factory");
@@ -14,7 +32,7 @@ let shutdownPromise = null;
 
 async function init() {
 	try {
-		await fs.mkdir(path.dirname(appStore.DEFAULT_DATA_FILE), {
+		await fsPromises.mkdir(path.dirname(appStore.DEFAULT_DATA_FILE), {
 			recursive: true,
 		});
 		await appStore.init();
@@ -22,7 +40,7 @@ async function init() {
 
 		try {
 			const staticRedirectsFile = path.join(__dirname, "redirects.json");
-			const staticRedirectsContent = await fs.readFile(
+			const staticRedirectsContent = await fsPromises.readFile(
 				staticRedirectsFile,
 				"utf8",
 			);

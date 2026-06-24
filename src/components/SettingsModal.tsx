@@ -51,10 +51,18 @@ type FailedChannel = {
 
 export const SettingsModal = ({ isOpen, onClose }: SettingsModalProps) => {
 	const queryClient = useQueryClient();
-	const { apiKey, setApiKey, watchedVideos, setWatchedVideos } = useStore();
+	const {
+		apiKey,
+		braveApiKey,
+		setApiKey,
+		setBraveApiKey,
+		watchedVideos,
+		setWatchedVideos,
+	} = useStore();
 	const { rawSubscriptions, addSubscriptions, syncWithBackend } =
 		useSubscriptionStorage();
 	const [inputKey, setInputKey] = useState(apiKey);
+	const [braveInputKey, setBraveInputKey] = useState(braveApiKey);
 	const [serverApiTokenInput, setServerApiTokenInput] = useState(() =>
 		getServerApiToken(),
 	);
@@ -86,6 +94,7 @@ export const SettingsModal = ({ isOpen, onClose }: SettingsModalProps) => {
 
 	const handleSave = () => {
 		setApiKey(inputKey);
+		setBraveApiKey(braveInputKey);
 		setServerApiToken(serverApiTokenInput);
 		void syncWithBackend({ importRemoteWatched: true });
 		queryClient.invalidateQueries({ queryKey: ["server-videos"] });
@@ -308,7 +317,9 @@ export const SettingsModal = ({ isOpen, onClose }: SettingsModalProps) => {
 											<input
 												type="password"
 												value={inputKey}
-												onChange={(e) => setInputKey(e.target.value)}
+												onChange={(e: ChangeEvent<HTMLInputElement>) =>
+													setInputKey(e.target.value)
+												}
 												placeholder="Enter your API key..."
 												className={inputClass}
 											/>
@@ -323,9 +334,45 @@ export const SettingsModal = ({ isOpen, onClose }: SettingsModalProps) => {
 										<p className="text-xs text-gray-500 dark:text-ios-400">
 											Optional browser-only fallback for channel handle
 											resolution. Backups and server sync do not include this
-											key.
+											key.{" "}
 											<a
 												href="https://console.cloud.google.com/apis/credentials"
+												target="_blank"
+												rel="noopener noreferrer"
+												className="text-red-600 hover:underline ml-1"
+											>
+												Get a key
+											</a>
+										</p>
+									</div>
+
+									<div className="space-y-2">
+										<label className="text-sm font-medium text-gray-700 dark:text-ios-300">
+											Brave Search API Key
+										</label>
+										<div className="relative">
+											<input
+												type="password"
+												value={braveInputKey}
+												onChange={(e: ChangeEvent<HTMLInputElement>) =>
+													setBraveInputKey(e.target.value)
+												}
+												placeholder="Enter your Brave Search API key..."
+												className={inputClass}
+											/>
+											<div className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400">
+												{isSaved ? (
+													<CheckCircle2 className="w-4 h-4 text-green-500" />
+												) : (
+													<ShieldCheck className="w-4 h-4" />
+												)}
+											</div>
+										</div>
+										<p className="text-xs text-gray-500 dark:text-ios-400">
+											Used for Brave fallback channel search only. Stored in
+											this browser and not sent to the server.{" "}
+											<a
+												href="https://brave.com/search/api/"
 												target="_blank"
 												rel="noopener noreferrer"
 												className="text-red-600 hover:underline ml-1"
@@ -343,7 +390,9 @@ export const SettingsModal = ({ isOpen, onClose }: SettingsModalProps) => {
 											<input
 												type="password"
 												value={serverApiTokenInput}
-												onChange={(e) => setServerApiTokenInput(e.target.value)}
+												onChange={(e: ChangeEvent<HTMLInputElement>) =>
+													setServerApiTokenInput(e.target.value)
+												}
 												placeholder="Match the required SERVER_API_TOKEN"
 												className={inputClass}
 											/>
