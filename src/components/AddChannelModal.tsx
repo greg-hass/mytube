@@ -251,6 +251,23 @@ export const AddChannelModal = ({
 			return;
 		}
 
+		// Skip keyword search for direct identifiers (channel IDs, @handles,
+		// YouTube URLs) — these are resolved via fetchChannelInfo() in the
+		// validation effect above. Firing a keyword search for them would
+		// return irrelevant results or duplicate the preview card.
+		const parsed = parseChannelInput(query);
+		const isDirectIdentifier =
+			parsed.type === "channel_id" ||
+			parsed.type === "handle" ||
+			query.includes("youtube.com");
+
+		if (isDirectIdentifier) {
+			setSearchResults([]);
+			setSearchError(null);
+			setIsSearching(false);
+			return;
+		}
+
 		const controller = new AbortController();
 		const timeout = window.setTimeout(async () => {
 			setSearchError(null);

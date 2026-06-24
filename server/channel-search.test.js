@@ -5,6 +5,7 @@ const require = createRequire(import.meta.url);
 const {
 	buildChannelSearchQueries,
 	dedupeAndRankChannels,
+	detectChannelIdentity,
 	getSearchCacheStats,
 	parseYouTubeChannelSearchResults,
 	scoreChannelResult,
@@ -139,6 +140,243 @@ describe("channel search ranking", () => {
 				customUrl: "/@veritasium",
 			},
 		]);
+	});
+});
+
+describe("direct identifier resolution", () => {
+	const { resetQuotaForTesting } = require("./youtube-api-search");
+
+	beforeEach(() => resetQuotaForTesting());
+
+	it("detects bare channel IDs", () => {
+		expect(detectChannelIdentity("UCBR8-60-B28hp2BmDPdntcQ")).toEqual({
+			type: "channel_id",
+			value: "UCBR8-60-B28hp2BmDPdntcQ",
+		});
+	});
+
+	it("detects @handles", () => {
+		expect(detectChannelIdentity("@mkbhd")).toEqual({
+			type: "handle",
+			value: "mkbhd",
+		});
+	});
+
+	it("detects YouTube channel URLs", () => {
+		expect(
+			detectChannelIdentity(
+				"https://www.youtube.com/channel/UCBR8-60-B28hp2BmDPdntcQ",
+			),
+		).toEqual({
+			type: "channel_id",
+			value: "UCBR8-60-B28hp2BmDPdntcQ",
+		});
+	});
+
+	it("detects YouTube @handle URLs", () => {
+		expect(detectChannelIdentity("https://www.youtube.com/@mkbhd")).toEqual({
+			type: "handle",
+			value: "mkbhd",
+		});
+	});
+
+	it("returns null for keyword queries", () => {
+		expect(detectChannelIdentity("linux tech")).toBeNull();
+		expect(detectChannelIdentity("woodworking")).toBeNull();
+		expect(detectChannelIdentity("the best cooking channels")).toBeNull();
+	});
+
+	it("resolves channel IDs via channels.list, not search.list", async () => {
+		let searchListCalled = false;
+		const fetchImpl = async (url) => {
+			const urlStr = String(url);
+			if (urlStr.includes("googleapis.com/youtube/v3/channels")) {
+				return {
+					ok: true,
+					status: 200,
+					json: async () => ({
+						items: [
+							{
+								id: "UCBR8-60-B28hp2BmDPdntcQ",
+								snippet: {
+									title: "YouTube",
+									description: "YouTube's official channel",
+									thumbnails: {
+										medium: { url: "https://example.com/yt.jpg" },
+									},
+									customUrl: "@youtube",
+								},
+								statistics: {
+									subscriberCount: "50000000",
+									videoCount: "1000",
+								},
+							},
+						],
+					}),
+				};
+			}
+			if (urlStr.includes("googleapis.com/youtube/v3/search")) {
+				searchListCalled = true;
+			}
+			return {
+				ok: false,
+				status: 500,
+				json: async () => [],
+				text: async () => "",
+			};
+		};
+
+		const results = await searchChannels("UCBR8-60-B28hp2BmDPdntcQ", {
+			fetchImpl,
+			youtubeApiKey: "yt-key",
+		});
+
+		expect(results).toHaveLength(1);
+		expect(results[0].id).toBe("UCBR8-60-B28hp2BmDPdntcQ");
+		expect(results[0].title).toBe("YouTube");
+		expect(results[0].subscriberCount).toBe("50000000");
+		expect(searchListCalled).toBe(false);
+	});
+
+	it("resolves @handles via channels.list forHandle", async () => {
+		let searchListCalled = false;
+		let forHandleParam = null;
+		const fetchImpl = async (url) => {
+			const urlStr = String(url);
+			if (urlStr.includes("googleapis.com/youtube/v3/channels")) {
+				const u = new URL(urlStr, "http://dummy");
+				forHandleParam = u.searchParams.get("forHandle");
+				return {
+					ok: true,
+					status: 200,
+					json: async () => ({
+						items: [
+							{
+								id: "UCBJycr3I2uIQHu5F2q5p5Gw",
+								snippet: {
+									title: "Marques Brownlee",
+									description: "MKBHD",
+									thumbnails: {
+										medium: {
+											url: "https://example.com/mkbhd.jpg",
+										},
+									},
+									customUrl: "@mkbhd",
+								},
+								statistics: { subscriberCount: "19000000" },
+							},
+						],
+					}),
+				};
+			}
+			if (urlStr.includes("googleapis.com/youtube/v3/search")) {
+				searchListCalled = true;
+			}
+			return {
+				ok: false,
+				status: 500,
+				json: async () => [],
+				text: async () => "",
+			};
+		};
+
+		const results = await searchChannels("@mkbhd", {
+			fetchImpl,
+			youtubeApiKey: "yt-key",
+		});
+
+		expect(results).toHaveLength(1);
+		expect(results[0].title).toBe("Marques Brownlee");
+		expect(results[0].subscriberCount).toBe("19000000");
+		expect(forHandleParam).toBe("@mkbhd");
+		expect(searchListCalled).toBe(false);
+	});
+
+	it("resolves YouTube URLs by extracting the handle", async () => {
+		let searchListCalled = false;
+		const fetchImpl = async (url) => {
+			const urlStr = String(url);
+			if (urlStr.includes("googleapis.com/youtube/v3/channels")) {
+				return {
+					ok: true,
+					status: 200,
+					json: async () => ({
+						items: [
+							{
+								id: "UCBJycr3I2uIQHu5F2q5p5Gw",
+								snippet: {
+									title: "Marques Brownlee",
+									customUrl: "@mkbhd",
+								},
+							},
+						],
+					}),
+				};
+			}
+			if (urlStr.includes("googleapis.com/youtube/v3/search")) {
+				searchListCalled = true;
+			}
+			return {
+				ok: false,
+				status: 500,
+				json: async () => [],
+				text: async () => "",
+			};
+		};
+
+		const results = await searchChannels("https://www.youtube.com/@mkbhd", {
+			fetchImpl,
+			youtubeApiKey: "yt-key",
+		});
+
+		expect(results).toHaveLength(1);
+		expect(results[0].title).toBe("Marques Brownlee");
+		expect(searchListCalled).toBe(false);
+	});
+
+	it("falls through to keyword search when direct resolution finds nothing", async () => {
+		let channelsListCalled = false;
+		const fetchImpl = async (url) => {
+			const urlStr = String(url);
+			if (urlStr.includes("googleapis.com/youtube/v3/channels")) {
+				channelsListCalled = true;
+				return { ok: true, status: 200, json: async () => ({ items: [] }) };
+			}
+			if (urlStr.includes("googleapis.com/youtube/v3/search")) {
+				return {
+					ok: true,
+					status: 200,
+					json: async () => ({
+						items: [
+							{
+								id: { channelId: "UC1234567890123456789012" },
+								snippet: {
+									title: "Linux Tips",
+									description: "Daily Linux",
+								},
+							},
+						],
+					}),
+				};
+			}
+			return {
+				ok: false,
+				status: 500,
+				json: async () => [],
+				text: async () => "",
+			};
+		};
+
+		// channels.list returns empty (invalid/unfound ID) — should fall
+		// through to keyword search.list which finds the channel.
+		const results = await searchChannels("UC1234567890123456789012", {
+			fetchImpl,
+			youtubeApiKey: "yt-key",
+		});
+
+		expect(channelsListCalled).toBe(true);
+		expect(results.length).toBeGreaterThan(0);
+		expect(results[0].id).toBe("UC1234567890123456789012");
 	});
 });
 
