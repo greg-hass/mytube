@@ -6,6 +6,7 @@ const invalidateQueries = vi.fn();
 const clearAllCachedVideos = vi.fn();
 const storeMocks = vi.hoisted(() => ({
 	setApiKey: vi.fn(),
+	setBraveApiKey: vi.fn(),
 	setWatchedVideos: vi.fn(),
 }));
 const subscriptionMocks = vi.hoisted(() => ({
@@ -40,7 +41,9 @@ vi.mock("framer-motion", () => ({
 vi.mock("../store/useStore", () => ({
 	useStore: () => ({
 		apiKey: "key",
+		braveApiKey: "",
 		setApiKey: storeMocks.setApiKey,
+		setBraveApiKey: storeMocks.setBraveApiKey,
 		watchedVideos: new Set(["watched-1", "watched-2"]),
 		setWatchedVideos: storeMocks.setWatchedVideos,
 	}),
@@ -63,6 +66,7 @@ describe("SettingsModal", () => {
 		invalidateQueries.mockClear();
 		clearAllCachedVideos.mockReset().mockResolvedValue(undefined);
 		storeMocks.setApiKey.mockClear();
+		storeMocks.setBraveApiKey.mockClear();
 		storeMocks.setWatchedVideos.mockClear();
 		subscriptionMocks.addSubscriptions.mockReset().mockResolvedValue(undefined);
 		subscriptionMocks.syncWithBackend.mockReset().mockResolvedValue(undefined);
@@ -321,22 +325,19 @@ describe("SettingsModal", () => {
 		expect(await screen.findByText("Retry started")).toBeInTheDocument();
 	});
 
-	it("retries protected data loading after saving a server API token", async () => {
+	it("saves a brave api key alongside the youtube api key", async () => {
 		render(<SettingsModal isOpen onClose={vi.fn()} />);
 
 		expect(await screen.findByText("Online")).toBeInTheDocument();
 		fireEvent.change(
-			screen.getByPlaceholderText("Match the required SERVER_API_TOKEN"),
+			screen.getByPlaceholderText("Enter your Brave Search API key..."),
 			{
-				target: { value: "new-browser-token" },
+				target: { value: "new-brave-key" },
 			},
 		);
 		fireEvent.click(screen.getByRole("button", { name: "Save Changes" }));
 
-		expect(localStorage.setItem).toHaveBeenCalledWith(
-			"mytube.serverApiToken",
-			"new-browser-token",
-		);
+		expect(storeMocks.setBraveApiKey).toHaveBeenCalledWith("new-brave-key");
 		expect(subscriptionMocks.syncWithBackend).toHaveBeenCalledWith({
 			importRemoteWatched: true,
 		});

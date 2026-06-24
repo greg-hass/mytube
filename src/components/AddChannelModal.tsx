@@ -16,6 +16,20 @@ import {
 	type ParsedChannelInput,
 } from "../lib/youtube-parser";
 import type { YouTubeChannel } from "../types/youtube";
+import { useStore } from "../store/useStore";
+
+/**
+ * Returns true if the parsed input is a direct identifier (channel ID,
+ * @handle, or YouTube URL) that should be resolved via the server rather
+ * than treated as a keyword search.
+ */
+function isDirectIdentifier(parsed: ParsedChannelInput, input: string) {
+	return (
+		parsed.type === "channel_id" ||
+		parsed.type === "handle" ||
+		input.includes("youtube.com")
+	);
+}
 
 function normalizeSearchText(value: string) {
 	return String(value || "")
@@ -172,6 +186,7 @@ export const AddChannelModal = ({
 	const [addedChannelIds, setAddedChannelIds] = useState<Set<string>>(
 		new Set(),
 	);
+	const [isValidating, setIsValidating] = useState(false);
 	const [isSearching, setIsSearching] = useState(false);
 	const [validationError, setValidationError] = useState<string>("");
 	const [searchError, setSearchError] = useState<"auth" | "network" | null>(
@@ -226,13 +241,12 @@ export const AddChannelModal = ({
 			setValidationError("Invalid YouTube channel format");
 			setChannelInfo(null);
 			setPreviewChannel(null);
+		} else if (isDirectIdentifier(parsed, trimmedInput)) {
+			setValidationError("");
+			void resolveChannelViaServer(parsed, trimmedInput);
 		} else {
 			setValidationError("");
 			setChannelInfo(null);
-			// Don't auto-fetch channel info — the /api/channel-search effect
-			// handles all resolution (direct identifiers and keywords) via
-			// the server, which has the YouTube API key and resolves via
-			// channels.list (1 quota unit, exact match).
 		}
 	}, [input]);
 
@@ -245,15 +259,32 @@ export const AddChannelModal = ({
 			return;
 		}
 
+		// Skip keyword search for direct identifiers — they're resolved via
+		// resolveChannelViaServer in the validation effect above.
+		const parsed = parseChannelInput(query);
+		if (isDirectIdentifier(parsed, query)) {
+			setSearchResults([]);
+			setSearchError(null);
+			setIsSearching(false);
+			return;
+		}
+
 		const controller = new AbortController();
 		const timeout = window.setTimeout(async () => {
 			setSearchError(null);
 			setIsSearching(true);
 			try {
+				const braveApiKey = useStore.getState().braveApiKey;
+				const headers: HeadersInit = {};
+				if (braveApiKey) {
+					headers["X-Brave-Api-Key"] = braveApiKey;
+				}
+
 				const response = await fetch(
 					`/api/channel-search?q=${encodeURIComponent(query)}`,
 					{
 						signal: controller.signal,
+						headers,
 					},
 				);
 
@@ -284,6 +315,52 @@ export const AddChannelModal = ({
 			window.clearTimeout(timeout);
 		};
 	}, [input]);
+
+	/**
+	 * Resolve a direct identifier (channel ID, @handle, YouTube URL) by
+	 * calling the server's /api/channel-search endpoint, which resolves via
+	 * YouTube channels.list (1 quota unit, exact match) with full metadata
+	 * (title, icon, subscriber count, video count).
+	 */
+	const resolveChannelViaServer = async (
+		parsed: ParsedChannelInput,
+		input: string,
+	) => {
+		if (parsed.type === "invalid") return;
+
+		setIsValidating(true);
+		try {
+			const braveApiKey = useStore.getState().braveApiKey;
+			const headers: HeadersInit = {};
+			if (braveApiKey) {
+				headers["X-Brave-Api-Key"] = braveApiKey;
+			}
+
+			const response = await fetch(
+				`/api/channel-search?q=${encodeURIComponent(input)}`,
+				{ headers },
+			);
+			if (!response.ok) {
+				setChannelInfo(null);
+				return;
+			}
+			const data = await response.json();
+			const results: YouTubeChannel[] = Array.isArray(data.results)
+				? data.results
+				: [];
+			if (results.length > 0) {
+				setChannelInfo(results[0]);
+				setValidationError("");
+			} else {
+				setChannelInfo(null);
+			}
+		} catch (error) {
+			console.error("Channel resolution failed:", error);
+			setChannelInfo(null);
+		} finally {
+			setIsValidating(false);
+		}
+	};
 
 	const createChannelFromParsedInput = async () => {
 		if (!parsedInput || parsedInput.type === "invalid") {
@@ -403,14 +480,12 @@ export const AddChannelModal = ({
 		}
 	};
 
-	const hasResults = visibleSearchResults.length > 0;
 	const canAddParsedInput =
-		(Boolean(channelInfo) ||
-			parsedInput?.type === "channel_id" ||
-			parsedInput?.type === "handle" ||
-			(parsedInput?.type === "custom_url" && input.includes("youtube.com"))) &&
-		!hasResults &&
-		!isSearching;
+		Boolean(channelInfo) ||
+		parsedInput?.type === "channel_id" ||
+		parsedInput?.type === "handle" ||
+		(parsedInput?.type === "custom_url" && input.includes("youtube.com"));
+	const hasResults = visibleSearchResults.length > 0;
 	const showFormats =
 		!hasResults && !channelInfo && !isSearching && input.trim().length < 2;
 
@@ -564,7 +639,7 @@ export const AddChannelModal = ({
 											required
 										/>
 										<div className="absolute right-3 top-1/2 -translate-y-1/2">
-											{isSearching ? (
+											{isValidating || isSearching ? (
 												<div className="w-4 h-4 border-2 border-red-600 border-t-transparent rounded-full animate-spin" />
 											) : channelInfo ? (
 												<Check className="w-5 h-5 text-green-500" />
