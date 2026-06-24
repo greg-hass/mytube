@@ -100,17 +100,21 @@ export const Header = ({
 			>
 				<div className="max-w-7xl mx-auto px-4">
 					<div className="flex h-[var(--app-header-height)] items-center justify-between gap-3 xl:gap-4">
-						{/* Logo */}
+						{/* Logo — same shape and size as the toolbar icons */}
 						<motion.div
-							whileHover={{ scale: 1.05 }}
 							className="flex items-center gap-3"
 						>
-							<img
-								src="/icon-192.png"
-								alt="MyTube"
-								style={{ width: 'var(--app-logo-size)', height: 'var(--app-logo-size)' }}
-								className="rounded-xl shadow-lg"
-							/>
+							<div
+								className="flex items-center justify-center p-2 rounded-lg bg-gray-100 dark:bg-ios-800"
+								aria-hidden="true"
+							>
+								<img
+									src="/icon-192.png"
+									alt="MyTube"
+									style={{ width: 'var(--app-logo-size)', height: 'var(--app-logo-size)' }}
+									className="rounded-md"
+								/>
+							</div>
 							<div>
 								<h1 className="text-lg md:text-xl font-bold tracking-tight">
 									<span className="text-white dark:text-ios-50">My</span>
