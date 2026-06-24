@@ -15,7 +15,6 @@ import {
 	getDisplayText,
 	type ParsedChannelInput,
 } from "../lib/youtube-parser";
-import { fetchChannelInfoWithFallback } from "../lib/youtube-api";
 import type { YouTubeChannel } from "../types/youtube";
 
 function normalizeSearchText(value: string) {
@@ -173,7 +172,6 @@ export const AddChannelModal = ({
 	const [addedChannelIds, setAddedChannelIds] = useState<Set<string>>(
 		new Set(),
 	);
-	const [isValidating, setIsValidating] = useState(false);
 	const [isSearching, setIsSearching] = useState(false);
 	const [validationError, setValidationError] = useState<string>("");
 	const [searchError, setSearchError] = useState<"auth" | "network" | null>(
@@ -221,10 +219,6 @@ export const AddChannelModal = ({
 		}
 
 		const parsed = parseChannelInput(trimmedInput);
-		const canResolveDirectly =
-			parsed.type === "channel_id" ||
-			parsed.type === "handle" ||
-			trimmedInput.includes("youtube.com");
 
 		setParsedInput(parsed);
 
@@ -232,36 +226,19 @@ export const AddChannelModal = ({
 			setValidationError("Invalid YouTube channel format");
 			setChannelInfo(null);
 			setPreviewChannel(null);
-		} else if (canResolveDirectly) {
-			setValidationError("");
-			// Auto-fetch channel info for valid inputs
-			void fetchChannelInfo(parsed);
 		} else {
 			setValidationError("");
 			setChannelInfo(null);
+			// Don't auto-fetch channel info — the /api/channel-search effect
+			// handles all resolution (direct identifiers and keywords) via
+			// the server, which has the YouTube API key and resolves via
+			// channels.list (1 quota unit, exact match).
 		}
 	}, [input]);
 
 	useEffect(() => {
 		const query = input.trim();
 		if (query.length < 2) {
-			setSearchResults([]);
-			setSearchError(null);
-			setIsSearching(false);
-			return;
-		}
-
-		// Skip keyword search for direct identifiers (channel IDs, @handles,
-		// YouTube URLs) — these are resolved via fetchChannelInfo() in the
-		// validation effect above. Firing a keyword search for them would
-		// return irrelevant results or duplicate the preview card.
-		const parsed = parseChannelInput(query);
-		const isDirectIdentifier =
-			parsed.type === "channel_id" ||
-			parsed.type === "handle" ||
-			query.includes("youtube.com");
-
-		if (isDirectIdentifier) {
 			setSearchResults([]);
 			setSearchError(null);
 			setIsSearching(false);
@@ -307,35 +284,6 @@ export const AddChannelModal = ({
 			window.clearTimeout(timeout);
 		};
 	}, [input]);
-
-	const fetchChannelInfo = async (parsed: ParsedChannelInput) => {
-		if (parsed.type === "invalid") return;
-
-		setIsValidating(true);
-		try {
-			// Try to get YouTube API key from environment or use fallback
-			const apiKey = import.meta.env.VITE_YOUTUBE_API_KEY;
-			const info = await fetchChannelInfoWithFallback(parsed, apiKey);
-
-			if (info) {
-				setChannelInfo(info);
-				setValidationError("");
-			} else {
-				setValidationError(
-					"Unable to fetch channel information. This may happen without an API key. The channel will still be added with basic information.",
-				);
-				setChannelInfo(null);
-			}
-		} catch (error) {
-			console.error("Error fetching channel info:", error);
-			setValidationError(
-				"Unable to fetch channel information. The channel will still be added with basic information.",
-			);
-			setChannelInfo(null);
-		} finally {
-			setIsValidating(false);
-		}
-	};
 
 	const createChannelFromParsedInput = async () => {
 		if (!parsedInput || parsedInput.type === "invalid") {
@@ -455,13 +403,14 @@ export const AddChannelModal = ({
 		}
 	};
 
-	const canAddParsedInput =
-		Boolean(channelInfo) ||
-		parsedInput?.type === "channel_id" ||
-		parsedInput?.type === "handle" ||
-		(parsedInput?.type === "custom_url" && input.includes("youtube.com"));
-
 	const hasResults = visibleSearchResults.length > 0;
+	const canAddParsedInput =
+		(Boolean(channelInfo) ||
+			parsedInput?.type === "channel_id" ||
+			parsedInput?.type === "handle" ||
+			(parsedInput?.type === "custom_url" && input.includes("youtube.com"))) &&
+		!hasResults &&
+		!isSearching;
 	const showFormats =
 		!hasResults && !channelInfo && !isSearching && input.trim().length < 2;
 
@@ -615,7 +564,7 @@ export const AddChannelModal = ({
 											required
 										/>
 										<div className="absolute right-3 top-1/2 -translate-y-1/2">
-											{isValidating || isSearching ? (
+											{isSearching ? (
 												<div className="w-4 h-4 border-2 border-red-600 border-t-transparent rounded-full animate-spin" />
 											) : channelInfo ? (
 												<Check className="w-5 h-5 text-green-500" />
