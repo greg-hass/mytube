@@ -4,7 +4,10 @@ const {
 } = require("./external-services.json");
 const { createLruCache } = require("./utils");
 const { searchYouTubeApiChannels } = require("./youtube-api-search");
-const { searchBraveChannels } = require("./brave-channel-search");
+const {
+	searchBraveChannels,
+	parseYouTubeUrl,
+} = require("./brave-channel-search");
 
 const SEARCH_TIMEOUT_MS = 8000;
 const SEARCH_CACHE_MS = 30000;
@@ -198,7 +201,12 @@ function scoreChannelResult(query, channel) {
 	return tokenScore + leadingTokenBonus;
 }
 
-function dedupeAndRankChannels(query, channels, limit = 8) {
+function dedupeAndRankChannels(
+	query,
+	channels,
+	limit = 8,
+	filterByScore = true,
+) {
 	const byId = new Map();
 
 	channels.forEach((channel) => {
@@ -214,12 +222,16 @@ function dedupeAndRankChannels(query, channels, limit = 8) {
 		}
 	});
 
-	return Array.from(byId.values())
-		.map((channel) => ({
-			...channel,
-			score: scoreChannelResult(query, channel),
-		}))
-		.filter((channel) => channel.score > 0)
+	const ranked = Array.from(byId.values()).map((channel) => ({
+		...channel,
+		score: scoreChannelResult(query, channel),
+	}));
+
+	const filtered = filterByScore
+		? ranked.filter((channel) => channel.score > 0)
+		: ranked;
+
+	return filtered
 		.sort((a, b) => b.score - a.score || a.title.localeCompare(b.title))
 		.slice(0, limit);
 }
@@ -379,18 +391,41 @@ async function searchChannels(query, options = {}) {
 
 	const fetchImpl = options.fetchImpl || fetch;
 	const limit = options.limit || 8;
-	const meaningfulQuery = getMeaningfulSearchText(trimmedQuery);
 
-	// ── Primary: YouTube Data API ──
-	// Uses 1 search.list call (100 units) with the meaningful query.
-	// Returns channel IDs + metadata directly — no resolution needed.
-	if (meaningfulQuery) {
-		const apiResults = await searchYouTubeApiChannels(meaningfulQuery, {
+	// ── Tier 0: Direct identifier resolution ──
+	// Channel IDs, @handles, and YouTube URLs are resolved exactly via
+	// channels.list (1 quota unit) instead of search.list (100 units).
+	const identity = detectChannelIdentity(trimmedQuery);
+	if (identity) {
+		const directResults = await resolveDirectChannel(identity, {
+			fetchImpl,
+			apiKey: options.youtubeApiKey,
+		});
+		if (directResults.length > 0) {
+			setCachedResults(trimmedQuery, directResults);
+			return directResults;
+		}
+		// Direct resolution failed (no API key, invalid handle) —
+		// fall through to keyword search as a last resort.
+	}
+
+	// ── Tier 1: YouTube Data API keyword search ──
+	// Pass the ORIGINAL query — YouTube's search.list handles natural
+	// language well. Trust YouTube's ranking: include all results sorted
+	// by local score, without filtering out score-0 matches (our local
+	// scorer may miss channels YouTube already determined are relevant).
+	{
+		const apiResults = await searchYouTubeApiChannels(trimmedQuery, {
 			fetchImpl,
 			apiKey: options.youtubeApiKey,
 		});
 		if (apiResults.length > 0) {
-			const ranked = dedupeAndRankChannels(trimmedQuery, apiResults, limit);
+			const ranked = dedupeAndRankChannels(
+				trimmedQuery,
+				apiResults,
+				limit,
+				false,
+			);
 			if (ranked.length > 0) {
 				setCachedResults(trimmedQuery, ranked);
 				return ranked;
@@ -398,10 +433,10 @@ async function searchChannels(query, options = {}) {
 		}
 	}
 
-	// ── Secondary: Brave Search API ──
+	// ── Tier 2: Brave Search API ──
 	// Queries site:youtube.com, resolves handles via channels.list (1 unit each).
-	if (meaningfulQuery) {
-		const braveResults = await searchBraveChannels(meaningfulQuery, {
+	{
+		const braveResults = await searchBraveChannels(trimmedQuery, {
 			fetchImpl,
 			braveKey: options.braveKey,
 			apiKey: options.youtubeApiKey,
@@ -415,7 +450,7 @@ async function searchChannels(query, options = {}) {
 		}
 	}
 
-	// ── Tertiary: YouTube scrape + Piped + Invidious ──
+	// ── Tier 3: YouTube scrape + Piped + Invidious ──
 	// Free but less reliable. Generates multiple query variants.
 	const searchQueries = buildChannelSearchQueries(trimmedQuery, 3);
 	if (searchQueries.length === 0) {
@@ -459,6 +494,101 @@ async function searchChannels(query, options = {}) {
 	return ranked;
 }
 
+/**
+ * Detect whether the query is a direct channel identifier rather than a
+ * keyword search.
+ *
+ * @param {string} query — raw user input
+ * @returns {{ type: "channel_id"|"handle"|"custom"|"user", value: string }|null}
+ */
+function detectChannelIdentity(query) {
+	const trimmed = String(query || "").trim();
+	if (!trimmed) return null;
+
+	// Channel ID: UCxxxxxxxxxxxxxxxxxxxxxx (24 chars total)
+	if (/^UC[\w-]{22}$/.test(trimmed)) {
+		return { type: "channel_id", value: trimmed };
+	}
+
+	// Handle: @username
+	const handleMatch = trimmed.match(/^@([\w.-]+)$/);
+	if (handleMatch) {
+		return { type: "handle", value: handleMatch[1] };
+	}
+
+	// YouTube URL (with or without protocol)
+	const parsed = parseYouTubeUrl(trimmed);
+	if (parsed) return parsed;
+
+	return null;
+}
+
+/**
+ * Resolve a direct channel identity via channels.list (1 quota unit)
+ * instead of search.list (100 units). Returns full metadata including
+ * subscriber and video counts.
+ *
+ * @param {{ type: string, value: string }} identity
+ * @param {object} options
+ * @returns {Promise<Array<{id,title,description,thumbnail,customUrl,subscriberCount,videoCount}>>}
+ */
+async function resolveDirectChannel(identity, options = {}) {
+	const apiKey =
+		options.apiKey !== undefined ? options.apiKey : process.env.YOUTUBE_API_KEY;
+	if (!apiKey) return [];
+
+	const fetchImpl = options.fetchImpl || fetch;
+	const controller = new AbortController();
+	const timeoutId = setTimeout(() => controller.abort(), SEARCH_TIMEOUT_MS);
+
+	try {
+		let queryParam;
+		if (identity.type === "channel_id") {
+			queryParam = `id=${encodeURIComponent(identity.value)}`;
+		} else if (identity.type === "handle") {
+			const handle = identity.value.startsWith("@")
+				? identity.value
+				: `@${identity.value}`;
+			queryParam = `forHandle=${encodeURIComponent(handle)}`;
+		} else {
+			// "custom" and "user" → forUsername
+			queryParam = `forUsername=${encodeURIComponent(identity.value)}`;
+		}
+
+		const url =
+			`https://www.googleapis.com/youtube/v3/channels` +
+			`?part=snippet,statistics&${queryParam}&key=${apiKey}`;
+
+		const response = await fetchImpl(url, { signal: controller.signal });
+		if (!response.ok) return [];
+
+		const data = await response.json();
+		const items = Array.isArray(data?.items) ? data.items : [];
+
+		return items
+			.filter((item) => item?.id?.startsWith("UC"))
+			.map((item) => ({
+				id: item.id,
+				title: item.snippet?.title || "",
+				description: item.snippet?.description || "",
+				thumbnail:
+					item.snippet?.thumbnails?.medium?.url ||
+					item.snippet?.thumbnails?.default?.url ||
+					"",
+				customUrl: item.snippet?.customUrl,
+				subscriberCount: item.statistics?.subscriberCount,
+				videoCount: item.statistics?.videoCount,
+			}));
+	} catch (error) {
+		if (error.name !== "AbortError") {
+			console.warn("Direct channel resolution failed:", error.message);
+		}
+		return [];
+	} finally {
+		clearTimeout(timeoutId);
+	}
+}
+
 function getSearchCacheStats() {
 	return {
 		size: searchCache.size,
@@ -487,11 +617,13 @@ function getSearchBackendStatus() {
 module.exports = {
 	buildChannelSearchQueries,
 	dedupeAndRankChannels,
+	detectChannelIdentity,
 	getMeaningfulSearchText,
 	getMeaningfulTokens,
 	getSearchBackendStatus,
 	getSearchCacheStats,
 	parseYouTubeChannelSearchResults,
+	resolveDirectChannel,
 	scoreChannelResult,
 	searchChannels,
 };
