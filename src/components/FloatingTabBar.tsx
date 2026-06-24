@@ -15,6 +15,9 @@ export type Tab =
 	| "activity"
 	| "favorites";
 
+type ActionTabId = "add";
+type TabId = Tab | ActionTabId;
+
 interface FloatingTabBarProps {
 	activeTab: Tab;
 	onTabChange: (tab: Tab) => void;
@@ -31,7 +34,7 @@ type FloatingTabBarCounts = Pick<
 >;
 
 const TABS: Array<{
-	id: Tab;
+	id: TabId;
 	label: string;
 	icon: typeof Grid3x3;
 	getBadge?: (props: FloatingTabBarCounts) => number | null;
@@ -45,7 +48,6 @@ const TABS: Array<{
 		id: "subscriptions",
 		label: "Subs",
 		icon: Grid3x3,
-		getBadge: (p) => p.subscriptionCount,
 	},
 	{
 		id: "activity",
@@ -65,7 +67,16 @@ const TABS: Array<{
 		icon: Heart,
 		getBadge: (p) => p.favoriteCount,
 	},
+	{
+		id: "add",
+		label: "Add",
+		icon: Plus,
+	},
 ];
+
+function isActionTab(id: TabId): id is ActionTabId {
+	return id === "add";
+}
 
 export const FloatingTabBar = ({
 	activeTab,
@@ -98,14 +109,23 @@ export const FloatingTabBar = ({
 				{/* Tab Bar Pill */}
 				<div className="pointer-events-auto flex w-full items-center gap-0.5 rounded-[2rem] bg-white/70 px-2 py-2 shadow-[0_8px_32px_rgba(0,0,0,0.12)] ring-1 ring-white/40 backdrop-blur-2xl dark:bg-ios-950/70 dark:shadow-[0_8px_32px_rgba(0,0,0,0.4)] dark:ring-white/10">
 					{TABS.map((tab) => {
-						const isActive = activeTab === tab.id;
+						const isAction = isActionTab(tab.id);
+						const isActive = !isAction && activeTab === tab.id;
 						const badge = tab.getBadge?.(props) ?? null;
 						const Icon = tab.icon;
+
+						const handleClick = () => {
+							if (isActionTab(tab.id)) {
+								onAddChannel();
+							} else {
+								onTabChange(tab.id);
+							}
+						};
 
 						return (
 							<button
 								key={tab.id}
-								onClick={() => onTabChange(tab.id)}
+								onClick={handleClick}
 								className="relative flex flex-1 flex-col items-center justify-center min-w-[3rem] rounded-full px-1.5 py-1 transition-all duration-200 sm:min-w-[4rem]"
 								aria-label={tab.label}
 								aria-pressed={isActive}
@@ -120,13 +140,15 @@ export const FloatingTabBar = ({
 								<div className="relative flex items-center justify-center">
 									<Icon
 										className={`w-6 h-6 sm:w-7 sm:h-7 transition-colors duration-200 ${
-											isActive
-												? "text-gray-900 dark:text-ios-100"
-												: "text-gray-400 dark:text-ios-500"
+											isAction
+												? "text-red-500 dark:text-red-400"
+												: isActive
+													? "text-gray-900 dark:text-ios-100"
+													: "text-gray-400 dark:text-ios-500"
 										}`}
-										strokeWidth={isActive ? 2.5 : 2}
+										strokeWidth={isAction || isActive ? 2.5 : 2}
 									/>
-									{badge !== null && badge > 0 && !isActive && (
+									{badge !== null && badge > 0 && !isActive && !isAction && (
 										<span className="absolute -top-1.5 -right-2.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-red-500 px-1 text-[10px] font-bold text-white shadow-sm">
 											{badge > 99 ? "99+" : badge}
 										</span>
@@ -134,9 +156,11 @@ export const FloatingTabBar = ({
 								</div>
 								<span
 									className={`relative mt-0.5 text-[10px] sm:text-[11px] font-semibold transition-colors duration-200 ${
-										isActive
-											? "text-gray-900 dark:text-ios-100"
-											: "text-gray-400 dark:text-ios-500"
+										isAction
+											? "text-red-500 dark:text-red-400"
+											: isActive
+												? "text-gray-900 dark:text-ios-100"
+												: "text-gray-400 dark:text-ios-500"
 									}`}
 								>
 									{tab.label}
@@ -144,24 +168,6 @@ export const FloatingTabBar = ({
 							</button>
 						);
 					})}
-
-					{/* Add Channel Button */}
-					<div className="w-px h-8 bg-gray-200 dark:bg-ios-700 mx-0.5" />
-					<motion.button
-						whileHover={{ scale: 1.1 }}
-						whileTap={{ scale: 0.9 }}
-						onClick={onAddChannel}
-						className="relative flex flex-1 items-center justify-center min-w-[3rem] rounded-full px-1.5 py-1 transition-all duration-200 sm:min-w-[4rem]"
-						title="Add channel"
-						aria-label="Add channel"
-					>
-						<div className="relative flex h-10 w-10 items-center justify-center rounded-full bg-red-600 shadow-sm ring-1 ring-red-500/20 backdrop-blur-xl dark:bg-red-600 dark:ring-red-400/20">
-							<Plus
-								className="w-6 h-6 sm:w-7 sm:h-7 text-white"
-								strokeWidth={2.5}
-							/>
-						</div>
-					</motion.button>
 				</div>
 			</div>
 		</motion.nav>

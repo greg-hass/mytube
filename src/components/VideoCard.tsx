@@ -1,4 +1,4 @@
-import { Play, Clock, Heart, CheckCircle2, ListPlus } from 'lucide-react';
+import { Play, Clock, Heart, CheckCircle2, ListPlus, Trash2 } from 'lucide-react';
 import type { YouTubeVideo } from '../types/youtube';
 import { useEffect, useRef, useState } from 'react';
 import type { MouseEvent, PointerEvent } from 'react';
@@ -6,7 +6,7 @@ import { getDisplayThumbnail } from '../lib/icon-loader';
 import { getHighResolutionVideoThumbnail, getNextVideoThumbnailFallback, isLikelyLowResolutionYouTubePlaceholder } from '../lib/video-thumbnails';
 import { useFavoriteVideos } from '../hooks/useFavoriteVideos';
 import { useQueuedVideos } from '../hooks/useQueuedVideos';
-import { clearVideoProgress, getVideoProgress, getVideoProgressPercent, saveVideoProgress } from '../lib/video-progress';
+import { clearVideoProgress, getVideoProgress, getVideoProgressPercent, markVideoProgressRemoved, saveVideoProgress } from '../lib/video-progress';
 import { allowEnhancedMediaPlayback, loadYouTubeIframeApi, type YouTubePlayer } from '../lib/youtube-iframe-api';
 import { useStore } from '../store/useStore';
 import { isLiveVideo } from '../lib/video-live';
@@ -18,6 +18,7 @@ interface Props {
   channelThumbnail?: string;
   onInlinePlaybackChange?: (videoId: string, isPlaying: boolean) => void;
   onUnavailable?: (videoId: string) => void;
+  context?: 'latest' | 'queue';
 }
 
 const SWIPE_TO_WATCHED_THRESHOLD = 80;
@@ -27,7 +28,7 @@ const SWIPE_HINT_THRESHOLD = 12;
 const WATCHED_PERCENT_THRESHOLD = 0.5;
 const WATCHED_SECONDS_THRESHOLD = 30;
 
-const StatefulVideoCard = ({ video, channelThumbnail, onInlinePlaybackChange, onUnavailable }: Props) => {
+const StatefulVideoCard = ({ video, channelThumbnail, onInlinePlaybackChange, onUnavailable, context = 'latest' }: Props) => {
   const isLikelyShort = video.isShort === true || isShortVideo({ ...video, isShort: undefined });
   const [imageLoaded, setImageLoaded] = useState(false);
   const [thumbnailUnavailable, setThumbnailUnavailable] = useState(false);
@@ -39,10 +40,11 @@ const StatefulVideoCard = ({ video, channelThumbnail, onInlinePlaybackChange, on
   const thumbnailFallbackCountRef = useRef(0);
   const pointerStartRef = useRef<{ x: number; y: number; pointerId: number } | null>(null);
   const { isFavoriteVideo, toggleFavoriteVideo } = useFavoriteVideos();
-  const { isQueuedVideo, toggleQueuedVideo } = useQueuedVideos();
+  const { isQueuedVideo, toggleQueuedVideo, removeQueuedVideo } = useQueuedVideos();
   const { watchedVideos, markAsWatched, markAsUnwatched } = useStore();
   const isFavorite = isFavoriteVideo(video.id);
   const isQueued = isQueuedVideo(video.id);
+  const isInQueueContext = context === 'queue';
   const [progressPercent, setProgressPercent] = useState(() => getVideoProgressPercent(video.id));
   const inlinePlayerContainerRef = useRef<HTMLDivElement | null>(null);
   const inlinePlayerRef = useRef<YouTubePlayer | null>(null);
@@ -189,7 +191,17 @@ const StatefulVideoCard = ({ video, channelThumbnail, onInlinePlaybackChange, on
         markAsWatched(video.id);
       }
     } else if (shouldToggleQueue) {
-      toggleQueuedVideo(video);
+      if (isInQueueContext) {
+        // Queue tab: every video here is either queued (Watch later) or has
+        // resume progress (Continue watching). Clear the queue and flag the
+        // progress as user-removed so a later resume in Latest doesn't
+        // resurrect the card before the user re-engages with it on purpose.
+        removeQueuedVideo(video.id);
+        markVideoProgressRemoved(video.id);
+      } else {
+        // Latest tab: classic toggle.
+        toggleQueuedVideo(video);
+      }
     }
   };
 
@@ -214,7 +226,16 @@ const StatefulVideoCard = ({ video, channelThumbnail, onInlinePlaybackChange, on
 
   const handleQueueClick = (event: MouseEvent<HTMLButtonElement>) => {
     event.stopPropagation();
-    toggleQueuedVideo(video);
+    if (isInQueueContext) {
+      // Queue tab: every video here is either queued (Watch later) or has
+      // resume progress (Continue watching). Clear the queue and flag the
+      // progress as user-removed so a later resume in Latest doesn't
+      // resurrect the card before the user re-engages with it on purpose.
+      removeQueuedVideo(video.id);
+      markVideoProgressRemoved(video.id);
+    } else {
+      toggleQueuedVideo(video);
+    }
   };
 
   const applyNextThumbnailFallback = () => {
@@ -279,6 +300,11 @@ const StatefulVideoCard = ({ video, channelThumbnail, onInlinePlaybackChange, on
               <>
                 <CheckCircle2 className="h-5 w-5" />
                 <span>{isWatched ? 'Watched' : 'Mark watched'}</span>
+              </>
+            ) : isInQueueContext ? (
+              <>
+                <Trash2 className="h-5 w-5" />
+                <span>Remove from queue</span>
               </>
             ) : (
               <>
@@ -372,6 +398,15 @@ const StatefulVideoCard = ({ video, channelThumbnail, onInlinePlaybackChange, on
           </div>
         )}
 
+        {!isPlayingInline && progressPercent > 0 && !isWatched && (
+          <div
+            data-testid="video-progress-badge"
+            className="absolute top-2 right-2 rounded bg-black/70 px-2 py-1 text-[11px] font-semibold tabular-nums text-white shadow-sm"
+          >
+            {Math.round(progressPercent)}%
+          </div>
+        )}
+
       </div>
 
       {/* Info */}
@@ -414,16 +449,24 @@ const StatefulVideoCard = ({ video, channelThumbnail, onInlinePlaybackChange, on
           >
             <CheckCircle2 className={`h-5 w-5 ${isWatched ? 'fill-current' : ''}`} />
           </button>
-          <button
+<button
             type="button"
             onClick={handleQueueClick}
-            aria-label={isQueued ? 'Remove video from queue' : 'Add video to queue'}
-            className={`absolute bottom-3 right-14 flex h-9 w-9 flex-none items-center justify-center rounded-full transition-colors ${isQueued
-              ? 'bg-blue-600/10 text-blue-500 dark:bg-blue-500/15 dark:text-blue-400'
-              : 'text-gray-400 hover:bg-gray-100 hover:text-blue-500 dark:text-ios-500 dark:hover:bg-ios-800 dark:hover:text-blue-400'
-              }`}
+            aria-label={isInQueueContext ? 'Remove video from queue' : isQueued ? 'Remove video from queue' : 'Add video to queue'}
+            data-testid="video-card-queue-button"
+            className={`absolute bottom-3 right-14 flex h-9 w-9 flex-none items-center justify-center rounded-full transition-colors ${
+              isInQueueContext
+                ? 'text-gray-400 hover:bg-red-50 hover:text-red-500 dark:text-ios-500 dark:hover:bg-red-500/15 dark:hover:text-red-400'
+                : isQueued
+                  ? 'bg-blue-600/10 text-blue-500 dark:bg-blue-500/15 dark:text-blue-400'
+                  : 'text-gray-400 hover:bg-gray-100 hover:text-blue-500 dark:text-ios-500 dark:hover:bg-ios-800 dark:hover:text-blue-400'
+            }`}
           >
-            <ListPlus className={`h-5 w-5 ${isQueued ? 'stroke-[2.5]' : ''}`} />
+            {isInQueueContext ? (
+              <Trash2 className="h-5 w-5" />
+            ) : (
+              <ListPlus className={`h-5 w-5 ${isQueued ? 'stroke-[2.5]' : ''}`} />
+            )}
           </button>
           <button
             type="button"
@@ -432,7 +475,7 @@ const StatefulVideoCard = ({ video, channelThumbnail, onInlinePlaybackChange, on
             className={`absolute bottom-3 right-3 flex h-9 w-9 flex-none items-center justify-center rounded-full transition-colors ${isFavorite
               ? 'bg-red-600/10 text-red-500 dark:bg-red-500/15 dark:text-red-400'
               : 'text-gray-400 hover:bg-gray-100 hover:text-red-500 dark:text-ios-500 dark:hover:bg-ios-800 dark:hover:text-red-400'
-              }`}
+            }`}
           >
             <Heart className={`h-5 w-5 ${isFavorite ? 'fill-current' : ''}`} />
           </button>

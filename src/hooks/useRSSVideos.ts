@@ -145,7 +145,15 @@ export const useRSSVideos = () => {
 		},
 		placeholderData: (previousData) => previousData,
 		staleTime: 1000 * 60, // 1 minute
-		refetchInterval: isAggregating ? 5000 : 1000 * 30,
+		refetchInterval: () => {
+			if (
+				typeof document !== "undefined" &&
+				document.visibilityState === "hidden"
+			) {
+				return false;
+			}
+			return isAggregating ? 5000 : 1000 * 30;
+		},
 	});
 
 	useEffect(() => {
@@ -177,6 +185,7 @@ export const useRSSVideos = () => {
 		},
 		onSuccess: () => {
 			queryClient.invalidateQueries({ queryKey: ["server-videos-status"] });
+			toast.success("Feed refresh started — pulling new videos...");
 		},
 		onError: (error) => {
 			console.error("Pull-to-refresh failed:", error);

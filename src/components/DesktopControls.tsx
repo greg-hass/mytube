@@ -9,7 +9,6 @@ import {
 	Moon,
 	Play,
 	Settings,
-	SlidersHorizontal,
 	Sun,
 } from "lucide-react";
 import type { SortBy } from "../types/youtube";
@@ -22,9 +21,6 @@ const ICON_MD = "w-5 h-5" as const;
 
 interface DesktopControlsProps {
 	theme: "light" | "dark";
-	showFilters: boolean;
-	onOpenFilters?: () => void;
-	activeFilterCount: number;
 	showShorts: boolean;
 	onToggleShorts?: () => void;
 	hideWatched: boolean;
@@ -42,9 +38,6 @@ interface DesktopControlsProps {
 
 export const DesktopControls = ({
 	theme,
-	showFilters,
-	onOpenFilters,
-	activeFilterCount,
 	showShorts,
 	onToggleShorts,
 	hideWatched,
@@ -60,30 +53,8 @@ export const DesktopControls = ({
 	onToggleTheme,
 }: DesktopControlsProps) => (
 	<div className="desktop-header-controls hidden xl:flex items-center gap-2">
-		{/* Filter Button */}
-		{showFilters && onOpenFilters && (
-			<motion.button
-				whileHover={{ scale: 1.05 }}
-				whileTap={{ scale: 0.95 }}
-				onClick={onOpenFilters}
-				className={`p-2 rounded-lg transition-colors ${
-					activeFilterCount > 0
-						? "bg-red-600 text-white hover:bg-red-700"
-						: "bg-gray-100 text-gray-800 hover:bg-gray-200 dark:bg-ios-800 dark:text-ios-100 dark:hover:bg-ios-700"
-				}`}
-				title="Feed filters"
-			>
-				<SlidersHorizontal className={ICON_MD} />
-				{activeFilterCount > 0 && (
-					<span className="ml-1 text-xs font-semibold">
-						{activeFilterCount}
-					</span>
-				)}
-			</motion.button>
-		)}
-
 		{/* Shorts Toggle */}
-		{showFilters && onToggleShorts && (
+		{onToggleShorts && (
 			<motion.button
 				whileHover={{ scale: 1.05 }}
 				whileTap={{ scale: 0.95 }}
@@ -100,7 +71,7 @@ export const DesktopControls = ({
 		)}
 
 		{/* Watched Toggle */}
-		{showFilters && onToggleWatched && (
+		{onToggleWatched && (
 			<motion.button
 				whileHover={{ scale: 1.05 }}
 				whileTap={{ scale: 0.95 }}

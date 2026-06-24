@@ -230,8 +230,14 @@ function normalizeThumbnail(url) {
 	return url;
 }
 
-async function searchPipedChannels(query, fetchImpl = fetch, signal) {
-	const searches = PIPED_INSTANCES.map(async (instance) => {
+async function searchPipedChannels(
+	query,
+	fetchImpl = fetch,
+	signal,
+	maxInstances = 2,
+) {
+	const instances = PIPED_INSTANCES.slice(0, maxInstances);
+	const searches = instances.map(async (instance) => {
 		try {
 			const response = await fetchImpl(
 				`${instance}/search?q=${encodeURIComponent(query)}&filter=channels`,
@@ -269,8 +275,14 @@ async function searchPipedChannels(query, fetchImpl = fetch, signal) {
 	return results.flat();
 }
 
-async function searchInvidiousChannels(query, fetchImpl = fetch, signal) {
-	const searches = INVIDIOUS_INSTANCES.map(async (instance) => {
+async function searchInvidiousChannels(
+	query,
+	fetchImpl = fetch,
+	signal,
+	maxInstances = 2,
+) {
+	const instances = INVIDIOUS_INSTANCES.slice(0, maxInstances);
+	const searches = instances.map(async (instance) => {
 		try {
 			const response = await fetchImpl(
 				`${instance}/api/v1/search?q=${encodeURIComponent(query)}&type=channel`,
@@ -405,7 +417,7 @@ async function searchChannels(query, options = {}) {
 
 	// ── Tertiary: YouTube scrape + Piped + Invidious ──
 	// Free but less reliable. Generates multiple query variants.
-	const searchQueries = buildChannelSearchQueries(trimmedQuery);
+	const searchQueries = buildChannelSearchQueries(trimmedQuery, 3);
 	if (searchQueries.length === 0) {
 		setCachedResults(trimmedQuery, []);
 		return [];

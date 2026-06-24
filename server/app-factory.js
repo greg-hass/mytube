@@ -5,7 +5,11 @@ const {
 	mergeIncomingSubscriptions,
 	removeSensitiveSyncSettings,
 } = require("./subscription-merge");
-const { getSearchCacheStats, searchChannels } = require("./channel-search");
+const {
+	getSearchCacheStats,
+	getSearchBackendStatus,
+	searchChannels,
+} = require("./channel-search");
 const { normalizeVideoCacheThumbnails } = require("./video-thumbnails");
 const { extractYouTubeChannelMetadata } = require("./youtube-html-parser");
 const {
@@ -341,7 +345,9 @@ function createApp({
 		asyncHandler(async (req, res) => {
 			const { id } = req.params;
 			const current = await appStore.readData(defaultData);
-			const found = current.subscriptions.some((subscription) => subscription.id === id);
+			const found = current.subscriptions.some(
+				(subscription) => subscription.id === id,
+			);
 			if (!found) {
 				return res.status(404).json({ error: "Subscription not found" });
 			}
@@ -409,7 +415,11 @@ function createApp({
 				Promise.resolve(feedAggregator.getAggregationStatus()),
 				feedAggregator.getActiveChannels({ limit }),
 			]);
-			res.json({ ...status, activeChannels });
+			res.json({
+				...status,
+				activeChannels,
+				searchBackends: getSearchBackendStatus(),
+			});
 		}, "Failed to read aggregation status"),
 	);
 

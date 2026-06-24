@@ -775,6 +775,125 @@ describe('VideoCard', () => {
     expect(favoriteButton.className).not.toContain('-mr-');
   });
 
+  it('shows a remove-from-queue button (Trash icon) when rendered in queue context', () => {
+    localStorage.setItem('queued-video-ids', JSON.stringify(['video-1']));
+    localStorage.setItem('queued-videos', JSON.stringify([{
+      id: 'video-1', title: video.title, description: '', thumbnail: video.thumbnail,
+      channelId: video.channelId, channelTitle: video.channelTitle, publishedAt: video.publishedAt,
+    }]));
+
+    render(
+      <MemoryRouter>
+        <VideoCard video={video} index={0} context="queue" />
+      </MemoryRouter>
+    );
+
+    // Queue context shows a "Remove video from queue" button (uses Trash icon).
+    const removeButton = screen.getByRole('button', { name: 'Remove video from queue' });
+    expect(removeButton).toBeInTheDocument();
+
+    // No "Add video to queue" affordance in queue context.
+    expect(screen.queryByRole('button', { name: 'Add video to queue' })).not.toBeInTheDocument();
+
+    // Favorite button stays at the right edge.
+    const favoriteButton = screen.getByRole('button', { name: 'Add video to favorites' });
+    expect(favoriteButton.className).toContain('right-3');
+  });
+
+  it('clicking the queue button in queue context removes the video from the queue', () => {
+    localStorage.setItem('queued-video-ids', JSON.stringify(['video-1']));
+    localStorage.setItem('queued-videos', JSON.stringify([{
+      id: 'video-1', title: video.title, description: '', thumbnail: video.thumbnail,
+      channelId: video.channelId, channelTitle: video.channelTitle, publishedAt: video.publishedAt,
+    }]));
+
+    render(
+      <MemoryRouter>
+        <VideoCard video={video} index={0} context="queue" />
+      </MemoryRouter>
+    );
+
+    const removeButton = screen.getByRole('button', { name: 'Remove video from queue' });
+    fireEvent.click(removeButton);
+
+    expect(JSON.parse(localStorage.getItem('queued-video-ids') || '[]')).toEqual([]);
+  });
+
+  it('clicking the queue button in queue context flags Continue watching cards as user-removed', () => {
+    // Continue watching cards have playback progress but are NOT in the queue.
+    // The trash button must flag the entry as removed so it stays gone from
+    // the section even if the user watches more of the video in Latest.
+    localStorage.setItem('video-playback-progress', JSON.stringify({
+      'video-1': { currentTime: 60, duration: 600, updatedAt: Date.now() },
+    }));
+
+    render(
+      <MemoryRouter>
+        <VideoCard video={video} index={0} context="queue" />
+      </MemoryRouter>
+    );
+
+    const removeButton = screen.getByRole('button', { name: 'Remove video from queue' });
+    fireEvent.click(removeButton);
+
+    const progress = JSON.parse(localStorage.getItem('video-playback-progress') || '{}');
+    expect(progress['video-1'].removedAt).toEqual(expect.any(Number));
+    // Progress itself is preserved — only the flag changes.
+    expect(progress['video-1'].currentTime).toBe(60);
+  });
+
+  it('removes a video from the queue on swipe-right when in queue context', () => {
+    localStorage.setItem('queued-video-ids', JSON.stringify(['video-1']));
+    localStorage.setItem('queued-videos', JSON.stringify([{
+      id: 'video-1', title: video.title, description: '', thumbnail: video.thumbnail,
+      channelId: video.channelId, channelTitle: video.channelTitle, publishedAt: video.publishedAt,
+    }]));
+
+    render(
+      <MemoryRouter>
+        <VideoCard video={video} index={0} context="queue" />
+      </MemoryRouter>
+    );
+
+    const card = screen.getByTestId('video-card');
+    fireEvent.pointerDown(card, {
+      pointerId: 1, pointerType: 'touch', clientX: 12, clientY: 20,
+    });
+    fireEvent.pointerMove(card, {
+      pointerId: 1, pointerType: 'touch', clientX: 112, clientY: 22,
+    });
+    // Swipe-right hint in queue context always reads "Remove from queue" —
+    // there's no Add path, since every video here is already queued.
+    expect(screen.getByText('Remove from queue')).toBeInTheDocument();
+    fireEvent.pointerUp(card, {
+      pointerId: 1, pointerType: 'touch', clientX: 112, clientY: 22,
+    });
+
+    expect(JSON.parse(localStorage.getItem('queued-video-ids') || '[]')).toEqual([]);
+  });
+
+  it('swipe-right flags Continue watching progress as user-removed', () => {
+    // Same shape as the click test, but exercises the gesture path so the
+    // click and swipe stay in sync if either one drifts later.
+    localStorage.setItem('video-playback-progress', JSON.stringify({
+      'video-1': { currentTime: 60, duration: 600, updatedAt: Date.now() },
+    }));
+
+    render(
+      <MemoryRouter>
+        <VideoCard video={video} index={0} context="queue" />
+      </MemoryRouter>
+    );
+
+    const card = screen.getByTestId('video-card');
+    fireEvent.pointerDown(card, { pointerId: 1, pointerType: 'touch', clientX: 12, clientY: 20 });
+    fireEvent.pointerMove(card, { pointerId: 1, pointerType: 'touch', clientX: 112, clientY: 22 });
+    fireEvent.pointerUp(card, { pointerId: 1, pointerType: 'touch', clientX: 112, clientY: 22 });
+
+    const progress = JSON.parse(localStorage.getItem('video-playback-progress') || '{}');
+    expect(progress['video-1'].removedAt).toEqual(expect.any(Number));
+  });
+
   it('shows a bottom progress bar when the video has saved playback progress', () => {
     localStorage.setItem('video-playback-progress', JSON.stringify({
       'video-1': {
@@ -816,6 +935,8 @@ describe('VideoCard', () => {
 
     const progressBar = await screen.findByTestId('video-progress-bar');
     expect(progressBar).toHaveStyle({ width: '50%' });
+    const badge = screen.getByTestId('video-progress-badge');
+    expect(badge).toHaveTextContent('50%');
   });
 
   it('shows a red LIVE overlay for live videos', () => {

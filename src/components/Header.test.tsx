@@ -62,7 +62,6 @@ describe("Header", () => {
 				onToggleShorts={vi.fn()}
 				hideWatched={false}
 				onToggleWatched={vi.fn()}
-				onOpenFilters={vi.fn()}
 			/>,
 		);
 
@@ -71,7 +70,7 @@ describe("Header", () => {
 
 		expect(menuButton).toBeInTheDocument();
 		expect(mobileControls).toBeInTheDocument();
-		expect(screen.getByTestId("mobile-filter-button")).toBeInTheDocument();
+		expect(screen.queryByTestId("mobile-filter-button")).not.toBeInTheDocument();
 		expect(screen.getByTestId("mobile-shorts-toggle")).toBeInTheDocument();
 		expect(screen.getByTestId("mobile-watched-toggle")).toBeInTheDocument();
 		expect(
@@ -154,15 +153,6 @@ describe("Header", () => {
 		expect(
 			document.querySelector(".bg-emerald-500.animate-pulse"),
 		).not.toBeInTheDocument();
-	});
-
-	it("opens feed filters from the mobile header filter button", () => {
-		const onOpenFilters = vi.fn();
-		render(<Header showFilters={true} onOpenFilters={onOpenFilters} />);
-
-		fireEvent.click(screen.getByTestId("mobile-filter-button"));
-
-		expect(onOpenFilters).toHaveBeenCalledOnce();
 	});
 
 	it("renders the mobile menu overlay outside the animated header", () => {

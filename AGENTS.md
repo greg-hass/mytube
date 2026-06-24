@@ -2,13 +2,16 @@
 
 ## Project Overview
 
-YouTube RSS Subscriptions — a self-hosted, RSS-first YouTube feed reader. Tracks watched state, filters Shorts, queues videos for later, and stays RSS-first so routine refreshes don't burn YouTube API quota.
+YouTube RSS Subscriptions — a self-hosted, RSS-first YouTube feed reader. Tracks
+watched state, filters Shorts, queues videos for later, and stays RSS-first so
+routine refreshes don't burn YouTube API quota.
 
 It's a feed reader, not a video archive. Videos still play through YouTube.
 
 ### Tech Stack
 
-- **Frontend:** React 19, TypeScript, Vite 7, Tailwind CSS 3, Zustand, TanStack Query
+- **Frontend:** React 19, TypeScript, Vite 7, Tailwind CSS 3, Zustand, TanStack
+  Query
 - **Server:** Node.js, Express (implied), SQLite (WAL mode)
 - **Container:** `ghcr.io/greg-hass/youtube-subscriptions:latest`
 - **Port mapping:** Host `5173` → Container `8080`
@@ -49,7 +52,8 @@ Prefer simple, explicit solutions. Do not optimize prematurely.
 ## Rules
 
 - Do not make cosmetic-only changes.
-- Do not rename services, containers, networks, volumes, routes, environment variables, or APIs without justification.
+- Do not rename services, containers, networks, volumes, routes, environment
+  variables, or APIs without justification.
 - Do not introduce unnecessary abstractions.
 - Preserve existing architecture unless structural issues require change.
 - Prefer existing patterns over introducing new ones.
@@ -93,7 +97,8 @@ Security:
 Networking:
 
 - Public exposure must be intentional.
-- Preserve existing ports, routes, middleware, and reverse proxy behavior unless changes are required.
+- Preserve existing ports, routes, middleware, and reverse proxy behavior unless
+  changes are required.
 - Prefer internal container networking where practical.
 - Avoid breaking service discovery or container naming.
 
@@ -103,7 +108,8 @@ Persistence:
 - Never drop volumes, tables, or columns without backup and rollback plans.
 - Preserve persistent mount paths and storage layouts.
 - SQLite uses WAL mode — do not disable it.
-- Backup/restore uses SQLite backup API: `npm run backup:sqlite` / `npm run restore:sqlite`
+- Backup/restore uses SQLite backup API: `npm run backup:sqlite` / `npm run
+  restore:sqlite`
 
 ---
 
@@ -120,18 +126,18 @@ Before completing any task:
 
 All checks must pass before task completion.
 
-Do not ignore failing checks, unhealthy containers, restart loops, or proxy failures.
-Never claim something works without verification.
+Do not ignore failing checks, unhealthy containers, restart loops, or proxy
+failures. Never claim something works without verification.
 
 ---
 
 ## Tooling Detection
 
-Prefer repository-defined scripts and documented workflows over inferred commands.
+Prefer repository-defined scripts and documented workflows over inferred
+commands.
 
-Do not invent custom commands.
-Do not assume frameworks or tooling without evidence.
-If tooling is ambiguous, ask before proceeding.
+Do not invent custom commands. Do not assume frameworks or tooling without
+evidence. If tooling is ambiguous, ask before proceeding.
 
 ---
 
@@ -158,7 +164,8 @@ Rules:
 - Verify containers are healthy before declaring success.
 - Check logs when containers fail or restart.
 - Preserve the existing container name (`mytube`) and volume (`mytube-data`).
-- Watchtower is enabled via label — do not remove `com.centurylinklabs.watchtower.enable=true`.
+- Watchtower is enabled via label — do not remove
+  `com.centurylinklabs.watchtower.enable=true`.
 
 ---
 
@@ -194,12 +201,14 @@ Rules:
 
 ## Reverse Proxy / Ingress
 
-The app serves from port `5173` on the host. If behind a reverse proxy (Caddy, nginx, Traefik):
+The app serves from port `5173` on the host. If behind a reverse proxy (Caddy,
+nginx, Traefik):
 
 - Preserve existing hostnames, routes, and middleware unless required.
 - Do not commit TLS certificates or private keys.
 - Do not expose admin interfaces publicly.
-- The app requires `Authorization: Bearer <token>` on API requests — ensure the proxy passes auth headers.
+- The app requires `Authorization: Bearer <token>` on API requests — ensure the
+  proxy passes auth headers.
 
 ---
 
@@ -218,8 +227,14 @@ When making changes:
 
 ## Architecture Notes
 
-- **RSS-first design:** All feed data comes from YouTube RSS by default. The `YOUTUBE_API_KEY` is optional and only used as a capped fallback for channel handle resolution.
-- **SQLite for state:** Subscriptions, watched state, favorites, queue, feed cache, channel refresh state all live in `server/data/youtube-subscriptions.sqlite`.
-- **No OAuth required.** The app uses RSS feeds and optionally a server-side API key for channel resolution.
+- **RSS-first design:** All feed data comes from YouTube RSS by default. The
+  `YOUTUBE_API_KEY` is optional and only used as a capped fallback for channel
+  handle resolution.
+- **SQLite for state:** Subscriptions, watched state, favorites, queue, feed
+  cache, channel refresh state all live in
+  `server/data/youtube-subscriptions.sqlite`.
+- **No OAuth required.** The app uses RSS feeds and optionally a server-side API
+  key for channel resolution.
 - **PWA-capable:** Frontend supports PWA install via `vite-plugin-pwa`.
-- **Rate limiting:** Mutating API requests are rate-limited (`30 req / 60s window` by default).
+- **Rate limiting:** Mutating API requests are rate-limited (`30 req / 60s
+  window` by default).

@@ -110,7 +110,7 @@ describe('SubscriptionCard', () => {
     expect(onToggleFavorite).toHaveBeenCalledWith('UC123');
   });
 
-  it('opens the unsubscribe confirmation and removes the channel', () => {
+  it('removes the channel directly through onRemove (Undo toast is the safety net)', () => {
     const onRemove = vi.fn();
 
     render(
@@ -128,8 +128,7 @@ describe('SubscriptionCard', () => {
       </MemoryRouter>
     );
 
-    fireEvent.click(screen.getByRole('button', { name: 'Unsubscribe from this channel' }));
-    fireEvent.click(screen.getByRole('button', { name: 'Unsubscribe' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Unsubscribe from Fast Channel' }));
 
     expect(onRemove).toHaveBeenCalledWith('UC123');
   });

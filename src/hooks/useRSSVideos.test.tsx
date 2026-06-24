@@ -114,7 +114,9 @@ describe("useRSSVideos", () => {
 
 		expect(result.current.videos[0].title).toBe("Cached video");
 		expect(toast.loading).not.toHaveBeenCalled();
-		expect(toast.success).not.toHaveBeenCalled();
+		expect(toast.success).toHaveBeenCalledWith(
+			"Feed refresh started — pulling new videos...",
+		);
 	});
 
 	it("refetches videos when server status reports a newer completed cache", async () => {

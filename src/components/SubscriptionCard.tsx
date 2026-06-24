@@ -17,7 +17,6 @@ interface Props {
 
 export const SubscriptionCard = memo(({ channel, groups = [], onRemove, onToggleFavorite, onToggleMute, onSetGroup }: Props) => {
   const [imageLoaded, setImageLoaded] = useState(false);
-  const [confirmOpen, setConfirmOpen] = useState(false);
   const navigate = useNavigate();
 
   const openChannel = () => {
@@ -65,7 +64,6 @@ export const SubscriptionCard = memo(({ channel, groups = [], onRemove, onToggle
           </div>
         )}
 
-        {/* Favorite button (top-left, hover only) */}
         {/* Action buttons (top-left, hover only) */}
         <div className="absolute top-2 left-2 flex gap-2 z-10">
           {onToggleFavorite && (
@@ -120,62 +118,22 @@ export const SubscriptionCard = memo(({ channel, groups = [], onRemove, onToggle
           </motion.div>
         </motion.div>
 
-        {/* Unsubscribe button (hover only) */}
+        {/* Unsubscribe button — tightened hit area; Undo toast in SubscriptionsList is the safety net */}
         {onRemove && (
           <button
             type="button"
             onClick={(e) => {
               e.stopPropagation();
-              setConfirmOpen(true);
+              onRemove(channel.id);
             }}
-            className="absolute top-2 right-2 p-2 rounded-full bg-red-600 text-white shadow-lg hover:bg-red-700 transition-all opacity-100 sm:opacity-0 sm:group-hover:opacity-100 translate-y-0 sm:translate-y-1 sm:group-hover:translate-y-0"
-            title="Unsubscribe from this channel"
+            className="absolute top-2 right-2 p-1.5 rounded-full bg-red-600 text-white shadow-lg hover:bg-red-700 transition-all opacity-100 sm:opacity-0 sm:group-hover:opacity-100 translate-y-0 sm:translate-y-1 sm:group-hover:translate-y-0"
+            title={`Unsubscribe from ${channel.title}`}
+            aria-label={`Unsubscribe from ${channel.title}`}
           >
-            <Trash2 className="w-4 h-4" />
+            <Trash2 className="w-3.5 h-3.5" />
           </button>
         )}
       </div>
-
-      {/* Unsubscribe confirmation (styled modal centered on screen) */}
-      {confirmOpen && onRemove && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm"
-          onClick={() => setConfirmOpen(false)}
-        >
-          <div
-            className="w-72 rounded-xl bg-white dark:bg-ios-900 shadow-2xl border border-gray-200 dark:border-ios-700 p-4 space-y-3"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <h4 className="text-sm font-semibold text-gray-900 dark:text-ios-100">
-              Unsubscribe?
-            </h4>
-            <p className="text-sm text-gray-600 dark:text-ios-400">
-              Remove <span className="font-medium">{channel.title}</span> from your subscriptions.
-            </p>
-            <div className="flex justify-end gap-2">
-              <button
-                className="px-3 py-1.5 rounded-lg text-sm bg-gray-100 hover:bg-gray-200 text-gray-800 dark:bg-ios-800 dark:hover:bg-ios-700 dark:text-ios-200 transition-colors"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setConfirmOpen(false);
-                }}
-              >
-                Cancel
-              </button>
-              <button
-                className="px-3 py-1.5 rounded-lg text-sm bg-red-600 hover:bg-red-700 text-white transition-colors"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onRemove(channel.id);
-                  setConfirmOpen(false);
-                }}
-              >
-                Unsubscribe
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
 
       {/* Info */}
       <div className="p-3 sm:p-4">
