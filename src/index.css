@@ -9,7 +9,6 @@
     --app-sticky-gap: 0.5rem;
     --app-tabs-height: 3.75rem;
     --app-tab-bar-bottom-offset: max(0.75rem, calc(env(safe-area-inset-bottom) - 0.75rem));
-    --app-logo-size: 1.25rem;
   }
 
   @media (min-width: 640px) {
