@@ -7,12 +7,18 @@ export function exportSubscriptionsAsOPML(
 	subscriptions: StoredSubscription[],
 ): string {
 	const outlines = subscriptions
-		.map(
-			(sub) =>
-				`      <outline text="${escapeXml(sub.title)}" title="${escapeXml(
-					sub.title,
-				)}" type="rss" xmlUrl="https://www.youtube.com/feeds/videos.xml?channel_id=${sub.id}" />`,
-		)
+		.map((sub) => {
+			const attrs = [
+				`text="${escapeXml(sub.title)}"`,
+				`title="${escapeXml(sub.title)}"`,
+				'type="rss"',
+				`xmlUrl="https://www.youtube.com/feeds/videos.xml?channel_id=${sub.id}"`,
+			];
+			if (sub.isFavorite) attrs.push('isFavorite="true"');
+			if (sub.isMuted) attrs.push('isMuted="true"');
+			if (sub.group) attrs.push(`group="${escapeXml(sub.group)}"`);
+			return `      <outline ${attrs.join(" ")} />`;
+		})
 		.join("\n");
 
 	return `<?xml version="1.0" encoding="UTF-8"?>

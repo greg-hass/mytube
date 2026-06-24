@@ -335,7 +335,7 @@ describe("channel search cache", () => {
 		const requestedUrls = [];
 		const fetchImpl = async (url) => {
 			requestedUrls.push(String(url));
-			if (String(url).includes("levelt")) {
+			if (String(url).includes("levelonetechs")) {
 				return {
 					ok: true,
 					json: async () => ({
@@ -372,7 +372,9 @@ describe("channel search cache", () => {
 				title: "Level1Techs",
 			}),
 		);
-		expect(requestedUrls.some((url) => url.includes("levelt"))).toBe(true);
+		expect(requestedUrls.some((url) => url.includes("levelonetechs"))).toBe(
+			true,
+		);
 	});
 
 	it("finds channels via the meaningful query when the original phrase fails", async () => {

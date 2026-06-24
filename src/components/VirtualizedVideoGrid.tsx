@@ -9,6 +9,7 @@ interface Props {
     columns?: number; // Optional: specify max columns (default 4)
     scrollStorageKey?: string;
     channelThumbnails?: Map<string, string>;
+    context?: 'latest' | 'queue';
 }
 
 const ROW_GAP = 24;
@@ -27,7 +28,7 @@ const getInitialContainerWidth = () => {
     return Math.max(MIN_CARD_WIDTH, Math.min(window.innerWidth, 1280) - 32);
 };
 
-export const VirtualizedVideoGrid = ({ videos, columns = 4, scrollStorageKey, channelThumbnails }: Props) => {
+export const VirtualizedVideoGrid = ({ videos, columns = 4, scrollStorageKey, channelThumbnails, context = 'latest' }: Props) => {
     const parentRef = useRef<HTMLDivElement>(null);
     const [inlinePlaybackVideos, setInlinePlaybackVideos] = useState<YouTubeVideo[] | null>(null);
     const [inlinePlaybackVideoId, setInlinePlaybackVideoId] = useState<string | null>(null);
@@ -194,6 +195,7 @@ export const VirtualizedVideoGrid = ({ videos, columns = 4, scrollStorageKey, ch
                                         channelThumbnail={channelThumbnails?.get(video.channelId)}
                                         onInlinePlaybackChange={handleInlinePlaybackChange}
                                         onUnavailable={handleVideoUnavailable}
+                                        context={context}
                                     />
                                 ))}
                             </div>

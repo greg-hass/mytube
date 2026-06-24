@@ -27,7 +27,7 @@ export interface UISlice {
 
 export const createUISlice: StateCreator<UISlice> = (set) => ({
     theme: 'dark',
-    viewMode: 'grid',
+    viewMode: 'list',
     sortBy: 'recent',
     searchQuery: '',
 

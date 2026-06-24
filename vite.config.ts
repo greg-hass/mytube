@@ -54,6 +54,10 @@ export default defineConfig({
     }),
     // PWA with service worker
     VitePWA({
+      // Don't register SW in dev — iOS Safari caches the SW aggressively
+      // and serves stale bundles, which breaks the HMR loop for local testing.
+      // SW only registers in production builds.
+      devOptions: { enabled: false },
       registerType: 'autoUpdate',
       includeAssets: ['favicon.ico', 'robots.txt', 'apple-touch-icon.png'],
       manifest: {
@@ -110,6 +114,10 @@ export default defineConfig({
     hmr: {
       overlay: true,
     },
+    // Allow LAN access for mobile/PWA testing (iPhone on same Wi-Fi hits
+    // http://192.168.x.x:5173). Dev-only; doesn't affect production build.
+    host: true,
+    allowedHosts: true,
     proxy: {
       '/api': {
         target: 'http://localhost:3001',

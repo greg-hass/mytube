@@ -26,9 +26,6 @@ interface HeaderProps {
 	onToggleShorts?: () => void;
 	hideWatched?: boolean;
 	onToggleWatched?: () => void;
-	showFilters?: boolean;
-	onOpenFilters?: () => void;
-	activeFilterCount?: number;
 	scrollHidden?: boolean;
 	compactMobile?: boolean;
 }
@@ -43,9 +40,6 @@ export const Header = ({
 	onToggleShorts,
 	hideWatched = false,
 	onToggleWatched,
-	showFilters = true,
-	onOpenFilters,
-	activeFilterCount = 0,
 	scrollHidden = false,
 	compactMobile = false,
 }: HeaderProps) => {
@@ -114,7 +108,8 @@ export const Header = ({
 							<img
 								src="/icon-192.png"
 								alt="MyTube"
-								className="h-10 w-10 rounded-xl shadow-lg"
+								style={{ width: 'var(--app-logo-size)', height: 'var(--app-logo-size)' }}
+								className="rounded-xl shadow-lg"
 							/>
 							<div>
 								<h1 className="text-lg md:text-xl font-bold tracking-tight">
@@ -143,9 +138,6 @@ export const Header = ({
 
 						<DesktopControls
 							theme={theme}
-							showFilters={showFilters}
-							onOpenFilters={onOpenFilters}
-							activeFilterCount={activeFilterCount}
 							showShorts={showShorts}
 							onToggleShorts={onToggleShorts}
 							hideWatched={hideWatched}
@@ -162,9 +154,6 @@ export const Header = ({
 						/>
 
 						<MobileHeaderControls
-							showFilters={showFilters}
-							onOpenFilters={onOpenFilters}
-							activeFilterCount={activeFilterCount}
 							showShorts={showShorts}
 							onToggleShorts={onToggleShorts}
 							hideWatched={hideWatched}
@@ -195,10 +184,6 @@ export const Header = ({
 			<MobileMenu
 				showMobileMenu={showMobileMenu}
 				onClose={() => setShowMobileMenu(false)}
-				channelCount={count}
-				showFilters={showFilters}
-				onOpenFilters={onOpenFilters}
-				activeFilterCount={activeFilterCount}
 				showShorts={showShorts}
 				onToggleShorts={onToggleShorts}
 				hideWatched={hideWatched}

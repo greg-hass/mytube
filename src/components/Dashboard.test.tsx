@@ -94,9 +94,6 @@ type HeaderMockProps = {
   onToggleShorts?: () => void;
   hideWatched?: boolean;
   onToggleWatched?: () => void;
-  showFilters?: boolean;
-  onOpenFilters?: () => void;
-  activeFilterCount?: number;
   scrollHidden?: boolean;
   compactMobile?: boolean;
 };
@@ -119,33 +116,25 @@ vi.mock('./Header', () => ({
     return (
       <header>
         <span data-testid="header-mock">Header</span>
-        {props.showFilters && (
-          <>
-            <button
-              type="button"
-              aria-label={props.showShorts ? 'Hide Shorts' : 'Show Shorts'}
-              data-testid="shorts-toggle"
-              onClick={props.onToggleShorts}
-            >
-              Shorts
-            </button>
-            <button
-              type="button"
-              aria-label={props.hideWatched ? 'Show Watched' : 'Hide Watched'}
-              data-testid="watched-toggle"
-              onClick={props.onToggleWatched}
-            >
-              Watched
-            </button>
-            <button
-              type="button"
-              aria-label="Feed filters"
-              data-testid="feed-filters-button"
-              onClick={props.onOpenFilters}
-            >
-              Filters
-            </button>
-          </>
+        {props.showShorts !== undefined && (
+          <button
+            type="button"
+            aria-label={props.showShorts ? 'Hide Shorts' : 'Show Shorts'}
+            data-testid="shorts-toggle"
+            onClick={props.onToggleShorts}
+          >
+            Shorts
+          </button>
+        )}
+        {props.hideWatched !== undefined && (
+          <button
+            type="button"
+            aria-label={props.hideWatched ? 'Show Watched' : 'Hide Watched'}
+            data-testid="watched-toggle"
+            onClick={props.onToggleWatched}
+          >
+            Watched
+          </button>
         )}
       </header>
     );
@@ -541,7 +530,7 @@ describe('Dashboard', () => {
     const pageChrome = screen.getByTestId('dashboard-page-chrome');
     const tabBar = screen.getByTestId('floating-tab-bar');
     const tabBarInner = screen.getByTestId('floating-tab-bar-inner');
-    const addChannelButton = screen.getByRole('button', { name: 'Add channel' });
+    const addTab = screen.getByRole('button', { name: 'Add' });
 
     expect(pageChrome.className).toContain('pt-[var(--app-sticky-gap)]');
     expect(pageChrome.className).toContain('pb-[calc(5rem+env(safe-area-inset-bottom))]');
@@ -550,8 +539,10 @@ describe('Dashboard', () => {
     expect(tabBar.className).toContain('z-50');
     expect(tabBar.className).toContain('pb-[var(--app-tab-bar-bottom-offset)]');
     expect(tabBarInner.className).toContain('max-w-7xl');
-    expect(addChannelButton.firstElementChild?.className).toContain('rounded-full');
-    expect(addChannelButton.firstElementChild?.className).toContain('bg-red-600');
+    // The Add action is rendered as a regular tab with a red icon
+    const addIcon = addTab.querySelector('svg');
+    const addIconClass = addIcon?.getAttribute('class') ?? '';
+    expect(addIconClass).toMatch(/text-red-500|text-red-400/);
   });
 
   it('keeps the iPhone latest controls in one compact row', () => {
@@ -767,7 +758,244 @@ describe('Dashboard', () => {
     expect(JSON.parse(localStorage.getItem('queued-video-ids') || '[]')).toEqual(['video-1']);
   });
 
-  it('shows saved favorite video records even before the feed has rebuilt', async () => {
+  it('splits the queue tab into Continue watching + Watch later', async () => {
+    // 5h ago: user started video-1 (paused mid-watch — in Continue watching)
+    // 3d ago: user queued video-2 (no progress — in Watch later)
+    const fiveHoursAgo = Date.now() - 5 * 60 * 60 * 1000;
+    const threeDaysAgo = Date.now() - 3 * 24 * 60 * 60 * 1000;
+
+    mockRSSVideosState = {
+      ...mockRSSVideosState,
+      videos: [
+        {
+          id: 'video-1',
+          title: 'Apple keynote paused mid-watch',
+          description: '',
+          thumbnail: 'https://example.com/v1.jpg',
+          channelId: 'UC123',
+          channelTitle: 'Apple',
+          publishedAt: new Date(threeDaysAgo).toISOString(),
+          duration: 600,
+        },
+        {
+          id: 'video-2',
+          title: 'Queued but not started',
+          description: '',
+          thumbnail: 'https://example.com/v2.jpg',
+          channelId: 'UC456',
+          channelTitle: 'Bloomberg',
+          publishedAt: new Date(threeDaysAgo).toISOString(),
+          duration: 900,
+        },
+      ],
+    };
+
+    localStorage.setItem('video-playback-progress', JSON.stringify({
+      'video-1': { currentTime: 300, duration: 600, updatedAt: fiveHoursAgo },
+    }));
+    localStorage.setItem('queued-video-ids', JSON.stringify(['video-1', 'video-2']));
+    localStorage.setItem('queued-videos', JSON.stringify([
+      {
+        id: 'video-1',
+        title: 'Apple keynote paused mid-watch',
+        description: '',
+        thumbnail: 'https://example.com/v1.jpg',
+        channelId: 'UC123',
+        channelTitle: 'Apple',
+        publishedAt: new Date(threeDaysAgo).toISOString(),
+      },
+      {
+        id: 'video-2',
+        title: 'Queued but not started',
+        description: '',
+        thumbnail: 'https://example.com/v2.jpg',
+        channelId: 'UC456',
+        channelTitle: 'Bloomberg',
+        publishedAt: new Date(threeDaysAgo).toISOString(),
+      },
+    ]));
+
+    render(<Dashboard />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Queue' }));
+
+    const continueSection = await screen.findByTestId('queue-continue-watching');
+    const watchLaterSection = await screen.findByTestId('queue-watch-later');
+
+    expect(continueSection).toHaveTextContent('Continue watching');
+    expect(continueSection).toHaveTextContent('1 paused');
+    expect(continueSection).toHaveTextContent('Apple keynote paused mid-watch');
+
+    expect(watchLaterSection).toHaveTextContent('Watch later');
+    expect(watchLaterSection).toHaveTextContent('1 saved');
+    expect(watchLaterSection).toHaveTextContent('Queued but not started');
+  });
+
+  it('surfaces a 25s pause on a long video as Continue watching (not gated by 5% percent)', async () => {
+    // Repro for the user-reported case: 25s of a 30-minute video is 1.4%,
+    // which is well under any percent threshold but should still surface.
+    const oneHourAgo = Date.now() - 60 * 60 * 1000;
+
+    mockRSSVideosState = {
+      ...mockRSSVideosState,
+      videos: [
+        {
+          id: 'video-long',
+          title: '30-minute video paused at 25s',
+          description: '',
+          thumbnail: 'https://example.com/long.jpg',
+          channelId: 'UC123',
+          channelTitle: 'Test Channel',
+          publishedAt: new Date(oneHourAgo).toISOString(),
+          duration: 1800,
+        },
+      ],
+    };
+
+    localStorage.setItem('video-playback-progress', JSON.stringify({
+      'video-long': { currentTime: 25, duration: 1800, updatedAt: oneHourAgo },
+    }));
+
+    render(<Dashboard />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Queue' }));
+
+    const continueSection = await screen.findByTestId('queue-continue-watching');
+    expect(continueSection).toHaveTextContent('Continue watching');
+    expect(continueSection).toHaveTextContent('1 paused');
+    expect(continueSection).toHaveTextContent('30-minute video paused at 25s');
+  });
+
+  it('hides a video from Continue watching once the user removes it', async () => {
+    // Repro for the user's follow-up: clicking trash in Continue watching
+    // must mark the video as removed so it stays gone even if they watch
+    // more of it later in Latest.
+    const oneHourAgo = Date.now() - 60 * 60 * 1000;
+
+    mockRSSVideosState = {
+      ...mockRSSVideosState,
+      videos: [
+        {
+          id: 'video-removed',
+          title: 'Video marked removed',
+          description: '',
+          thumbnail: 'https://example.com/removed.jpg',
+          channelId: 'UC123',
+          channelTitle: 'Test Channel',
+          publishedAt: new Date(oneHourAgo).toISOString(),
+          duration: 600,
+        },
+        {
+          id: 'video-fresh',
+          title: 'Unrelated fresh video',
+          description: '',
+          thumbnail: 'https://example.com/fresh.jpg',
+          channelId: 'UC123',
+          channelTitle: 'Test Channel',
+          publishedAt: new Date(oneHourAgo).toISOString(),
+          duration: 600,
+        },
+      ],
+    };
+
+    // The removed video has both progress AND a fresh removedAt timestamp.
+    // The other video has no progress at all, so it won't appear in
+    // Continue watching regardless — keeps the section rendering.
+    localStorage.setItem('video-playback-progress', JSON.stringify({
+      'video-removed': {
+        currentTime: 60,
+        duration: 600,
+        updatedAt: oneHourAgo,
+        removedAt: Date.now(),
+      },
+    }));
+
+    render(<Dashboard />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Queue' }));
+
+    // Wait for Queue tab to mount. With no in-progress videos, neither
+    // section renders — we get the empty state instead.
+    await screen.findByText('Your queue is empty');
+    expect(screen.queryByText('Video marked removed')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('queue-continue-watching')).not.toBeInTheDocument();
+  });
+
+  it('forgets a removed video once the grace window expires', async () => {
+    // Edge case: user removed a video, then 6 months later comes back. We
+    // don't want a stale flag to hide a video forever — the 30-day grace
+    // window exists so storage cleanups don't permanently lose content.
+    const oneHourAgo = Date.now() - 60 * 60 * 1000;
+    const ancient = Date.now() - 60 * 86_400_000; // 60 days ago
+
+    mockRSSVideosState = {
+      ...mockRSSVideosState,
+      videos: [
+        {
+          id: 'video-ancient-removed',
+          title: 'Removed ages ago',
+          description: '',
+          thumbnail: 'https://example.com/ancient.jpg',
+          channelId: 'UC123',
+          channelTitle: 'Test Channel',
+          publishedAt: new Date(oneHourAgo).toISOString(),
+          duration: 600,
+        },
+      ],
+    };
+
+    localStorage.setItem('video-playback-progress', JSON.stringify({
+      'video-ancient-removed': {
+        currentTime: 60,
+        duration: 600,
+        updatedAt: oneHourAgo,
+        removedAt: ancient,
+      },
+    }));
+
+    render(<Dashboard />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Queue' }));
+
+    const continueSection = await screen.findByTestId('queue-continue-watching');
+    expect(continueSection).toHaveTextContent('Removed ages ago');
+  });
+
+  it('does not surface sub-5s accidental taps as Continue watching', async () => {
+    const oneHourAgo = Date.now() - 60 * 60 * 1000;
+
+    mockRSSVideosState = {
+      ...mockRSSVideosState,
+      videos: [
+        {
+          id: 'video-tap',
+          title: 'I just tapped play for 2 seconds',
+          description: '',
+          thumbnail: 'https://example.com/tap.jpg',
+          channelId: 'UC123',
+          channelTitle: 'Test Channel',
+          publishedAt: new Date(oneHourAgo).toISOString(),
+          duration: 1800,
+        },
+      ],
+    };
+
+    localStorage.setItem('video-playback-progress', JSON.stringify({
+      'video-tap': { currentTime: 2, duration: 1800, updatedAt: oneHourAgo },
+    }));
+
+    render(<Dashboard />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Queue' }));
+
+    // No videos, no sections, empty state shows.
+    await waitFor(() => {
+      expect(screen.getByText('Your queue is empty')).toBeInTheDocument();
+    });
+    expect(screen.queryByTestId('queue-continue-watching')).not.toBeInTheDocument();
+  });
+
+  it('shows the saved favorite video records even before the feed has rebuilt', async () => {
     localStorage.setItem('favorite-video-ids', JSON.stringify(['video-1']));
     localStorage.setItem('favorite-videos', JSON.stringify([
       {
@@ -1055,223 +1283,6 @@ describe('Dashboard', () => {
     expect(screen.getByText('Fresh unwatched upload')).toBeInTheDocument();
   });
 
-  it('filters latest videos by duration from the quality filters sheet', () => {
-    mockRSSVideosState = {
-      ...mockRSSVideosState,
-      videos: [
-        {
-          id: 'video-1',
-          title: 'Quick update',
-          description: '',
-          thumbnail: 'https://example.com/quick.jpg',
-          channelId: 'UC123',
-          channelTitle: 'Test Channel',
-          publishedAt: new Date().toISOString(),
-          duration: 8 * 60,
-        },
-        {
-          id: 'video-2',
-          title: 'Deep dive',
-          description: '',
-          thumbnail: 'https://example.com/deep.jpg',
-          channelId: 'UC123',
-          channelTitle: 'Test Channel',
-          publishedAt: new Date().toISOString(),
-          duration: 22 * 60,
-        },
-      ],
-    };
-
-    render(<Dashboard />);
-
-    fireEvent.click(screen.getByTestId('feed-filters-button'));
-    fireEvent.click(screen.getByRole('button', { name: '10-30 min' }));
-
-    expect(screen.queryByText('Quick update')).not.toBeInTheDocument();
-    expect(screen.getByText('Deep dive')).toBeInTheDocument();
-  });
-
-  it('can hide livestream replays from Latest', () => {
-    mockRSSVideosState = {
-      ...mockRSSVideosState,
-      videos: [
-        {
-          id: 'video-1',
-          title: 'Normal upload',
-          description: '',
-          thumbnail: 'https://example.com/normal.jpg',
-          channelId: 'UC123',
-          channelTitle: 'Test Channel',
-          publishedAt: new Date().toISOString(),
-          duration: 12 * 60,
-        },
-        {
-          id: 'video-2',
-          title: 'Match livestream replay',
-          description: '',
-          thumbnail: 'https://example.com/live.jpg',
-          channelId: 'UC123',
-          channelTitle: 'Test Channel',
-          publishedAt: new Date().toISOString(),
-          duration: 2 * 60 * 60,
-        },
-      ],
-    };
-
-    render(<Dashboard />);
-
-    fireEvent.click(screen.getByTestId('feed-filters-button'));
-    fireEvent.click(screen.getByLabelText('Hide livestream replays'));
-
-    expect(screen.getByText('Normal upload')).toBeInTheDocument();
-    expect(screen.queryByText('Match livestream replay')).not.toBeInTheDocument();
-  });
-
-  it('can mute latest videos by keyword from the quality filters sheet', () => {
-    mockRSSVideosState = {
-      ...mockRSSVideosState,
-      videos: [
-        {
-          id: 'video-1',
-          title: 'Transfer rumor roundup',
-          description: '',
-          thumbnail: 'https://example.com/rumor.jpg',
-          channelId: 'UC123',
-          channelTitle: 'Test Channel',
-          publishedAt: new Date().toISOString(),
-        },
-        {
-          id: 'video-2',
-          title: 'Clean tactical analysis',
-          description: '',
-          thumbnail: 'https://example.com/tactics.jpg',
-          channelId: 'UC123',
-          channelTitle: 'Test Channel',
-          publishedAt: new Date().toISOString(),
-        },
-      ],
-    };
-
-    render(<Dashboard />);
-
-    fireEvent.click(screen.getByTestId('feed-filters-button'));
-    fireEvent.change(screen.getByLabelText('Mute keywords'), { target: { value: 'rumor' } });
-
-    expect(screen.queryByText('Transfer rumor roundup')).not.toBeInTheDocument();
-    expect(screen.getByText('Clean tactical analysis')).toBeInTheDocument();
-  });
-
-  it('can boost latest videos by keyword from the quality filters sheet', () => {
-    mockRSSVideosState = {
-      ...mockRSSVideosState,
-      videos: [
-        {
-          id: 'video-1',
-          title: 'Regular upload',
-          description: '',
-          thumbnail: 'https://example.com/regular.jpg',
-          channelId: 'UC123',
-          channelTitle: 'Test Channel',
-          publishedAt: new Date().toISOString(),
-        },
-        {
-          id: 'video-2',
-          title: 'Linux deep dive',
-          description: '',
-          thumbnail: 'https://example.com/linux.jpg',
-          channelId: 'UC123',
-          channelTitle: 'Test Channel',
-          publishedAt: new Date().toISOString(),
-        },
-      ],
-    };
-
-    render(<Dashboard />);
-
-    fireEvent.click(screen.getByTestId('feed-filters-button'));
-    fireEvent.change(screen.getByLabelText('Boost keywords'), { target: { value: 'linux' } });
-
-    const renderedText = document.body.textContent || '';
-    expect(renderedText.indexOf('Linux deep dive')).toBeLessThan(renderedText.indexOf('Regular upload'));
-  });
-
-  it('can hide premieres and duplicate titles from the quality filters sheet', () => {
-    mockRSSVideosState = {
-      ...mockRSSVideosState,
-      videos: [
-        {
-          id: 'video-1',
-          title: 'Normal upload',
-          description: '',
-          thumbnail: 'https://example.com/normal.jpg',
-          channelId: 'UC123',
-          channelTitle: 'Test Channel',
-          publishedAt: new Date().toISOString(),
-        },
-        {
-          id: 'video-2',
-          title: 'Product launch premiere',
-          description: '',
-          thumbnail: 'https://example.com/premiere.jpg',
-          channelId: 'UC123',
-          channelTitle: 'Test Channel',
-          publishedAt: new Date().toISOString(),
-        },
-        {
-          id: 'video-3',
-          title: 'Same News Story!',
-          description: '',
-          thumbnail: 'https://example.com/same-a.jpg',
-          channelId: 'UC123',
-          channelTitle: 'Test Channel',
-          publishedAt: '2026-01-02T00:00:00.000Z',
-        },
-        {
-          id: 'video-4',
-          title: 'Same news story',
-          description: '',
-          thumbnail: 'https://example.com/same-b.jpg',
-          channelId: 'UC123',
-          channelTitle: 'Test Channel',
-          publishedAt: '2026-01-01T00:00:00.000Z',
-        },
-      ],
-    };
-
-    render(<Dashboard />);
-
-    fireEvent.click(screen.getByTestId('feed-filters-button'));
-    fireEvent.click(screen.getByLabelText('Hide premieres'));
-    fireEvent.click(screen.getByLabelText('Hide duplicate titles'));
-
-    expect(screen.getByText('Normal upload')).toBeInTheDocument();
-    expect(screen.queryByText('Product launch premiere')).not.toBeInTheDocument();
-    expect(screen.getByText('Same News Story!')).toBeInTheDocument();
-    expect(screen.queryByText('Same news story')).not.toBeInTheDocument();
-  });
-
-  it('persists quality filter settings across reloads', () => {
-    localStorage.setItem('feed-quality-filters', JSON.stringify({
-      durationFilter: '10-30',
-      hideLiveReplays: true,
-      hidePremieres: true,
-      hideDuplicateTitles: true,
-      mutedKeywordText: 'rumor',
-      boostedKeywordText: 'linux',
-    }));
-
-    render(<Dashboard />);
-
-    fireEvent.click(screen.getByTestId('feed-filters-button'));
-
-    expect(screen.getByRole('button', { name: '10-30 min' }).className).toContain('bg-red-600');
-    expect(screen.getByLabelText('Hide livestream replays')).toBeChecked();
-    expect(screen.getByLabelText('Hide premieres')).toBeChecked();
-    expect(screen.getByLabelText('Hide duplicate titles')).toBeChecked();
-    expect(screen.getByLabelText('Mute keywords')).toHaveValue('rumor');
-    expect(screen.getByLabelText('Boost keywords')).toHaveValue('linux');
-  });
-
   it('filters latest videos by video title and channel name', () => {
     mockSearchQuery = 'linux';
     mockRSSVideosState = {
@@ -1312,59 +1323,6 @@ describe('Dashboard', () => {
     expect(screen.getByText('Linux weekly roundup')).toBeInTheDocument();
     expect(screen.getByText('Security bulletin')).toBeInTheDocument();
     expect(screen.queryByText('Football highlights')).not.toBeInTheDocument();
-  });
-
-  it('saves and applies feed view presets from the latest toolbar', async () => {
-    mockRSSVideosState = {
-      ...mockRSSVideosState,
-      videos: [
-        {
-          id: 'video-1',
-          title: 'Long update',
-          description: '',
-          thumbnail: '',
-          channelId: 'UC123',
-          channelTitle: 'Test Channel',
-          publishedAt: new Date().toISOString(),
-          duration: 60 * 40,
-        },
-        {
-          id: 'video-2',
-          title: 'Short update',
-          description: '',
-          thumbnail: '',
-          channelId: 'UC123',
-          channelTitle: 'Test Channel',
-          publishedAt: new Date().toISOString(),
-          duration: 60 * 5,
-        },
-      ],
-    };
-
-    render(<Dashboard />);
-
-    fireEvent.click(screen.getByTestId('feed-filters-button'));
-    fireEvent.click(screen.getByRole('button', { name: '30+ min' }));
-    expect(screen.getByText('Long update')).toBeInTheDocument();
-    expect(screen.queryByText('Short update')).not.toBeInTheDocument();
-
-    fireEvent.change(screen.getByLabelText('New saved view name'), { target: { value: 'Longform' } });
-    fireEvent.click(screen.getByRole('button', { name: /save view/i }));
-
-    await waitFor(() => {
-      expect(screen.getByRole('option', { name: 'Longform' })).toBeInTheDocument();
-    });
-
-    fireEvent.click(screen.getByTestId('shorts-toggle'));
-    fireEvent.click(screen.getByRole('button', { name: 'Under 10 min' }));
-    expect(screen.queryByText('Long update')).not.toBeInTheDocument();
-    expect(screen.getByText('Short update')).toBeInTheDocument();
-
-    fireEvent.change(screen.getByLabelText('Saved view'), { target: { value: JSON.parse(localStorage.getItem('feed-view-presets') || '[]')[0].id } });
-
-    expect(screen.getByText('Long update')).toBeInTheDocument();
-    expect(screen.queryByText('Short update')).not.toBeInTheDocument();
-    expect(JSON.parse(localStorage.getItem('feed-view-presets') || '[]')[0].filters.durationFilter).toBe('30-plus');
   });
 
   it('does not add saved views when preset storage writes fail', async () => {

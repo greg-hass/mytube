@@ -62,7 +62,8 @@ import {
 	isCompactMobileViewport,
 } from "../lib/mobile-viewport";
 import { formatTimeAgo, formatRefreshAge } from "../lib/format";
-import type { YouTubeChannel } from "../types/youtube";
+import { getAllVideoProgress } from "../lib/video-progress";
+import type { YouTubeChannel, YouTubeVideo } from "../types/youtube";
 
 type Tab = "subscriptions" | "latest" | "queue" | "activity" | "favorites";
 type FavoriteSection = "channels" | "videos";
@@ -75,13 +76,6 @@ const DASHBOARD_TABS: Tab[] = [
 	"activity",
 	"favorites",
 ];
-const DURATION_FILTER_OPTIONS: Array<{ value: DurationFilter; label: string }> =
-	[
-		{ value: "any", label: "Any" },
-		{ value: "under-10", label: "Under 10 min" },
-		{ value: "10-30", label: "10-30 min" },
-		{ value: "30-plus", label: "30+ min" },
-	];
 const QUALITY_FILTERS_STORAGE_KEY = "feed-quality-filters";
 const LATEST_TIMELINE_SCROLL_STORAGE_KEY = "latest-videos-scroll";
 const LATEST_DOUBLE_TAP_INTERVAL_MS = 350;
@@ -257,7 +251,6 @@ export const Dashboard = () => {
 	const [feedViewPresets, setFeedViewPresets] = useState<FeedViewPreset[]>(() =>
 		readFeedViewPresets(),
 	);
-	const [isQualityFiltersOpen, setIsQualityFiltersOpen] = useState(false);
 	const [activeFavoriteSection, setActiveFavoriteSection] =
 		useState<FavoriteSection>("channels");
 	const [isMobileTimeline, setIsMobileTimeline] = useState(false);
@@ -287,7 +280,17 @@ export const Dashboard = () => {
 	const { favoriteVideoIds, favoriteVideos: savedFavoriteVideos } =
 		useFavoriteVideos();
 	const { queuedVideoIds, queuedVideos: savedQueuedVideos } = useQueuedVideos();
-	const { searchQuery, watchedVideos, markAsWatched, setSearchQuery } = useStore();
+	const { searchQuery, watchedVideos, markAsWatched, setSearchQuery } =
+		useStore();
+
+	// Re-render the queue when a video is started/resumed elsewhere in the app
+	// (the video-progress-changed event fires from saveVideoProgress/clearVideoProgress).
+	const [videoProgressVersion, setVideoProgressVersion] = useState(0);
+	useEffect(() => {
+		const handler = () => setVideoProgressVersion((version) => version + 1);
+		window.addEventListener("video-progress-changed", handler);
+		return () => window.removeEventListener("video-progress-changed", handler);
+	}, []);
 
 	// Check if any channels have temporary IDs (can't fetch videos)
 	const hasTemporaryChannels = rawSubscriptions.some(
@@ -497,6 +500,59 @@ export const Dashboard = () => {
 		return Array.from(queuedById.values());
 	}, [videos, queuedVideoIds, savedQueuedVideos]);
 
+	// Continue watching: videos the user has started but not finished.
+	// Sorted by oldest-paused first so forgotten pauses bubble to the top.
+	// Reads the progress store once (not per-video) to keep it cheap on big feeds.
+	// 5s absolute floor ignores accidental 1-2s taps without losing real watches.
+	// Videos the user explicitly removed from this section are skipped until
+	// either they re-engage in Latest (saveVideoProgress drops the flag) or
+	// the grace window expires — so a remove gesture sticks even if the user
+	// happens to watch another few seconds later.
+	const REMOVED_GRACE_DAYS = 30;
+	const inProgressVideos = useMemo(() => {
+		if (videos.length === 0) return [];
+
+		const progressStore = getAllVideoProgress();
+		const now = Date.now();
+		const graceCutoff = now - REMOVED_GRACE_DAYS * 86_400_000;
+		const withProgress: { video: YouTubeVideo; updatedAt: number }[] = [];
+
+		for (const video of videos) {
+			const progress = progressStore[video.id];
+			if (!progress) continue;
+			if (
+				typeof progress.currentTime !== "number" ||
+				typeof progress.duration !== "number" ||
+				progress.duration <= 0
+			) {
+				continue;
+			}
+			// 5s floor — captures anything you actually watched, ignores
+			// accidental taps. saveVideoProgress already auto-clears at
+			// 95% / within 10s of end, so we don't need an upper bound here.
+			if (progress.currentTime < 5) continue;
+			// Honor explicit user removal. saveVideoProgress will clear the
+			// flag the next time the user resumes the video in Latest, so
+			// re-engagement is intentional, not accidental.
+			if (progress.removedAt && progress.removedAt > graceCutoff) continue;
+			withProgress.push({ video, updatedAt: progress.updatedAt ?? 0 });
+		}
+
+		withProgress.sort((a, b) => a.updatedAt - b.updatedAt);
+		return withProgress.map((entry) => entry.video);
+		// videoProgressVersion is the trigger for re-reading the progress store
+		// eslint-disable-next-line react-hooks/exhaustive-deps
+	}, [videos, videoProgressVersion]);
+
+	// Watch later: queued videos that aren't in Continue watching. Already
+	// in queue-add order (oldest first) from useQueuedVideos.
+	const watchLaterVideos = useMemo(() => {
+		if (queuedVideos.length === 0) return [];
+		if (inProgressVideos.length === 0) return queuedVideos;
+		const inProgressIds = new Set(inProgressVideos.map((video) => video.id));
+		return queuedVideos.filter((video) => !inProgressIds.has(video.id));
+	}, [queuedVideos, inProgressVideos]);
+
 	const changeTab = (tab: Tab) => {
 		setActiveTab(tab);
 		writeDashboardTabToUrl(tab);
@@ -680,22 +736,6 @@ export const Dashboard = () => {
 		return () => window.removeEventListener("scroll", onScroll);
 	}, []);
 
-	const activeQualityFilterCount =
-		(durationFilter !== "any" ? 1 : 0) +
-		(hideLiveReplays ? 1 : 0) +
-		(hidePremieres ? 1 : 0) +
-		(hideDuplicateTitles ? 1 : 0) +
-		(mutedKeywords.length > 0 ? 1 : 0) +
-		(boostedKeywords.length > 0 ? 1 : 0);
-	const clearQualityFilters = () => {
-		setDurationFilter("any");
-		setHideLiveReplays(false);
-		setHidePremieres(false);
-		setHideDuplicateTitles(false);
-		setMutedKeywordText("");
-		setBoostedKeywordText("");
-	};
-
 	const getCurrentFeedViewFilters = (): FeedViewFilters => ({
 		showShorts,
 		hideWatched,
@@ -833,13 +873,6 @@ export const Dashboard = () => {
 				onToggleShorts={() => setShowShorts((prev) => !prev)}
 				hideWatched={hideWatched}
 				onToggleWatched={() => setHideWatched((prev) => !prev)}
-				showFilters={
-					activeTab === TAB_LATEST ||
-					activeTab === "queue" ||
-					activeTab === "favorites"
-				}
-				onOpenFilters={() => setIsQualityFiltersOpen(true)}
-				activeFilterCount={activeQualityFilterCount}
 				scrollHidden={!headerVisible}
 				compactMobile={isMobileTimeline}
 			/>
@@ -980,299 +1013,329 @@ export const Dashboard = () => {
 
 					{/* Content */}
 					<AnimatePresence mode="wait" initial={false}>
-							{activeTab === "subscriptions" ? (
-								<motion.div
-									key="subscriptions"
-									initial={{ opacity: 0, x: -20 }}
-									animate={{ opacity: 1, x: 0 }}
-									exit={{ opacity: 0, x: 20 }}
-									transition={{ duration: 0.3 }}
+						{activeTab === "subscriptions" ? (
+							<motion.div
+								key="subscriptions"
+								initial={{ opacity: 0, x: -20 }}
+								animate={{ opacity: 1, x: 0 }}
+								exit={{ opacity: 0, x: 20 }}
+								transition={{ duration: 0.3 }}
+							>
+								<DashboardContentBoundary
+									onReturnToLatest={() => changeTab(TAB_LATEST)}
 								>
-									<DashboardContentBoundary
-										onReturnToLatest={() => changeTab(TAB_LATEST)}
-									>
-										<SubscriptionsList
-											selectedGroup={selectedSubscriptionGroup}
-											groups={subscriptionGroups}
-										/>
-									</DashboardContentBoundary>
-								</motion.div>
-							) : activeTab === TAB_LATEST ? (
-								<motion.div
-									key={TAB_LATEST}
-									initial={{ opacity: 0, x: 20 }}
-									animate={{ opacity: 1, x: 0 }}
-									exit={{ opacity: 0, x: -20 }}
-									transition={{ duration: 0.3 }}
-									className="px-4"
-								>
-									{videos.length === 0 ? (
-										hasTemporaryChannels ? (
-											<div className="text-center py-12">
-												<p className="text-gray-600 dark:text-ios-400 text-lg mb-2">
-													Some channels need channel IDs to fetch videos
-												</p>
-												<p className="text-sm text-gray-500">
-													Channels added with handles or custom names will be
-													updated automatically when videos are discovered
-												</p>
-											</div>
-										) : (
-											<EmptyState
-												icon={TrendingUp}
-												iconName={TAB_LATEST}
-												title="No videos found"
-												detail="New uploads from your subscriptions will appear here."
-											/>
-										)
-									) : (
-										<div>
-											<p className="hidden sm:block text-sm text-gray-500 dark:text-ios-400 mb-4">
-												Showing {filteredVideos.length} recent videos
+									<SubscriptionsList
+										selectedGroup={selectedSubscriptionGroup}
+										groups={subscriptionGroups}
+									/>
+								</DashboardContentBoundary>
+							</motion.div>
+						) : activeTab === TAB_LATEST ? (
+							<motion.div
+								key={TAB_LATEST}
+								initial={{ opacity: 0, x: 20 }}
+								animate={{ opacity: 1, x: 0 }}
+								exit={{ opacity: 0, x: -20 }}
+								transition={{ duration: 0.3 }}
+								className="px-4"
+							>
+								{videos.length === 0 ? (
+									hasTemporaryChannels ? (
+										<div className="text-center py-12">
+											<p className="text-gray-600 dark:text-ios-400 text-lg mb-2">
+												Some channels need channel IDs to fetch videos
 											</p>
-											<VirtualizedVideoGrid
-												videos={visibleLatestVideos}
-												columns={4}
-												scrollStorageKey="latest-videos-scroll"
-												channelThumbnails={channelThumbnails}
-											/>
-											{visibleLatestVideos.length < filteredVideos.length && (
-												<div className="mt-4 flex justify-center pb-8 sm:hidden">
-													<button
-														type={BTN}
-														onClick={() =>
-															setMobileVideoLimit(
-																(count) => count + MOBILE_TIMELINE_INCREMENT,
-															)
-														}
-														className="rounded-lg bg-gray-800 px-4 py-2 text-sm font-medium text-white dark:bg-ios-700"
-													>
-														Show older videos
-													</button>
-												</div>
-											)}
-										</div>
-									)}
-								</motion.div>
-							) : activeTab === "queue" ? (
-								<motion.div
-									key="queue"
-									initial={{ opacity: 0, x: 20 }}
-									animate={{ opacity: 1, x: 0 }}
-									exit={{ opacity: 0, x: -20 }}
-									transition={{ duration: 0.3 }}
-									className="px-4"
-								>
-									{queuedVideos.length === 0 ? (
-										<EmptyState
-											icon={ListVideo}
-											iconName="queue"
-											title="Your queue is empty"
-											detail="Add videos to your queue to watch them later."
-										/>
-									) : (
-										<div>
-											<p className="hidden sm:block text-sm text-gray-500 dark:text-ios-400 mb-4">
-												{queuedVideos.length} video
-												{queuedVideos.length !== 1 ? "s" : ""} queued
+											<p className="text-sm text-gray-500">
+												Channels added with handles or custom names will be
+												updated automatically when videos are discovered
 											</p>
-											<VirtualizedVideoGrid
-												videos={queuedVideos}
-												columns={4}
-												scrollStorageKey="queued-videos-scroll"
-												channelThumbnails={channelThumbnails}
-											/>
 										</div>
-									)}
-								</motion.div>
-							) : activeTab === "favorites" ? (
-								<motion.div
-									key="favorites"
-									initial={{ opacity: 0, x: 20 }}
-									animate={{ opacity: 1, x: 0 }}
-									exit={{ opacity: 0, x: -20 }}
-									transition={{ duration: 0.3 }}
-									className="px-4"
-								>
-									{favoriteChannels.length === 0 &&
-									favoriteVideos.length === 0 ? (
-										<EmptyState
-											icon={Heart}
-											iconName="favorites"
-											title="No favorites yet"
-											detail="Favorite channels or videos to find them here."
-										/>
 									) : (
-										<div className="space-y-8">
-											{(favoriteChannels.length > 0 ||
-												favoriteVideos.length > 0) && (
-												<div
-													data-testid="favorite-section-switcher"
-													className="grid grid-cols-2 gap-1 rounded-xl bg-gray-100 p-1 dark:bg-ios-900 sm:hidden"
+										<EmptyState
+											icon={TrendingUp}
+											iconName={TAB_LATEST}
+											title="No videos found"
+											detail="New uploads from your subscriptions will appear here."
+										/>
+									)
+								) : (
+									<div>
+										<p className="hidden sm:block text-sm text-gray-500 dark:text-ios-400 mb-4">
+											Showing {filteredVideos.length} recent videos
+										</p>
+										<VirtualizedVideoGrid
+											videos={visibleLatestVideos}
+											columns={4}
+											scrollStorageKey="latest-videos-scroll"
+											channelThumbnails={channelThumbnails}
+										/>
+										{visibleLatestVideos.length < filteredVideos.length && (
+											<div className="mt-4 flex justify-center pb-8 sm:hidden">
+												<button
+													type={BTN}
+													onClick={() =>
+														setMobileVideoLimit(
+															(count) => count + MOBILE_TIMELINE_INCREMENT,
+														)
+													}
+													className="rounded-lg bg-gray-800 px-4 py-2 text-sm font-medium text-white dark:bg-ios-700"
 												>
-													<button
-														type={BTN}
-														aria-pressed={visibleFavoriteSection === "channels"}
-														onClick={() => setActiveFavoriteSection("channels")}
-														className={`rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
-															visibleFavoriteSection === "channels"
-																? "bg-white text-gray-950 shadow-sm dark:bg-ios-800 dark:text-ios-50"
-																: "text-gray-600 dark:text-ios-300"
-														}`}
-													>
-														Channels ({favoriteChannels.length})
-													</button>
-													<button
-														type={BTN}
-														aria-pressed={visibleFavoriteSection === "videos"}
-														onClick={() => setActiveFavoriteSection("videos")}
-														className={`rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
-															visibleFavoriteSection === "videos"
-																? "bg-white text-gray-950 shadow-sm dark:bg-ios-800 dark:text-ios-50"
-																: "text-gray-600 dark:text-ios-300"
-														}`}
-													>
-														Videos ({favoriteVideos.length})
-													</button>
+													Show older videos
+												</button>
+											</div>
+										)}
+									</div>
+								)}
+							</motion.div>
+						) : activeTab === "queue" ? (
+							<motion.div
+								key="queue"
+								initial={{ opacity: 0, x: 20 }}
+								animate={{ opacity: 1, x: 0 }}
+								exit={{ opacity: 0, x: -20 }}
+								transition={{ duration: 0.3 }}
+								className="px-4"
+							>
+								{inProgressVideos.length === 0 &&
+								watchLaterVideos.length === 0 ? (
+									<EmptyState
+										icon={ListVideo}
+										iconName="queue"
+										title="Your queue is empty"
+										detail="Swipe a video right to save it for later. Videos you start watching show up at the top."
+									/>
+								) : (
+									<div className="space-y-6">
+										{inProgressVideos.length > 0 && (
+											<section data-testid="queue-continue-watching">
+												<div className="mb-2 flex items-baseline justify-between">
+													<h3 className="text-[0.7rem] font-semibold uppercase tracking-[0.08em] text-gray-500 dark:text-ios-400">
+														Continue watching
+													</h3>
+													<span className="text-[11px] text-gray-500 dark:text-ios-500">
+														{inProgressVideos.length} paused
+													</span>
+												</div>
+												<VirtualizedVideoGrid
+													videos={inProgressVideos}
+													columns={4}
+													scrollStorageKey="queue-continue-watching-scroll"
+													channelThumbnails={channelThumbnails}
+													context="queue"
+												/>
+											</section>
+										)}
+
+										{watchLaterVideos.length > 0 && (
+											<section data-testid="queue-watch-later">
+												<div className="mb-2 flex items-baseline justify-between">
+													<h3 className="text-[0.7rem] font-semibold uppercase tracking-[0.08em] text-gray-500 dark:text-ios-400">
+														Watch later
+													</h3>
+													<span className="text-[11px] text-gray-500 dark:text-ios-500">
+														{watchLaterVideos.length} saved
+													</span>
+												</div>
+												<VirtualizedVideoGrid
+													videos={watchLaterVideos}
+													columns={4}
+													scrollStorageKey="queue-watch-later-scroll"
+													channelThumbnails={channelThumbnails}
+													context="queue"
+												/>
+											</section>
+										)}
+									</div>
+								)}
+							</motion.div>
+						) : activeTab === "favorites" ? (
+							<motion.div
+								key="favorites"
+								initial={{ opacity: 0, x: 20 }}
+								animate={{ opacity: 1, x: 0 }}
+								exit={{ opacity: 0, x: -20 }}
+								transition={{ duration: 0.3 }}
+								className="px-4"
+							>
+								{favoriteChannels.length === 0 &&
+								favoriteVideos.length === 0 ? (
+									<EmptyState
+										icon={Heart}
+										iconName="favorites"
+										title="No favorites yet"
+										detail="Favorite channels or videos to find them here."
+									/>
+								) : (
+									<div className="space-y-8">
+										{(favoriteChannels.length > 0 ||
+											favoriteVideos.length > 0) && (
+											<div
+												data-testid="favorite-section-switcher"
+												className="grid grid-cols-2 gap-1 rounded-xl bg-gray-100 p-1 dark:bg-ios-900 sm:hidden"
+											>
+												<button
+													type={BTN}
+													aria-pressed={visibleFavoriteSection === "channels"}
+													onClick={() => setActiveFavoriteSection("channels")}
+													className={`rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
+														visibleFavoriteSection === "channels"
+															? "bg-white text-gray-950 shadow-sm dark:bg-ios-800 dark:text-ios-50"
+															: "text-gray-600 dark:text-ios-300"
+													}`}
+												>
+													Channels ({favoriteChannels.length})
+												</button>
+												<button
+													type={BTN}
+													aria-pressed={visibleFavoriteSection === "videos"}
+													onClick={() => setActiveFavoriteSection("videos")}
+													className={`rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
+														visibleFavoriteSection === "videos"
+															? "bg-white text-gray-950 shadow-sm dark:bg-ios-800 dark:text-ios-50"
+															: "text-gray-600 dark:text-ios-300"
+													}`}
+												>
+													Videos ({favoriteVideos.length})
+												</button>
+											</div>
+										)}
+
+										<section
+											data-testid="favorite-channels-section"
+											className={`${visibleFavoriteSection === "channels" ? "block" : "hidden sm:block"} ${favoriteChannels.length === 0 ? "sm:hidden" : ""}`}
+										>
+											<div className="mb-4 flex items-center justify-between gap-3">
+												<h2 className="text-lg font-semibold text-gray-900 dark:text-ios-100">
+													Channels
+												</h2>
+												<span className="text-sm text-gray-500 dark:text-ios-400">
+													{favoriteChannels.length}
+												</span>
+											</div>
+											{favoriteChannels.length === 0 ? (
+												<div className="rounded-xl border border-dashed border-gray-200 p-6 text-center text-sm text-gray-500 dark:border-ios-800 dark:text-ios-400">
+													No favorite channels yet
+												</div>
+											) : (
+												<div className="grid grid-cols-2 gap-3 sm:grid-cols-3 sm:gap-6 lg:grid-cols-4 xl:grid-cols-5">
+													{favoriteChannels.map((channel, index) => (
+														<SubscriptionCard
+															key={channel.id}
+															channel={channel}
+															index={index}
+															groups={subscriptionGroups}
+															onToggleFavorite={async (channelId) => {
+																const channel = allSubscriptions.find(
+																	(s) => s.id === channelId,
+																);
+																await toggleChannelFavorite(channelId);
+																if (channel) {
+																	toast.success(
+																		`Removed ${channel.title} from favorites`,
+																	);
+																}
+															}}
+														/>
+													))}
 												</div>
 											)}
+										</section>
 
-											<section
-												data-testid="favorite-channels-section"
-												className={`${visibleFavoriteSection === "channels" ? "block" : "hidden sm:block"} ${favoriteChannels.length === 0 ? "sm:hidden" : ""}`}
-											>
-												<div className="mb-4 flex items-center justify-between gap-3">
-													<h2 className="text-lg font-semibold text-gray-900 dark:text-ios-100">
-														Channels
-													</h2>
-													<span className="text-sm text-gray-500 dark:text-ios-400">
-														{favoriteChannels.length}
-													</span>
-												</div>
-												{favoriteChannels.length === 0 ? (
-													<div className="rounded-xl border border-dashed border-gray-200 p-6 text-center text-sm text-gray-500 dark:border-ios-800 dark:text-ios-400">
-														No favorite channels yet
-													</div>
-												) : (
-													<div className="grid grid-cols-2 gap-3 sm:grid-cols-3 sm:gap-6 lg:grid-cols-4 xl:grid-cols-5">
-														{favoriteChannels.map((channel, index) => (
-															<SubscriptionCard
-																key={channel.id}
-																channel={channel}
-																index={index}
-																groups={subscriptionGroups}
-																onToggleFavorite={async (channelId) => {
-																	const channel = allSubscriptions.find(
-																		(s) => s.id === channelId,
-																	);
-																	await toggleChannelFavorite(channelId);
-																	if (channel) {
-																		toast.success(
-																			`Removed ${channel.title} from favorites`,
-																		);
-																	}
-																}}
-															/>
-														))}
-													</div>
-												)}
-											</section>
-
-											<section
-												data-testid="favorite-videos-section"
-												className={`${visibleFavoriteSection === "videos" ? "block" : "hidden sm:block"} ${favoriteVideos.length === 0 ? "sm:hidden" : ""}`}
-											>
-												<div className="mb-4 flex items-center justify-between gap-3">
-													<h2 className="text-lg font-semibold text-gray-900 dark:text-ios-100">
-														Videos
-													</h2>
-													<span className="text-sm text-gray-500 dark:text-ios-400">
-														{favoriteVideos.length}
-													</span>
-												</div>
-												{favoriteVideos.length === 0 ? (
-													<div className="rounded-xl border border-dashed border-gray-200 p-6 text-center text-sm text-gray-500 dark:border-ios-800 dark:text-ios-400">
-														No favorite videos yet
-													</div>
-												) : (
-													<VirtualizedVideoGrid
-														videos={favoriteVideos}
-														columns={4}
-														scrollStorageKey="favorite-videos-scroll"
-														channelThumbnails={channelThumbnails}
-													/>
-												)}
-											</section>
-										</div>
-									)}
-								</motion.div>
-							) : (
-								<motion.div
-									key="activity"
-									initial={{ opacity: 0 }}
-									animate={{ opacity: 1 }}
-									exit={{ opacity: 0 }}
-									transition={{ duration: 0.16 }}
-									className="px-4"
-								>
-									{activeChannels.length === 0 ? (
-										<EmptyState
-											icon={Activity}
-											iconName="activity"
-											title="No activity yet"
-											detail="Recent uploads from your channels will appear here."
-										/>
-									) : (
-										<>
-											<div className="mb-4">
-												<h2 className="text-2xl font-bold text-gray-900 dark:text-ios-100 mb-2">
-													Most Active Channels
+										<section
+											data-testid="favorite-videos-section"
+											className={`${visibleFavoriteSection === "videos" ? "block" : "hidden sm:block"} ${favoriteVideos.length === 0 ? "sm:hidden" : ""}`}
+										>
+											<div className="mb-4 flex items-center justify-between gap-3">
+												<h2 className="text-lg font-semibold text-gray-900 dark:text-ios-100">
+													Videos
 												</h2>
-												<p className="text-sm text-gray-500 dark:text-ios-400">
-													Top {activeChannels.length} channels by uploads in the
-													past 7 days
-												</p>
+												<span className="text-sm text-gray-500 dark:text-ios-400">
+													{favoriteVideos.length}
+												</span>
 											</div>
-											<div className="space-y-3">
-												{activeChannels.map((item, index) => (
-													<div
-														key={item.channel.id}
-														onClick={() => openChannel(item.channel.id)}
-														className="flex items-center gap-4 p-4 bg-white dark:bg-ios-800 rounded-xl shadow-sm hover:shadow-md transition-all cursor-pointer border border-gray-200 dark:border-ios-700"
-													>
-														<div className="flex-shrink-0 w-12 h-12 bg-gradient-to-br from-green-500 to-emerald-600 rounded-full flex items-center justify-center text-white font-bold text-lg">
-															#{index + 1}
-														</div>
-														<img
-															src={item.channel.thumbnail}
-															alt={item.channel.title}
-															className="w-16 h-16 rounded-full object-cover"
-														/>
-														<div className="flex-1 min-w-0">
-															<h3 className="font-semibold text-gray-900 dark:text-ios-100 truncate">
-																{item.channel.title}
-															</h3>
-															<p className="text-sm text-gray-500 dark:text-ios-400">
-																{item.count} video{item.count !== 1 ? "s" : ""}{" "}
-																this week
-															</p>
-														</div>
-														<div className="text-right">
-															<p className="text-xs text-gray-500 dark:text-ios-400">
-																Latest upload
-															</p>
-															<p className="text-sm font-medium text-gray-700 dark:text-ios-300">
-																{formatTimeAgo(item.latestVideo)}
-															</p>
-														</div>
+											{favoriteVideos.length === 0 ? (
+												<div className="rounded-xl border border-dashed border-gray-200 p-6 text-center text-sm text-gray-500 dark:border-ios-800 dark:text-ios-400">
+													No favorite videos yet
+												</div>
+											) : (
+												<VirtualizedVideoGrid
+													videos={favoriteVideos}
+													columns={4}
+													scrollStorageKey="favorite-videos-scroll"
+													channelThumbnails={channelThumbnails}
+												/>
+											)}
+										</section>
+									</div>
+								)}
+							</motion.div>
+						) : (
+							<motion.div
+								key="activity"
+								initial={{ opacity: 0 }}
+								animate={{ opacity: 1 }}
+								exit={{ opacity: 0 }}
+								transition={{ duration: 0.16 }}
+								className="px-4"
+							>
+								{activeChannels.length === 0 ? (
+									<EmptyState
+										icon={Activity}
+										iconName="activity"
+										title="No activity yet"
+										detail="Recent uploads from your channels will appear here."
+									/>
+								) : (
+									<>
+										<div className="mb-4">
+											<h2 className="text-2xl font-bold text-gray-900 dark:text-ios-100 mb-2">
+												Most Active Channels
+											</h2>
+											<p className="text-sm text-gray-500 dark:text-ios-400">
+												Top {activeChannels.length} channels by uploads in the
+												past 7 days
+											</p>
+										</div>
+										<div className="space-y-3">
+											{activeChannels.map((item, index) => (
+												<div
+													key={item.channel.id}
+													onClick={() => openChannel(item.channel.id)}
+													className="flex items-center gap-4 p-4 bg-white dark:bg-ios-800 rounded-xl shadow-sm hover:shadow-md transition-all cursor-pointer border border-gray-200 dark:border-ios-700"
+												>
+													<div className="flex-shrink-0 w-12 h-12 bg-gradient-to-br from-green-500 to-emerald-600 rounded-full flex items-center justify-center text-white font-bold text-lg">
+														#{index + 1}
 													</div>
-												))}
-											</div>
-										</>
-									)}
-								</motion.div>
-							)}
-						</AnimatePresence>
+													<img
+														src={item.channel.thumbnail}
+														alt={item.channel.title}
+														className="w-16 h-16 rounded-full object-cover"
+													/>
+													<div className="flex-1 min-w-0">
+														<h3 className="font-semibold text-gray-900 dark:text-ios-100 truncate">
+															{item.channel.title}
+														</h3>
+														<p className="text-sm text-gray-500 dark:text-ios-400">
+															{item.count} video{item.count !== 1 ? "s" : ""}{" "}
+															this week
+														</p>
+													</div>
+													<div className="text-right">
+														<p className="text-xs text-gray-500 dark:text-ios-400">
+															Latest upload
+														</p>
+														<p className="text-sm font-medium text-gray-700 dark:text-ios-300">
+															{formatTimeAgo(item.latestVideo)}
+														</p>
+													</div>
+												</div>
+											))}
+										</div>
+									</>
+								)}
+							</motion.div>
+						)}
+					</AnimatePresence>
 
 					<FloatingTabBar
 						activeTab={activeTab}
@@ -1286,7 +1349,7 @@ export const Dashboard = () => {
 						onAddChannel={() => setIsAddChannelModalOpen(true)}
 						subscriptionCount={allSubscriptions.length}
 						activeChannelCount={activeChannels.length}
-						queueCount={queuedVideos.length}
+						queueCount={inProgressVideos.length}
 						favoriteCount={favoriteChannels.length + favoriteVideos.length}
 					/>
 				</div>
@@ -1377,153 +1440,6 @@ export const Dashboard = () => {
 							</button>
 						</div>
 					</form>
-				</div>
-			)}
-
-			{isQualityFiltersOpen && (
-				<div className="fixed inset-0 z-[120]">
-					<button
-						type={BTN}
-						aria-label="Close feed filters"
-						className="absolute inset-0 bg-gray-950/60"
-						onClick={() => setIsQualityFiltersOpen(false)}
-					/>
-					<div
-						role="dialog"
-						aria-modal="true"
-						aria-labelledby="feed-filters-title"
-						className="absolute bottom-0 left-0 right-0 rounded-t-2xl border-t border-gray-200 bg-white p-4 shadow-2xl dark:border-ios-800 dark:bg-ios-900 sm:bottom-auto sm:left-1/2 sm:right-auto sm:top-28 sm:w-96 sm:-translate-x-1/2 sm:rounded-xl sm:border"
-					>
-						<div className="mb-4 flex items-center justify-between gap-3">
-							<h2
-								id="feed-filters-title"
-								className="text-lg font-semibold text-gray-900 dark:text-ios-100"
-							>
-								Feed filters
-							</h2>
-							<button
-								type={BTN}
-								aria-label="Close feed filters"
-								onClick={() => setIsQualityFiltersOpen(false)}
-								className="inline-flex h-10 w-10 items-center justify-center rounded-lg bg-gray-100 text-gray-700 hover:bg-gray-200 dark:bg-ios-800 dark:text-ios-200 dark:hover:bg-ios-700"
-							>
-								<X className="h-5 w-5" />
-							</button>
-						</div>
-
-						<div className="space-y-5">
-							<div>
-								<p className="mb-2 text-sm font-medium text-gray-700 dark:text-ios-300">
-									Duration
-								</p>
-								<div className="grid grid-cols-2 gap-2">
-									{DURATION_FILTER_OPTIONS.map((option) => (
-										<button
-											key={option.value}
-											type={BTN}
-											onClick={() => setDurationFilter(option.value)}
-											className={`h-10 rounded-lg px-3 text-sm font-medium transition-colors ${
-												durationFilter === option.value
-													? "bg-red-600 text-white"
-													: "bg-gray-100 text-gray-800 hover:bg-gray-200 dark:bg-ios-800 dark:text-ios-100 dark:hover:bg-ios-700"
-											}`}
-										>
-											{option.label}
-										</button>
-									))}
-								</div>
-							</div>
-
-							<label className="flex items-center justify-between gap-4 rounded-lg bg-gray-100 px-3 py-3 dark:bg-ios-800">
-								<span className="text-sm font-medium text-gray-800 dark:text-ios-100">
-									Hide livestream replays
-								</span>
-								<input
-									type="checkbox"
-									aria-label="Hide livestream replays"
-									checked={hideLiveReplays}
-									onChange={(event) => setHideLiveReplays(event.target.checked)}
-									className="h-5 w-5 rounded border-gray-300 text-red-600 focus:ring-red-500 dark:border-ios-700 dark:bg-ios-900"
-								/>
-							</label>
-
-							<label className="flex items-center justify-between gap-4 rounded-lg bg-gray-100 px-3 py-3 dark:bg-ios-800">
-								<span className="text-sm font-medium text-gray-800 dark:text-ios-100">
-									Hide premieres
-								</span>
-								<input
-									type="checkbox"
-									aria-label="Hide premieres"
-									checked={hidePremieres}
-									onChange={(event) => setHidePremieres(event.target.checked)}
-									className="h-5 w-5 rounded border-gray-300 text-red-600 focus:ring-red-500 dark:border-ios-700 dark:bg-ios-900"
-								/>
-							</label>
-
-							<label className="flex items-center justify-between gap-4 rounded-lg bg-gray-100 px-3 py-3 dark:bg-ios-800">
-								<span className="text-sm font-medium text-gray-800 dark:text-ios-100">
-									Hide duplicate titles
-								</span>
-								<input
-									type="checkbox"
-									aria-label="Hide duplicate titles"
-									checked={hideDuplicateTitles}
-									onChange={(event) =>
-										setHideDuplicateTitles(event.target.checked)
-									}
-									className="h-5 w-5 rounded border-gray-300 text-red-600 focus:ring-red-500 dark:border-ios-700 dark:bg-ios-900"
-								/>
-							</label>
-
-							<div className="space-y-3">
-								<label className="block">
-									<span className="mb-2 block text-sm font-medium text-gray-700 dark:text-ios-300">
-										Mute keywords
-									</span>
-									<input
-										type="text"
-										value={mutedKeywordText}
-										onChange={(event) =>
-											setMutedKeywordText(event.target.value)
-										}
-										placeholder="rumor, spoiler"
-										className="h-10 w-full rounded-lg border border-gray-200 bg-white px-3 text-sm text-gray-900 outline-none focus:border-red-500 dark:border-ios-800 dark:bg-ios-950 dark:text-ios-100"
-									/>
-								</label>
-								<label className="block">
-									<span className="mb-2 block text-sm font-medium text-gray-700 dark:text-ios-300">
-										Boost keywords
-									</span>
-									<input
-										type="text"
-										value={boostedKeywordText}
-										onChange={(event) =>
-											setBoostedKeywordText(event.target.value)
-										}
-										placeholder="linux, tactics"
-										className="h-10 w-full rounded-lg border border-gray-200 bg-white px-3 text-sm text-gray-900 outline-none focus:border-red-500 dark:border-ios-800 dark:bg-ios-950 dark:text-ios-100"
-									/>
-								</label>
-							</div>
-
-							<div className="flex gap-2">
-								<button
-									type={BTN}
-									onClick={clearQualityFilters}
-									className="h-10 flex-1 rounded-lg bg-gray-100 px-3 text-sm font-medium text-gray-800 hover:bg-gray-200 dark:bg-ios-800 dark:text-ios-100 dark:hover:bg-ios-700"
-								>
-									Clear
-								</button>
-								<button
-									type={BTN}
-									onClick={() => setIsQualityFiltersOpen(false)}
-									className="h-10 flex-1 rounded-lg bg-red-600 px-3 text-sm font-medium text-white hover:bg-red-700"
-								>
-									Done
-								</button>
-							</div>
-						</div>
-					</div>
 				</div>
 			)}
 

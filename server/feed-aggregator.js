@@ -31,7 +31,7 @@ const {
 
 const BATCH_SIZE = 15;
 const BATCH_DELAY = 500; // 500ms between batches
-const MAX_ARCHIVED_VIDEOS = 5000;
+const MAX_ARCHIVED_VIDEOS = Number(process.env.MAX_ARCHIVED_VIDEOS) || 5000;
 const API_RESOLVER_DAILY_QUOTA_CAP = 100;
 const STARTUP_CACHE_MAX_AGE_MS = 10 * 60 * 1000;
 const DEFAULT_DATA = {
@@ -338,11 +338,15 @@ function createFeedAggregator() {
 				await enrichVideosWithShortsStatus(batchVideos, shortsStatusById);
 				allVideos.push(...batchVideos);
 
-				const currentVideos = mergeVideoArchive(existingVideos, allVideos, {
-					activeChannelIds: new Set(subscriptions.map((sub) => sub.id)),
-					maxVideos: MAX_ARCHIVED_VIDEOS,
-					cacheUpdatedAt: existingVideoCache.lastUpdated,
-				});
+				const { videos: currentVideos } = mergeVideoArchive(
+					existingVideos,
+					allVideos,
+					{
+						activeChannelIds: new Set(subscriptions.map((sub) => sub.id)),
+						maxVideos: MAX_ARCHIVED_VIDEOS,
+						cacheUpdatedAt: existingVideoCache.lastUpdated,
+					},
+				);
 				channelRefreshes = mergeChannelRefreshes(
 					channelRefreshes,
 					new Set(subscriptions.map((sub) => sub.id)),
@@ -391,11 +395,17 @@ function createFeedAggregator() {
 				}
 			}
 
-			const archivedVideos = mergeVideoArchive(existingVideos, allVideos, {
-				activeChannelIds: new Set(subscriptions.map((sub) => sub.id)),
-				maxVideos: MAX_ARCHIVED_VIDEOS,
-				cacheUpdatedAt: existingVideoCache.lastUpdated,
-			});
+			const { videos: archivedVideos, evictedCount: totalEvicted } =
+				mergeVideoArchive(existingVideos, allVideos, {
+					activeChannelIds: new Set(subscriptions.map((sub) => sub.id)),
+					maxVideos: MAX_ARCHIVED_VIDEOS,
+					cacheUpdatedAt: existingVideoCache.lastUpdated,
+				});
+			if (totalEvicted > 0) {
+				console.log(
+					`📦 Archive cap (${MAX_ARCHIVED_VIDEOS}): ${totalEvicted} old videos evicted`,
+				);
+			}
 			const archivedVideosWithShortsStatus = archivedVideos.map((video) =>
 				video?.id && typeof shortsStatusById[video.id] === "boolean"
 					? { ...video, isShort: shortsStatusById[video.id] }

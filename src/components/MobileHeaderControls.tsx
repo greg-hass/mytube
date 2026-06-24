@@ -4,16 +4,12 @@ import {
 	Menu,
 	Play,
 	Search,
-	SlidersHorizontal,
 	X,
 } from "lucide-react";
 
 const ICON_MD = "w-5 h-5" as const;
 
 interface MobileHeaderControlsProps {
-	showFilters: boolean;
-	onOpenFilters?: () => void;
-	activeFilterCount: number;
 	showShorts: boolean;
 	onToggleShorts?: () => void;
 	hideWatched: boolean;
@@ -25,9 +21,6 @@ interface MobileHeaderControlsProps {
 }
 
 export const MobileHeaderControls = ({
-	showFilters,
-	onOpenFilters,
-	activeFilterCount,
 	showShorts,
 	onToggleShorts,
 	hideWatched,
@@ -38,21 +31,7 @@ export const MobileHeaderControls = ({
 	onOpenMenu,
 }: MobileHeaderControlsProps) => (
 	<div className="mobile-header-controls flex xl:hidden items-center gap-2">
-		{showFilters && onOpenFilters && (
-			<button
-				data-testid="mobile-filter-button"
-				onClick={onOpenFilters}
-				className={`p-2 rounded-lg transition-colors ${
-					activeFilterCount > 0
-						? "bg-red-600 text-white hover:bg-red-700"
-						: "bg-gray-100 text-gray-800 hover:bg-gray-200 dark:bg-ios-800 dark:text-ios-100 dark:hover:bg-ios-700"
-				}`}
-				title="Feed filters"
-			>
-				<SlidersHorizontal className={ICON_MD} />
-			</button>
-		)}
-		{showFilters && onToggleShorts && (
+		{onToggleShorts && (
 			<button
 				data-testid="mobile-shorts-toggle"
 				onClick={onToggleShorts}
@@ -66,7 +45,7 @@ export const MobileHeaderControls = ({
 				<Play className={ICON_MD} />
 			</button>
 		)}
-		{showFilters && onToggleWatched && (
+		{onToggleWatched && (
 			<button
 				data-testid="mobile-watched-toggle"
 				onClick={onToggleWatched}
