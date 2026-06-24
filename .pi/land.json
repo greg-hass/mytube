@@ -1,0 +1,3 @@
+{
+	"validationCommands": ["./scripts/check.sh"]
+}
