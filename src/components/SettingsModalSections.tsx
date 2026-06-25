@@ -768,8 +768,8 @@ export function LlmConfigSection({
 
 				<div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2.5 dark:border-amber-900/60 dark:bg-amber-950/30">
 					<p className="text-xs font-medium text-amber-800 dark:text-amber-300">
-						⚠ A provider API key must be entered in API Configuration above
-						for channel suggestions/discovery.
+						⚠ A provider API key must be entered in API Configuration above for
+						channel suggestions/discovery.
 					</p>
 				</div>
 			</div>
