@@ -70,6 +70,25 @@ Rules:
 - Do NOT call web_search more than 3 times. Compile your answer after that.
 - You may include channels from your training knowledge if they are well-known and match the user's interests — you do not need to web-search every single one.`;
 
+/**
+ * Prompt for direct suggestions (no tool-calling loop).
+ * Reasoning models produce better JSON without the tool loop.
+ */
+const SUGGESTIONS_DIRECT_PROMPT = `You are a YouTube channel discovery assistant. Given a list of channels a user is subscribed to, suggest 5 NEW YouTube channels they would likely enjoy.
+
+Return ONLY a JSON array (no prose, no markdown fences):
+[
+  {"handle":"channelhandle","title":"Channel Name","reason":"Why this channel matches the user's interests"},
+  ...
+]
+
+Rules:
+- handle is the @handle WITHOUT the @ symbol
+- title is the official channel display name
+- reason is a brief personalised reason (1 sentence)
+- Only suggest channels the user is NOT already subscribed to
+- Base suggestions on your knowledge of the YouTube ecosystem`;
+
 const TOOLS = [
 	{
 		type: "function",
@@ -160,7 +179,10 @@ function resolveProvider(options = {}) {
  */
 async function resolveChannelViaLlm(query, options = {}) {
 	const provider = resolveProvider(options);
-	if (!provider.apiKey || !provider.endpoint) return null;
+	// OpenCode free tier works WITHOUT an API key — only require an
+	// endpoint. Other providers (deepseek, custom) need a key.
+	if (!provider.endpoint) return null;
+	if (!provider.apiKey && provider.label !== "opencode") return null;
 
 	const fetchImpl = options.fetchImpl || fetch;
 	const externalSignal = options.signal;
@@ -170,22 +192,25 @@ async function resolveChannelViaLlm(query, options = {}) {
 			: process.env.BRAVE_API_KEY || "";
 
 	const useSuggestions = options.useSuggestions === true;
-	const maxIterations = useSuggestions
-		? MAX_SUGGESTION_ITERATIONS
-		: MAX_TOOL_ITERATIONS;
-	const systemPrompt = useSuggestions ? SUGGESTIONS_PROMPT : SYSTEM_PROMPT;
-	const messages = useSuggestions
-		? [
-				{ role: "system", content: systemPrompt },
-				{
-					role: "user",
-					content: `Here are my subscriptions:\n\n${options.subscriptionContext || query}\n\n${query}`,
-				},
-			]
-		: [
-				{ role: "system", content: systemPrompt },
-				{ role: "user", content: `Find the YouTube channel for: ${query}` },
-			];
+
+	// Suggestions mode: skip the tool-calling loop entirely.
+	// Reasoning models (deepseek-v4-flash / big-pickle) fail to
+	// converge when given tools — they loop on web_search and never
+	// produce a final answer. Without tools, they reason internally
+	// and produce clean JSON in content from their training knowledge.
+	if (useSuggestions) {
+		return resolveSuggestionsDirect(provider, query, options, {
+			fetchImpl,
+			signal: externalSignal,
+		});
+	}
+
+	const maxIterations = MAX_TOOL_ITERATIONS;
+	const systemPrompt = SYSTEM_PROMPT;
+	const messages = [
+		{ role: "system", content: systemPrompt },
+		{ role: "user", content: `Find the YouTube channel for: ${query}` },
+	];
 
 	for (let iteration = 0; iteration < maxIterations; iteration++) {
 		const controller = new AbortController();
@@ -200,21 +225,33 @@ async function resolveChannelViaLlm(query, options = {}) {
 			}
 		}
 
+		// Build headers — only add Authorization when a key exists.
+		// OpenCode free tier breaks if you send a dummy Bearer token
+		// (returns 401), but works fine with no auth header at all.
+		const headers = { "Content-Type": "application/json" };
+		if (provider.apiKey) {
+			headers.Authorization = `Bearer ${provider.apiKey}`;
+		}
+
+		// For reasoning models (deepseek-v4-flash), reasoning_content
+		// burns tokens before content is produced. Set a generous
+		// max_tokens so reasoning doesn't eat the entire budget and
+		// leave content empty (finish_reason: "length").
+		const requestBody = {
+			model: provider.model,
+			messages,
+			tools: TOOLS,
+			tool_choice: "auto",
+			temperature: useSuggestions ? 0.5 : 0,
+			max_tokens: 4096,
+		};
+
 		let response;
 		try {
 			response = await fetchImpl(provider.endpoint, {
 				method: "POST",
-				headers: {
-					"Content-Type": "application/json",
-					Authorization: `Bearer ${provider.apiKey}`,
-				},
-				body: JSON.stringify({
-					model: provider.model,
-					messages,
-					tools: TOOLS,
-					tool_choice: "auto",
-					temperature: useSuggestions ? 0.5 : 0,
-				}),
+				headers,
+				body: JSON.stringify(requestBody),
 				signal: controller.signal,
 			});
 		} catch (error) {
@@ -253,16 +290,25 @@ async function resolveChannelViaLlm(query, options = {}) {
 		const message = data?.choices?.[0]?.message;
 		if (!message) return null;
 
+		// Reasoning models (e.g. deepseek-v4-flash, which OpenCode's
+		// big-pickle maps to) put chain-of-thought in reasoning_content
+		// and may leave content empty. Fall back to reasoning_content
+		// when content has nothing parseable.
+		const contentText = extractAnswerText(
+			message.content,
+			message.reasoning_content,
+		);
+
 		messages.push(message);
 
 		// No tool calls — this is the final answer. Parse it.
 		if (!message.tool_calls || message.tool_calls.length === 0) {
 			if (useSuggestions) {
-				const parsed = parseSuggestionsResponse(message.content);
+				const parsed = parseSuggestionsResponse(contentText);
 				if (!parsed || parsed.length === 0) return null;
 				return parsed.map((item) => ({ ...item, provider: provider.label }));
 			}
-			const parsed = parseFinalResponse(message.content);
+			const parsed = parseFinalResponse(contentText);
 			if (!parsed) return null;
 			return { ...parsed, provider: provider.label };
 		}
@@ -311,6 +357,106 @@ async function resolveChannelViaOpencode(query, options = {}) {
 		...options,
 		provider: options.provider || "opencode",
 	});
+}
+
+// ─── Suggestions (no tool loop) ───────────────────────────────────────────
+
+/**
+ * Resolve channel suggestions WITHOUT a tool-calling loop.
+ *
+ * Reasoning models (deepseek-v4-flash / big-pickle) fail to converge
+ * in a tool loop — they keep calling web_search and never produce a
+ * final answer. Without tools, they reason internally and produce
+ * clean JSON in `content` from their training knowledge.
+ *
+ * The prompt already permits the model to suggest well-known channels
+ * from training data, so web search is not needed for quality.
+ */
+async function resolveSuggestionsDirect(provider, query, options, network) {
+	const fetchImpl = network.fetchImpl || fetch;
+	const externalSignal = network.signal;
+
+	const messages = [
+		{ role: "system", content: SUGGESTIONS_DIRECT_PROMPT },
+		{
+			role: "user",
+			content: `Here are my subscriptions:\n\n${options.subscriptionContext || query}\n\n${query}`,
+		},
+	];
+
+	const controller = new AbortController();
+	const timeoutId = setTimeout(() => controller.abort(), LLM_TIMEOUT_MS * 2);
+	if (externalSignal) {
+		if (externalSignal.aborted) {
+			controller.abort();
+		} else {
+			externalSignal.addEventListener("abort", () => controller.abort(), {
+				once: true,
+			});
+		}
+	}
+
+	const headers = { "Content-Type": "application/json" };
+	if (provider.apiKey) {
+		headers.Authorization = `Bearer ${provider.apiKey}`;
+	}
+
+	let response;
+	try {
+		response = await fetchImpl(provider.endpoint, {
+			method: "POST",
+			headers,
+			body: JSON.stringify({
+				model: provider.model,
+				messages,
+				temperature: 0.5,
+				max_tokens: 4096,
+			}),
+			signal: controller.signal,
+		});
+	} catch (error) {
+		if (error.name === "AbortError") {
+			console.warn("LLM suggestions request timed out");
+		} else {
+			console.warn("LLM suggestions request failed:", error.message);
+		}
+		return null;
+	} finally {
+		clearTimeout(timeoutId);
+	}
+
+	if (!response.ok) {
+		if (response.status === 429) {
+			console.warn(`⚠️ LLM provider ${provider.label} rate-limited — skipping`);
+		} else if (response.status === 401) {
+			console.warn(
+				`⚠️ LLM provider ${provider.label} API key invalid — skipping`,
+			);
+		} else {
+			console.warn(`LLM provider ${provider.label} error ${response.status}`);
+		}
+		return null;
+	}
+
+	let data;
+	try {
+		data = await response.json();
+	} catch (error) {
+		console.warn("LLM returned invalid JSON:", error.message);
+		return null;
+	}
+
+	const message = data?.choices?.[0]?.message;
+	if (!message) return null;
+
+	const contentText = extractAnswerText(
+		message.content,
+		message.reasoning_content,
+	);
+
+	const parsed = parseSuggestionsResponse(contentText);
+	if (!parsed || parsed.length === 0) return null;
+	return parsed.map((item) => ({ ...item, provider: provider.label }));
 }
 
 // ─── Tool execution ──────────────────────────────────────────────────────
@@ -474,6 +620,34 @@ function stripHtml(html) {
 		.trim();
 }
 
+// ─── Reasoning model support ──────────────────────────────────────────────
+
+/**
+ * Extract the answer text from a chat completion message.
+ *
+ * Reasoning models (deepseek-v4-flash, which OpenCode's big-pickle
+ * maps to) put chain-of-thought in `reasoning_content` and may leave
+ * `content` empty — especially when the token budget is consumed by
+ * reasoning before the model produces its final answer.
+ *
+ * Strategy:
+ *   1. If content has JSON-like text, use it directly.
+ *   2. If content is empty, try reasoning_content.
+ *   3. If reasoning_content contains embedded JSON, extract that.
+ */
+function extractAnswerText(content, reasoningContent) {
+	const text = String(content || "").trim();
+	if (text) return text;
+
+	const reasoning = String(reasoningContent || "").trim();
+	if (!reasoning) return "";
+
+	// Reasoning content often ends with the final JSON answer
+	// after the chain-of-thought. Try to extract it.
+	const jsonMatch = reasoning.match(/\[[\s\S]*?\]|\{[\s\S]*?\}/);
+	return jsonMatch ? jsonMatch[0] : reasoning;
+}
+
 // ─── Response parsing ─────────────────────────────────────────────────────
 
 /**
@@ -620,7 +794,9 @@ module.exports = {
 	PROVIDER_CONFIG,
 	SYSTEM_PROMPT,
 	SUGGESTIONS_PROMPT,
+	SUGGESTIONS_DIRECT_PROMPT,
 	TOOLS,
+	extractAnswerText,
 	executeToolCall,
 	executeWebSearch,
 	getLlmBackendStatus,
