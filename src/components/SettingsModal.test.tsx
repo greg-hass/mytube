@@ -12,6 +12,8 @@ const storeMocks = vi.hoisted(() => ({
 	setApiKey: vi.fn(),
 	setBraveApiKey: vi.fn(),
 	setOpencodeApiKey: vi.fn(),
+	setDeepseekApiKey: vi.fn(),
+	setCustomApiKey: vi.fn(),
 	setLlmProvider: vi.fn(),
 	setLlmApiKey: vi.fn(),
 	setLlmModel: vi.fn(),
@@ -54,24 +56,32 @@ vi.mock("framer-motion", () => ({
 	},
 }));
 
-vi.mock("../store/useStore", () => ({
-	useStore: () => ({
+vi.mock("../store/useStore", () => {
+	const state = {
 		apiKey: "key",
 		braveApiKey: "",
 		opencodeApiKey: "",
+		deepseekApiKey: "",
+		customApiKey: "",
 		llmProvider: "opencode",
 		llmApiKey: "",
 		llmModel: "big-pickle",
 		setApiKey: storeMocks.setApiKey,
 		setBraveApiKey: storeMocks.setBraveApiKey,
 		setOpencodeApiKey: storeMocks.setOpencodeApiKey,
+		setDeepseekApiKey: storeMocks.setDeepseekApiKey,
+		setCustomApiKey: storeMocks.setCustomApiKey,
 		setLlmProvider: storeMocks.setLlmProvider,
 		setLlmApiKey: storeMocks.setLlmApiKey,
 		setLlmModel: storeMocks.setLlmModel,
 		watchedVideos: new Set(["watched-1", "watched-2"]),
 		setWatchedVideos: storeMocks.setWatchedVideos,
-	}),
-}));
+	};
+	const storeFn = (selector?: (s: typeof state) => unknown) =>
+		selector ? selector(state) : state;
+	storeFn.getState = () => state;
+	return { useStore: storeFn };
+});
 
 vi.mock("../hooks/useSubscriptionStorage", () => ({
 	useSubscriptionStorage: () => ({
