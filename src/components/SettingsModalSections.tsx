@@ -701,9 +701,34 @@ export function LlmConfigSection({
 		setProvider(newProvider);
 		// Auto-fill the default model when switching providers
 		const defaultModel = DEFAULT_MODELS[newProvider];
+		const newModel = defaultModel || model;
 		if (defaultModel) {
-			setModel(defaultModel);
+			setModel(newModel);
 		}
+		// Persist provider and model immediately so Discover Channels
+		// can use them without needing Save in API Configuration.
+		useStore.getState().setLlmProvider(newProvider);
+		useStore.getState().setLlmModel(newModel);
+		// Also derive and persist the matching API key if it's already
+		// in the store from a previous save.
+		const { opencodeApiKey, deepseekApiKey, customApiKey } =
+			useStore.getState();
+		const derivedKey =
+			newProvider === "opencode"
+				? opencodeApiKey
+				: newProvider === "deepseek"
+					? deepseekApiKey
+					: customApiKey;
+		if (derivedKey) {
+			useStore.getState().setLlmApiKey(derivedKey);
+		}
+	};
+
+	// Persist model changes immediately when the user types/selects.
+	// Wraps setModel so ModelSelector's onChange auto-saves.
+	const handleModelChange = (newModel: string) => {
+		setModel(newModel);
+		useStore.getState().setLlmModel(newModel);
 	};
 
 	return (
@@ -739,7 +764,7 @@ export function LlmConfigSection({
 				{/* Model selector — dropdown when models loaded, text input otherwise */}
 				<ModelSelector
 					model={model}
-					setModel={setModel}
+					setModel={handleModelChange}
 					models={models}
 					modelsLoading={modelsLoading}
 					modelsError={modelsError}
@@ -768,8 +793,10 @@ export function LlmConfigSection({
 
 				<div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2.5 dark:border-amber-900/60 dark:bg-amber-950/30">
 					<p className="text-xs font-medium text-amber-800 dark:text-amber-300">
-						⚠ A provider API key must be entered in API Configuration above for
-						channel suggestions/discovery.
+						⚠ A provider API key must be saved in{" "}
+						<strong>API Configuration</strong> above for channel
+						suggestions/discovery. Provider and model selections save
+						automatically — no need to click Save.
 					</p>
 				</div>
 			</div>

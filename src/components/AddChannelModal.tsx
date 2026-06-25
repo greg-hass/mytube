@@ -8,6 +8,7 @@ import {
 	ShieldAlert,
 	CloudOff,
 	Sparkles,
+	RotateCw,
 } from "lucide-react";
 import { getDisplayText } from "../lib/youtube-parser";
 import { useAddChannelSearch } from "../hooks/useAddChannelSearch";
@@ -744,6 +745,32 @@ function SuggestionsSection({
 							/>
 						)}
 					/>
+				)}
+			</AnimatePresence>
+
+			<AnimatePresence>
+				{state.phase === "results" && state.channels.length === 0 && (
+					<motion.div
+						initial={{ opacity: 0, y: 10 }}
+						animate={{ opacity: 1, y: 0 }}
+						exit={{ opacity: 0, y: 10 }}
+						className="rounded-xl border border-gray-200 dark:border-ios-800 px-4 py-4 text-center"
+					>
+						<p className="text-sm text-gray-500 dark:text-ios-400 mb-3">
+							No channel suggestions found. The LLM may not have found relevant
+							channels, or the provider API key may not be configured.
+						</p>
+						<div className="flex items-center justify-center gap-2">
+							<button
+								type="button"
+								onClick={onDiscover}
+								className="flex items-center gap-1.5 text-sm font-medium text-red-600 hover:underline"
+							>
+								<RotateCw className="w-4 h-4" />
+								Try again
+							</button>
+						</div>
+					</motion.div>
 				)}
 			</AnimatePresence>
 		</>
