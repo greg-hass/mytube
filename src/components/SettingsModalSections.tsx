@@ -310,17 +310,19 @@ function ModelSelector({
 				</button>
 			</div>
 			<p className="text-xs text-gray-500 dark:text-ios-400">
-				{models.length > 0
-					? `${models.length} models available for ${providerLabel}.`
-					: modelsLoading
-						? "Loading available models..."
-						: modelsError
-							? `Could not load models (${modelsError}). Type manually or refresh.`
-							: provider === "custom"
-								? "Enter the model name for your custom endpoint."
-								: provider === "deepseek" && !apiKey
-									? "Enter an API key, then refresh to list available models."
-									: "No models loaded. Refresh to fetch available models."}
+				{models.length > 0 && modelsError
+					? `${models.length} models available (live fetch failed: ${modelsError}).`
+					: models.length > 0
+						? `${models.length} models available for ${providerLabel}.`
+						: modelsLoading
+							? "Loading available models..."
+							: modelsError
+								? `Could not load models (${modelsError}). Type manually or refresh.`
+								: provider === "custom"
+									? "Enter the model name for your custom endpoint."
+									: provider === "deepseek" && !apiKey
+										? "Enter an API key, then refresh to list available models."
+										: "No models loaded. Refresh to fetch available models."}
 			</p>
 		</div>
 	);
@@ -532,6 +534,24 @@ const MODELS_ENDPOINTS: Record<string, string> = {
 	deepseek: "https://api.deepseek.com/v1/models",
 };
 
+/**
+ * Known free-model lists per provider, used as an instant fallback
+ * when the live endpoint can't be reached (ad blockers, service workers,
+ * captive portals, etc.). Keeps the model dropdown working regardless
+ * of network restrictions.
+ */
+const FALLBACK_MODELS: Record<string, string[]> = {
+	opencode: [
+		"big-pickle",
+		"deepseek-v4-flash-free",
+		"mimo-v2.5-free",
+		"minimax-m3-free",
+		"nemotron-3-ultra-free",
+		"north-mini-code-free",
+		"qwen3.6-plus-free",
+	],
+};
+
 async function fetchAvailableModels(
 	provider: string,
 	apiKey: string,
@@ -566,6 +586,7 @@ async function fetchAvailableModels(
 		if (err instanceof TypeError && err.message.includes("fetch")) {
 			throw new Error("Network error — check your connection");
 		}
+		// Re-throw to let loadModels catch and update the error state
 		throw err;
 	}
 }
@@ -586,7 +607,9 @@ export function LlmConfigSection({
 	setModel: (v: string) => void;
 }) {
 	const [showEndpoint, setShowEndpoint] = useState(false);
-	const [models, setModels] = useState<string[]>([]);
+	const [models, setModels] = useState<string[]>(
+	FALLBACK_MODELS[provider] ?? [],
+);
 	const [modelsLoading, setModelsLoading] = useState(false);
 	const [modelsError, setModelsError] = useState<string | null>(null);
 
@@ -614,7 +637,11 @@ export function LlmConfigSection({
 			setModelsError(
 				err instanceof Error ? err.message : "Failed to load models",
 			);
-			setModels([]);
+			// Keep the fallback list (if one exists) when the live fetch fails,
+			// so the dropdown works even with network blockers or ad-blockers.
+			if (!FALLBACK_MODELS[provider]) {
+				setModels([]);
+			}
 		} finally {
 			setModelsLoading(false);
 		}
