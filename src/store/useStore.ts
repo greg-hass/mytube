@@ -20,6 +20,8 @@ export const useStore = create<AppState>()(
 				apiKey: state.apiKey,
 				braveApiKey: state.braveApiKey,
 				opencodeApiKey: state.opencodeApiKey,
+				deepseekApiKey: state.deepseekApiKey,
+				customApiKey: state.customApiKey,
 				llmProvider: state.llmProvider,
 				llmApiKey: state.llmApiKey,
 				llmModel: state.llmModel,

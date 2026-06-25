@@ -101,6 +101,10 @@ function SettingsBody({
 				setBraveInputKey={state.setBraveInputKey}
 				opencodeInputKey={state.opencodeInputKey}
 				setOpencodeInputKey={state.setOpencodeInputKey}
+				deepseekInputKey={state.deepseekInputKey}
+				setDeepseekInputKey={state.setDeepseekInputKey}
+				customApiKeyInput={state.customApiKeyInput}
+				setCustomApiKeyInput={state.setCustomApiKeyInput}
 				serverApiTokenInput={state.serverApiTokenInput}
 				setServerApiTokenInput={state.setServerApiTokenInput}
 				isSaved={state.isSaved}
@@ -109,8 +113,6 @@ function SettingsBody({
 			<LlmConfigSection
 				provider={state.llmProviderInput}
 				setProvider={state.setLlmProviderInput}
-				apiKey={state.llmApiKeyInput}
-				setApiKey={state.setLlmApiKeyInput}
 				model={state.llmModelInput}
 				setModel={state.setLlmModelInput}
 			/>

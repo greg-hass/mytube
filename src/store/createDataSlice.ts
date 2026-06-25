@@ -11,6 +11,8 @@ export interface DataSlice {
 	apiKey: string;
 	braveApiKey: string;
 	opencodeApiKey: string;
+	deepseekApiKey: string;
+	customApiKey: string;
 	useApiForVideos: boolean;
 	quotaUsed: number;
 	apiExhausted: boolean;
@@ -23,6 +25,8 @@ export interface DataSlice {
 	setApiKey: (key: string) => void;
 	setBraveApiKey: (key: string) => void;
 	setOpencodeApiKey: (key: string) => void;
+	setDeepseekApiKey: (key: string) => void;
+	setCustomApiKey: (key: string) => void;
 	setLlmProvider: (provider: string) => void;
 	setLlmApiKey: (key: string) => void;
 	setLlmModel: (model: string) => void;
@@ -42,6 +46,8 @@ export const createDataSlice: StateCreator<DataSlice> = (set, get) => ({
 	apiKey: "",
 	braveApiKey: "",
 	opencodeApiKey: "",
+	deepseekApiKey: "",
+	customApiKey: "",
 	llmProvider: "opencode",
 	llmApiKey: "",
 	llmModel: "big-pickle",
@@ -54,6 +60,8 @@ export const createDataSlice: StateCreator<DataSlice> = (set, get) => ({
 	setApiKey: (key) => set({ apiKey: key }),
 	setBraveApiKey: (key) => set({ braveApiKey: key }),
 	setOpencodeApiKey: (key) => set({ opencodeApiKey: key }),
+	setDeepseekApiKey: (key) => set({ deepseekApiKey: key }),
+	setCustomApiKey: (key) => set({ customApiKey: key }),
 	setLlmProvider: (provider) => set({ llmProvider: provider }),
 	setLlmApiKey: (key) => set({ llmApiKey: key }),
 	setLlmModel: (model) => set({ llmModel: model }),

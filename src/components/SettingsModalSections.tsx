@@ -22,6 +22,7 @@ import {
 	RotateCw,
 	Loader2,
 } from "lucide-react";
+import { useStore } from "../store/useStore";
 import type {
 	ServerHealth,
 	ServerVersion,
@@ -69,6 +70,10 @@ export function ApiConfigSection({
 	setBraveInputKey,
 	opencodeInputKey,
 	setOpencodeInputKey,
+	deepseekInputKey,
+	setDeepseekInputKey,
+	customApiKeyInput,
+	setCustomApiKeyInput,
 	serverApiTokenInput,
 	setServerApiTokenInput,
 	isSaved,
@@ -80,6 +85,10 @@ export function ApiConfigSection({
 	setBraveInputKey: (v: string) => void;
 	opencodeInputKey: string;
 	setOpencodeInputKey: (v: string) => void;
+	deepseekInputKey: string;
+	setDeepseekInputKey: (v: string) => void;
+	customApiKeyInput: string;
+	setCustomApiKeyInput: (v: string) => void;
 	serverApiTokenInput: string;
 	setServerApiTokenInput: (v: string) => void;
 	isSaved: boolean;
@@ -154,6 +163,36 @@ export function ApiConfigSection({
 								Get a key
 							</a>
 						</>
+					}
+				/>
+				<ApiKeyField
+					label="DeepSeek API Key"
+					value={deepseekInputKey}
+					onChange={setDeepseekInputKey}
+					placeholder="Enter your DeepSeek API key..."
+					isSaved={isSaved}
+					description={
+						<>
+							~$0.60/M output tokens. DeepSeek v4 Flash is fast and cheap.{" "}
+							<a
+								href="https://platform.deepseek.com/api_keys"
+								target="_blank"
+								rel="noopener noreferrer"
+								className="text-red-600 hover:underline ml-1"
+							>
+								Get a key
+							</a>
+						</>
+					}
+				/>
+				<ApiKeyField
+					label="Custom LLM API Key"
+					value={customApiKeyInput}
+					onChange={setCustomApiKeyInput}
+					placeholder="Enter your API key..."
+					isSaved={isSaved}
+					description={
+						<>For use with a custom OpenAI-compatible provider endpoint.</>
 					}
 				/>
 				<ApiKeyField
@@ -249,7 +288,6 @@ function ModelSelector({
 	onRefresh,
 	provider,
 	providerLabel,
-	apiKey,
 }: {
 	model: string;
 	setModel: (v: string) => void;
@@ -259,7 +297,6 @@ function ModelSelector({
 	onRefresh: () => void;
 	provider: string;
 	providerLabel: string;
-	apiKey: string;
 }) {
 	return (
 		<div className="space-y-2">
@@ -320,9 +357,7 @@ function ModelSelector({
 								? `Could not load models (${modelsError}). Type manually or refresh.`
 								: provider === "custom"
 									? "Enter the model name for your custom endpoint."
-									: provider === "deepseek" && !apiKey
-										? "Enter an API key, then refresh to list available models."
-										: "No models loaded. Refresh to fetch available models."}
+									: "No models loaded. Refresh to fetch available models."}
 			</p>
 		</div>
 	);
@@ -594,24 +629,31 @@ async function fetchAvailableModels(
 export function LlmConfigSection({
 	provider,
 	setProvider,
-	apiKey,
-	setApiKey,
 	model,
 	setModel,
 }: {
 	provider: string;
 	setProvider: (v: string) => void;
-	apiKey: string;
-	setApiKey: (v: string) => void;
 	model: string;
 	setModel: (v: string) => void;
 }) {
 	const [showEndpoint, setShowEndpoint] = useState(false);
 	const [models, setModels] = useState<string[]>(
-	FALLBACK_MODELS[provider] ?? [],
-);
+		FALLBACK_MODELS[provider] ?? [],
+	);
 	const [modelsLoading, setModelsLoading] = useState(false);
 	const [modelsError, setModelsError] = useState<string | null>(null);
+
+	// Subscribe to provider-specific keys from the store so the model
+	// list re-fetches when the user enters a key in API Configuration.
+	const opencodeKey = useStore((s) => s.opencodeApiKey);
+	const deepseekKey = useStore((s) => s.deepseekApiKey);
+	const currentKey =
+		provider === "opencode"
+			? opencodeKey
+			: provider === "deepseek"
+				? deepseekKey
+				: "";
 
 	const loadModels = useCallback(async () => {
 		if (provider === "custom") {
@@ -622,7 +664,7 @@ export function LlmConfigSection({
 
 		// For providers that need auth for the models endpoint,
 		// don't try without a key.
-		if (provider === "deepseek" && !apiKey) {
+		if (provider === "deepseek" && !currentKey) {
 			setModels([]);
 			setModelsError(null);
 			return;
@@ -631,7 +673,7 @@ export function LlmConfigSection({
 		setModelsLoading(true);
 		setModelsError(null);
 		try {
-			const list = await fetchAvailableModels(provider, apiKey);
+			const list = await fetchAvailableModels(provider, currentKey);
 			setModels(list);
 		} catch (err) {
 			setModelsError(
@@ -645,7 +687,7 @@ export function LlmConfigSection({
 		} finally {
 			setModelsLoading(false);
 		}
-	}, [provider, apiKey]);
+	}, [provider, currentKey]);
 
 	// Auto-fetch when provider changes or apiKey becomes available
 	useEffect(() => {
@@ -694,49 +736,6 @@ export function LlmConfigSection({
 					</select>
 				</div>
 
-				<ApiKeyField
-					label="API Key"
-					value={apiKey}
-					onChange={setApiKey}
-					placeholder={
-						{
-							opencode: "Enter your OpenCode API key...",
-							deepseek: "Enter your DeepSeek API key...",
-							custom: "Enter your API key...",
-						}[provider] || "Enter your API key..."
-					}
-					isSaved={false}
-					description={
-						provider === "opencode" ? (
-							<>
-								Free. Used for channel suggestions and LLM-powered search.{" "}
-								<a
-									href="https://opencode.ai/auth"
-									target="_blank"
-									rel="noopener noreferrer"
-									className="text-red-600 hover:underline ml-1"
-								>
-									Get a key
-								</a>
-							</>
-						) : provider === "deepseek" ? (
-							<>
-								~$0.60/M output tokens. DeepSeek v4 Flash is fast and cheap.{" "}
-								<a
-									href="https://platform.deepseek.com/api_keys"
-									target="_blank"
-									rel="noopener noreferrer"
-									className="text-red-600 hover:underline ml-1"
-								>
-									Get a key
-								</a>
-							</>
-						) : (
-							"Any OpenAI-compatible provider."
-						)
-					}
-				/>
-
 				{/* Model selector — dropdown when models loaded, text input otherwise */}
 				<ModelSelector
 					model={model}
@@ -747,7 +746,6 @@ export function LlmConfigSection({
 					onRefresh={loadModels}
 					provider={provider}
 					providerLabel={providerLabel}
-					apiKey={apiKey}
 				/>
 
 				{provider === "custom" && (
@@ -770,8 +768,8 @@ export function LlmConfigSection({
 
 				<div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2.5 dark:border-amber-900/60 dark:bg-amber-950/30">
 					<p className="text-xs font-medium text-amber-800 dark:text-amber-300">
-						⚠ A Smart Search provider API key is required for channel
-						suggestions/discovery.
+						⚠ A provider API key must be entered in API Configuration above
+						for channel suggestions/discovery.
 					</p>
 				</div>
 			</div>

@@ -11,12 +11,15 @@ export function useSettingsFormState() {
 		apiKey,
 		braveApiKey,
 		opencodeApiKey,
+		deepseekApiKey,
+		customApiKey,
 		llmProvider,
-		llmApiKey,
 		llmModel,
 		setApiKey,
 		setBraveApiKey,
 		setOpencodeApiKey,
+		setDeepseekApiKey,
+		setCustomApiKey,
 		setLlmProvider,
 		setLlmApiKey,
 		setLlmModel,
@@ -25,8 +28,9 @@ export function useSettingsFormState() {
 	const [inputKey, setInputKey] = useState(apiKey);
 	const [braveInputKey, setBraveInputKey] = useState(braveApiKey);
 	const [opencodeInputKey, setOpencodeInputKey] = useState(opencodeApiKey);
+	const [deepseekInputKey, setDeepseekInputKey] = useState(deepseekApiKey);
+	const [customApiKeyInput, setCustomApiKeyInput] = useState(customApiKey);
 	const [llmProviderInput, setLlmProviderInput] = useState(llmProvider);
-	const [llmApiKeyInput, setLlmApiKeyInput] = useState(llmApiKey);
 	const [llmModelInput, setLlmModelInput] = useState(llmModel);
 	const [serverApiTokenInput, setServerApiTokenInput] = useState(() =>
 		getServerApiToken(),
@@ -39,10 +43,12 @@ export function useSettingsFormState() {
 		setBraveInputKey,
 		opencodeInputKey,
 		setOpencodeInputKey,
+		deepseekInputKey,
+		setDeepseekInputKey,
+		customApiKeyInput,
+		setCustomApiKeyInput,
 		llmProviderInput,
 		setLlmProviderInput,
-		llmApiKeyInput,
-		setLlmApiKeyInput,
 		llmModelInput,
 		setLlmModelInput,
 		serverApiTokenInput,
@@ -51,6 +57,8 @@ export function useSettingsFormState() {
 		setApiKey,
 		setBraveApiKey,
 		setOpencodeApiKey,
+		setDeepseekApiKey,
+		setCustomApiKey,
 		setLlmProvider,
 		setLlmApiKey,
 		setLlmModel,

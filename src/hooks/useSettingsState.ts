@@ -59,8 +59,18 @@ export function useSettingsState(onClose: () => void) {
 		form.setApiKey(form.inputKey);
 		form.setBraveApiKey(form.braveInputKey);
 		form.setOpencodeApiKey(form.opencodeInputKey);
+		form.setDeepseekApiKey(form.deepseekInputKey);
+		form.setCustomApiKey(form.customApiKeyInput);
 		form.setLlmProvider(form.llmProviderInput);
-		form.setLlmApiKey(form.llmApiKeyInput);
+		// Derive llmApiKey from the provider-specific key so the Smart
+		// Search section doesn't need its own API key field.
+		const derivedKey =
+			form.llmProviderInput === "opencode"
+				? form.opencodeInputKey
+				: form.llmProviderInput === "deepseek"
+					? form.deepseekInputKey
+					: form.customApiKeyInput;
+		form.setLlmApiKey(derivedKey);
 		form.setLlmModel(form.llmModelInput);
 		setServerApiToken(form.serverApiTokenInput);
 		void syncWithBackend({ importRemoteWatched: true });
@@ -81,10 +91,12 @@ export function useSettingsState(onClose: () => void) {
 		setBraveInputKey: form.setBraveInputKey,
 		opencodeInputKey: form.opencodeInputKey,
 		setOpencodeInputKey: form.setOpencodeInputKey,
+		deepseekInputKey: form.deepseekInputKey,
+		setDeepseekInputKey: form.setDeepseekInputKey,
+		customApiKeyInput: form.customApiKeyInput,
+		setCustomApiKeyInput: form.setCustomApiKeyInput,
 		llmProviderInput: form.llmProviderInput,
 		setLlmProviderInput: form.setLlmProviderInput,
-		llmApiKeyInput: form.llmApiKeyInput,
-		setLlmApiKeyInput: form.setLlmApiKeyInput,
 		llmModelInput: form.llmModelInput,
 		setLlmModelInput: form.setLlmModelInput,
 		serverApiTokenInput: form.serverApiTokenInput,
