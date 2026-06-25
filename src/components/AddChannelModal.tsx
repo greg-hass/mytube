@@ -7,9 +7,11 @@ import {
 	Search,
 	ShieldAlert,
 	CloudOff,
+	Sparkles,
 } from "lucide-react";
 import { getDisplayText } from "../lib/youtube-parser";
 import { useAddChannelSearch } from "../hooks/useAddChannelSearch";
+import { useChannelSuggestions } from "../hooks/useChannelSuggestions";
 import { formatSubscriberCount, formatVideoCount } from "./channelSearch";
 import { AddChannelPreview } from "./AddChannelPreview";
 import type { YouTubeChannel } from "../types/youtube";
@@ -31,6 +33,7 @@ export const AddChannelModal = ({
 		existingSubscriptions,
 		onAdd,
 	});
+	const suggestions = useChannelSuggestions();
 
 	return (
 		<AnimatePresence>
@@ -42,7 +45,11 @@ export const AddChannelModal = ({
 					className="app-shell fixed inset-0 z-[100] flex h-[100dvh] flex-col overflow-hidden"
 				>
 					<AddChannelHeader onClose={onClose} />
-					<ModalBody search={search} />
+					<ModalBody
+						search={search}
+						suggestions={suggestions}
+						existingSubscriptions={existingSubscriptions}
+					/>
 				</motion.div>
 			)}
 		</AnimatePresence>
@@ -53,8 +60,12 @@ export const AddChannelModal = ({
 
 function ModalBody({
 	search,
+	suggestions,
+	existingSubscriptions,
 }: {
 	search: ReturnType<typeof useAddChannelSearch>;
+	suggestions: ReturnType<typeof useChannelSuggestions>;
+	existingSubscriptions: YouTubeChannel[];
 }) {
 	return (
 		<div className="flex-1 min-h-0 overflow-y-auto custom-scrollbar">
@@ -71,74 +82,182 @@ function ModalBody({
 					parsedInput={search.parsedInput}
 				/>
 
-				<AnimatePresence>
-					{search.isSearching && !search.hasResults && (
-						<SearchLoadingSkeleton />
-					)}
-				</AnimatePresence>
-
-				<AnimatePresence>
-					{search.hasResults && (
-						<SearchResultsSection
-							results={search.visibleSearchResults}
-							previewingId={search.previewChannel?.id ?? null}
-							addedIds={search.addedChannelIds}
-							onSelectPreview={search.handleSelectPreviewChannel}
-							renderPreview={(channel) => (
-								<AddChannelPreview
-									channel={channel}
-									isLoading={search.isLoading}
-									isAdded={search.addedChannelIds.has(channel.id)}
-									onAdd={search.handleAddPreviewChannel}
-									onDismiss={search.handleDismissPreview}
-								/>
-							)}
-						/>
-					)}
-				</AnimatePresence>
-
-				<NoResultsBlock
-					isSearching={search.isSearching}
-					input={search.input}
-					hasResults={search.hasResults}
-					channelInfo={search.channelInfo}
-					searchError={search.searchError}
+				<SearchResultsBody
+					search={search}
+					suggestions={suggestions}
+					existingSubscriptions={existingSubscriptions}
 				/>
-
-				<SearchErrorStates
-					searchError={search.searchError}
-					isSearching={search.isSearching}
-				/>
-
-				<AnimatePresence>
-					{search.channelInfo && !search.previewChannel && (
-						<AddChannelPreview
-							channel={search.channelInfo}
-							isLoading={search.isLoading}
-							isAdded={search.addedChannelIds.has(search.channelInfo.id)}
-							onAdd={search.handleAddPreviewChannel}
-							onDismiss={search.handleDismissPreview}
-						/>
-					)}
-				</AnimatePresence>
-
-				{!search.channelInfo && search.canAddParsedInput && (
-					<AddParsedInputButton
-						displayText={
-							search.parsedInput
-								? getDisplayText(search.parsedInput)
-								: search.input.trim()
-						}
-						isLoading={search.isLoading}
-						onAdd={search.handleAddParsedInput}
-					/>
-				)}
 
 				<AnimatePresence>
 					{search.showFormats && <SupportedFormatsSection />}
 				</AnimatePresence>
 			</div>
 		</div>
+	);
+}
+
+function SearchResultsBody({
+	search,
+	suggestions,
+	existingSubscriptions,
+}: {
+	search: ReturnType<typeof useAddChannelSearch>;
+	suggestions: ReturnType<typeof useChannelSuggestions>;
+	existingSubscriptions: YouTubeChannel[];
+}) {
+	return (
+		<>
+			<SearchStatusDisplay
+				isSearching={search.isSearching}
+				hasResults={search.hasResults}
+				visibleSearchResults={search.visibleSearchResults}
+				previewChannel={search.previewChannel}
+				addedChannelIds={search.addedChannelIds}
+				channelInfo={search.channelInfo}
+				searchError={search.searchError}
+				input={search.input}
+				isLoading={search.isLoading}
+				onSelectPreview={search.handleSelectPreviewChannel}
+				onAdd={search.handleAddPreviewChannel}
+				onDismiss={search.handleDismissPreview}
+			/>
+
+			<ChannelAddActions
+				search={search}
+				suggestions={suggestions}
+				existingSubscriptions={existingSubscriptions}
+			/>
+		</>
+	);
+}
+
+function SearchStatusDisplay({
+	isSearching,
+	hasResults,
+	visibleSearchResults,
+	previewChannel,
+	addedChannelIds,
+	channelInfo,
+	searchError,
+	input,
+	isLoading,
+	onSelectPreview,
+	onAdd,
+	onDismiss,
+}: {
+	isSearching: boolean;
+	hasResults: boolean;
+	visibleSearchResults: YouTubeChannel[];
+	previewChannel: YouTubeChannel | null;
+	addedChannelIds: Set<string>;
+	channelInfo: YouTubeChannel | null;
+	searchError: "auth" | "network" | null;
+	input: string;
+	isLoading: boolean;
+	onSelectPreview: (channel: YouTubeChannel) => void;
+	onAdd: () => Promise<void>;
+	onDismiss: () => void;
+}) {
+	return (
+		<>
+			<AnimatePresence>
+				{isSearching && !hasResults && <SearchLoadingSkeleton />}
+			</AnimatePresence>
+
+			<AnimatePresence>
+				{hasResults && (
+					<SearchResultsSection
+						results={visibleSearchResults}
+						previewingId={previewChannel?.id ?? null}
+						addedIds={addedChannelIds}
+						onSelectPreview={onSelectPreview}
+						renderPreview={(channel) => (
+							<AddChannelPreview
+								channel={channel}
+								isLoading={isLoading}
+								isAdded={addedChannelIds.has(channel.id)}
+								onAdd={onAdd}
+								onDismiss={onDismiss}
+							/>
+						)}
+					/>
+				)}
+			</AnimatePresence>
+
+			<NoResultsBlock
+				isSearching={isSearching}
+				input={input}
+				hasResults={hasResults}
+				channelInfo={channelInfo}
+				searchError={searchError}
+			/>
+
+			<SearchErrorStates searchError={searchError} isSearching={isSearching} />
+
+			<AnimatePresence>
+				{channelInfo && !previewChannel && (
+					<AddChannelPreview
+						channel={channelInfo}
+						isLoading={isLoading}
+						isAdded={addedChannelIds.has(channelInfo.id)}
+						onAdd={onAdd}
+						onDismiss={onDismiss}
+					/>
+				)}
+			</AnimatePresence>
+		</>
+	);
+}
+
+function ChannelAddActions({
+	search,
+	suggestions,
+	existingSubscriptions,
+}: {
+	search: ReturnType<typeof useAddChannelSearch>;
+	suggestions: ReturnType<typeof useChannelSuggestions>;
+	existingSubscriptions: YouTubeChannel[];
+}) {
+	const showSuggestionsButton =
+		!search.isSearching &&
+		!search.hasResults &&
+		!search.channelInfo &&
+		!search.validationError &&
+		!search.searchError &&
+		suggestions.state.phase === "idle" &&
+		search.input.trim().length < 2;
+
+	const handleDiscover = async () => {
+		if (suggestions.state.phase === "loading") return;
+		await suggestions.fetchSuggestions(existingSubscriptions);
+	};
+
+	return (
+		<>
+			{!search.channelInfo && search.canAddParsedInput && (
+				<AddParsedInputButton
+					displayText={
+						search.parsedInput
+							? getDisplayText(search.parsedInput)
+							: search.input.trim()
+					}
+					isLoading={search.isLoading}
+					onAdd={search.handleAddParsedInput}
+				/>
+			)}
+
+			<SuggestionsSection
+				suggestions={suggestions}
+				addedIds={search.addedChannelIds}
+				previewChannel={search.previewChannel}
+				isLoading={search.isLoading}
+				onSelectPreview={search.handleSelectPreviewChannel}
+				onAdd={search.handleAddPreviewChannel}
+				onDismiss={search.handleDismissPreview}
+				showButton={showSuggestionsButton}
+				onDiscover={handleDiscover}
+			/>
+		</>
 	);
 }
 
@@ -509,6 +628,125 @@ function AddParsedInputButton({
 				)}
 			</button>
 		</div>
+	);
+}
+
+// ─── Suggestions Section ───────────────────────────────────────────────
+
+function SuggestionsSection({
+	suggestions,
+	addedIds,
+	previewChannel,
+	isLoading,
+	onSelectPreview,
+	onAdd,
+	onDismiss,
+	showButton,
+	onDiscover,
+}: {
+	suggestions: ReturnType<typeof useChannelSuggestions>;
+	addedIds: Set<string>;
+	previewChannel: YouTubeChannel | null;
+	isLoading: boolean;
+	onSelectPreview: (channel: YouTubeChannel) => void;
+	onAdd: () => Promise<void>;
+	onDismiss: () => void;
+	showButton: boolean;
+	onDiscover: () => Promise<void>;
+}) {
+	const { state } = suggestions;
+
+	return (
+		<>
+			<AnimatePresence>
+				{showButton && (
+					<motion.div
+						initial={{ opacity: 0, y: 10 }}
+						animate={{ opacity: 1, y: 0 }}
+						exit={{ opacity: 0, y: 10 }}
+					>
+						<button
+							type="button"
+							onClick={onDiscover}
+							className="w-full flex items-center justify-center gap-2 rounded-xl border-2 border-dashed border-gray-300 dark:border-ios-700 px-4 py-4 text-sm font-medium text-gray-600 dark:text-ios-300 transition-all hover:border-red-400 hover:text-red-600 dark:hover:border-red-500 dark:hover:text-red-400 bg-transparent"
+						>
+							<Sparkles className="w-5 h-5" />
+							Discover Channels
+						</button>
+					</motion.div>
+				)}
+			</AnimatePresence>
+
+			<AnimatePresence>
+				{state.phase === "loading" && (
+					<motion.div
+						initial={{ opacity: 0 }}
+						animate={{ opacity: 1 }}
+						exit={{ opacity: 0 }}
+						className="text-center py-6"
+					>
+						<div className="w-6 h-6 border-2 border-red-600 border-t-transparent rounded-full animate-spin mx-auto mb-2" />
+						<p className="text-sm text-gray-500 dark:text-ios-400">
+							Finding channels you&apos;ll like...
+						</p>
+					</motion.div>
+				)}
+			</AnimatePresence>
+
+			<AnimatePresence>
+				{state.phase === "error" && (
+					<motion.div
+						initial={{ opacity: 0, y: 10 }}
+						animate={{ opacity: 1, y: 0 }}
+						exit={{ opacity: 0, y: 10 }}
+						className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 dark:border-amber-900/60 dark:bg-amber-950/30"
+					>
+						<div className="flex items-start gap-3">
+							<AlertCircle className="w-5 h-5 text-amber-500 mt-0.5 shrink-0" />
+							<div className="min-w-0">
+								<p className="text-sm font-medium text-amber-800 dark:text-amber-300">
+									{state.message.includes("API key")
+										? "Smart Search not configured"
+										: "Couldn&apos;t get suggestions"}
+								</p>
+								<p className="mt-1 text-xs text-amber-700 dark:text-amber-400">
+									{state.message}
+								</p>
+								{state.message.includes("API key") && (
+									<button
+										type="button"
+										onClick={onDiscover}
+										className="mt-2 text-xs font-medium text-red-600 hover:underline"
+									>
+										Try again
+									</button>
+								)}
+							</div>
+						</div>
+					</motion.div>
+				)}
+			</AnimatePresence>
+
+			<AnimatePresence>
+				{state.phase === "results" && state.channels.length > 0 && (
+					<SearchResultsSection
+						results={state.channels}
+						previewingId={previewChannel?.id ?? null}
+						addedIds={addedIds}
+						onSelectPreview={onSelectPreview}
+						renderPreview={(channel) => (
+							<AddChannelPreview
+								channel={channel}
+								isLoading={isLoading}
+								isAdded={addedIds.has(channel.id)}
+								onAdd={onAdd}
+								onDismiss={onDismiss}
+							/>
+						)}
+					/>
+				)}
+			</AnimatePresence>
+		</>
 	);
 }
 

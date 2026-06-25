@@ -28,9 +28,18 @@ const AUTH_ERROR = "auth" as const;
 
 function buildSearchHeaders(): HeadersInit {
 	const headers: HeadersInit = {};
-	const { braveApiKey, opencodeApiKey } = useStore.getState();
-	if (braveApiKey) headers["X-Brave-Api-Key"] = braveApiKey;
+	const { braveApiKey, opencodeApiKey, llmProvider, llmApiKey, llmModel } =
+		useStore.getState();
+
+	// Legacy: send OpenCode key via the old header for backward compat
 	if (opencodeApiKey) headers["X-Opencode-Api-Key"] = opencodeApiKey;
+
+	// LLM provider config for search + suggestions
+	if (braveApiKey) headers["X-Brave-Api-Key"] = braveApiKey;
+	if (llmProvider) headers["X-Llm-Provider"] = llmProvider;
+	if (llmApiKey) headers["X-Llm-Api-Key"] = llmApiKey;
+	if (llmModel) headers["X-Llm-Model"] = llmModel;
+
 	return headers;
 }
 

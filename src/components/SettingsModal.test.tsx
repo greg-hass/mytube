@@ -12,12 +12,23 @@ const storeMocks = vi.hoisted(() => ({
 	setApiKey: vi.fn(),
 	setBraveApiKey: vi.fn(),
 	setOpencodeApiKey: vi.fn(),
+	setLlmProvider: vi.fn(),
+	setLlmApiKey: vi.fn(),
+	setLlmModel: vi.fn(),
 	setWatchedVideos: vi.fn(),
 }));
 const subscriptionMocks = vi.hoisted(() => ({
 	addSubscriptions: vi.fn(),
 	syncWithBackend: vi.fn(),
 }));
+
+const onClose = vi.fn();
+
+async function renderModal() {
+	const result = render(<SettingsModal isOpen onClose={onClose} />);
+	expect(await screen.findByText("Online")).toBeInTheDocument();
+	return result;
+}
 
 vi.mock("@tanstack/react-query", () => ({
 	useQueryClient: () => ({
@@ -48,9 +59,15 @@ vi.mock("../store/useStore", () => ({
 		apiKey: "key",
 		braveApiKey: "",
 		opencodeApiKey: "",
+		llmProvider: "opencode",
+		llmApiKey: "",
+		llmModel: "big-pickle",
 		setApiKey: storeMocks.setApiKey,
 		setBraveApiKey: storeMocks.setBraveApiKey,
 		setOpencodeApiKey: storeMocks.setOpencodeApiKey,
+		setLlmProvider: storeMocks.setLlmProvider,
+		setLlmApiKey: storeMocks.setLlmApiKey,
+		setLlmModel: storeMocks.setLlmModel,
 		watchedVideos: new Set(["watched-1", "watched-2"]),
 		setWatchedVideos: storeMocks.setWatchedVideos,
 	}),
@@ -72,20 +89,20 @@ describe("SettingsModal", () => {
 	beforeEach(() => {
 		invalidateQueries.mockClear();
 		clearAllCachedVideos.mockReset().mockResolvedValue(undefined);
-		storeMocks.setApiKey.mockClear();
-		storeMocks.setBraveApiKey.mockClear();
-		storeMocks.setOpencodeApiKey.mockClear();
-		storeMocks.setWatchedVideos.mockClear();
-		subscriptionMocks.addSubscriptions.mockReset().mockResolvedValue(undefined);
-		subscriptionMocks.syncWithBackend.mockReset().mockResolvedValue(undefined);
+		for (const key of Object.keys(storeMocks) as (keyof typeof storeMocks)[]) {
+			storeMocks[key].mockClear();
+		}
+		for (const key of Object.keys(
+			subscriptionMocks,
+		) as (keyof typeof subscriptionMocks)[]) {
+			subscriptionMocks[key].mockReset().mockResolvedValue(undefined);
+		}
 		installFetchMock();
 		installLocalStorageMock();
 	});
 
 	it("keeps the mobile settings header below the top safe area", async () => {
-		render(<SettingsModal isOpen onClose={vi.fn()} />);
-
-		expect(await screen.findByText("Online")).toBeInTheDocument();
+		await renderModal();
 
 		// The "Settings" text is nested inside the glass header; walk up to
 		// find the modal container that carries the safe-area padding.
@@ -98,9 +115,7 @@ describe("SettingsModal", () => {
 	});
 
 	it("shows backup health counts in Settings", async () => {
-		render(<SettingsModal isOpen onClose={vi.fn()} />);
-
-		expect(await screen.findByText("Online")).toBeInTheDocument();
+		await renderModal();
 		expect(screen.getByText("Data Health")).toBeInTheDocument();
 		expect(screen.getByText("3 subscriptions")).toBeInTheDocument();
 		expect(screen.getByText("2 watched")).toBeInTheDocument();
@@ -110,9 +125,7 @@ describe("SettingsModal", () => {
 	});
 
 	it("explains that backups include all user-owned app data and shows storage health", async () => {
-		render(<SettingsModal isOpen onClose={vi.fn()} />);
-
-		expect(await screen.findByText("Online")).toBeInTheDocument();
+		await renderModal();
 		expect(
 			screen.getByText(
 				/Subscriptions, watched videos, favorites, queue, feed filters, groups, and settings/i,
@@ -133,7 +146,7 @@ describe("SettingsModal", () => {
 			failedChannels: [],
 		});
 
-		render(<SettingsModal isOpen onClose={vi.fn()} />);
+		await renderModal();
 
 		expect(
 			await screen.findByText("Recovered from backup on startup"),
@@ -141,7 +154,7 @@ describe("SettingsModal", () => {
 	});
 
 	it("reports restored subscription and watched counts after importing a backup", async () => {
-		const { container } = render(<SettingsModal isOpen onClose={vi.fn()} />);
+		const { container } = await renderModal();
 		const input = container.querySelector(
 			'input[type="file"]',
 		) as HTMLInputElement;
@@ -172,9 +185,7 @@ describe("SettingsModal", () => {
 	});
 
 	it("resets feed cache without clearing saved user data", async () => {
-		render(<SettingsModal isOpen onClose={vi.fn()} />);
-
-		expect(await screen.findByText("Online")).toBeInTheDocument();
+		await renderModal();
 		fireEvent.click(screen.getByRole("button", { name: "Reset Feed Cache" }));
 
 		await waitFor(() => {
@@ -199,9 +210,8 @@ describe("SettingsModal", () => {
 	});
 
 	it("shows server health and version in Settings", async () => {
-		render(<SettingsModal isOpen onClose={vi.fn()} />);
-
-		expect(await screen.findByText("Server")).toBeInTheDocument();
+		await renderModal();
+		expect(screen.getByText("Server")).toBeInTheDocument();
 		expect(screen.getByText("Online")).toBeInTheDocument();
 		expect(screen.getByText("Server 1.0.0")).toBeInTheDocument();
 		expect(screen.getByText("App 0.0.0")).toBeInTheDocument();
@@ -210,9 +220,8 @@ describe("SettingsModal", () => {
 	});
 
 	it("shows failed refresh channels in Settings", async () => {
-		render(<SettingsModal isOpen onClose={vi.fn()} />);
-
-		expect(await screen.findByText("Refresh Issues")).toBeInTheDocument();
+		await renderModal();
+		expect(screen.getByText("Refresh Issues")).toBeInTheDocument();
 		expect(screen.getByText("Broken Channel")).toBeInTheDocument();
 		expect(
 			screen.getByText("No RSS videos or metadata returned"),
@@ -220,9 +229,8 @@ describe("SettingsModal", () => {
 	});
 
 	it("can retry failed channel refreshes from Settings", async () => {
-		render(<SettingsModal isOpen onClose={vi.fn()} />);
-
-		expect(await screen.findByText("Refresh Issues")).toBeInTheDocument();
+		await renderModal();
+		expect(screen.getByText("Refresh Issues")).toBeInTheDocument();
 		fireEvent.click(
 			screen.getByRole("button", { name: "Retry Failed Channels" }),
 		);
@@ -242,9 +250,7 @@ describe("SettingsModal", () => {
 	});
 
 	it("saves a brave api key alongside the youtube api key", async () => {
-		render(<SettingsModal isOpen onClose={vi.fn()} />);
-
-		expect(await screen.findByText("Online")).toBeInTheDocument();
+		await renderModal();
 		fireEvent.change(
 			screen.getByPlaceholderText("Enter your Brave Search API key..."),
 			{
