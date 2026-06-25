@@ -19,6 +19,7 @@ export const useStore = create<AppState>()(
 				sortBy: state.sortBy,
 				apiKey: state.apiKey,
 				braveApiKey: state.braveApiKey,
+				opencodeApiKey: state.opencodeApiKey,
 				quotaUsed: state.quotaUsed,
 				apiExhausted: state.apiExhausted,
 				lastQuotaResetDate: state.lastQuotaResetDate,

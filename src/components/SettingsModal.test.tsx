@@ -1,12 +1,17 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { SettingsModal } from "./SettingsModal";
+import {
+	installFetchMock,
+	installLocalStorageMock,
+} from "./SettingsModal.test-helpers";
 
 const invalidateQueries = vi.fn();
 const clearAllCachedVideos = vi.fn();
 const storeMocks = vi.hoisted(() => ({
 	setApiKey: vi.fn(),
 	setBraveApiKey: vi.fn(),
+	setOpencodeApiKey: vi.fn(),
 	setWatchedVideos: vi.fn(),
 }));
 const subscriptionMocks = vi.hoisted(() => ({
@@ -42,8 +47,10 @@ vi.mock("../store/useStore", () => ({
 	useStore: () => ({
 		apiKey: "key",
 		braveApiKey: "",
+		opencodeApiKey: "",
 		setApiKey: storeMocks.setApiKey,
 		setBraveApiKey: storeMocks.setBraveApiKey,
+		setOpencodeApiKey: storeMocks.setOpencodeApiKey,
 		watchedVideos: new Set(["watched-1", "watched-2"]),
 		setWatchedVideos: storeMocks.setWatchedVideos,
 	}),
@@ -67,72 +74,12 @@ describe("SettingsModal", () => {
 		clearAllCachedVideos.mockReset().mockResolvedValue(undefined);
 		storeMocks.setApiKey.mockClear();
 		storeMocks.setBraveApiKey.mockClear();
+		storeMocks.setOpencodeApiKey.mockClear();
 		storeMocks.setWatchedVideos.mockClear();
 		subscriptionMocks.addSubscriptions.mockReset().mockResolvedValue(undefined);
 		subscriptionMocks.syncWithBackend.mockReset().mockResolvedValue(undefined);
-		vi.stubGlobal(
-			"fetch",
-			vi.fn((url: string) => {
-				if (url === "/api/health") {
-					return Promise.resolve({
-						ok: true,
-						json: async () => ({
-							status: "ok",
-							subscriptions: 3,
-							videos: 42,
-							lastUpdated: "2026-05-09T20:00:00.000Z",
-							dataIntegrity: [
-								{ file: "/data/db.json", status: "ok", backupFile: null },
-								{ file: "/data/videos.json", status: "ok", backupFile: null },
-							],
-						}),
-					});
-				}
-				if (url === "/api/version") {
-					return Promise.resolve({
-						ok: true,
-						json: async () => ({
-							name: "youtube-subscriptions-api",
-							version: "1.0.0",
-							appVersion: "0.0.0",
-						}),
-					});
-				}
-				if (url === "/api/videos/status") {
-					return Promise.resolve({
-						ok: true,
-						json: async () => ({
-							errors: 1,
-							failedChannels: [
-								{
-									id: "UC_BAD",
-									title: "Broken Channel",
-									reason: "No RSS videos or metadata returned",
-								},
-							],
-						}),
-					});
-				}
-				return Promise.resolve({
-					ok: true,
-					json: async () => ({ success: true }),
-				});
-			}),
-		);
-		const storage = new Map<string, string>([
-			["favorite-video-ids", JSON.stringify(["fav-1"])],
-			["queued-video-ids", JSON.stringify(["queue-1", "queue-2"])],
-			[
-				"feed-quality-filters",
-				JSON.stringify({ hidePremieres: true, mutedKeywordText: "rumor" }),
-			],
-		]);
-		vi.stubGlobal("localStorage", {
-			getItem: vi.fn((key: string) => storage.get(key) ?? null),
-			setItem: vi.fn((key: string, value: string) => storage.set(key, value)),
-			removeItem: vi.fn((key: string) => storage.delete(key)),
-			clear: vi.fn(() => storage.clear()),
-		});
+		installFetchMock();
+		installLocalStorageMock();
 	});
 
 	it("keeps the mobile settings header below the top safe area", async () => {
@@ -144,7 +91,7 @@ describe("SettingsModal", () => {
 		// find the modal container that carries the safe-area padding.
 		const headerLabel = screen.getByText("Settings");
 		const modal = headerLabel.closest(
-			'[class*="pt-[env(safe-area-inset-top)"]',
+			'[class*="pt-[env(safe-area-inset-top)]"]',
 		);
 		expect(modal?.className).toContain("pt-[env(safe-area-inset-top)]");
 		expect(modal?.className).toContain("md:pt-0");
@@ -175,46 +122,15 @@ describe("SettingsModal", () => {
 	});
 
 	it("shows when storage was recovered from a startup backup", async () => {
-		vi.mocked(fetch).mockImplementation((input: URL | RequestInfo) => {
-			const url = String(input);
-			if (url === "/api/health") {
-				return Promise.resolve({
-					ok: true,
-					json: async () => ({
-						status: "ok",
-						subscriptions: 3,
-						videos: 42,
-						lastUpdated: "2026-05-09T20:00:00.000Z",
-						dataIntegrity: [
-							{
-								file: "/data/db.json",
-								status: "restored",
-								backupFile: "/data/backups/db.bak.json",
-							},
-						],
-					}),
-				} as Response);
-			}
-			if (url === "/api/version") {
-				return Promise.resolve({
-					ok: true,
-					json: async () => ({
-						name: "youtube-subscriptions-api",
-						version: "1.0.0",
-						appVersion: "0.0.0",
-					}),
-				} as Response);
-			}
-			if (url === "/api/videos/status") {
-				return Promise.resolve({
-					ok: true,
-					json: async () => ({ failedChannels: [] }),
-				} as Response);
-			}
-			return Promise.resolve({
-				ok: true,
-				json: async () => ({ success: true }),
-			} as Response);
+		installFetchMock({
+			dataIntegrity: [
+				{
+					file: "/data/db.json",
+					status: "restored",
+					backupFile: "/data/backups/db.bak.json",
+				},
+			],
+			failedChannels: [],
 		});
 
 		render(<SettingsModal isOpen onClose={vi.fn()} />);

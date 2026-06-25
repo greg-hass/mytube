@@ -156,6 +156,14 @@ async function searchBraveChannels(query, options = {}) {
 			const identity = parseYouTubeUrl(result.url);
 			if (!identity) continue;
 
+			// Brave returns a thumbnail for the webpage. For YouTube channel
+			// pages this is typically the channel avatar. Resize to medium
+			// if it's a YouTube avatar URL (=sNNN suffix controls the size).
+			const rawThumb = result.thumbnail?.src || "";
+			const thumbnail = rawThumb.match(/yt3\.(googleusercontent|ggpht)\.com/)
+				? rawThumb.replace(/=s\d+.*$/, "=s176-c-k-c0x00ffffff-no-rj")
+				: rawThumb;
+
 			if (identity.type === "channel_id") {
 				// Direct channel ID — no resolution needed
 				if (seenIds.has(identity.value)) continue;
@@ -165,7 +173,7 @@ async function searchBraveChannels(query, options = {}) {
 					id: identity.value,
 					title: result.title?.replace(/\s*[-–—]\s*YouTube\s*$/i, "") || "",
 					description: result.description || "",
-					thumbnail: "",
+					thumbnail,
 					customUrl: undefined,
 				});
 			} else {

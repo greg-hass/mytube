@@ -1,9 +1,10 @@
 import { createRequire } from "node:module";
-import { beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 const require = createRequire(import.meta.url);
 const {
 	buildChannelSearchQueries,
+	clearSearchCache,
 	dedupeAndRankChannels,
 	detectChannelIdentity,
 	getSearchCacheStats,
@@ -140,6 +141,100 @@ describe("channel search ranking", () => {
 				customUrl: "/@veritasium",
 			},
 		]);
+	});
+});
+
+describe("fuzzy keyword matching", () => {
+	it("matches a typo'd token against a channel title", () => {
+		// "linx" (typo) should still match "Linux" — 1 edit, 4 chars
+		expect(
+			scoreChannelResult("linx tech", {
+				id: "UC1234567890123456789012",
+				title: "Linux Tech",
+			}),
+		).toBeGreaterThan(0);
+	});
+
+	it("matches a longer typo against a longer channel name", () => {
+		// "woodworing" (2 typos) should match "woodworking" — 2 edits, 11 chars
+		expect(
+			scoreChannelResult("woodworing", {
+				id: "UC1234567890123456789012",
+				title: "Steve Ramsey Woodworking",
+			}),
+		).toBeGreaterThan(0);
+	});
+
+	it("matches a substring token against a longer title token", () => {
+		// "tech" should match "technology" — substring match
+		expect(
+			scoreChannelResult("tech", {
+				id: "UC1234567890123456789012",
+				title: "Technology Connections",
+			}),
+		).toBeGreaterThan(0);
+	});
+
+	it("ranks exact matches above fuzzy matches", () => {
+		const exact = scoreChannelResult("linux tech", {
+			id: "UC_EXACT_______________",
+			title: "Linux Tech",
+		});
+		const fuzzy = scoreChannelResult("linx tech", {
+			id: "UC_FUZZY_______________",
+			title: "Linux Tech",
+		});
+
+		expect(exact).toBeGreaterThan(fuzzy);
+	});
+
+	it("returns 0 for completely unrelated queries", () => {
+		expect(
+			scoreChannelResult("quantum physics", {
+				id: "UC1234567890123456789012",
+				title: "Cooking Channel",
+			}),
+		).toBe(0);
+	});
+
+	it("handles multi-token queries with mixed exact and fuzzy matches", () => {
+		// "linx tech" → "linx" fuzzy-matches "linux", "tech" exact-matches "tech"
+		const results = dedupeAndRankChannels("linx tech", [
+			{ id: "UC_A__________________", title: "Linux Tech Tips" },
+			{ id: "UC_B__________________", title: "Tech News" },
+			{ id: "UC_C__________________", title: "Cooking Show" },
+		]);
+
+		// Linux Tech Tips should rank first (both tokens match, even if fuzzy)
+		expect(results[0]?.id).toBe("UC_A__________________");
+		// Tech News should rank above Cooking Show (1 exact match vs 0)
+		const techNews = results.find((r) => r.id === "UC_B__________________");
+		const cooking = results.find((r) => r.id === "UC_C__________________");
+		if (techNews && cooking) {
+			expect(techNews.score).toBeGreaterThan(cooking.score);
+		}
+	});
+
+	it("matches against customUrl/handle as well as title", () => {
+		// "lvl1techs" with 1 typo should match handle "/@level1techs"
+		expect(
+			scoreChannelResult("lvl1techs", {
+				id: "UC1234567890123456789012",
+				title: "Level One Techs",
+				customUrl: "/@level1techs",
+			}),
+		).toBeGreaterThan(0);
+	});
+
+	it("skips Levenshtein for very short tokens to avoid noise", () => {
+		// 2-char token "js" should not fuzzy-match "java" (1 edit would be
+		// 50% similarity, too noisy). Exact match only.
+		expect(
+			scoreChannelResult("js", {
+				id: "UC1234567890123456789012",
+				title: "JavaScript Mastery",
+			}),
+		).toBe(0);
 	});
 });
 
@@ -377,6 +472,611 @@ describe("direct identifier resolution", () => {
 		expect(channelsListCalled).toBe(true);
 		expect(results.length).toBeGreaterThan(0);
 		expect(results[0].id).toBe("UC1234567890123456789012");
+	});
+
+	describe("scrape fallback when YOUTUBE_API_KEY is not set", () => {
+		const ORIGINAL_YT_KEY = process.env.YOUTUBE_API_KEY;
+
+		beforeEach(() => {
+			clearSearchCache();
+			delete process.env.YOUTUBE_API_KEY;
+		});
+
+		afterEach(() => {
+			if (ORIGINAL_YT_KEY !== undefined) {
+				process.env.YOUTUBE_API_KEY = ORIGINAL_YT_KEY;
+			}
+		});
+
+		it("resolves a /channel/UC... URL by scraping the YouTube page", async () => {
+			let scrapedUrl = null;
+			const fetchImpl = async (url) => {
+				const urlStr = String(url);
+				if (urlStr.includes("googleapis.com")) {
+					throw new Error(
+						"Should not call YouTube Data API when no key is set",
+					);
+				}
+				if (urlStr.includes("youtube.com/channel/UCBR8-60-B28hp2BmDPdntcQ")) {
+					scrapedUrl = urlStr;
+					return {
+						ok: true,
+						status: 200,
+						text: async () =>
+							"<html><head>" +
+							'<link rel="canonical" href="https://www.youtube.com/channel/UCBR8-60-B28hp2BmDPdntcQ" />' +
+							'<meta property="og:title" content="YouTube" />' +
+							"</head><body></body></html>",
+					};
+				}
+				return {
+					ok: false,
+					status: 500,
+					text: async () => "",
+					json: async () => ({}),
+				};
+			};
+
+			const results = await searchChannels(
+				"https://www.youtube.com/channel/UCBR8-60-B28hp2BmDPdntcQ",
+				{ fetchImpl },
+			);
+
+			expect(scrapedUrl).toContain(
+				"youtube.com/channel/UCBR8-60-B28hp2BmDPdntcQ",
+			);
+			expect(results).toHaveLength(1);
+			expect(results[0].id).toBe("UCBR8-60-B28hp2BmDPdntcQ");
+			expect(results[0].title).toBe("YouTube");
+		});
+
+		it("resolves an @handle URL by scraping the YouTube page", async () => {
+			let scrapedUrl = null;
+			const fetchImpl = async (url) => {
+				const urlStr = String(url);
+				if (urlStr.includes("googleapis.com")) {
+					throw new Error(
+						"Should not call YouTube Data API when no key is set",
+					);
+				}
+				if (urlStr.includes("youtube.com/@mkbhd")) {
+					scrapedUrl = urlStr;
+					return {
+						ok: true,
+						status: 200,
+						text: async () =>
+							"<html><head>" +
+							'<link rel="canonical" href="https://www.youtube.com/channel/UCBJycr3I2uIQHu5F2q5p5Gw" />' +
+							'<meta property="og:title" content="Marques Brownlee" />' +
+							"</head><body></body></html>",
+					};
+				}
+				return {
+					ok: false,
+					status: 500,
+					text: async () => "",
+					json: async () => ({}),
+				};
+			};
+
+			const results = await searchChannels("https://www.youtube.com/@mkbhd", {
+				fetchImpl,
+			});
+
+			expect(scrapedUrl).toContain("youtube.com/@mkbhd");
+			expect(results).toHaveLength(1);
+			expect(results[0].id).toBe("UCBJycr3I2uIQHu5F2q5p5Gw");
+			expect(results[0].title).toBe("Marques Brownlee");
+			expect(results[0].customUrl).toBe("/@mkbhd");
+		});
+
+		it("resolves a bare @handle by scraping the YouTube page", async () => {
+			const fetchImpl = async (url) => {
+				const urlStr = String(url);
+				if (urlStr.includes("googleapis.com")) {
+					throw new Error(
+						"Should not call YouTube Data API when no key is set",
+					);
+				}
+				if (urlStr.includes("youtube.com/@veritasium")) {
+					return {
+						ok: true,
+						status: 200,
+						text: async () =>
+							"<html><head>" +
+							'<link rel="canonical" href="https://www.youtube.com/channel/UCHnyfMqiRRG1u-2MsSQLbXA" />' +
+							'<meta property="og:title" content="Veritasium" />' +
+							"</head><body></body></html>",
+					};
+				}
+				return {
+					ok: false,
+					status: 500,
+					text: async () => "",
+					json: async () => ({}),
+				};
+			};
+
+			const results = await searchChannels("@veritasium", { fetchImpl });
+
+			expect(results).toHaveLength(1);
+			expect(results[0].id).toBe("UCHnyfMqiRRG1u-2MsSQLbXA");
+			expect(results[0].title).toBe("Veritasium");
+		});
+
+		it("resolves a bare channel ID by scraping the YouTube page", async () => {
+			const fetchImpl = async (url) => {
+				const urlStr = String(url);
+				if (urlStr.includes("googleapis.com")) {
+					throw new Error(
+						"Should not call YouTube Data API when no key is set",
+					);
+				}
+				if (urlStr.includes("youtube.com/channel/UCBR8-60-B28hp2BmDPdntcQ")) {
+					return {
+						ok: true,
+						status: 200,
+						text: async () =>
+							"<html><head>" +
+							'<link rel="canonical" href="https://www.youtube.com/channel/UCBR8-60-B28hp2BmDPdntcQ" />' +
+							'<meta property="og:title" content="YouTube" />' +
+							"</head><body></body></html>",
+					};
+				}
+				return {
+					ok: false,
+					status: 500,
+					text: async () => "",
+					json: async () => ({}),
+				};
+			};
+
+			const results = await searchChannels("UCBR8-60-B28hp2BmDPdntcQ", {
+				fetchImpl,
+			});
+
+			expect(results).toHaveLength(1);
+			expect(results[0].id).toBe("UCBR8-60-B28hp2BmDPdntcQ");
+			expect(results[0].title).toBe("YouTube");
+		});
+
+		it("rejects a /channel/URL that redirects to a different channel", async () => {
+			const fetchImpl = async (url) => {
+				const urlStr = String(url);
+				if (urlStr.includes("googleapis.com")) {
+					throw new Error("Should not call API");
+				}
+				if (urlStr.includes("youtube.com/channel/UCBR8-60-B28hp2BmDPdntcQ")) {
+					// YouTube redirected to a different channel — the canonical
+					// link doesn't match the requested ID, so reject it.
+					return {
+						ok: true,
+						status: 200,
+						text: async () =>
+							"<html><head>" +
+							'<link rel="canonical" href="https://www.youtube.com/channel/UCDIFFERENT00000000000000" />' +
+							'<meta property="og:title" content="Wrong Channel" />' +
+							"</head><body></body></html>",
+					};
+				}
+				return {
+					ok: false,
+					status: 500,
+					text: async () => "",
+					json: async () => ({}),
+				};
+			};
+
+			const results = await searchChannels(
+				"https://www.youtube.com/channel/UCBR8-60-B28hp2BmDPdntcQ",
+				{ fetchImpl },
+			);
+
+			// Scrape rejected the mismatched ID, so we get no results
+			// from the scrape path. (The keyword/scrape fallback tiers
+			// also return empty in this mock — the key assertion is that
+			// we did NOT get the wrong channel ID.)
+			const wrongId = results.find((r) => r.id === "UCDIFFERENT00000000000000");
+			expect(wrongId).toBeUndefined();
+		});
+
+		it("falls through to keyword search when scrape returns no channel ID", async () => {
+			let scrapeCalled = false;
+			const fetchImpl = async (url) => {
+				const urlStr = String(url);
+				if (urlStr.includes("googleapis.com")) {
+					throw new Error("Should not call API");
+				}
+				if (urlStr.includes("youtube.com/@nonexistent")) {
+					scrapeCalled = true;
+					// YouTube returns a 404 for invalid handles
+					return {
+						ok: false,
+						status: 404,
+						text: async () => "Not Found",
+						json: async () => ({}),
+					};
+				}
+				return {
+					ok: false,
+					status: 500,
+					text: async () => "",
+					json: async () => ({}),
+				};
+			};
+
+			const results = await searchChannels("@nonexistent", { fetchImpl });
+
+			expect(scrapeCalled).toBe(true);
+			// No API, no scrape result — should return empty array
+			// rather than throwing or returning wrong results.
+			expect(results).toEqual([]);
+		});
+
+		it("prefers the YouTube Data API over scraping when a key is set", async () => {
+			let apiCalled = false;
+			let scrapeCalled = false;
+			const fetchImpl = async (url) => {
+				const urlStr = String(url);
+				if (urlStr.includes("googleapis.com/youtube/v3/channels")) {
+					apiCalled = true;
+					return {
+						ok: true,
+						status: 200,
+						json: async () => ({
+							items: [
+								{
+									id: "UCBR8-60-B28hp2BmDPdntcQ",
+									snippet: {
+										title: "YouTube",
+										description: "YouTube's official channel",
+										thumbnails: {
+											medium: {
+												url: "https://example.com/yt.jpg",
+											},
+										},
+										customUrl: "@youtube",
+									},
+									statistics: {
+										subscriberCount: "50000000",
+										videoCount: "1000",
+									},
+								},
+							],
+						}),
+					};
+				}
+				if (urlStr.includes("youtube.com/")) {
+					scrapeCalled = true;
+				}
+				return {
+					ok: false,
+					status: 500,
+					text: async () => "",
+					json: async () => ({}),
+				};
+			};
+
+			const results = await searchChannels(
+				"https://www.youtube.com/channel/UCBR8-60-B28hp2BmDPdntcQ",
+				{ fetchImpl, youtubeApiKey: "yt-key" },
+			);
+
+			expect(apiCalled).toBe(true);
+			expect(scrapeCalled).toBe(false);
+			expect(results).toHaveLength(1);
+			expect(results[0].subscriberCount).toBe("50000000");
+		});
+
+		it("tries concatenated handle for multi-word person-name queries", async () => {
+			let scrapedUrl = null;
+			const fetchImpl = async (url) => {
+				const urlStr = String(url);
+				if (urlStr.includes("googleapis.com")) {
+					throw new Error("Should not call API");
+				}
+				if (urlStr.includes("youtube.com/@marionawfal")) {
+					scrapedUrl = urlStr;
+					return {
+						ok: true,
+						status: 200,
+						text: async () =>
+							"<html><head>" +
+							'<link rel="canonical" href="https://www.youtube.com/channel/UCTWBp-39z6tvz4-LQB-Z_QA" />' +
+							'<meta property="og:title" content="Mario Nawfal" />' +
+							"</head><body></body></html>",
+					};
+				}
+				return {
+					ok: false,
+					status: 500,
+					text: async () => "",
+					json: async () => ({}),
+				};
+			};
+
+			const results = await searchChannels("mario nawfal", { fetchImpl });
+
+			expect(scrapedUrl).toContain("youtube.com/@marionawfal");
+			expect(results).toHaveLength(1);
+			expect(results[0].id).toBe("UCTWBp-39z6tvz4-LQB-Z_QA");
+			expect(results[0].title).toBe("Mario Nawfal");
+		});
+
+		it("falls through when concatenated handle does not exist", async () => {
+			const fetchImpl = async (url) => {
+				const urlStr = String(url);
+				if (urlStr.includes("googleapis.com")) {
+					throw new Error("Should not call API");
+				}
+				// All YouTube page fetches return 404 — no handle resolves
+				return {
+					ok: false,
+					status: 404,
+					text: async () => "Not Found",
+					json: async () => ({}),
+				};
+			};
+
+			const results = await searchChannels("random xyz query", { fetchImpl });
+
+			// No handle resolves, no API, no Brave — returns empty
+			expect(results).toEqual([]);
+		});
+	});
+
+	describe("tier 6a: OpenCode big-pickle (function-calling with web_search tool)", () => {
+		beforeEach(() => {
+			clearSearchCache();
+		});
+
+		it("falls through to OpenCode when lower tiers miss", async () => {
+			let opencodeCalled = false;
+			let verifyPageUrl = null;
+			const fetchImpl = async (url) => {
+				const urlStr = String(url);
+				// OpenCode big-pickle call
+				if (urlStr.includes("opencode.ai/zen/v1/chat/completions")) {
+					opencodeCalled = true;
+					return {
+						ok: true,
+						status: 200,
+						json: async () => ({
+							choices: [
+								{
+									message: {
+										role: "assistant",
+										content: JSON.stringify({
+											handle: "MarioNawfal",
+											title: "Mario Nawfal",
+										}),
+									},
+								},
+							],
+						}),
+					};
+				}
+				// YouTube page scrape to verify
+				if (urlStr.includes("youtube.com/@MarioNawfal")) {
+					verifyPageUrl = urlStr;
+					return {
+						ok: true,
+						status: 200,
+						text: async () =>
+							"<html><head>" +
+							'<link rel="canonical" href="https://www.youtube.com/channel/UCTWBp-39z6tvz4-LQB-Z_QA" />' +
+							'<meta property="og:title" content="Mario Nawfal" />' +
+							"</head><body></body></html>",
+					};
+				}
+				throw new Error(`Unexpected fetch: ${urlStr}`);
+			};
+			const results = await searchChannels("mario nafal typo", {
+				fetchImpl,
+				opencodeKey: "test-opencode-key",
+			});
+			expect(opencodeCalled).toBe(true);
+			expect(verifyPageUrl).toContain("youtube.com/@MarioNawfal");
+			expect(results).toHaveLength(1);
+			expect(results[0].id).toBe("UCTWBp-39z6tvz4-LQB-Z_QA");
+			expect(results[0].title).toBe("Mario Nawfal");
+		});
+
+		it("skips OpenCode entirely without an opencodeKey", async () => {
+			const fetchImpl = async (url) => {
+				const urlStr = String(url);
+				if (urlStr.includes("opencode.ai")) {
+					throw new Error("OpenCode should not be called without a key");
+				}
+				return {
+					ok: false,
+					status: 404,
+					text: async () => "Not Found",
+					json: async () => ({}),
+				};
+			};
+			const results = await searchChannels("obscure query xyz", {
+				fetchImpl,
+			});
+			expect(results).toEqual([]);
+		});
+
+
+		it("uses DDG HTML as the web_search backend when no Brave key is set", async () => {
+			let opencodeCalls = 0;
+			let ddgCalled = false;
+			const fetchImpl = async (url) => {
+				const urlStr = String(url);
+				if (urlStr.includes("opencode.ai")) {
+					opencodeCalls++;
+					// First call: model asks for web_search.
+					// Second call: model returns the final answer.
+					if (opencodeCalls === 1) {
+						return {
+							ok: true,
+							status: 200,
+							json: async () => ({
+								choices: [
+									{
+										message: {
+											role: "assistant",
+											content: null,
+											tool_calls: [
+												{
+													id: "call_1",
+													type: "function",
+													function: {
+														name: "web_search",
+														arguments: JSON.stringify({
+															query: "mario nawfal",
+														}),
+													},
+												},
+											],
+										},
+									},
+								],
+							}),
+						};
+					}
+					return {
+						ok: true,
+						status: 200,
+						json: async () => ({
+							choices: [
+								{
+									message: {
+										role: "assistant",
+										content: JSON.stringify({
+											handle: "MarioNawfal",
+											title: "Mario Nawfal",
+										}),
+									},
+								},
+							],
+						}),
+					};
+				}
+				if (urlStr.includes("html.duckduckgo.com")) {
+					ddgCalled = true;
+					return {
+						ok: true,
+						status: 200,
+						text: async () =>
+							'<a class="result__a" href="https://www.youtube.com/@MarioNawfal">Mario Nawfal</a>' +
+							'<a class="result__snippet">Interviews</a>',
+					};
+				}
+				if (urlStr.includes("youtube.com/@MarioNawfal")) {
+					return {
+						ok: true,
+						status: 200,
+						text: async () =>
+							"<html><head>" +
+							'<link rel="canonical" href="https://www.youtube.com/channel/UCTWBp-39z6tvz4-LQB-Z_QA" />' +
+							'<meta property="og:title" content="Mario Nawfal" />' +
+							"</head><body></body></html>",
+					};
+				}
+				return {
+					ok: false,
+					status: 404,
+					text: async () => "",
+					json: async () => ({}),
+				};
+			};
+			const results = await searchChannels("mario nafal", {
+				fetchImpl,
+				opencodeKey: "test-opencode-key",
+			});
+			expect(opencodeCalls).toBe(2);
+			expect(ddgCalled).toBe(true);
+			expect(results).toHaveLength(1);
+			expect(results[0].id).toBe("UCTWBp-39z6tvz4-LQB-Z_QA");
+		});
+
+		it("does not call OpenCode when no lower tier misses (e.g. concatenated handle succeeds)", async () => {
+			let opencodeCalled = false;
+			const fetchImpl = async (url) => {
+				const urlStr = String(url);
+				if (urlStr.includes("opencode.ai")) {
+					opencodeCalled = true;
+					throw new Error(
+						"OpenCode should not be called when tier 0b succeeds",
+					);
+				}
+				if (urlStr.includes("youtube.com/@marionawfal")) {
+					return {
+						ok: true,
+						status: 200,
+						text: async () =>
+							"<html><head>" +
+							'<link rel="canonical" href="https://www.youtube.com/channel/UCTWBp-39z6tvz4-LQB-Z_QA" />' +
+							'<meta property="og:title" content="Mario Nawfal" />' +
+							"</head><body></body></html>",
+					};
+				}
+				return {
+					ok: false,
+					status: 404,
+					text: async () => "Not Found",
+					json: async () => ({}),
+				};
+			};
+			const results = await searchChannels("mario nawfal", {
+				fetchImpl,
+				opencodeKey: "test-opencode-key",
+			});
+			expect(opencodeCalled).toBe(false);
+			expect(results).toHaveLength(1);
+		});
+
+		it("aborts the OpenCode tool loop on max iterations and returns empty", async () => {
+			// OpenCode keeps asking for web_search, never returns a final answer
+			const fetchImpl = async (url) => {
+				const urlStr = String(url);
+				if (urlStr.includes("opencode.ai")) {
+					return {
+						ok: true,
+						status: 200,
+						json: async () => ({
+							choices: [
+								{
+									message: {
+										role: "assistant",
+										content: null,
+										tool_calls: [
+											{
+												id: "call_x",
+												type: "function",
+												function: {
+													name: "web_search",
+													arguments: JSON.stringify({ query: "x" }),
+												},
+											},
+										],
+									},
+								},
+							],
+						}),
+					};
+				}
+				if (urlStr.includes("html.duckduckgo.com")) {
+					return { ok: true, status: 200, text: async () => "" };
+				}
+				return {
+					ok: false,
+					status: 404,
+					text: async () => "",
+					json: async () => ({}),
+				};
+			};
+			const results = await searchChannels("obscure query xyz", {
+				fetchImpl,
+				opencodeKey: "test-opencode-key",
+			});
+			expect(results).toEqual([]);
+		});
 	});
 });
 
