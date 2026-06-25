@@ -3,7 +3,13 @@
  * Each section is a small focused function with low cyclomatic
  * complexity, so the SettingsModal body just orchestrates them.
  */
-import { useState, useCallback, useEffect, type ChangeEvent, type RefObject } from "react";
+import {
+	useState,
+	useCallback,
+	useEffect,
+	type ChangeEvent,
+	type RefObject,
+} from "react";
 import {
 	Key,
 	ShieldCheck,
@@ -264,9 +270,9 @@ function ModelSelector({
 				{models.length > 0 ? (
 					<select
 						value={model}
-						onChange={(
-							e: ChangeEvent<HTMLSelectElement>,
-						) => setModel(e.target.value)}
+						onChange={(e: ChangeEvent<HTMLSelectElement>) =>
+							setModel(e.target.value)
+						}
 						className={`${SETTINGS_CLASSES.input} flex-1 appearance-none cursor-pointer`}
 					>
 						{!models.includes(model) && model && (
@@ -282,9 +288,9 @@ function ModelSelector({
 					<input
 						type="text"
 						value={model}
-						onChange={(
-							e: ChangeEvent<HTMLInputElement>,
-						) => setModel(e.target.value)}
+						onChange={(e: ChangeEvent<HTMLInputElement>) =>
+							setModel(e.target.value)
+						}
 						placeholder="big-pickle, deepseek-v4-flash, etc."
 						className={`${SETTINGS_CLASSES.input} flex-1`}
 					/>
@@ -552,9 +558,7 @@ async function fetchAvailableModels(
 
 		// OpenCode: only show free models (big-pickle + -free suffix)
 		if (provider === "opencode") {
-			return unique.filter(
-				(m) => m === "big-pickle" || m.endsWith("-free"),
-			);
+			return unique.filter((m) => m === "big-pickle" || m.endsWith("-free"));
 		}
 
 		return unique;
