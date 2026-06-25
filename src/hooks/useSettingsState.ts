@@ -8,10 +8,11 @@ import { useCallback, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useStore } from "../store/useStore";
 import { useSubscriptionStorage } from "../hooks/useSubscriptionStorage";
-import { getServerApiToken, setServerApiToken } from "../lib/api-auth";
+import { setServerApiToken } from "../lib/api-auth";
 import { readBackupLocalData } from "../lib/app-backup";
 import { useServerStatus } from "../hooks/useServerStatus";
 import { useBackupActions } from "../hooks/useBackupActions";
+import { useSettingsFormState } from "../hooks/useSettingsFormState";
 
 const SAVED_BANNER_DURATION_MS = 1000;
 
@@ -19,7 +20,8 @@ function countActiveFeedFilters(): number {
 	const filters = readBackupLocalData().feedQualityFilters || {};
 	return Object.values(filters).filter((value) => {
 		if (typeof value === "boolean") return value;
-		if (typeof value === "string") return value.trim().length > 0 && value !== "any";
+		if (typeof value === "string")
+			return value.trim().length > 0 && value !== "any";
 		return false;
 	}).length;
 }
@@ -27,35 +29,24 @@ function countActiveFeedFilters(): number {
 function deriveStorageHealthLabel(
 	serverHealth: ReturnType<typeof useServerStatus>["serverHealth"],
 ): string {
-	return serverHealth?.dataIntegrity?.some((event) => event.status === "restored")
+	return serverHealth?.dataIntegrity?.some(
+		(event) => event.status === "restored",
+	)
 		? "Recovered from backup on startup"
 		: "Storage healthy";
 }
 
 export function useSettingsState(onClose: () => void) {
 	const queryClient = useQueryClient();
-	const {
-		apiKey,
-		braveApiKey,
-		opencodeApiKey,
-		setApiKey,
-		setBraveApiKey,
-		setOpencodeApiKey,
-		watchedVideos,
-	} = useStore();
+	const form = useSettingsFormState();
+	const { watchedVideos } = useStore();
 	const { rawSubscriptions, syncWithBackend } = useSubscriptionStorage();
 
-	const [inputKey, setInputKey] = useState(apiKey);
-	const [braveInputKey, setBraveInputKey] = useState(braveApiKey);
-	const [opencodeInputKey, setOpencodeInputKey] = useState(opencodeApiKey);
-	const [serverApiTokenInput, setServerApiTokenInput] = useState(() =>
-		getServerApiToken(),
-	);
 	const [isSaved, setIsSaved] = useState(false);
 
 	const server = useServerStatus();
 	const backup = useBackupActions({
-		onRestoredApiKey: setInputKey,
+		onRestoredApiKey: form.setInputKey,
 	});
 
 	const localBackupData = readBackupLocalData();
@@ -65,10 +56,13 @@ export function useSettingsState(onClose: () => void) {
 	const favoriteCount = localBackupData.favoriteVideoIds?.length || 0;
 
 	const handleSave = useCallback(() => {
-		setApiKey(inputKey);
-		setBraveApiKey(braveInputKey);
-		setOpencodeApiKey(opencodeInputKey);
-		setServerApiToken(serverApiTokenInput);
+		form.setApiKey(form.inputKey);
+		form.setBraveApiKey(form.braveInputKey);
+		form.setOpencodeApiKey(form.opencodeInputKey);
+		form.setLlmProvider(form.llmProviderInput);
+		form.setLlmApiKey(form.llmApiKeyInput);
+		form.setLlmModel(form.llmModelInput);
+		setServerApiToken(form.serverApiTokenInput);
 		void syncWithBackend({ importRemoteWatched: true });
 		queryClient.invalidateQueries({ queryKey: ["server-videos"] });
 		queryClient.invalidateQueries({ queryKey: ["server-videos-status"] });
@@ -77,29 +71,24 @@ export function useSettingsState(onClose: () => void) {
 			setIsSaved(false);
 			onClose();
 		}, SAVED_BANNER_DURATION_MS);
-	}, [
-		inputKey,
-		braveInputKey,
-		opencodeInputKey,
-		serverApiTokenInput,
-		setApiKey,
-		setBraveApiKey,
-		setOpencodeApiKey,
-		syncWithBackend,
-		queryClient,
-		onClose,
-	]);
+	}, [form, syncWithBackend, queryClient, onClose]);
 
 	return {
-		// Form state
-		inputKey,
-		setInputKey,
-		braveInputKey,
-		setBraveInputKey,
-		opencodeInputKey,
-		setOpencodeInputKey,
-		serverApiTokenInput,
-		setServerApiTokenInput,
+		// Form state (via sub-hook)
+		inputKey: form.inputKey,
+		setInputKey: form.setInputKey,
+		braveInputKey: form.braveInputKey,
+		setBraveInputKey: form.setBraveInputKey,
+		opencodeInputKey: form.opencodeInputKey,
+		setOpencodeInputKey: form.setOpencodeInputKey,
+		llmProviderInput: form.llmProviderInput,
+		setLlmProviderInput: form.setLlmProviderInput,
+		llmApiKeyInput: form.llmApiKeyInput,
+		setLlmApiKeyInput: form.setLlmApiKeyInput,
+		llmModelInput: form.llmModelInput,
+		setLlmModelInput: form.setLlmModelInput,
+		serverApiTokenInput: form.serverApiTokenInput,
+		setServerApiTokenInput: form.setServerApiTokenInput,
 		isSaved,
 		// Backup state
 		backupStatus: backup.backupStatus,

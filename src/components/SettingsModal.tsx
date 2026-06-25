@@ -5,6 +5,7 @@ import {
 	ApiConfigSection,
 	BackupSection,
 	DataHealthSection,
+	LlmConfigSection,
 	RefreshIssuesSection,
 	ServerSection,
 } from "./SettingsModalSections";
@@ -86,7 +87,11 @@ function SettingsHeader({ onClose }: { onClose: () => void }) {
 	);
 }
 
-function SettingsBody({ state }: { state: ReturnType<typeof useSettingsState> }) {
+function SettingsBody({
+	state,
+}: {
+	state: ReturnType<typeof useSettingsState>;
+}) {
 	return (
 		<div className="flex-1 overflow-y-auto p-5 space-y-6 custom-scrollbar">
 			<ApiConfigSection
@@ -100,6 +105,14 @@ function SettingsBody({ state }: { state: ReturnType<typeof useSettingsState> })
 				setServerApiTokenInput={state.setServerApiTokenInput}
 				isSaved={state.isSaved}
 				onSave={state.handleSave}
+			/>
+			<LlmConfigSection
+				provider={state.llmProviderInput}
+				setProvider={state.setLlmProviderInput}
+				apiKey={state.llmApiKeyInput}
+				setApiKey={state.setLlmApiKeyInput}
+				model={state.llmModelInput}
+				setModel={state.setLlmModelInput}
 			/>
 			<BackupSection
 				backupStatus={state.backupStatus}

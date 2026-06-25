@@ -16,10 +16,16 @@ export interface DataSlice {
 	apiExhausted: boolean;
 	lastQuotaResetDate: string;
 	watchedVideos: Set<string>;
+	llmProvider: string;
+	llmApiKey: string;
+	llmModel: string;
 
 	setApiKey: (key: string) => void;
 	setBraveApiKey: (key: string) => void;
 	setOpencodeApiKey: (key: string) => void;
+	setLlmProvider: (provider: string) => void;
+	setLlmApiKey: (key: string) => void;
+	setLlmModel: (model: string) => void;
 	toggleUseApiForVideos: () => void;
 	incrementQuota: (amount: number) => void;
 	setQuota: (amount: number) => void;
@@ -36,6 +42,9 @@ export const createDataSlice: StateCreator<DataSlice> = (set, get) => ({
 	apiKey: "",
 	braveApiKey: "",
 	opencodeApiKey: "",
+	llmProvider: "opencode",
+	llmApiKey: "",
+	llmModel: "big-pickle",
 	useApiForVideos: false,
 	quotaUsed: 0,
 	apiExhausted: false,
@@ -45,6 +54,9 @@ export const createDataSlice: StateCreator<DataSlice> = (set, get) => ({
 	setApiKey: (key) => set({ apiKey: key }),
 	setBraveApiKey: (key) => set({ braveApiKey: key }),
 	setOpencodeApiKey: (key) => set({ opencodeApiKey: key }),
+	setLlmProvider: (provider) => set({ llmProvider: provider }),
+	setLlmApiKey: (key) => set({ llmApiKey: key }),
+	setLlmModel: (model) => set({ llmModel: model }),
 
 	toggleUseApiForVideos: () =>
 		set((state) => ({

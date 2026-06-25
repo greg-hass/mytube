@@ -3,7 +3,7 @@
  * Each section is a small focused function with low cyclomatic
  * complexity, so the SettingsModal body just orchestrates them.
  */
-import type { ChangeEvent, RefObject } from "react";
+import { useState, type ChangeEvent, type RefObject } from "react";
 import {
 	Key,
 	ShieldCheck,
@@ -12,6 +12,7 @@ import {
 	Database,
 	Server,
 	CheckCircle2,
+	Brain,
 } from "lucide-react";
 import type {
 	ServerHealth,
@@ -412,6 +413,159 @@ export function RefreshIssuesSection({
 						</p>
 					</div>
 				))}
+			</div>
+		</section>
+	);
+}
+
+// ─── LLM Smart Search & Discovery section ────────────────────────────────
+
+const PROVIDER_OPTIONS: { value: string; label: string }[] = [
+	{ value: "opencode", label: "OpenCode (free)" },
+	{ value: "deepseek", label: "DeepSeek" },
+	{ value: "custom", label: "Custom" },
+];
+
+const DEFAULT_MODELS: Record<string, string> = {
+	opencode: "big-pickle",
+	deepseek: "deepseek-v4-flash",
+	custom: "",
+};
+
+export function LlmConfigSection({
+	provider,
+	setProvider,
+	apiKey,
+	setApiKey,
+	model,
+	setModel,
+}: {
+	provider: string;
+	setProvider: (v: string) => void;
+	apiKey: string;
+	setApiKey: (v: string) => void;
+	model: string;
+	setModel: (v: string) => void;
+}) {
+	const [showEndpoint, setShowEndpoint] = useState(false);
+
+	const handleProviderChange = (newProvider: string) => {
+		setProvider(newProvider);
+		// Auto-fill the default model when switching providers
+		const defaultModel = DEFAULT_MODELS[newProvider];
+		if (defaultModel) {
+			setModel(defaultModel);
+		}
+	};
+
+	return (
+		<section className="space-y-3">
+			<SectionHeader icon={<Brain className="w-4 h-4" />}>
+				Smart Search &amp; Discovery
+			</SectionHeader>
+			<div className={`${SETTINGS_CLASSES.card} p-4`}>
+				<p className="text-sm text-gray-600 dark:text-ios-300">
+					Powers channel suggestions based on your subscriptions and LLM-powered
+					fuzzy search when keyword searches fail.
+				</p>
+
+				<div className="space-y-2">
+					<label className="text-sm font-medium text-gray-700 dark:text-ios-300">
+						Provider
+					</label>
+					<select
+						value={provider}
+						onChange={(e: ChangeEvent<HTMLSelectElement>) =>
+							handleProviderChange(e.target.value)
+						}
+						className={`${SETTINGS_CLASSES.input} appearance-none cursor-pointer`}
+					>
+						{PROVIDER_OPTIONS.map((opt) => (
+							<option key={opt.value} value={opt.value}>
+								{opt.label}
+							</option>
+						))}
+					</select>
+				</div>
+
+				<ApiKeyField
+					label="API Key"
+					value={apiKey}
+					onChange={setApiKey}
+					placeholder={
+						{
+							opencode: "Enter your OpenCode API key...",
+							deepseek: "Enter your DeepSeek API key...",
+							custom: "Enter your API key...",
+						}[provider] || "Enter your API key..."
+					}
+					isSaved={false}
+					description={
+						provider === "opencode" ? (
+							<>
+								Free. Used for channel suggestions and LLM-powered search.{" "}
+								<a
+									href="https://opencode.ai/auth"
+									target="_blank"
+									rel="noopener noreferrer"
+									className="text-red-600 hover:underline ml-1"
+								>
+									Get a key
+								</a>
+							</>
+						) : provider === "deepseek" ? (
+							<>
+								~$0.60/M output tokens. DeepSeek v4 Flash is fast and cheap.{" "}
+								<a
+									href="https://platform.deepseek.com/api_keys"
+									target="_blank"
+									rel="noopener noreferrer"
+									className="text-red-600 hover:underline ml-1"
+								>
+									Get a key
+								</a>
+							</>
+						) : (
+							"Any OpenAI-compatible provider."
+						)
+					}
+				/>
+
+				<ApiKeyField
+					label="Model"
+					value={model}
+					onChange={setModel}
+					placeholder="big-pickle, deepseek-v4-flash, etc."
+					isSaved={false}
+					description={
+						"Defaults to the best-value model for the selected provider."
+					}
+				/>
+
+				{provider === "custom" && (
+					<div className="space-y-2">
+						<button
+							type="button"
+							onClick={() => setShowEndpoint(!showEndpoint)}
+							className="text-xs text-red-600 hover:underline"
+						>
+							{showEndpoint ? "Hide" : "Configure"} custom endpoint
+						</button>
+						{showEndpoint && (
+							<p className="text-xs text-gray-500 dark:text-ios-400">
+								Custom endpoints are configured on the server via environment
+								variables (LLM_ENDPOINT, LLM_API_KEY, LLM_MODEL).
+							</p>
+						)}
+					</div>
+				)}
+
+				<div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2.5 dark:border-amber-900/60 dark:bg-amber-950/30">
+					<p className="text-xs font-medium text-amber-800 dark:text-amber-300">
+						⚠ A Smart Search provider API key is required for channel
+						suggestions/discovery.
+					</p>
+				</div>
 			</div>
 		</section>
 	);

@@ -9,10 +9,10 @@ const {
 	parseYouTubeUrl,
 } = require("./brave-channel-search");
 const { extractYouTubeChannelMetadata } = require("./youtube-html-parser");
-const {
-	resolveChannelViaOpencode,
-	getOpencodeBackendStatus,
-} = require("./opencode-channel-resolver");
+const resolveChannelViaLlmProvider =
+	require("./llm-channel-resolver").resolveChannelViaLlm;
+const { getLlmBackendStatus } = require("./llm-channel-resolver");
+// getOpencodeBackendStatus re-exported through opencode-channel-resolver for back-compat
 
 const SEARCH_TIMEOUT_MS = 8000;
 const SEARCH_CACHE_MS = 30000;
@@ -512,7 +512,10 @@ async function searchChannels(query, options = {}) {
 	// channels.list (1 quota unit) instead of search.list (100 units).
 	const identity = detectChannelIdentity(trimmedQuery);
 	const fallbackQuery = identity ? identity.value : trimmedQuery;
+	const llmConfig = options.llmConfig;
+
 	if (identity) {
+		// 0a: YouTube Data API (channels.list — 1 unit)
 		const directResults = await resolveDirectChannel(identity, {
 			fetchImpl,
 			apiKey: options.youtubeApiKey,
@@ -522,10 +525,7 @@ async function searchChannels(query, options = {}) {
 			return directResults;
 		}
 
-		// Direct resolution via API failed (no YOUTUBE_API_KEY, or the
-		// handle/ID didn't match). Try scraping the YouTube channel page
-		// directly — the page's own metadata always contains the canonical
-		// channel ID and title, so this works without any API key.
+		// 0b: YouTube scrape (no API key needed)
 		const scrapeResults = await resolveDirectChannelByScrape(identity, {
 			fetchImpl,
 		});
@@ -533,15 +533,60 @@ async function searchChannels(query, options = {}) {
 			setCachedResults(trimmedQuery, scrapeResults);
 			return scrapeResults;
 		}
-		// Direct resolution failed (no API key, invalid handle) —
-		// fall through to keyword/fallback search using the clean identity.
+
+		// 0c: Brave Search (web search for the channel URL)
+		{
+			const braveResults = await searchBraveChannels(fallbackQuery, {
+				fetchImpl,
+				braveKey: options.braveKey,
+				apiKey: options.youtubeApiKey,
+			});
+			if (braveResults.length > 0) {
+				const ranked = dedupeAndRankChannels(trimmedQuery, braveResults, limit);
+				if (ranked.length > 0) {
+					setCachedResults(trimmedQuery, ranked);
+					return ranked;
+				}
+			}
+		}
+
+		// 0d: LLM resolver (fallback for tricky/obscure handles)
+		const llmResult = await resolveChannelViaLlm(fallbackQuery, {
+			fetchImpl,
+			opencodeKey: options.opencodeKey,
+			...llmConfig,
+			braveKey: options.braveKey,
+		});
+		if (llmResult) {
+			const verifyIdentity = {
+				type: llmResult.type,
+				value: llmResult.value,
+			};
+			const verified = await resolveDirectChannelByScrape(verifyIdentity, {
+				fetchImpl,
+			});
+			if (verified.length > 0) {
+				if (llmResult.title && !verified[0].title) {
+					verified[0].title = llmResult.title;
+				}
+				const ranked = dedupeAndRankChannels(trimmedQuery, verified, limit);
+				if (ranked.length > 0) {
+					setCachedResults(trimmedQuery, ranked);
+					return ranked;
+				}
+			}
+			console.warn(
+				`[${llmResult.provider}-tier] LLM suggested ${llmResult.type}=${llmResult.value} for "${fallbackQuery}" but YouTube page did not verify — skipping`,
+			);
+		}
+
+		// Exact lookup exhausted — fall through to keyword search using
+		// the identity value as the query.
 	}
 
 	// ── Tier 0b: Concatenated handle fallback ──
 	// "mario nawfal" (typed as two words) likely means the handle
-	// `@marionawfal`. The keyword backends often miss person-name
-	// queries with a space, so try the concatenated handle directly.
-	// Capped at 3s so invalid handles don't block the search.
+	// `@marionawfal`. Capped at 3s so invalid handles don't block.
 	if (!identity && trimmedQuery.length >= 4) {
 		const tokens = trimmedQuery.split(/\s+/).filter(Boolean);
 		if (tokens.length >= 2 && tokens.length <= 4) {
@@ -563,11 +608,44 @@ async function searchChannels(query, options = {}) {
 		}
 	}
 
-	// ── Tier 1: YouTube Data API keyword search ──
-	// Pass the ORIGINAL query — YouTube's search.list handles natural
-	// language well. Trust YouTube's ranking: include all results sorted
-	// by local score, without filtering out score-0 matches (our local
-	// scorer may miss channels YouTube already determined are relevant).
+	// ── Keyword search tiers ──
+
+	// Tier K1: LLM-based fuzzy search (promoted from tier 6 to tier 1)
+	// Uses OpenCode big-pickle, DeepSeek, or custom provider with
+	// web_search tool. Always verified by YouTube page scrape.
+	{
+		const llmResult = await resolveChannelViaLlm(fallbackQuery, {
+			fetchImpl,
+			opencodeKey: options.opencodeKey,
+			...llmConfig,
+			braveKey: options.braveKey,
+		});
+		if (llmResult) {
+			const verifyIdentity = {
+				type: llmResult.type,
+				value: llmResult.value,
+			};
+			const verified = await resolveDirectChannelByScrape(verifyIdentity, {
+				fetchImpl,
+			});
+			if (verified.length > 0) {
+				if (llmResult.title && !verified[0].title) {
+					verified[0].title = llmResult.title;
+				}
+				const ranked = dedupeAndRankChannels(trimmedQuery, verified, limit);
+				if (ranked.length > 0) {
+					setCachedResults(trimmedQuery, ranked);
+					return ranked;
+				}
+			}
+			console.warn(
+				`[${llmResult.provider}-tier] LLM suggested ${llmResult.type}=${llmResult.value} for "${fallbackQuery}" but YouTube page did not verify — skipping`,
+			);
+		}
+	}
+
+	// Tier K2: YouTube Data API search.list (100 calls/day cap)
+	// Fallback when LLM has no API key configured or returned nothing.
 	{
 		const apiResults = await searchYouTubeApiChannels(fallbackQuery, {
 			fetchImpl,
@@ -587,30 +665,11 @@ async function searchChannels(query, options = {}) {
 		}
 	}
 
-	// ── Tier 2: Brave Search API ──
-	// Queries site:youtube.com, resolves handles via channels.list (1 unit each).
-	{
-		const braveResults = await searchBraveChannels(fallbackQuery, {
-			fetchImpl,
-			braveKey: options.braveKey,
-			apiKey: options.youtubeApiKey,
-		});
-		if (braveResults.length > 0) {
-			const ranked = dedupeAndRankChannels(trimmedQuery, braveResults, limit);
-			if (ranked.length > 0) {
-				setCachedResults(trimmedQuery, ranked);
-				return ranked;
-			}
-		}
-	}
-
-	// ── Tier 3: YouTube scrape + Piped + Invidious ──
-	// Free but less reliable. Generates multiple query variants.
+	// Tier K3: YouTube scrape + Piped + Invidious (free but flaky)
+	// Kept as a free fallback when neither LLM nor YouTube API is available.
 	const searchQueries = buildChannelSearchQueries(fallbackQuery, 3);
 	let tier3Ranked = [];
 	if (searchQueries.length > 0) {
-		// AbortController cancels all in-flight requests after the timeout,
-		// so slow instances don't keep running in the background.
 		const controller = new AbortController();
 		const timeoutId = setTimeout(() => controller.abort(), SEARCH_TIMEOUT_MS);
 
@@ -649,53 +708,6 @@ async function searchChannels(query, options = {}) {
 		}
 	}
 
-	// ── Tier 6: LLM-based fuzzy resolver (OpenCode big-pickle) ──
-	// The killer feature for keyword queries the static backends miss —
-	// e.g. "mario nawfal" (typo) or "nawfal" (single-word) where Brave
-	// returns unrelated channels.
-	//
-	// OpenCode big-pickle — free, function-calling with a custom
-	// web_search tool (DDG HTML or Brave backend). Uses the
-	// OPENCODE_API_KEY the user already has.
-	//
-	// The LLM's output is ALWAYS verified by scraping the YouTube page
-	// — LLMs hallucinate handles that look right but don't exist. The
-	// verification step is what makes this tier safe.
-	{
-		const llmResult = await resolveChannelViaLlm(fallbackQuery, {
-			fetchImpl,
-			opencodeKey: options.opencodeKey,
-			braveKey: options.braveKey,
-		});
-		if (llmResult) {
-			const verifyIdentity = {
-				type: llmResult.type,
-				value: llmResult.value,
-			};
-			const verified = await resolveDirectChannelByScrape(verifyIdentity, {
-				fetchImpl,
-			});
-			if (verified.length > 0) {
-				// If the LLM returned a better title than the page scrape
-				// picked up, use it. The page scrape occasionally misses the
-				// title for non-mobile UAs.
-				if (llmResult.title && !verified[0].title) {
-					verified[0].title = llmResult.title;
-				}
-				const ranked = dedupeAndRankChannels(trimmedQuery, verified, limit);
-				if (ranked.length > 0) {
-					setCachedResults(trimmedQuery, ranked);
-					return ranked;
-				}
-			}
-			// LLM's suggestion didn't verify — log for debugging but
-			// don't fail loudly (hallucination is expected sometimes).
-			console.warn(
-				`[${llmResult.provider}-tier] LLM suggested ${llmResult.type}=${llmResult.value} for "${fallbackQuery}" but YouTube page did not verify — skipping`,
-			);
-		}
-	}
-
 	// All tiers exhausted. Cache the empty result so we don't hammer
 	// the backends on repeated identical queries.
 	setCachedResults(trimmedQuery, []);
@@ -720,16 +732,21 @@ async function searchChannels(query, options = {}) {
  */
 async function resolveChannelViaLlm(query, options) {
 	const fetchImpl = options.fetchImpl || fetch;
+	const cfg = options.llmConfig || {};
+	const apiKey =
+		cfg.apiKey !== undefined
+			? cfg.apiKey
+			: options.opencodeKey !== undefined
+				? options.opencodeKey
+				: process.env.OPENCODE_API_KEY;
+	if (!apiKey) return null;
 
-	const opencodeKey =
-		options.opencodeKey !== undefined
-			? options.opencodeKey
-			: process.env.OPENCODE_API_KEY;
-	if (!opencodeKey) return null;
-
-	return await resolveChannelViaOpencode(query, {
+	return await resolveChannelViaLlmProvider(query, {
 		fetchImpl,
-		apiKey: opencodeKey,
+		provider: cfg.provider || "opencode",
+		apiKey,
+		model: cfg.model,
+		endpoint: cfg.endpoint,
 		braveKey: options.braveKey,
 	});
 }
@@ -945,7 +962,7 @@ function getSearchBackendStatus() {
 			available: Boolean(process.env.BRAVE_API_KEY),
 		},
 		scrape: { available: true },
-		opencode: getOpencodeBackendStatus(),
+		llm: getLlmBackendStatus(),
 	};
 }
 

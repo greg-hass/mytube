@@ -67,7 +67,7 @@ function createHealthHandler({
 	defaultVideoCache,
 	thumbnailRateLimiter,
 }) {
-	return asyncHandler(async (req, res) => {
+	return asyncHandler(async (_req, res) => {
 		const [data, videoCache] = await Promise.all([
 			appStore.readData(defaultData),
 			appStore.readVideoCache(defaultVideoCache),
@@ -230,7 +230,7 @@ function createApp({
 	);
 	app.use(express.json({ limit: "5mb" }));
 
-	app.get("/api/healthz", (req, res) => {
+	app.get("/api/healthz", (_req, res) => {
 		res.json({ status: "ok" });
 	});
 
@@ -244,7 +244,7 @@ function createApp({
 		}),
 	);
 
-	app.get("/api/version", (req, res) => {
+	app.get("/api/version", (_req, res) => {
 		res.json({
 			name: serverPackage.name,
 			version: serverPackage.version,
@@ -256,7 +256,7 @@ function createApp({
 
 	app.get(
 		"/api/sync",
-		asyncHandler(async (req, res) => {
+		asyncHandler(async (_req, res) => {
 			const data = await appStore.readData(defaultData);
 			const revision = data.syncRevision ?? appStore.getCurrentRevision();
 			res.setHeader("ETag", `"${revision}"`);
@@ -281,13 +281,107 @@ function createApp({
 				String(req.header("x-brave-api-key") || "").trim() || undefined;
 			const opencodeKey =
 				String(req.header("x-opencode-api-key") || "").trim() || undefined;
+			const llmProvider =
+				String(req.header("x-llm-provider") || "").trim() || undefined;
+			const llmApiKey =
+				String(req.header("x-llm-api-key") || "").trim() || undefined;
+			const llmModel =
+				String(req.header("x-llm-model") || "").trim() || undefined;
+			const llmEndpoint =
+				String(req.header("x-llm-endpoint") || "").trim() || undefined;
 			const results = await searchChannels(query, {
 				limit: 8,
 				braveKey,
 				opencodeKey,
+				llmConfig: {
+					provider: llmProvider,
+					apiKey: llmApiKey,
+					model: llmModel,
+					endpoint: llmEndpoint,
+				},
 			});
 			res.json({ results });
 		}, "Failed to search channels"),
+	);
+
+	app.post(
+		"/api/channel-suggestions",
+		channelSearchRateLimiter,
+		asyncHandler(async (req, res) => {
+			const { subscriptions } = req.body || {};
+			const list = Array.isArray(subscriptions) ? subscriptions : [];
+			if (list.length === 0) {
+				return res.status(400).json({ error: "No subscriptions provided" });
+			}
+
+			const llmProvider =
+				String(req.header("x-llm-provider") || "").trim() || undefined;
+			const llmApiKey =
+				String(req.header("x-llm-api-key") || "").trim() || undefined;
+			const llmModel =
+				String(req.header("x-llm-model") || "").trim() || undefined;
+			const llmEndpoint =
+				String(req.header("x-llm-endpoint") || "").trim() || undefined;
+
+			if (
+				!llmApiKey &&
+				!process.env.OPENCODE_API_KEY &&
+				!process.env.DEEPSEEK_API_KEY
+			) {
+				return res.status(400).json({
+					error:
+						"An LLM provider API key is required for channel suggestions. Configure one in Settings.",
+				});
+			}
+
+			const {
+				resolveChannelViaLlm: resolveLlm,
+			} = require("./llm-channel-resolver");
+			const { resolveDirectChannelByScrape } = require("./channel-search");
+
+			const subscriptionContext = list
+				.map((sub) => `- ${sub.title}${sub.handle ? ` (@${sub.handle})` : ""}`)
+				.join("\n");
+
+			const llmResults = await resolveLlm(
+				"Find channels I would like based on my subscriptions",
+				{
+					provider: llmProvider || "opencode",
+					apiKey: llmApiKey,
+					model: llmModel,
+					endpoint: llmEndpoint,
+					useSuggestions: true,
+					subscriptionContext,
+				},
+			);
+
+			if (!llmResults || !Array.isArray(llmResults)) {
+				return res.json({ results: [] });
+			}
+
+			const verified = [];
+			for (const item of llmResults) {
+				const verifyIdentity = {
+					type: item.type,
+					value: item.value,
+				};
+				const scraped = await resolveDirectChannelByScrape(verifyIdentity);
+				if (scraped.length > 0) {
+					const channel = scraped[0];
+					if (item.title && !channel.title) {
+						channel.title = item.title;
+					}
+					channel.reason = item.reason || "";
+					verified.push(channel);
+				} else {
+					console.warn(
+						`[suggestions] LLM suggested ${item.type}=${item.value} but YouTube page did not verify — skipping`,
+					);
+				}
+			}
+
+			res.json({ results: verified });
+		}, "Failed to generate suggestions"),
 	);
 
 	app.post(
@@ -433,7 +527,7 @@ function createApp({
 
 	app.post(
 		"/api/videos/refresh",
-		asyncHandler(async (req, res) => {
+		asyncHandler(async (_req, res) => {
 			feedAggregator
 				.aggregateFeeds({ force: true })
 				.catch((err) => console.error("Background aggregation error:", err));
@@ -446,7 +540,7 @@ function createApp({
 
 	app.post(
 		"/api/videos/cache/reset",
-		asyncHandler(async (req, res) => {
+		asyncHandler(async (_req, res) => {
 			await appStore.writeVideoCache({
 				videos: [],
 				lastUpdated: null,

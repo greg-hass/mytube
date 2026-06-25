@@ -901,7 +901,6 @@ describe("direct identifier resolution", () => {
 			expect(results).toEqual([]);
 		});
 
-
 		it("uses DDG HTML as the web_search backend when no Brave key is set", async () => {
 			let opencodeCalls = 0;
 			let ddgCalled = false;
@@ -1131,7 +1130,7 @@ describe("search fallback chain", () => {
 		expect(scrapeCalled).toBe(false);
 	});
 
-	it("falls through to Brave when YouTube API has no results", async () => {
+	it("falls through to scrape when YouTube API has no results", async () => {
 		const fetchImpl = async (url) => {
 			const urlStr = String(url);
 			if (urlStr.includes("googleapis.com/youtube/v3/search")) {
@@ -1141,21 +1140,11 @@ describe("search fallback chain", () => {
 					json: async () => ({ items: [] }),
 				};
 			}
-			if (urlStr.includes("api.search.brave.com")) {
+			if (urlStr.includes("youtube.com/results")) {
 				return {
 					ok: true,
-					status: 200,
-					json: async () => ({
-						web: {
-							results: [
-								{
-									title: "Tech Review Daily - YouTube",
-									url: "https://www.youtube.com/channel/UC8888888888888888888888",
-									description: "Daily tech reviews and comparisons",
-								},
-							],
-						},
-					}),
+					text: async () =>
+						`"channelRenderer":{"channelId":"UC8888888888888888888888","title":{"simpleText":"Tech Review Daily"}}`,
 				};
 			}
 			return {
@@ -1170,7 +1159,6 @@ describe("search fallback chain", () => {
 			fetchImpl,
 			limit: 5,
 			youtubeApiKey: "yt-key",
-			braveKey: "brave-key",
 		});
 
 		expect(results.length).toBeGreaterThan(0);
