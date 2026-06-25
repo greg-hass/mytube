@@ -585,6 +585,7 @@ const FALLBACK_MODELS: Record<string, string[]> = {
 		"north-mini-code-free",
 		"qwen3.6-plus-free",
 	],
+	deepseek: ["deepseek-v4-flash", "deepseek-v4-pro"],
 };
 
 async function fetchAvailableModels(
@@ -631,11 +632,17 @@ export function LlmConfigSection({
 	setProvider,
 	model,
 	setModel,
+	opencodeInputKey,
+	deepseekInputKey,
+	customApiKeyInput,
 }: {
 	provider: string;
 	setProvider: (v: string) => void;
 	model: string;
 	setModel: (v: string) => void;
+	opencodeInputKey: string;
+	deepseekInputKey: string;
+	customApiKeyInput: string;
 }) {
 	const [showEndpoint, setShowEndpoint] = useState(false);
 	const [models, setModels] = useState<string[]>(
@@ -663,9 +670,9 @@ export function LlmConfigSection({
 		}
 
 		// For providers that need auth for the models endpoint,
-		// don't try without a key.
+		// show fallback models until a key is available.
 		if (provider === "deepseek" && !currentKey) {
-			setModels([]);
+			setModels(FALLBACK_MODELS[provider] ?? []);
 			setModelsError(null);
 			return;
 		}
@@ -674,16 +681,17 @@ export function LlmConfigSection({
 		setModelsError(null);
 		try {
 			const list = await fetchAvailableModels(provider, currentKey);
-			setModels(list);
+			// If live fetch returned results, use them. Otherwise fall
+			// back to the hardcoded list so the dropdown always works.
+			setModels(list.length > 0 ? list : (FALLBACK_MODELS[provider] ?? []));
 		} catch (err) {
 			setModelsError(
 				err instanceof Error ? err.message : "Failed to load models",
 			);
-			// Keep the fallback list (if one exists) when the live fetch fails,
-			// so the dropdown works even with network blockers or ad-blockers.
-			if (!FALLBACK_MODELS[provider]) {
-				setModels([]);
-			}
+			// Restore the fallback list on error — the previous code only
+			// avoided clearing, which meant switching to DeepSeek (empty)
+			// then back to OpenCode left models empty with no restore.
+			setModels(FALLBACK_MODELS[provider] ?? []);
 		} finally {
 			setModelsLoading(false);
 		}
@@ -709,18 +717,25 @@ export function LlmConfigSection({
 		// can use them without needing Save in API Configuration.
 		useStore.getState().setLlmProvider(newProvider);
 		useStore.getState().setLlmModel(newModel);
-		// Also derive and persist the matching API key if it's already
-		// in the store from a previous save.
-		const { opencodeApiKey, deepseekApiKey, customApiKey } =
-			useStore.getState();
-		const derivedKey =
+		// Auto-save the matching API key from the FORM INPUTS (not
+		// just the store) so the key reaches the store even if the
+		// user hasn't clicked Save in API Configuration yet.
+		const inputKey =
 			newProvider === "opencode"
-				? opencodeApiKey
+				? opencodeInputKey
 				: newProvider === "deepseek"
-					? deepseekApiKey
-					: customApiKey;
-		if (derivedKey) {
-			useStore.getState().setLlmApiKey(derivedKey);
+					? deepseekInputKey
+					: customApiKeyInput;
+		if (inputKey) {
+			// Persist the provider-specific key to the store
+			if (newProvider === "opencode")
+				useStore.getState().setOpencodeApiKey(inputKey);
+			if (newProvider === "deepseek")
+				useStore.getState().setDeepseekApiKey(inputKey);
+			if (newProvider === "custom")
+				useStore.getState().setCustomApiKey(inputKey);
+			// Derive llmApiKey from the provider-specific key
+			useStore.getState().setLlmApiKey(inputKey);
 		}
 	};
 
