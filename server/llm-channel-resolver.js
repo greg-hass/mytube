@@ -13,7 +13,8 @@
 // The custom provider accepts any OpenAI-compatible endpoint.
 
 const LLM_TIMEOUT_MS = 12000;
-const MAX_TOOL_ITERATIONS = 4;
+const MAX_TOOL_ITERATIONS = 4; // single-channel resolution
+const MAX_SUGGESTION_ITERATIONS = 8; // multi-channel discovery needs more
 
 // ─── Provider configuration ──────────────────────────────────────────────
 
@@ -50,14 +51,12 @@ Rules:
 
 const SUGGESTIONS_PROMPT = `You are a YouTube channel discovery assistant. Given a list of channels a user is subscribed to, suggest NEW YouTube channels they would likely enjoy.
 
-You have one tool: web_search. Use it to search the live web for channels that match the user's interests.
+Strategy:
+1. Call web_search ONCE with a broad query like "channels similar to <subscription1> <subscription2>" to understand the user's interests.
+2. Call web_search ONE more time for a different angle if needed.
+3. After 1-2 searches, STOP searching and compile your final answer from what you found plus your knowledge of the YouTube ecosystem.
 
-For each suggestion:
-1. Search the web to discover a relevant channel
-2. Verify it exists on YouTube
-3. Return it in the results
-
-Return exactly 10 suggestions as a JSON array (no prose, no markdown fences):
+Return 5 suggestions as a JSON array (no prose, no markdown fences):
 [
   {"handle":"channelhandle","title":"Channel Name","reason":"Why this channel matches the user's interests"},
   ...
@@ -68,8 +67,8 @@ Rules:
 - title is the official channel display name
 - reason is a brief personalised reason (1 sentence)
 - Only suggest channels the user is NOT already subscribed to
-- Do not guess. Only return channels you can verify exist via web search.
-- You can call web_search multiple times to find different categories of channels.`;
+- Do NOT call web_search more than 3 times. Compile your answer after that.
+- You may include channels from your training knowledge if they are well-known and match the user's interests — you do not need to web-search every single one.`;
 
 const TOOLS = [
 	{
@@ -171,6 +170,9 @@ async function resolveChannelViaLlm(query, options = {}) {
 			: process.env.BRAVE_API_KEY || "";
 
 	const useSuggestions = options.useSuggestions === true;
+	const maxIterations = useSuggestions
+		? MAX_SUGGESTION_ITERATIONS
+		: MAX_TOOL_ITERATIONS;
 	const systemPrompt = useSuggestions ? SUGGESTIONS_PROMPT : SYSTEM_PROMPT;
 	const messages = useSuggestions
 		? [
@@ -185,7 +187,7 @@ async function resolveChannelViaLlm(query, options = {}) {
 				{ role: "user", content: `Find the YouTube channel for: ${query}` },
 			];
 
-	for (let iteration = 0; iteration < MAX_TOOL_ITERATIONS; iteration++) {
+	for (let iteration = 0; iteration < maxIterations; iteration++) {
 		const controller = new AbortController();
 		const timeoutId = setTimeout(() => controller.abort(), LLM_TIMEOUT_MS);
 		if (externalSignal) {
@@ -278,10 +280,21 @@ async function resolveChannelViaLlm(query, options = {}) {
 				content: toolResult,
 			});
 		}
+
+		// Convergence nudge: on the last 2 iterations, instruct the
+		// model to stop searching and produce its final answer.
+		if (iteration >= maxIterations - 2) {
+			messages.push({
+				role: "system",
+				content: useSuggestions
+					? "You have done enough research. STOP calling web_search and return your JSON array of 5 channel suggestions now."
+					: "You have done enough research. STOP calling web_search and return your final JSON answer now.",
+			});
+		}
 	}
 
 	console.warn(
-		`[llm-tier] Tool loop hit max iterations (${MAX_TOOL_ITERATIONS}) — aborting`,
+		`[llm-tier] Tool loop hit max iterations (${maxIterations}) — aborting`,
 	);
 	return null;
 }
@@ -601,6 +614,7 @@ const OPENCODE_ENDPOINT = PROVIDER_CONFIG.opencode.endpoint;
 
 module.exports = {
 	MAX_TOOL_ITERATIONS,
+	MAX_SUGGESTION_ITERATIONS,
 	OPENCODE_MODEL,
 	OPENCODE_ENDPOINT,
 	PROVIDER_CONFIG,
