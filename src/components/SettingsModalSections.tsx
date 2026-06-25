@@ -3,7 +3,7 @@
  * Each section is a small focused function with low cyclomatic
  * complexity, so the SettingsModal body just orchestrates them.
  */
-import { useState, type ChangeEvent, type RefObject } from "react";
+import { useState, useCallback, useEffect, type ChangeEvent, type RefObject } from "react";
 import {
 	Key,
 	ShieldCheck,
@@ -13,6 +13,8 @@ import {
 	Server,
 	CheckCircle2,
 	Brain,
+	RotateCw,
+	Loader2,
 } from "lucide-react";
 import type {
 	ServerHealth,
@@ -188,6 +190,7 @@ function ApiKeyField({
 	placeholder,
 	isSaved,
 	description,
+	type = "password",
 }: {
 	label: string;
 	labelExtra?: string;
@@ -196,6 +199,7 @@ function ApiKeyField({
 	placeholder: string;
 	isSaved: boolean;
 	description: React.ReactNode;
+	type?: "text" | "password";
 }) {
 	return (
 		<div className="space-y-2">
@@ -209,7 +213,7 @@ function ApiKeyField({
 			</label>
 			<div className="relative">
 				<input
-					type="password"
+					type={type}
 					value={value}
 					onChange={(e: ChangeEvent<HTMLInputElement>) =>
 						onChange(e.target.value)
@@ -230,7 +234,91 @@ function ApiKeyField({
 	);
 }
 
-// ─── Backup & restore section ────────────────────────────────────────────
+function ModelSelector({
+	model,
+	setModel,
+	models,
+	modelsLoading,
+	modelsError,
+	onRefresh,
+	provider,
+	providerLabel,
+	apiKey,
+}: {
+	model: string;
+	setModel: (v: string) => void;
+	models: string[];
+	modelsLoading: boolean;
+	modelsError: string | null;
+	onRefresh: () => void;
+	provider: string;
+	providerLabel: string;
+	apiKey: string;
+}) {
+	return (
+		<div className="space-y-2">
+			<label className="text-sm font-medium text-gray-700 dark:text-ios-300">
+				Model
+			</label>
+			<div className="flex gap-2">
+				{models.length > 0 ? (
+					<select
+						value={model}
+						onChange={(
+							e: ChangeEvent<HTMLSelectElement>,
+						) => setModel(e.target.value)}
+						className={`${SETTINGS_CLASSES.input} flex-1 appearance-none cursor-pointer`}
+					>
+						{!models.includes(model) && model && (
+							<option value={model}>{model} (custom)</option>
+						)}
+						{models.map((m) => (
+							<option key={m} value={m}>
+								{m}
+							</option>
+						))}
+					</select>
+				) : (
+					<input
+						type="text"
+						value={model}
+						onChange={(
+							e: ChangeEvent<HTMLInputElement>,
+						) => setModel(e.target.value)}
+						placeholder="big-pickle, deepseek-v4-flash, etc."
+						className={`${SETTINGS_CLASSES.input} flex-1`}
+					/>
+				)}
+				<button
+					type="button"
+					onClick={onRefresh}
+					disabled={modelsLoading || provider === "custom"}
+					className="px-3 py-2.5 rounded-lg bg-gray-100 dark:bg-ios-800/90 hover:bg-gray-200 dark:hover:bg-ios-700 disabled:opacity-40 transition-colors shrink-0"
+					title="Refresh models from API"
+				>
+					{modelsLoading ? (
+						<Loader2 className="w-4 h-4 animate-spin" />
+					) : (
+						<RotateCw className="w-4 h-4" />
+					)}
+				</button>
+			</div>
+			<p className="text-xs text-gray-500 dark:text-ios-400">
+				{models.length > 0
+					? `${models.length} models available for ${providerLabel}.`
+					: modelsLoading
+						? "Loading available models..."
+						: modelsError
+							? `Could not load models (${modelsError}). Type manually or refresh.`
+							: provider === "custom"
+								? "Enter the model name for your custom endpoint."
+								: provider === "deepseek" && !apiKey
+									? "Enter an API key, then refresh to list available models."
+									: "No models loaded. Refresh to fetch available models."}
+			</p>
+		</div>
+	);
+}
 
 export function BackupSection({
 	backupStatus,
@@ -432,6 +520,52 @@ const DEFAULT_MODELS: Record<string, string> = {
 	custom: "",
 };
 
+/** Models API endpoints for known providers (OpenAI-compatible /v1/models). */
+const MODELS_ENDPOINTS: Record<string, string> = {
+	opencode: "https://opencode.ai/zen/v1/models",
+	deepseek: "https://api.deepseek.com/v1/models",
+};
+
+async function fetchAvailableModels(
+	provider: string,
+	apiKey: string,
+): Promise<string[]> {
+	const endpoint = MODELS_ENDPOINTS[provider];
+	if (!endpoint) return [];
+
+	const headers: Record<string, string> = {};
+	if (apiKey) {
+		headers["Authorization"] = `Bearer ${apiKey}`;
+	}
+
+	try {
+		const res = await fetch(endpoint, { headers });
+		if (!res.ok) {
+			throw new Error(
+				`${res.status}${res.status === 401 ? " — invalid API key" : ""}`,
+			);
+		}
+
+		const data: { data?: { id: string }[] } = await res.json();
+		const ids = (data.data || []).map((m) => m.id);
+		const unique = [...new Set(ids)].sort((a, b) => a.localeCompare(b));
+
+		// OpenCode: only show free models (big-pickle + -free suffix)
+		if (provider === "opencode") {
+			return unique.filter(
+				(m) => m === "big-pickle" || m.endsWith("-free"),
+			);
+		}
+
+		return unique;
+	} catch (err) {
+		if (err instanceof TypeError && err.message.includes("fetch")) {
+			throw new Error("Network error — check your connection");
+		}
+		throw err;
+	}
+}
+
 export function LlmConfigSection({
 	provider,
 	setProvider,
@@ -448,6 +582,47 @@ export function LlmConfigSection({
 	setModel: (v: string) => void;
 }) {
 	const [showEndpoint, setShowEndpoint] = useState(false);
+	const [models, setModels] = useState<string[]>([]);
+	const [modelsLoading, setModelsLoading] = useState(false);
+	const [modelsError, setModelsError] = useState<string | null>(null);
+
+	const loadModels = useCallback(async () => {
+		if (provider === "custom") {
+			setModels([]);
+			setModelsError(null);
+			return;
+		}
+
+		// For providers that need auth for the models endpoint,
+		// don't try without a key.
+		if (provider === "deepseek" && !apiKey) {
+			setModels([]);
+			setModelsError(null);
+			return;
+		}
+
+		setModelsLoading(true);
+		setModelsError(null);
+		try {
+			const list = await fetchAvailableModels(provider, apiKey);
+			setModels(list);
+		} catch (err) {
+			setModelsError(
+				err instanceof Error ? err.message : "Failed to load models",
+			);
+			setModels([]);
+		} finally {
+			setModelsLoading(false);
+		}
+	}, [provider, apiKey]);
+
+	// Auto-fetch when provider changes or apiKey becomes available
+	useEffect(() => {
+		loadModels();
+	}, [loadModels]);
+
+	const providerLabel =
+		PROVIDER_OPTIONS.find((p) => p.value === provider)?.label || provider;
 
 	const handleProviderChange = (newProvider: string) => {
 		setProvider(newProvider);
@@ -531,15 +706,17 @@ export function LlmConfigSection({
 					}
 				/>
 
-				<ApiKeyField
-					label="Model"
-					value={model}
-					onChange={setModel}
-					placeholder="big-pickle, deepseek-v4-flash, etc."
-					isSaved={false}
-					description={
-						"Defaults to the best-value model for the selected provider."
-					}
+				{/* Model selector — dropdown when models loaded, text input otherwise */}
+				<ModelSelector
+					model={model}
+					setModel={setModel}
+					models={models}
+					modelsLoading={modelsLoading}
+					modelsError={modelsError}
+					onRefresh={loadModels}
+					provider={provider}
+					providerLabel={providerLabel}
+					apiKey={apiKey}
 				/>
 
 				{provider === "custom" && (
