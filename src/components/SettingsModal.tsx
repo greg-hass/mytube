@@ -115,6 +115,9 @@ function SettingsBody({
 				setProvider={state.setLlmProviderInput}
 				model={state.llmModelInput}
 				setModel={state.setLlmModelInput}
+				opencodeInputKey={state.opencodeInputKey}
+				deepseekInputKey={state.deepseekInputKey}
+				customApiKeyInput={state.customApiKeyInput}
 			/>
 			<BackupSection
 				backupStatus={state.backupStatus}
