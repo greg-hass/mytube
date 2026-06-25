@@ -8,6 +8,8 @@ const {
 	OPENCODE_MODEL,
 	SYSTEM_PROMPT,
 	TOOLS,
+	extractAnswerText,
+	resolveChannelViaLlm,
 	executeToolCall,
 	executeWebSearch,
 	getOpencodeBackendStatus,
@@ -485,9 +487,11 @@ describe("resolveChannelViaOpencode", () => {
 		console.warn = originalWarn;
 	});
 
-	it("returns null when no API key is available", async () => {
+	it("returns null when no API key and non-opencode provider", async () => {
 		delete process.env.OPENCODE_API_KEY;
-		const result = await resolveChannelViaOpencode("mario nawfal");
+		const result = await resolveChannelViaOpencode("mario nawfal", {
+			provider: "deepseek",
+		});
 		expect(result).toBeNull();
 	});
 
@@ -801,5 +805,211 @@ describe("getOpencodeBackendStatus", () => {
 		expect(getOpencodeBackendStatus().searchBackend).toBe("duckduckgo");
 		process.env.BRAVE_API_KEY = "y";
 		expect(getOpencodeBackendStatus().searchBackend).toBe("brave");
+	});
+});
+
+describe("extractAnswerText", () => {
+	it("returns content when it is non-empty", () => {
+		const result = extractAnswerText("hello", "reasoning here");
+		expect(result).toBe("hello");
+	});
+
+	it("falls back to reasoning_content when content is empty", () => {
+		const result = extractAnswerText("", '[{"handle":"x"}]');
+		expect(result).toBe('[{"handle":"x"}]');
+	});
+
+	it("extracts JSON from reasoning_content chain-of-thought", () => {
+		const reasoning =
+			"Let me think... I should suggest 5 channels.\n" +
+			'[{"handle":"mkbhd","title":"M"}]\n' +
+			"That's my answer.";
+		const result = extractAnswerText("", reasoning);
+		expect(result).toBe('[{"handle":"mkbhd","title":"M"}]');
+	});
+
+	it("returns empty string when both content and reasoning are empty", () => {
+		expect(extractAnswerText("", "")).toBe("");
+		expect(extractAnswerText(null, undefined)).toBe("");
+	});
+});
+
+describe("resolveChannelViaLlm (suggestions mode)", () => {
+	const originalEnv = { ...process.env };
+
+	beforeEach(() => {
+		process.env = { ...originalEnv };
+		delete process.env.OPENCODE_API_KEY;
+	});
+
+	afterEach(() => {
+		process.env = originalEnv;
+	});
+
+	it("returns suggestions from a non-reasoning model response", async () => {
+		const fetchImpl = vi.fn().mockResolvedValue({
+			ok: true,
+			json: () =>
+				Promise.resolve({
+					choices: [
+						{
+							message: {
+								role: "assistant",
+								content: JSON.stringify([
+									{
+										handle: "3blue1brown",
+										title: "3Blue1Brown",
+										reason: "Math",
+									},
+								]),
+							},
+						},
+					],
+				}),
+		});
+		const result = await resolveChannelViaLlm("suggest", {
+			provider: "opencode",
+			useSuggestions: true,
+			subscriptionContext: "- Test",
+			fetchImpl,
+		});
+		expect(result).toHaveLength(1);
+		expect(result[0]).toEqual({
+			type: "handle",
+			value: "3blue1brown",
+			title: "3Blue1Brown",
+			reason: "Math",
+			provider: "opencode",
+		});
+	});
+
+	it("returns suggestions from reasoning_content when content is empty", async () => {
+		const fetchImpl = vi.fn().mockResolvedValue({
+			ok: true,
+			json: () =>
+				Promise.resolve({
+					choices: [
+						{
+							message: {
+								role: "assistant",
+								content: "",
+								reasoning_content:
+									'Thinking... [{"handle":"x","title":"Y","reason":"Z"}]',
+							},
+						},
+					],
+				}),
+		});
+		const result = await resolveChannelViaLlm("suggest", {
+			provider: "opencode",
+			useSuggestions: true,
+			subscriptionContext: "- Test",
+			fetchImpl,
+		});
+		expect(result).toHaveLength(1);
+		expect(result[0].value).toBe("x");
+	});
+
+	it("does not send Authorization header for opencode without key", async () => {
+		const fetchImpl = vi.fn().mockResolvedValue({
+			ok: true,
+			json: () =>
+				Promise.resolve({
+					choices: [
+						{
+							message: {
+								role: "assistant",
+								content: '[{"handle":"a","title":"B","reason":"C"}]',
+							},
+						},
+					],
+				}),
+		});
+		await resolveChannelViaLlm("suggest", {
+			provider: "opencode",
+			useSuggestions: true,
+			subscriptionContext: "- Test",
+			fetchImpl,
+		});
+		const headers = fetchImpl.mock.calls[0][1].headers;
+		expect(headers.Authorization).toBeUndefined();
+		expect(headers["Content-Type"]).toBe("application/json");
+	});
+
+	it("sends Authorization header when a key is provided", async () => {
+		const fetchImpl = vi.fn().mockResolvedValue({
+			ok: true,
+			json: () =>
+				Promise.resolve({
+					choices: [
+						{
+							message: {
+								role: "assistant",
+								content: '[{"handle":"a","title":"B","reason":"C"}]',
+							},
+						},
+					],
+				}),
+		});
+		await resolveChannelViaLlm("suggest", {
+			provider: "opencode",
+			apiKey: "my-key",
+			useSuggestions: true,
+			subscriptionContext: "- Test",
+			fetchImpl,
+		});
+		const headers = fetchImpl.mock.calls[0][1].headers;
+		expect(headers.Authorization).toBe("Bearer my-key");
+	});
+
+	it("does not pass tools in the request body for suggestions", async () => {
+		const fetchImpl = vi.fn().mockResolvedValue({
+			ok: true,
+			json: () =>
+				Promise.resolve({
+					choices: [
+						{
+							message: {
+								role: "assistant",
+								content: '[{"handle":"a","title":"B","reason":"C"}]',
+							},
+						},
+					],
+				}),
+		});
+		await resolveChannelViaLlm("suggest", {
+			provider: "opencode",
+			useSuggestions: true,
+			subscriptionContext: "- Test",
+			fetchImpl,
+		});
+		const body = JSON.parse(fetchImpl.mock.calls[0][1].body);
+		expect(body.tools).toBeUndefined();
+		expect(body.tool_choice).toBeUndefined();
+	});
+
+	it("includes max_tokens in the request body", async () => {
+		const fetchImpl = vi.fn().mockResolvedValue({
+			ok: true,
+			json: () =>
+				Promise.resolve({
+					choices: [
+						{
+							message: {
+								role: "assistant",
+								content: '[{"handle":"a","title":"B","reason":"C"}]',
+							},
+						},
+					],
+				}),
+		});
+		await resolveChannelViaLlm("suggest", {
+			provider: "opencode",
+			useSuggestions: true,
+			subscriptionContext: "- Test",
+			fetchImpl,
+		});
+		const body = JSON.parse(fetchImpl.mock.calls[0][1].body);
+		expect(body.max_tokens).toBe(4096);
 	});
 });
