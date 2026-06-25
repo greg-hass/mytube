@@ -13,8 +13,12 @@ import {
 	Server,
 	CheckCircle2,
 } from "lucide-react";
-import type { ServerHealth, ServerVersion, FailedChannel } from "../types/server";
-import type { ServerStatus } from "../hooks/useSettingsState";
+import type {
+	ServerHealth,
+	ServerVersion,
+	FailedChannel,
+} from "../types/server";
+import type { ServerStatus } from "../hooks/useServerStatus";
 
 const SETTINGS_CLASSES = {
 	card: "rounded-xl border border-gray-200 dark:border-ios-800 bg-white dark:bg-ios-900 space-y-4",
@@ -74,7 +78,9 @@ export function ApiConfigSection({
 }) {
 	return (
 		<section className="space-y-3">
-			<SectionHeader icon={<Key className="w-4 h-4" />}>API Configuration</SectionHeader>
+			<SectionHeader icon={<Key className="w-4 h-4" />}>
+				API Configuration
+			</SectionHeader>
 			<div className={`${SETTINGS_CLASSES.card} p-4`}>
 				<ApiKeyField
 					label="YouTube Data API Key"
@@ -128,8 +134,8 @@ export function ApiConfigSection({
 					description={
 						<>
 							Powers the smart resolver: when keyword search fails, the
-							big-pickle model searches the live web (via DuckDuckGo or
-							Brave) and suggests the right channel. The model is free.{" "}
+							big-pickle model searches the live web (via DuckDuckGo or Brave)
+							and suggests the right channel. The model is free.{" "}
 							<a
 								href="https://opencode.ai/auth"
 								target="_blank"
@@ -148,7 +154,10 @@ export function ApiConfigSection({
 					placeholder="Match the required SERVER_API_TOKEN"
 					isSaved={false}
 					description={
-						<>Stored only in this browser and sent as a bearer token to same-origin API requests.</>
+						<>
+							Stored only in this browser and sent as a bearer token to
+							same-origin API requests.
+						</>
 					}
 				/>
 				<button
@@ -201,7 +210,9 @@ function ApiKeyField({
 				<input
 					type="password"
 					value={value}
-					onChange={(e: ChangeEvent<HTMLInputElement>) => onChange(e.target.value)}
+					onChange={(e: ChangeEvent<HTMLInputElement>) =>
+						onChange(e.target.value)
+					}
 					placeholder={placeholder}
 					className={SETTINGS_CLASSES.input}
 				/>
@@ -235,11 +246,13 @@ export function BackupSection({
 }) {
 	return (
 		<section className="space-y-3">
-			<SectionHeader icon={<ShieldCheck className="w-4 h-4" />}>Backup &amp; Restore</SectionHeader>
+			<SectionHeader icon={<ShieldCheck className="w-4 h-4" />}>
+				Backup &amp; Restore
+			</SectionHeader>
 			<div className={`${SETTINGS_CLASSES.card} p-4`}>
 				<p className="text-sm text-gray-600 dark:text-ios-300">
-					Subscriptions, watched videos, favorites, queue, feed filters,
-					groups, and settings.
+					Subscriptions, watched videos, favorites, queue, feed filters, groups,
+					and settings.
 				</p>
 				<input
 					ref={restoreInputRef}
@@ -308,7 +321,9 @@ export function DataHealthSection({
 	];
 	return (
 		<section className="space-y-3">
-			<SectionHeader icon={<Database className="w-4 h-4" />}>Data Health</SectionHeader>
+			<SectionHeader icon={<Database className="w-4 h-4" />}>
+				Data Health
+			</SectionHeader>
 			<div className="grid grid-cols-2 gap-2">
 				{items.map((item) => (
 					<div key={item} className={SETTINGS_CLASSES.statItem}>
@@ -348,7 +363,9 @@ export function ServerSection({
 	];
 	return (
 		<section className="space-y-3">
-			<SectionHeader icon={<Server className="w-4 h-4" />}>Server</SectionHeader>
+			<SectionHeader icon={<Server className="w-4 h-4" />}>
+				Server
+			</SectionHeader>
 			<div className="grid grid-cols-2 gap-2">
 				{items.map((item) => (
 					<div key={item} className={SETTINGS_CLASSES.statItem}>
@@ -371,7 +388,9 @@ export function RefreshIssuesSection({
 }) {
 	return (
 		<section className="space-y-3">
-			<SectionHeader icon={<ShieldCheck className="w-4 h-4" />}>Refresh Issues</SectionHeader>
+			<SectionHeader icon={<ShieldCheck className="w-4 h-4" />}>
+				Refresh Issues
+			</SectionHeader>
 			<div className="space-y-2">
 				<button
 					type="button"
