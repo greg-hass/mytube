@@ -320,4 +320,74 @@ describe("Brave channel search", () => {
 		expect(results).toHaveLength(1);
 		expect(results[0].id).toBe("UC8888888888888888888888");
 	});
+
+	it("extracts and resizes YouTube avatar thumbnails from Brave", async () => {
+		const fetchImpl = async (url) => {
+			if (String(url).includes("api.search.brave.com")) {
+				return {
+					ok: true,
+					status: 200,
+					json: async () => ({
+						web: {
+							results: [
+								{
+									title: "Woodworking - YouTube",
+									url: "https://www.youtube.com/channel/UC9999999999999999999999",
+									description: "Woodworking channel",
+									thumbnail: {
+										src: "https://yt3.googleusercontent.com/avatar123=s900-c-k-c0x00ffffff-no-rj",
+										type: "image/jpeg",
+									},
+								},
+							],
+						},
+					}),
+				};
+			}
+			return { ok: false, status: 404, json: async () => ({}) };
+		};
+
+		const results = await searchBraveChannels("woodworking", {
+			braveKey: "brave-key",
+			fetchImpl,
+		});
+
+		expect(results[0].thumbnail).toBe(
+			"https://yt3.googleusercontent.com/avatar123=s176-c-k-c0x00ffffff-no-rj",
+		);
+	});
+
+	it("passes through non-YouTube thumbnails unchanged", async () => {
+		const fetchImpl = async (url) => {
+			if (String(url).includes("api.search.brave.com")) {
+				return {
+					ok: true,
+					status: 200,
+					json: async () => ({
+						web: {
+							results: [
+								{
+									title: "Channel - YouTube",
+									url: "https://www.youtube.com/channel/UCaaaaaaaaaaaaaa00000000a",
+									description: "Test",
+									thumbnail: {
+										src: "https://example.com/preview.jpg",
+										type: "image/jpeg",
+									},
+								},
+							],
+						},
+					}),
+				};
+			}
+			return { ok: false, status: 404, json: async () => ({}) };
+		};
+
+		const results = await searchBraveChannels("test", {
+			braveKey: "brave-key",
+			fetchImpl,
+		});
+
+		expect(results[0].thumbnail).toBe("https://example.com/preview.jpg");
+	});
 });

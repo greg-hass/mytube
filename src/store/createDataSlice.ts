@@ -10,6 +10,7 @@ function getCurrentPacificDate(): string {
 export interface DataSlice {
 	apiKey: string;
 	braveApiKey: string;
+	opencodeApiKey: string;
 	useApiForVideos: boolean;
 	quotaUsed: number;
 	apiExhausted: boolean;
@@ -18,6 +19,7 @@ export interface DataSlice {
 
 	setApiKey: (key: string) => void;
 	setBraveApiKey: (key: string) => void;
+	setOpencodeApiKey: (key: string) => void;
 	toggleUseApiForVideos: () => void;
 	incrementQuota: (amount: number) => void;
 	setQuota: (amount: number) => void;
@@ -33,6 +35,7 @@ export interface DataSlice {
 export const createDataSlice: StateCreator<DataSlice> = (set, get) => ({
 	apiKey: "",
 	braveApiKey: "",
+	opencodeApiKey: "",
 	useApiForVideos: false,
 	quotaUsed: 0,
 	apiExhausted: false,
@@ -41,6 +44,7 @@ export const createDataSlice: StateCreator<DataSlice> = (set, get) => ({
 
 	setApiKey: (key) => set({ apiKey: key }),
 	setBraveApiKey: (key) => set({ braveApiKey: key }),
+	setOpencodeApiKey: (key) => set({ opencodeApiKey: key }),
 
 	toggleUseApiForVideos: () =>
 		set((state) => ({

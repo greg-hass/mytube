@@ -277,8 +277,15 @@ function createApp({
 			if (query.length < 2) {
 				return res.json({ results: [] });
 			}
-			const braveKey = String(req.header("x-brave-api-key") || "").trim() || undefined;
-			const results = await searchChannels(query, { limit: 8, braveKey });
+			const braveKey =
+				String(req.header("x-brave-api-key") || "").trim() || undefined;
+			const opencodeKey =
+				String(req.header("x-opencode-api-key") || "").trim() || undefined;
+			const results = await searchChannels(query, {
+				limit: 8,
+				braveKey,
+				opencodeKey,
+			});
 			res.json({ results });
 		}, "Failed to search channels"),
 	);
