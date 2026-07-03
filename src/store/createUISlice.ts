@@ -3,7 +3,7 @@ import type { SortBy } from '../types/youtube';
 
 export interface UISlice {
     theme: 'light' | 'dark';
-    viewMode: 'grid' | 'list';
+    viewMode: 'grid' | 'list' | 'compact';
     sortBy: SortBy;
     searchQuery: string;
 
@@ -14,7 +14,7 @@ export interface UISlice {
     showWatchedOnly: boolean;
 
     toggleTheme: () => void;
-    setViewMode: (mode: 'grid' | 'list') => void;
+    setViewMode: (mode: 'grid' | 'list' | 'compact') => void;
     setSortBy: (sortBy: SortBy) => void;
     setSearchQuery: (query: string) => void;
 

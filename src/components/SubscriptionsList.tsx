@@ -2,6 +2,7 @@ import { Grid3x3 } from 'lucide-react';
 import { toast } from 'sonner';
 import { EmptyState } from './EmptyState';
 import { SubscriptionCard } from './SubscriptionCard';
+import { CompactSubscriptionsList } from './CompactSubscriptionsList';
 import { SkeletonCard } from './SkeletonCard';
 import { useSubscriptionStorage } from '../hooks/useSubscriptionStorage';
 import { useStore } from '../store/useStore';
@@ -64,8 +65,53 @@ export const SubscriptionsList = ({
     );
   }
 
+  const handleRemove = async (channelId: string) => {
+    const removedChannel = rawSubscriptions.find(s => s.id === channelId);
+    await removeSubscription(channelId);
+    if (removedChannel) {
+      toast.success(`Removed ${removedChannel.title}`, {
+        description: 'Channel removed from subscriptions',
+        action: {
+          label: 'Undo',
+          onClick: async () => {
+            await addSubscriptions([removedChannel]);
+            toast.success('Channel restored');
+          },
+        },
+      });
+    }
+  };
+
+  const handleFavorite = async (channelId: string) => {
+    const channel = validSubscriptions.find(s => s.id === channelId);
+    const wasFavorite = channel?.isFavorite;
+    await toggleFavorite(channelId);
+    if (channel) {
+      toast.success(
+        wasFavorite ? `Removed ${channel.title} from favorites` : `Added ${channel.title} to favorites`
+      );
+    }
+  };
+
+  const handleMute = async (channelId: string) => {
+    const channel = validSubscriptions.find(s => s.id === channelId);
+    const wasMuted = channel?.isMuted;
+    await toggleMute(channelId);
+    if (channel) {
+      toast.success(wasMuted ? `Unmuted ${channel.title}` : `Muted ${channel.title}`);
+    }
+  };
+
   return (
     <div data-testid="subscriptions-list" className="px-4 bg-gray-50 dark:bg-ios-950">
+      {viewMode === 'compact' ? (
+        <CompactSubscriptionsList
+          channels={visibleSubscriptions}
+          onRemove={handleRemove}
+          onToggleFavorite={handleFavorite}
+          onToggleMute={handleMute}
+        />
+      ) : (
       <div
         className={
           viewMode === 'grid'
@@ -79,51 +125,9 @@ export const SubscriptionsList = ({
             channel={channel}
             index={index}
             groups={subscriptionGroups}
-            onRemove={async (channelId) => {
-              const removedChannel = rawSubscriptions.find(s => s.id === channelId);
-              await removeSubscription(channelId);
-
-              if (removedChannel) {
-                toast.success(`Removed ${removedChannel.title}`, {
-                  description: 'Channel removed from subscriptions',
-                  action: {
-                    label: 'Undo',
-                    onClick: async () => {
-                      await addSubscriptions([removedChannel]);
-                      toast.success('Channel restored');
-                    },
-                  },
-                });
-              }
-            }}
-            onToggleFavorite={async (channelId) => {
-              const channel = validSubscriptions.find(s => s.id === channelId);
-              const wasFavorite = channel?.isFavorite;
-
-              await toggleFavorite(channelId);
-
-              if (channel) {
-                toast.success(
-                  wasFavorite ? `Removed ${channel.title} from favorites` : `Added ${channel.title} to favorites`
-                );
-              }
-            }}
-            onToggleMute={async (channelId) => {
-              const channel = validSubscriptions.find(s => s.id === channelId);
-              const wasMuted = channel?.isMuted;
-
-              console.log('🔇 Toggling mute for:', channel?.title, 'Current state:', wasMuted);
-
-              await toggleMute(channelId);
-
-              console.log('✅ Mute toggled successfully');
-
-              if (channel) {
-                toast.success(
-                  wasMuted ? `Unmuted ${channel.title}` : `Muted ${channel.title}`
-                );
-              }
-            }}
+            onRemove={handleRemove}
+            onToggleFavorite={handleFavorite}
+            onToggleMute={handleMute}
             onSetGroup={async (channelId, group) => {
               await setSubscriptionGroup(channelId, group);
               const channel = validSubscriptions.find(s => s.id === channelId);
@@ -136,6 +140,7 @@ export const SubscriptionsList = ({
           />
         ))}
       </div>
+      )}
     </div>
   );
 };

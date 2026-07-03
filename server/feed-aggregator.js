@@ -165,6 +165,8 @@ function createFeedAggregator() {
 		const batchPromises = batch.map(async (sub) => {
 			const feedResult = await feedFetcher(sub.id, undefined, {
 				previousItemHash: channelRefreshes[sub.id]?.itemHash,
+				etag: channelRefreshes[sub.id]?.etag,
+				lastModified: channelRefreshes[sub.id]?.lastModified,
 				youtubeApiFallback,
 			});
 			const { videos, channelMetadata } = feedResult;

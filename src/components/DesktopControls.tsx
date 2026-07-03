@@ -2,6 +2,7 @@ import { Suspense, lazy } from "react";
 import { motion } from "framer-motion";
 import {
 	Download,
+	AlignJustify,
 	Eye,
 	EyeOff,
 	Grid3x3,
@@ -30,8 +31,8 @@ interface DesktopControlsProps {
 	onExport: (format: "opml" | "json") => void;
 	sortBy: SortBy;
 	onSortChange: (value: SortBy) => void;
-	viewMode: "grid" | "list";
-	onViewModeChange: (mode: "grid" | "list") => void;
+	viewMode: "grid" | "list" | "compact";
+	onViewModeChange: (mode: "grid" | "list" | "compact") => void;
 	onOpenSettings: () => void;
 	onToggleTheme: () => void;
 	/** When true, hide playback/filter/import/export controls — keep only Settings + Theme. */
@@ -128,6 +129,17 @@ export const DesktopControls = ({
 						} transition-all`}
 					>
 						<List className={ICON_MD} />
+					</button>
+					<button
+						onClick={() => onViewModeChange("compact")}
+						aria-label="Compact subscription view"
+						className={`p-2 rounded ${
+							viewMode === "compact"
+								? "bg-white dark:bg-ios-900 shadow"
+								: "hover:bg-gray-200 dark:hover:bg-ios-700"
+						} transition-all`}
+					>
+						<AlignJustify className={ICON_MD} />
 					</button>
 				</div>
 

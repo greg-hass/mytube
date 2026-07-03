@@ -14,6 +14,7 @@ import {
 	mergeSubscriptionLists,
 	type RevisionRecorder,
 } from "./server-sync";
+import { fetchChannelIconsBatch } from "./youtube-api";
 
 const SUBSCRIPTIONS_QUERY_KEY = ["subscriptions"] as const;
 
@@ -89,7 +90,6 @@ async function repairViaApi(apiKey: string, deps: RepairDeps): Promise<void> {
 
 	if (channelIds.length === 0) return;
 
-	const { fetchChannelIconsBatch } = await import("./youtube-api");
 	const apiChannels = await fetchChannelIconsBatch(channelIds, apiKey);
 	const apiChannelsById = new Map(
 		apiChannels.map((channel) => [channel.id, channel]),
@@ -122,6 +122,12 @@ export async function repairChannelIcons(
 	deps: RepairDeps,
 	opts: { useApi?: boolean; apiKey?: string } = {},
 ): Promise<number> {
+	const before = new Map(
+		(await getAllSubscriptions()).map((subscription) => [
+			subscription.id,
+			subscription.thumbnail || "",
+		]),
+	);
 	try {
 		await repairViaServer(deps);
 	} catch (serverErr) {
@@ -136,5 +142,9 @@ export async function repairChannelIcons(
 		await repairViaApi(opts.apiKey, deps);
 	}
 
-	return 0;
+	const after = await getAllSubscriptions();
+	return after.filter(
+		(subscription) =>
+			(before.get(subscription.id) || "") !== (subscription.thumbnail || ""),
+	).length;
 }

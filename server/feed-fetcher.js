@@ -364,9 +364,43 @@ async function fetchYouTubeApiVideos(
 }
 
 async function fetchChannelFeed(channelId, feedParser = parser, options = {}) {
+	const fetchImpl = options.fetchImpl || fetch;
+	const controller = new AbortController();
+	const timeoutId = setTimeout(
+		() => controller.abort(),
+		options.timeoutMs || 10000,
+	);
 	try {
 		const feedUrl = `https://www.youtube.com/feeds/videos.xml?channel_id=${channelId}`;
-		const feed = await feedParser.parseURL(feedUrl);
+		const headers = { "user-agent": "Feedy/1.0" };
+		if (options.etag) headers["if-none-match"] = options.etag;
+		if (options.lastModified) {
+			headers["if-modified-since"] = options.lastModified;
+		}
+		const response = await fetchImpl(feedUrl, {
+			headers,
+			signal: controller.signal,
+		});
+		const etag = response.headers.get("etag") || options.etag || null;
+		const lastModified =
+			response.headers.get("last-modified") || options.lastModified || null;
+		if (response.status === 304) {
+			return {
+				outcome: "not-modified",
+				source: "rss",
+				videos: [],
+				itemHash: options.previousItemHash || null,
+				etag,
+				lastModified,
+				channelMetadata: null,
+			};
+		}
+		if (!response.ok) {
+			throw Object.assign(new Error(`Feed returned ${response.status}`), {
+				status: response.status,
+			});
+		}
+		const feed = await feedParser.parseString(await response.text());
 		const videos = [];
 		const seen = new Set();
 		for (const item of feed.items || []) {
@@ -385,6 +419,8 @@ async function fetchChannelFeed(channelId, feedParser = parser, options = {}) {
 				source: "rss",
 				videos: [],
 				itemHash,
+				etag,
+				lastModified,
 				channelMetadata: null,
 			};
 		}
@@ -393,6 +429,8 @@ async function fetchChannelFeed(channelId, feedParser = parser, options = {}) {
 			source: "rss",
 			videos,
 			itemHash,
+			etag,
+			lastModified,
 			channelMetadata: {
 				title: feed.title || "Unknown Channel",
 				thumbnail: null,
@@ -428,6 +466,8 @@ async function fetchChannelFeed(channelId, feedParser = parser, options = {}) {
 			errorMessage: error.message || "Failed to fetch feed",
 			transient: classifyFeedFailure(error) === "transient-failure",
 		};
+	} finally {
+		clearTimeout(timeoutId);
 	}
 }
 

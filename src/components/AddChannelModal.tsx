@@ -232,6 +232,10 @@ function ChannelAddActions({
 		if (suggestions.state.phase === "loading") return;
 		await suggestions.fetchSuggestions(existingSubscriptions);
 	};
+	const handleClearSuggestions = () => {
+		search.handleDismissPreview();
+		suggestions.reset();
+	};
 
 	return (
 		<>
@@ -257,6 +261,7 @@ function ChannelAddActions({
 				onDismiss={search.handleDismissPreview}
 				showButton={showSuggestionsButton}
 				onDiscover={handleDiscover}
+				onClear={handleClearSuggestions}
 			/>
 		</>
 	);
@@ -644,6 +649,7 @@ function SuggestionsSection({
 	onDismiss,
 	showButton,
 	onDiscover,
+	onClear,
 }: {
 	suggestions: ReturnType<typeof useChannelSuggestions>;
 	addedIds: Set<string>;
@@ -654,6 +660,7 @@ function SuggestionsSection({
 	onDismiss: () => void;
 	showButton: boolean;
 	onDiscover: () => Promise<void>;
+	onClear: () => void;
 }) {
 	const { state } = suggestions;
 
@@ -730,21 +737,35 @@ function SuggestionsSection({
 
 			<AnimatePresence>
 				{state.phase === "results" && state.channels.length > 0 && (
-					<SearchResultsSection
-						results={state.channels}
-						previewingId={previewChannel?.id ?? null}
-						addedIds={addedIds}
-						onSelectPreview={onSelectPreview}
-						renderPreview={(channel) => (
-							<AddChannelPreview
-								channel={channel}
-								isLoading={isLoading}
-								isAdded={addedIds.has(channel.id)}
-								onAdd={onAdd}
-								onDismiss={onDismiss}
-							/>
-						)}
-					/>
+					<div>
+						<div className="mb-2 flex items-center justify-between">
+							<p className="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-ios-400">
+								Discovered channels
+							</p>
+							<button
+								type="button"
+								onClick={onClear}
+								className="text-sm font-medium text-red-600 hover:underline"
+							>
+								Clear
+							</button>
+						</div>
+						<SearchResultsSection
+							results={state.channels}
+							previewingId={previewChannel?.id ?? null}
+							addedIds={addedIds}
+							onSelectPreview={onSelectPreview}
+							renderPreview={(channel) => (
+								<AddChannelPreview
+									channel={channel}
+									isLoading={isLoading}
+									isAdded={addedIds.has(channel.id)}
+									onAdd={onAdd}
+									onDismiss={onDismiss}
+								/>
+							)}
+						/>
+					</div>
 				)}
 			</AnimatePresence>
 
@@ -760,6 +781,13 @@ function SuggestionsSection({
 							No related YouTube channels were found.
 						</p>
 						<div className="flex items-center justify-center gap-2">
+							<button
+								type="button"
+								onClick={onClear}
+								className="text-sm font-medium text-gray-600 hover:underline dark:text-ios-300"
+							>
+								Clear
+							</button>
 							<button
 								type="button"
 								onClick={onDiscover}

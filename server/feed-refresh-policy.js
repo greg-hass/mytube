@@ -122,6 +122,8 @@ function mergeChannelRefreshes(existingRefreshes = {}, activeChannelIds = new Se
                     lastFailedFetchAt: fetchedAt,
                     outcome: channel.outcome || (channel.transient ? 'transient-failure' : 'permanent-failure'),
                     itemHash: channel.itemHash || previous.itemHash || null,
+                    ...(channel.etag || previous.etag ? { etag: channel.etag || previous.etag } : {}),
+                    ...(channel.lastModified || previous.lastModified ? { lastModified: channel.lastModified || previous.lastModified } : {}),
                     lastError: getFailureReason(channel),
                     consecutiveFailures,
                     backoffUntil: shouldBackoff
@@ -139,6 +141,8 @@ function mergeChannelRefreshes(existingRefreshes = {}, activeChannelIds = new Se
                 lastSuccessfulFetchAt: fetchedAt,
                 outcome: channel.outcome || 'success',
                 itemHash: channel.itemHash || previous.itemHash || null,
+                ...(channel.etag || previous.etag ? { etag: channel.etag || previous.etag } : {}),
+                ...(channel.lastModified || previous.lastModified ? { lastModified: channel.lastModified || previous.lastModified } : {}),
                 consecutiveFailures: 0,
                 backoffUntil: null,
                 lastError: null,

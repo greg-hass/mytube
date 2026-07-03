@@ -1,5 +1,5 @@
 import { lazy, Suspense } from "react";
-import { Download, Grid3x3, List, Moon, Settings, Sun, X } from "lucide-react";
+import { AlignJustify, Download, Grid3x3, List, Moon, Settings, Sun, X } from "lucide-react";
 import { RefreshStatusPanel } from "./RefreshStatusPanel";
 import type { SyncStatus } from "../hooks/useRSSVideos";
 import type { SortBy } from "../types/youtube";
@@ -78,8 +78,8 @@ interface MobileMenuProps {
 	onToggleWatched?: () => void;
 	sortBy: SortBy;
 	onSortChange: (value: SortBy) => void;
-	viewMode: "grid" | "list";
-	onViewModeChange: (mode: "grid" | "list") => void;
+	viewMode: "grid" | "list" | "compact";
+	onViewModeChange: (mode: "grid" | "list" | "compact") => void;
 	onExport: (format: "opml" | "json") => void;
 	onOpenSettings: () => void;
 	onToggleTheme: () => void;
@@ -247,6 +247,17 @@ export const MobileMenu = ({
 								>
 									<List className={ICON_SM} />
 									List
+								</button>
+								<button
+									onClick={() => onViewModeChange("compact")}
+									className={`flex flex-1 items-center justify-center gap-2 rounded px-3 py-2.5 transition-all ${
+										viewMode === "compact"
+											? "bg-white text-gray-900 shadow-sm dark:bg-ios-950 dark:text-ios-50"
+											: "text-gray-600 hover:bg-gray-200 dark:text-ios-300 dark:hover:bg-ios-700"
+									}`}
+								>
+									<AlignJustify className={ICON_SM} />
+									Compact
 								</button>
 							</div>
 						</section>

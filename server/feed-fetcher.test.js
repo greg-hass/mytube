@@ -47,22 +47,64 @@ describe("RSS-first feed fetcher", () => {
 
 	it("returns not-modified when the item hash matches", async () => {
 		const feedParser = {
-			parseURL: vi.fn(async () => ({
+			parseString: vi.fn(async () => ({
 				title: "Channel",
 				items: [{ id: "yt:video:a", title: "A" }],
 			})),
 		};
 		const itemHash = createVideoItemHash([{ id: "a" }]);
+		const fetchImpl = vi.fn(async () =>
+			new Response("<feed />", {
+				status: 200,
+				headers: { etag: '"upstream-etag"', "last-modified": "today" },
+			}),
+		);
 
 		await expect(
-			fetchChannelFeed("UC_TEST", feedParser, { previousItemHash: itemHash }),
+			fetchChannelFeed("UC_TEST", feedParser, {
+				fetchImpl,
+				previousItemHash: itemHash,
+				etag: '"previous-etag"',
+			}),
 		).resolves.toMatchObject({
 			outcome: "not-modified",
 			itemHash,
 			source: "rss",
+			etag: '"upstream-etag"',
+			lastModified: "today",
 			videos: [],
 		});
-		expect(feedParser.parseURL).toHaveBeenCalledTimes(1);
+		expect(fetchImpl).toHaveBeenCalledWith(
+			"https://www.youtube.com/feeds/videos.xml?channel_id=UC_TEST",
+			expect.objectContaining({
+				headers: expect.objectContaining({
+					"user-agent": "Feedy/1.0",
+					"if-none-match": '"previous-etag"',
+				}),
+			}),
+		);
+		expect(feedParser.parseString).toHaveBeenCalledWith("<feed />");
+	});
+
+	it("returns not-modified for an upstream HTTP 304", async () => {
+		const feedParser = { parseString: vi.fn() };
+		const fetchImpl = vi.fn(async () =>
+			new Response(null, { status: 304, headers: { etag: '"same"' } }),
+		);
+
+		await expect(
+			fetchChannelFeed("UC_TEST", feedParser, {
+				fetchImpl,
+				etag: '"same"',
+				previousItemHash: "hash",
+			}),
+		).resolves.toMatchObject({
+			outcome: "not-modified",
+			etag: '"same"',
+			itemHash: "hash",
+			videos: [],
+		});
+		expect(feedParser.parseString).not.toHaveBeenCalled();
 	});
 
 	it("classifies retryable and permanent failures", () => {
@@ -75,12 +117,9 @@ describe("RSS-first feed fetcher", () => {
 
 	it("uses the YouTube API once after RSS failure", async () => {
 		const feedParser = {
-			parseURL: vi.fn(async () => {
-				throw Object.assign(new Error("upstream unavailable"), {
-					statusCode: 503,
-				});
-			}),
+			parseString: vi.fn(),
 		};
+		const fetchImpl = vi.fn(async () => new Response("", { status: 503 }));
 		const youtubeApiFallback = vi.fn(async () => ({
 			videos: [{ id: "api-video", channelId: "UC_TEST" }],
 			channelMetadata: { title: "Channel", thumbnail: null },
@@ -88,6 +127,7 @@ describe("RSS-first feed fetcher", () => {
 
 		await expect(
 			fetchChannelFeed("UC_TEST", feedParser, {
+				fetchImpl,
 				youtubeApiFallback,
 			}),
 		).resolves.toMatchObject({
@@ -95,23 +135,24 @@ describe("RSS-first feed fetcher", () => {
 			source: "youtube-api",
 			videos: [{ id: "api-video", channelId: "UC_TEST" }],
 		});
-		expect(feedParser.parseURL).toHaveBeenCalledTimes(1);
+		expect(fetchImpl).toHaveBeenCalledTimes(1);
 		expect(youtubeApiFallback).toHaveBeenCalledTimes(1);
 	});
 
 	it("preserves a classified failure when no API fallback is available", async () => {
 		const feedParser = {
-			parseURL: vi.fn(async () => {
-				throw Object.assign(new Error("missing"), { statusCode: 404 });
-			}),
+			parseString: vi.fn(),
 		};
+		const fetchImpl = vi.fn(async () => new Response("", { status: 404 }));
 
-		await expect(fetchChannelFeed("UC_TEST", feedParser)).resolves.toMatchObject({
+		await expect(
+			fetchChannelFeed("UC_TEST", feedParser, { fetchImpl }),
+		).resolves.toMatchObject({
 			outcome: "permanent-failure",
 			videos: [],
 			errorStatus: 404,
-			errorMessage: "missing",
+			errorMessage: "Feed returned 404",
 		});
-		expect(feedParser.parseURL).toHaveBeenCalledTimes(1);
+		expect(fetchImpl).toHaveBeenCalledTimes(1);
 	});
 });

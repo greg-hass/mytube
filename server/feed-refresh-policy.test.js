@@ -171,12 +171,13 @@ describe('feed refresh policy', () => {
 
     it('returns transient RSS failures without an internal retry loop', async () => {
         const feedParser = {
-            parseURL: vi.fn().mockRejectedValue(new Error('Status code 500')),
+            parseString: vi.fn(),
         };
+        const fetchImpl = vi.fn().mockResolvedValue(new Response('', { status: 500 }));
 
-        const result = await fetchChannelFeed('UC_RECOVERED', feedParser);
+        const result = await fetchChannelFeed('UC_RECOVERED', feedParser, { fetchImpl });
 
-        expect(feedParser.parseURL).toHaveBeenCalledTimes(1);
+        expect(fetchImpl).toHaveBeenCalledTimes(1);
         expect(result).toMatchObject({
             outcome: 'transient-failure',
             videos: [],
@@ -186,16 +187,15 @@ describe('feed refresh policy', () => {
 
     it('does not retry permanent 404 RSS feed failures', async () => {
         const feedParser = {
-            parseURL: vi.fn().mockRejectedValue(new Error('Status code 404')),
+            parseString: vi.fn(),
         };
+        const fetchImpl = vi.fn().mockResolvedValue(new Response('', { status: 404 }));
 
         const result = await fetchChannelFeed('UC_MISSING', feedParser, {
-            maxAttempts: 3,
-            retryDelayMs: 0,
-            fallbackToUploadsPage: false,
+            fetchImpl,
         });
 
-        expect(feedParser.parseURL).toHaveBeenCalledTimes(1);
+        expect(fetchImpl).toHaveBeenCalledTimes(1);
         expect(result).toMatchObject({
             videos: [],
             channelMetadata: null,
@@ -206,14 +206,16 @@ describe('feed refresh policy', () => {
 
     it('uses the YouTube API fallback when RSS returns no feed', async () => {
         const feedParser = {
-            parseURL: vi.fn().mockRejectedValue(new Error('Status code 404')),
+            parseString: vi.fn(),
         };
+        const fetchImpl = vi.fn().mockResolvedValue(new Response('', { status: 404 }));
         const youtubeApiFallback = vi.fn().mockResolvedValue({
             videos: [{ id: 'fallback-video', channelId: 'UC_FALLBACK' }],
             channelMetadata: { title: 'Fallback Channel', thumbnail: null },
         });
 
         const result = await fetchChannelFeed('UC_FALLBACK', feedParser, {
+            fetchImpl,
             youtubeApiFallback,
         });
 
@@ -229,20 +231,13 @@ describe('feed refresh policy', () => {
         });
     });
 
-    it('keeps the original RSS failure when the uploads playlist fallback is empty', async () => {
+    it('keeps the original RSS failure when no API fallback is configured', async () => {
         const feedParser = {
-            parseURL: vi.fn().mockRejectedValue(new Error('Status code 404')),
+            parseString: vi.fn(),
         };
-        const httpClient = {
-            get: vi.fn().mockResolvedValue({
-                status: 200,
-                data: '<script>var ytInitialData = {"contents": {}};</script>',
-            }),
-        };
-
+        const fetchImpl = vi.fn().mockResolvedValue(new Response('', { status: 404 }));
         const result = await fetchChannelFeed('UC_EMPTY', feedParser, {
-            maxAttempts: 1,
-            httpClient,
+            fetchImpl,
         });
 
         expect(result).toMatchObject({
