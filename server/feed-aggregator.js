@@ -449,12 +449,9 @@ function createFeedAggregator(storeOverride) {
 			const aggregatorSubs = subscriptions;
 			const aggregatorRedirects = parsedData.redirects || {};
 			const aggregatorQuotaUsed = parsedData.settings?.quotaUsed;
-			const aggregatorQuotaResetDate =
-				parsedData.settings?.lastQuotaResetDate;
+			const aggregatorQuotaResetDate = parsedData.settings?.lastQuotaResetDate;
 			await store.updateData(DEFAULT_DATA, (current) => {
-				const aggregatorMeta = new Map(
-					aggregatorSubs.map((s) => [s.id, s]),
-				);
+				const aggregatorMeta = new Map(aggregatorSubs.map((s) => [s.id, s]));
 				const mergedSubs = (current.subscriptions || []).map(
 					(sub) => aggregatorMeta.get(sub.id) || sub,
 				);
