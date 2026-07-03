@@ -757,8 +757,7 @@ function SuggestionsSection({
 						className="rounded-xl border border-gray-200 dark:border-ios-800 px-4 py-4 text-center"
 					>
 						<p className="text-sm text-gray-500 dark:text-ios-400 mb-3">
-							No channel suggestions found. The LLM may not have found relevant
-							channels, or the provider API key may not be configured.
+							No related YouTube channels were found.
 						</p>
 						<div className="flex items-center justify-center gap-2">
 							<button

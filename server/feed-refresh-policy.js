@@ -10,6 +10,9 @@ function getFailureReason(result) {
 }
 
 function isFailedRefreshResult(result) {
+    if (result.outcome) {
+        return result.outcome === 'transient-failure' || result.outcome === 'permanent-failure';
+    }
     return result.expected && (!result.channelMetadata && (!result.videos || result.videos.length === 0));
 }
 
@@ -114,8 +117,11 @@ function mergeChannelRefreshes(existingRefreshes = {}, activeChannelIds = new Se
 
                 merged[channel.id] = {
                     ...previous,
+                    lastAttemptedAt: fetchedAt,
                     lastFetchedAt: fetchedAt,
                     lastFailedFetchAt: fetchedAt,
+                    outcome: channel.outcome || (channel.transient ? 'transient-failure' : 'permanent-failure'),
+                    itemHash: channel.itemHash || previous.itemHash || null,
                     lastError: getFailureReason(channel),
                     consecutiveFailures,
                     backoffUntil: shouldBackoff
@@ -128,8 +134,11 @@ function mergeChannelRefreshes(existingRefreshes = {}, activeChannelIds = new Se
 
             merged[channel.id] = {
                 ...previous,
+                lastAttemptedAt: fetchedAt,
                 lastFetchedAt: fetchedAt,
                 lastSuccessfulFetchAt: fetchedAt,
+                outcome: channel.outcome || 'success',
+                itemHash: channel.itemHash || previous.itemHash || null,
                 consecutiveFailures: 0,
                 backoffUntil: null,
                 lastError: null,

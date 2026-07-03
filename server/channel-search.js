@@ -4,14 +4,14 @@ const {
 } = require("./external-services.json");
 const { createLruCache } = require("./utils");
 const { searchYouTubeApiChannels } = require("./youtube-api-search");
-const {
-	searchBraveChannels,
-	parseYouTubeUrl,
-} = require("./brave-channel-search");
+const { parseYouTubeUrl } = require("./brave-channel-search");
 const { extractYouTubeChannelMetadata } = require("./youtube-html-parser");
+const {
+	extractYouTubeInitialData,
+	findYouTubeChannelCandidates,
+} = require("./youtube-discovery");
 const resolveChannelViaLlmProvider =
 	require("./llm-channel-resolver").resolveChannelViaLlm;
-const { getLlmBackendStatus } = require("./llm-channel-resolver");
 // getOpencodeBackendStatus re-exported through opencode-channel-resolver for back-compat
 
 const SEARCH_TIMEOUT_MS = 8000;
@@ -357,6 +357,8 @@ function normalizeThumbnail(url) {
 	return url;
 }
 
+// Legacy helper retained temporarily for backward-compatible module tests.
+// eslint-disable-next-line no-unused-vars
 async function searchPipedChannels(
 	query,
 	fetchImpl = fetch,
@@ -402,6 +404,7 @@ async function searchPipedChannels(
 	return results.flat();
 }
 
+// eslint-disable-next-line no-unused-vars
 async function searchInvidiousChannels(
 	query,
 	fetchImpl = fetch,
@@ -474,6 +477,7 @@ function parseYouTubeChannelSearchResults(html) {
 	return results;
 }
 
+// eslint-disable-next-line no-unused-vars
 async function searchYouTubePageChannels(query, fetchImpl = fetch, signal) {
 	try {
 		const response = await fetchImpl(
@@ -506,26 +510,10 @@ async function searchChannels(query, options = {}) {
 
 	const fetchImpl = options.fetchImpl || fetch;
 	const limit = options.limit || 8;
-
-	// ── Tier 0: Direct identifier resolution ──
-	// Channel IDs, @handles, and YouTube URLs are resolved exactly via
-	// channels.list (1 quota unit) instead of search.list (100 units).
 	const identity = detectChannelIdentity(trimmedQuery);
 	const fallbackQuery = identity ? identity.value : trimmedQuery;
-	const llmConfig = options.llmConfig;
 
 	if (identity) {
-		// 0a: YouTube Data API (channels.list — 1 unit)
-		const directResults = await resolveDirectChannel(identity, {
-			fetchImpl,
-			apiKey: options.youtubeApiKey,
-		});
-		if (directResults.length > 0) {
-			setCachedResults(trimmedQuery, directResults);
-			return directResults;
-		}
-
-		// 0b: YouTube scrape (no API key needed)
 		const scrapeResults = await resolveDirectChannelByScrape(identity, {
 			fetchImpl,
 		});
@@ -533,185 +521,66 @@ async function searchChannels(query, options = {}) {
 			setCachedResults(trimmedQuery, scrapeResults);
 			return scrapeResults;
 		}
+	}
 
-		// 0c: Brave Search (web search for the channel URL)
-		{
-			const braveResults = await searchBraveChannels(fallbackQuery, {
-				fetchImpl,
-				braveKey: options.braveKey,
-				apiKey: options.youtubeApiKey,
-			});
-			if (braveResults.length > 0) {
-				const ranked = dedupeAndRankChannels(trimmedQuery, braveResults, limit);
-				if (ranked.length > 0) {
-					setCachedResults(trimmedQuery, ranked);
-					return ranked;
-				}
-			}
-		}
-
-		// 0d: LLM resolver (fallback for tricky/obscure handles)
-		const llmResult = await resolveChannelViaLlm(fallbackQuery, {
-			fetchImpl,
-			opencodeKey: options.opencodeKey,
-			...llmConfig,
-			braveKey: options.braveKey,
-		});
-		if (llmResult) {
-			const verifyIdentity = {
-				type: llmResult.type,
-				value: llmResult.value,
-			};
-			const verified = await resolveDirectChannelByScrape(verifyIdentity, {
-				fetchImpl,
-			});
-			if (verified.length > 0) {
-				if (llmResult.title && !verified[0].title) {
-					verified[0].title = llmResult.title;
-				}
-				const ranked = dedupeAndRankChannels(trimmedQuery, verified, limit);
-				if (ranked.length > 0) {
-					setCachedResults(trimmedQuery, ranked);
-					return ranked;
-				}
-			}
-			console.warn(
-				`[${llmResult.provider}-tier] LLM suggested ${llmResult.type}=${llmResult.value} for "${fallbackQuery}" but YouTube page did not verify — skipping`,
+	const searchQueries = buildChannelSearchQueries(fallbackQuery, 3);
+	if (searchQueries.length > 0) {
+		const controller = new AbortController();
+		const timeoutId = setTimeout(() => controller.abort(), SEARCH_TIMEOUT_MS);
+		try {
+			const searchResults = await Promise.all(
+				searchQueries.map(async (searchQuery) => {
+					const params = new URLSearchParams({
+						search_query: searchQuery,
+						sp: "EgIQAg==",
+					});
+					const response = await fetchImpl(
+						`https://www.youtube.com/results?${params.toString()}`,
+						{
+							headers: {
+								"User-Agent":
+									"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 Chrome/135 Safari/537.36",
+								"Accept-Language": "en-US,en;q=0.9",
+							},
+							signal: controller.signal,
+						},
+					);
+					if (!response.ok) return [];
+					return findYouTubeChannelCandidates(
+						extractYouTubeInitialData(await response.text()),
+					);
+				}),
 			);
-		}
-
-		// Exact lookup exhausted — fall through to keyword search using
-		// the identity value as the query.
-	}
-
-	// ── Tier 0b: Concatenated handle fallback ──
-	// "mario nawfal" (typed as two words) likely means the handle
-	// `@marionawfal`. Capped at 3s so invalid handles don't block.
-	if (!identity && trimmedQuery.length >= 4) {
-		const tokens = trimmedQuery.split(/\s+/).filter(Boolean);
-		if (tokens.length >= 2 && tokens.length <= 4) {
-			const concatenated = tokens.join("").replace(/[^a-z0-9]/gi, "");
-			if (concatenated.length >= 4) {
-				const handleIdentity = { type: "handle", value: concatenated };
-				let timeoutHandle;
-				const handleResults = await Promise.race([
-					resolveDirectChannelByScrape(handleIdentity, { fetchImpl }),
-					new Promise((resolve) => {
-						timeoutHandle = setTimeout(() => resolve([]), 3000);
-					}),
-				]).finally(() => clearTimeout(timeoutHandle));
-				if (handleResults.length > 0) {
-					setCachedResults(trimmedQuery, handleResults);
-					return handleResults;
-				}
-			}
-		}
-	}
-
-	// ── Keyword search tiers ──
-
-	// Tier K1: LLM-based fuzzy search (promoted from tier 6 to tier 1)
-	// Uses OpenCode big-pickle, DeepSeek, or custom provider with
-	// web_search tool. Always verified by YouTube page scrape.
-	{
-		const llmResult = await resolveChannelViaLlm(fallbackQuery, {
-			fetchImpl,
-			opencodeKey: options.opencodeKey,
-			...llmConfig,
-			braveKey: options.braveKey,
-		});
-		if (llmResult) {
-			const verifyIdentity = {
-				type: llmResult.type,
-				value: llmResult.value,
-			};
-			const verified = await resolveDirectChannelByScrape(verifyIdentity, {
-				fetchImpl,
-			});
-			if (verified.length > 0) {
-				if (llmResult.title && !verified[0].title) {
-					verified[0].title = llmResult.title;
-				}
-				const ranked = dedupeAndRankChannels(trimmedQuery, verified, limit);
-				if (ranked.length > 0) {
-					setCachedResults(trimmedQuery, ranked);
-					return ranked;
-				}
-			}
-			console.warn(
-				`[${llmResult.provider}-tier] LLM suggested ${llmResult.type}=${llmResult.value} for "${fallbackQuery}" but YouTube page did not verify — skipping`,
-			);
-		}
-	}
-
-	// Tier K2: YouTube Data API search.list (100 calls/day cap)
-	// Fallback when LLM has no API key configured or returned nothing.
-	{
-		const apiResults = await searchYouTubeApiChannels(fallbackQuery, {
-			fetchImpl,
-			apiKey: options.youtubeApiKey,
-		});
-		if (apiResults.length > 0) {
 			const ranked = dedupeAndRankChannels(
 				trimmedQuery,
-				apiResults,
+				searchResults.flat(),
 				limit,
-				false,
 			);
 			if (ranked.length > 0) {
 				setCachedResults(trimmedQuery, ranked);
 				return ranked;
 			}
-		}
-	}
-
-	// Tier K3: YouTube scrape + Piped + Invidious (free but flaky)
-	// Kept as a free fallback when neither LLM nor YouTube API is available.
-	const searchQueries = buildChannelSearchQueries(fallbackQuery, 3);
-	let tier3Ranked = [];
-	if (searchQueries.length > 0) {
-		const controller = new AbortController();
-		const timeoutId = setTimeout(() => controller.abort(), SEARCH_TIMEOUT_MS);
-
-		let searchResults;
-		try {
-			searchResults = await Promise.all(
-				searchQueries.map(async (searchQuery) => {
-					const [youtubeResults, pipedResults, invidiousResults] =
-						await Promise.all([
-							searchYouTubePageChannels(
-								searchQuery,
-								fetchImpl,
-								controller.signal,
-							),
-							searchPipedChannels(searchQuery, fetchImpl, controller.signal),
-							searchInvidiousChannels(
-								searchQuery,
-								fetchImpl,
-								controller.signal,
-							),
-						]);
-
-					return [...youtubeResults, ...pipedResults, ...invidiousResults];
-				}),
-			);
+		} catch (error) {
+			if (error.name !== "AbortError") {
+				console.warn("YouTube channel discovery failed:", error.message);
+			}
 		} finally {
 			clearTimeout(timeoutId);
 		}
-
-		const allResults = searchResults.flat();
-		tier3Ranked = dedupeAndRankChannels(trimmedQuery, allResults, limit);
-
-		if (tier3Ranked.length > 0) {
-			setCachedResults(trimmedQuery, tier3Ranked);
-			return tier3Ranked;
-		}
 	}
 
-	// All tiers exhausted. Cache the empty result so we don't hammer
-	// the backends on repeated identical queries.
-	setCachedResults(trimmedQuery, []);
-	return [];
+	const apiResults = await searchYouTubeApiChannels(fallbackQuery, {
+		fetchImpl,
+		apiKey: options.youtubeApiKey,
+	});
+	const ranked = dedupeAndRankChannels(
+		trimmedQuery,
+		apiResults,
+		limit,
+		false,
+	);
+	setCachedResults(trimmedQuery, ranked);
+	return ranked;
 }
 
 /**
@@ -730,6 +599,7 @@ async function searchChannels(query, options = {}) {
  * @param {string|undefined} options.braveKey
  * @returns {Promise<{type,value,title,provider}|null>}
  */
+// eslint-disable-next-line no-unused-vars
 async function resolveChannelViaLlm(query, options) {
 	const fetchImpl = options.fetchImpl || fetch;
 	const cfg = options.llmConfig || {};
@@ -954,15 +824,11 @@ function clearSearchCache() {
 function getSearchBackendStatus() {
 	const { getQuotaStats } = require("./youtube-api-search");
 	return {
+		youtubeHtml: { available: true },
 		youtubeApi: {
 			available: Boolean(process.env.YOUTUBE_API_KEY),
 			quota: getQuotaStats(),
 		},
-		brave: {
-			available: Boolean(process.env.BRAVE_API_KEY),
-		},
-		scrape: { available: true },
-		llm: getLlmBackendStatus(),
 	};
 }
 

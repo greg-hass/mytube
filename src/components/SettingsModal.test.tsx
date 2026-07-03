@@ -259,17 +259,14 @@ describe("SettingsModal", () => {
 		expect(await screen.findByText("Retry started")).toBeInTheDocument();
 	});
 
-	it("saves a brave api key alongside the youtube api key", async () => {
+	it("keeps YouTube API as the only discovery fallback setting", async () => {
 		await renderModal();
-		fireEvent.change(
-			screen.getByPlaceholderText("Enter your Brave Search API key..."),
-			{
-				target: { value: "new-brave-key" },
-			},
-		);
+		expect(screen.getByText("YouTube Data API Key")).toBeInTheDocument();
+		expect(screen.queryByText("Brave Search API Key")).not.toBeInTheDocument();
+		expect(screen.queryByText("OpenCode API Key")).not.toBeInTheDocument();
+		expect(screen.queryByText("DeepSeek API Key")).not.toBeInTheDocument();
 		fireEvent.click(screen.getByRole("button", { name: "Save Changes" }));
 
-		expect(storeMocks.setBraveApiKey).toHaveBeenCalledWith("new-brave-key");
 		expect(subscriptionMocks.syncWithBackend).toHaveBeenCalledWith({
 			importRemoteWatched: true,
 		});

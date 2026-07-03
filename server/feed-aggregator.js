@@ -4,6 +4,7 @@ const {
 	buildVideoFromFeedItem,
 	fetchChannelFeed,
 	fetchChannelThumbnail,
+	fetchYouTubeApiVideos,
 } = require("./feed-fetcher");
 const {
 	CHANNEL_REFRESH_INTERVAL_MS,
@@ -42,6 +43,24 @@ const DEFAULT_DATA = {
 };
 const QUOTA_TIMEZONE = "America/Los_Angeles";
 
+function countRefreshOutcomes(results = []) {
+	const counts = {
+		success: 0,
+		notModified: 0,
+		transientFailure: 0,
+		permanentFailure: 0,
+	};
+	for (const result of results) {
+		if (result.outcome === "not-modified") counts.notModified += 1;
+		else if (result.outcome === "transient-failure")
+			counts.transientFailure += 1;
+		else if (result.outcome === "permanent-failure")
+			counts.permanentFailure += 1;
+		else counts.success += 1;
+	}
+	return counts;
+}
+
 function getCurrentDateInTimezone(timeZone = QUOTA_TIMEZONE, now = new Date()) {
 	return new Intl.DateTimeFormat("en-US", {
 		timeZone,
@@ -55,8 +74,6 @@ function createFeedAggregator() {
 	let aggregationPromise = null;
 	let archivedShortsBackfillPromise = null;
 	let archivedShortsBackfillLastAttemptAt = null;
-	let rerunRequested = false;
-	let queuedAggregationOptions = {};
 	let scheduledRefreshTimer = null;
 	let scheduledRefreshStatus = {
 		enabled: false,
@@ -135,11 +152,21 @@ function createFeedAggregator() {
 		const feedFetcher = deps.fetchChannelFeed || fetchChannelFeed;
 		const thumbnailFetcher =
 			deps.fetchChannelThumbnail || fetchChannelThumbnail;
+		const channelRefreshes = deps.channelRefreshes || {};
+		const youtubeApiFallback =
+			deps.youtubeApiFallback ||
+			(process.env.YOUTUBE_API_KEY
+				? (channelId) =>
+						fetchYouTubeApiVideos(channelId, process.env.YOUTUBE_API_KEY)
+				: undefined);
 		const batchRefreshResults = [];
 		const batchVideos = [];
 
 		const batchPromises = batch.map(async (sub) => {
-			const feedResult = await feedFetcher(sub.id);
+			const feedResult = await feedFetcher(sub.id, undefined, {
+				previousItemHash: channelRefreshes[sub.id]?.itemHash,
+				youtubeApiFallback,
+			});
 			const { videos, channelMetadata } = feedResult;
 			const refreshResult = {
 				...sub,
@@ -251,7 +278,7 @@ function createFeedAggregator() {
 
 			if (apiKey && useResolverApi)
 				console.log(
-					"🔑 API key available for capped handle resolution only; videos use RSS",
+					"🔑 API key available as capped fallback; discovery and videos remain RSS/HTML-first",
 				);
 			else if (apiKey)
 				console.log(
@@ -333,6 +360,7 @@ function createFeedAggregator() {
 					batch,
 					subscriptions,
 					fetchedChannelResults,
+					{ channelRefreshes },
 				);
 
 				await enrichVideosWithShortsStatus(batchVideos, shortsStatusById);
@@ -367,6 +395,7 @@ function createFeedAggregator() {
 					videos: currentVideos.length,
 					errors: failedChannels.length,
 					failedChannels,
+					outcomes: countRefreshOutcomes(fetchedChannelResults),
 					lastUpdated: new Date().toISOString(),
 				};
 
@@ -447,6 +476,7 @@ function createFeedAggregator() {
 				videos: archivedVideosWithShortsStatus.length,
 				errors: failedChannels.length,
 				failedChannels,
+				outcomes: countRefreshOutcomes(fetchedChannelResults),
 				startedAt: aggregationStartedAt,
 				completedAt: new Date().toISOString(),
 				lastUpdated: new Date().toISOString(),
@@ -474,34 +504,17 @@ function createFeedAggregator() {
 
 	async function aggregateFeeds(options = {}) {
 		if (aggregationPromise) {
-			rerunRequested = true;
-			queuedAggregationOptions = {
-				...queuedAggregationOptions,
-				force: Boolean(queuedAggregationOptions.force || options.force),
-			};
 			aggregationStatus = {
 				...aggregationStatus,
-				state: "queued",
 				lastUpdated: new Date().toISOString(),
 			};
-			console.log(
-				"⏳ Feed aggregation already running; queued one follow-up refresh.",
-			);
+			console.log("⏳ Feed aggregation already running; joining active refresh.");
 			return aggregationPromise;
 		}
 
 		aggregationPromise = (async () => {
 			try {
-				do {
-					const runOptions = {
-						...options,
-						...queuedAggregationOptions,
-						force: Boolean(options.force || queuedAggregationOptions.force),
-					};
-					queuedAggregationOptions = {};
-					rerunRequested = false;
-					await runAggregation(runOptions);
-				} while (rerunRequested);
+				await runAggregation(options);
 			} finally {
 				aggregationPromise = null;
 			}

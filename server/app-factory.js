@@ -277,28 +277,11 @@ function createApp({
 			if (query.length < 2) {
 				return res.json({ results: [] });
 			}
-			const braveKey =
-				String(req.header("x-brave-api-key") || "").trim() || undefined;
-			const opencodeKey =
-				String(req.header("x-opencode-api-key") || "").trim() || undefined;
-			const llmProvider =
-				String(req.header("x-llm-provider") || "").trim() || undefined;
-			const llmApiKey =
-				String(req.header("x-llm-api-key") || "").trim() || undefined;
-			const llmModel =
-				String(req.header("x-llm-model") || "").trim() || undefined;
-			const llmEndpoint =
-				String(req.header("x-llm-endpoint") || "").trim() || undefined;
 			const results = await searchChannels(query, {
 				limit: 8,
-				braveKey,
-				opencodeKey,
-				llmConfig: {
-					provider: llmProvider,
-					apiKey: llmApiKey,
-					model: llmModel,
-					endpoint: llmEndpoint,
-				},
+				youtubeApiKey:
+					String(req.header("x-youtube-api-key") || "").trim() ||
+					process.env.YOUTUBE_API_KEY,
 			});
 			res.json({ results });
 		}, "Failed to search channels"),
@@ -313,74 +296,26 @@ function createApp({
 			if (list.length === 0) {
 				return res.status(400).json({ error: "No subscriptions provided" });
 			}
-
-			const llmProvider =
-				String(req.header("x-llm-provider") || "").trim() || undefined;
-			const llmApiKey =
-				String(req.header("x-llm-api-key") || "").trim() || undefined;
-			const llmModel =
-				String(req.header("x-llm-model") || "").trim() || undefined;
-			const llmEndpoint =
-				String(req.header("x-llm-endpoint") || "").trim() || undefined;
-
-			if (
-				!llmApiKey &&
-				!process.env.OPENCODE_API_KEY &&
-				!process.env.DEEPSEEK_API_KEY
-			) {
-				return res.status(400).json({
-					error:
-						"An LLM provider API key is required for channel suggestions. Configure one in Settings.",
-				});
-			}
-
-			const {
-				resolveChannelViaLlm: resolveLlm,
-			} = require("./llm-channel-resolver");
-			const { resolveDirectChannelByScrape } = require("./channel-search");
-
-			const subscriptionContext = list
-				.map((sub) => `- ${sub.title}${sub.handle ? ` (@${sub.handle})` : ""}`)
-				.join("\n");
-
-			const llmResults = await resolveLlm(
-				"Find channels I would like based on my subscriptions",
-				{
-					provider: llmProvider || "opencode",
-					apiKey: llmApiKey,
-					model: llmModel,
-					endpoint: llmEndpoint,
-					useSuggestions: true,
-					subscriptionContext,
-				},
+			const existingIds = new Set(list.map((subscription) => subscription.id));
+			const youtubeApiKey =
+				String(req.header("x-youtube-api-key") || "").trim() ||
+				process.env.YOUTUBE_API_KEY;
+			const searches = await Promise.all(
+				list
+					.slice(0, 3)
+					.map((subscription) =>
+						searchChannels(String(subscription.title || ""), {
+							limit: 4,
+							youtubeApiKey,
+						}),
+					),
 			);
-
-			if (!llmResults || !Array.isArray(llmResults)) {
-				return res.json({ results: [] });
+			const suggestions = new Map();
+			for (const channel of searches.flat()) {
+				if (!channel?.id || existingIds.has(channel.id)) continue;
+				suggestions.set(channel.id, channel);
 			}
-
-			const verified = [];
-			for (const item of llmResults) {
-				const verifyIdentity = {
-					type: item.type,
-					value: item.value,
-				};
-				const scraped = await resolveDirectChannelByScrape(verifyIdentity);
-				if (scraped.length > 0) {
-					const channel = scraped[0];
-					if (item.title && !channel.title) {
-						channel.title = item.title;
-					}
-					channel.reason = item.reason || "";
-					verified.push(channel);
-				} else {
-					console.warn(
-						`[suggestions] LLM suggested ${item.type}=${item.value} but YouTube page did not verify — skipping`,
-					);
-				}
-			}
-
-			res.json({ results: verified });
+			res.json({ results: Array.from(suggestions.values()).slice(0, 8) });
 		}, "Failed to generate suggestions"),
 	);
 

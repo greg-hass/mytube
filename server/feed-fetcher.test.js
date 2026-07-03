@@ -1,110 +1,117 @@
-import { createRequire } from 'node:module';
-import { describe, expect, it } from 'vitest';
+import { createRequire } from "node:module";
+import { describe, expect, it, vi } from "vitest";
 
 const require = createRequire(import.meta.url);
-const { buildVideoFromFeedItem, parseUploadsPlaylistVideos } = require('./feed-fetcher');
+const {
+	buildVideoFromFeedItem,
+	classifyFeedFailure,
+	createVideoItemHash,
+	fetchChannelFeed,
+} = require("./feed-fetcher");
 
-function buildUploadsPage(videoRenderers) {
-    return `
-        <script>
-        var ytInitialData = {
-            "metadata": {
-                "playlistMetadataRenderer": {
-                    "title": "Fallback Channel - Videos"
-                }
-            },
-            "contents": {
-                "playlistVideoListRenderer": {
-                    "contents": ${JSON.stringify(videoRenderers)}
-                }
-            }
-        };
-        </script>
-    `;
-}
+describe("RSS-first feed fetcher", () => {
+	it("normalizes high-resolution regular and Shorts thumbnails", () => {
+		expect(
+			buildVideoFromFeedItem(
+				{
+					id: "yt:video:regular",
+					title: "Regular upload",
+					mediaGroup: {
+						"media:thumbnail": {
+							$: { url: "https://i.ytimg.com/vi/regular/hqdefault.jpg" },
+						},
+					},
+				},
+				{ channelId: "UC_TEST", channelTitle: "Channel" },
+			),
+		).toMatchObject({
+			id: "regular",
+			thumbnail: "https://i.ytimg.com/vi/regular/maxresdefault.jpg",
+		});
+		expect(
+			buildVideoFromFeedItem(
+				{ id: "yt:video:short", title: "Clip #shorts" },
+				{ channelId: "UC_TEST", channelTitle: "Channel" },
+			),
+		).toMatchObject({ id: "short", isShort: true });
+	});
 
-describe('feed fetcher', () => {
-    it('stores high-resolution URLs for regular RSS video thumbnails', () => {
-        const video = buildVideoFromFeedItem({
-            id: 'yt:video:fresh-video',
-            title: 'Fresh upload',
-            pubDate: '2026-05-14T10:00:00.000Z',
-            mediaGroup: {
-                'media:thumbnail': {
-                    $: { url: 'https://i.ytimg.com/vi/fresh-video/hqdefault.jpg' },
-                },
-            },
-        }, {
-            channelId: 'UC_FALLBACK',
-            channelTitle: 'Fallback Channel',
-        });
+	it("creates deterministic hashes from ordered unique video IDs", () => {
+		expect(
+			createVideoItemHash([{ id: "a" }, { id: "b" }, { id: "a" }]),
+		).toBe(createVideoItemHash([{ id: "a" }, { id: "b" }]));
+		expect(createVideoItemHash([{ id: "b" }, { id: "a" }])).not.toBe(
+			createVideoItemHash([{ id: "a" }, { id: "b" }]),
+		);
+	});
 
-        expect(video).toMatchObject({
-            id: 'fresh-video',
-            thumbnail: 'https://i.ytimg.com/vi/fresh-video/maxresdefault.jpg',
-        });
-    });
+	it("returns not-modified when the item hash matches", async () => {
+		const feedParser = {
+			parseURL: vi.fn(async () => ({
+				title: "Channel",
+				items: [{ id: "yt:video:a", title: "A" }],
+			})),
+		};
+		const itemHash = createVideoItemHash([{ id: "a" }]);
 
-    it('stores portrait thumbnail URLs for feed items that are Shorts', () => {
-        const video = buildVideoFromFeedItem({
-            id: 'yt:video:short-id',
-            title: 'Quick clip #shorts',
-            pubDate: '2026-05-14T10:00:00.000Z',
-            mediaGroup: {
-                'media:thumbnail': {
-                    $: { url: 'https://i.ytimg.com/vi/short-id/hqdefault.jpg' },
-                },
-            },
-        }, {
-            channelId: 'UC_FALLBACK',
-            channelTitle: 'Fallback Channel',
-        });
+		await expect(
+			fetchChannelFeed("UC_TEST", feedParser, { previousItemHash: itemHash }),
+		).resolves.toMatchObject({
+			outcome: "not-modified",
+			itemHash,
+			source: "rss",
+			videos: [],
+		});
+		expect(feedParser.parseURL).toHaveBeenCalledTimes(1);
+	});
 
-        expect(video).toMatchObject({
-            id: 'short-id',
-            isShort: true,
-            thumbnail: 'https://i.ytimg.com/vi/short-id/oar2.jpg',
-        });
-    });
+	it("classifies retryable and permanent failures", () => {
+		expect(classifyFeedFailure({ statusCode: 429 })).toBe("transient-failure");
+		expect(classifyFeedFailure({ response: { status: 503 } })).toBe(
+			"transient-failure",
+		);
+		expect(classifyFeedFailure({ statusCode: 404 })).toBe("permanent-failure");
+	});
 
-    it('does not treat missing uploads-page publish times as newly published videos', () => {
-        const html = buildUploadsPage([
-            {
-                playlistVideoRenderer: {
-                    videoId: 'real-date',
-                    title: { runs: [{ text: 'Video with a real age' }] },
-                    thumbnail: { thumbnails: [{ url: 'https://i.ytimg.com/vi/real-date/hqdefault.jpg' }] },
-                    publishedTimeText: { simpleText: '2 hours ago' },
-                },
-            },
-            {
-                playlistVideoRenderer: {
-                    videoId: 'missing-date',
-                    title: { runs: [{ text: 'Video missing age text' }] },
-                    thumbnail: { thumbnails: [{ url: 'https://i.ytimg.com/vi/missing-date/hqdefault.jpg' }] },
-                },
-            },
-            {
-                playlistVideoRenderer: {
-                    videoId: 'bad-date',
-                    title: { runs: [{ text: 'Video with bad age text' }] },
-                    thumbnail: { thumbnails: [{ url: 'https://i.ytimg.com/vi/bad-date/hqdefault.jpg' }] },
-                    publishedTimeText: { simpleText: 'Watch now' },
-                },
-            },
-        ]);
+	it("uses the YouTube API once after RSS failure", async () => {
+		const feedParser = {
+			parseURL: vi.fn(async () => {
+				throw Object.assign(new Error("upstream unavailable"), {
+					statusCode: 503,
+				});
+			}),
+		};
+		const youtubeApiFallback = vi.fn(async () => ({
+			videos: [{ id: "api-video", channelId: "UC_TEST" }],
+			channelMetadata: { title: "Channel", thumbnail: null },
+		}));
 
-        const { videos } = parseUploadsPlaylistVideos(html, {
-            channelId: 'UC_FALLBACK',
-            now: Date.parse('2026-05-14T12:00:00.000Z'),
-        });
+		await expect(
+			fetchChannelFeed("UC_TEST", feedParser, {
+				youtubeApiFallback,
+			}),
+		).resolves.toMatchObject({
+			outcome: "success",
+			source: "youtube-api",
+			videos: [{ id: "api-video", channelId: "UC_TEST" }],
+		});
+		expect(feedParser.parseURL).toHaveBeenCalledTimes(1);
+		expect(youtubeApiFallback).toHaveBeenCalledTimes(1);
+	});
 
-        expect(videos).toHaveLength(1);
-        expect(videos[0]).toMatchObject({
-            id: 'real-date',
-            publishedAt: '2026-05-14T10:00:00.000Z',
-            thumbnail: 'https://i.ytimg.com/vi/real-date/maxresdefault.jpg',
-            publishedAtSource: 'youtube-relative-time',
-        });
-    });
+	it("preserves a classified failure when no API fallback is available", async () => {
+		const feedParser = {
+			parseURL: vi.fn(async () => {
+				throw Object.assign(new Error("missing"), { statusCode: 404 });
+			}),
+		};
+
+		await expect(fetchChannelFeed("UC_TEST", feedParser)).resolves.toMatchObject({
+			outcome: "permanent-failure",
+			videos: [],
+			errorStatus: 404,
+			errorMessage: "missing",
+		});
+		expect(feedParser.parseURL).toHaveBeenCalledTimes(1);
+	});
 });

@@ -1,9 +1,9 @@
 const Parser = require("rss-parser");
 const axios = require("axios");
+const { createHash } = require("node:crypto");
 const { getHighResolutionVideoThumbnail } = require("./video-thumbnails");
 
 const FEED_FETCH_RETRY_STATUSES = new Set([408, 429, 500, 502, 503, 504]);
-const FEED_FETCH_MAX_ATTEMPTS = 3;
 const UPLOADS_PLAYLIST_FETCH_LIMIT = 15;
 
 const parser = new Parser({
@@ -28,10 +28,6 @@ function parseDuration(duration) {
 	const minutes = parseInt(match[2]) || 0;
 	const seconds = parseInt(match[3]) || 0;
 	return hours * 3600 + minutes * 60 + seconds;
-}
-
-function sleep(ms) {
-	return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 function getHttpStatusFromError(error) {
@@ -300,90 +296,139 @@ async function fetchUploadsPlaylistFeed(
 	};
 }
 
-async function fetchChannelFeed(channelId, feedParser = parser, options = {}) {
-	const maxAttempts = options.maxAttempts || FEED_FETCH_MAX_ATTEMPTS;
-	let lastError = null;
-
-	for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
-		try {
-			const feedUrl = `https://www.youtube.com/feeds/videos.xml?channel_id=${channelId}`;
-			const feed = await feedParser.parseURL(feedUrl);
-
-			const videos = feed.items.map((item) =>
-				buildVideoFromFeedItem(item, {
-					channelId,
-					channelTitle: feed.title || item.author || "Unknown",
-				}),
-			);
-
-			return {
-				videos,
-				channelMetadata: {
-					title: feed.title || "Unknown Channel",
-					thumbnail: null,
-				},
-			};
-		} catch (error) {
-			lastError = error;
-			const status = getHttpStatusFromError(error);
-			const shouldRetry =
-				FEED_FETCH_RETRY_STATUSES.has(status) && attempt < maxAttempts;
-
-			if (!shouldRetry) {
-				const shouldUseFallback = options.fallbackToUploadsPage !== false;
-				if (shouldUseFallback) {
-					try {
-						const fallbackResult = await fetchUploadsPlaylistFeed(
-							channelId,
-							options.httpClient || axios,
-							{
-								now: options.now,
-							},
-						);
-
-						if (fallbackResult.videos.length > 0) {
-							console.warn(
-								`RSS failed for ${channelId}; used uploads playlist fallback.`,
-							);
-							return {
-								...fallbackResult,
-								usedFallback: true,
-								originalErrorStatus: status,
-								originalErrorMessage: error.message,
-							};
-						}
-					} catch (fallbackError) {
-						console.warn(
-							`Uploads playlist fallback failed for ${channelId}:`,
-							fallbackError.message,
-						);
-					}
-				}
-
-				console.error(`Failed to fetch feed for ${channelId}:`, error.message);
-				return {
-					videos: [],
-					channelMetadata: null,
-					errorStatus: status,
-					errorMessage: error.message,
-					transient: FEED_FETCH_RETRY_STATUSES.has(status),
-				};
-			}
-
-			console.warn(
-				`Retrying feed for ${channelId} after HTTP ${status} (${attempt}/${maxAttempts})`,
-			);
-			await sleep(options.retryDelayMs ?? attempt * 750);
-		}
+function createVideoItemHash(videos) {
+	const ids = [];
+	const seen = new Set();
+	for (const video of videos || []) {
+		if (!video?.id || seen.has(video.id)) continue;
+		seen.add(video.id);
+		ids.push(video.id);
 	}
+	return createHash("sha256").update(ids.join("\n")).digest("hex");
+}
 
+function classifyFeedFailure(error) {
+	const status = getHttpStatusFromError(error);
+	if (status === null || FEED_FETCH_RETRY_STATUSES.has(status)) {
+		return "transient-failure";
+	}
+	return "permanent-failure";
+}
+
+async function fetchYouTubeApiVideos(
+	channelId,
+	apiKey = process.env.YOUTUBE_API_KEY,
+	fetchImpl = fetch,
+) {
+	if (!apiKey) return { videos: [], channelMetadata: null };
+	const params = new URLSearchParams({
+		part: "snippet",
+		type: "video",
+		order: "date",
+		maxResults: "15",
+		channelId,
+		key: apiKey,
+	});
+	const response = await fetchImpl(
+		`https://www.googleapis.com/youtube/v3/search?${params.toString()}`,
+	);
+	if (!response.ok) {
+		throw Object.assign(new Error(`YouTube API returned HTTP ${response.status}`), {
+			status: response.status,
+		});
+	}
+	const payload = await response.json();
+	const items = Array.isArray(payload?.items) ? payload.items : [];
+	const videos = items
+		.filter((item) => item?.id?.videoId)
+		.map((item) => ({
+			id: item.id.videoId,
+			title: item.snippet?.title || "Untitled",
+			channelId,
+			channelTitle: item.snippet?.channelTitle || "Unknown",
+			publishedAt: item.snippet?.publishedAt || null,
+			thumbnail: getHighResolutionVideoThumbnail(
+				item.snippet?.thumbnails?.high?.url,
+				item.id.videoId,
+			),
+			description: item.snippet?.description || "",
+			duration: null,
+			fetchedVia: "youtube-api",
+		}));
 	return {
-		videos: [],
-		channelMetadata: null,
-		errorStatus: getHttpStatusFromError(lastError),
-		errorMessage: lastError?.message || "Failed to fetch feed",
-		transient: true,
+		videos,
+		channelMetadata: videos[0]
+			? { title: videos[0].channelTitle, thumbnail: null }
+			: null,
 	};
+}
+
+async function fetchChannelFeed(channelId, feedParser = parser, options = {}) {
+	try {
+		const feedUrl = `https://www.youtube.com/feeds/videos.xml?channel_id=${channelId}`;
+		const feed = await feedParser.parseURL(feedUrl);
+		const videos = [];
+		const seen = new Set();
+		for (const item of feed.items || []) {
+			const video = buildVideoFromFeedItem(item, {
+				channelId,
+				channelTitle: feed.title || item.author || "Unknown",
+			});
+			if (!video.id || seen.has(video.id)) continue;
+			seen.add(video.id);
+			videos.push(video);
+		}
+		const itemHash = createVideoItemHash(videos);
+		if (options.previousItemHash && options.previousItemHash === itemHash) {
+			return {
+				outcome: "not-modified",
+				source: "rss",
+				videos: [],
+				itemHash,
+				channelMetadata: null,
+			};
+		}
+		return {
+			outcome: "success",
+			source: "rss",
+			videos,
+			itemHash,
+			channelMetadata: {
+				title: feed.title || "Unknown Channel",
+				thumbnail: null,
+			},
+		};
+	} catch (error) {
+		if (typeof options.youtubeApiFallback === "function") {
+			try {
+				const fallback = await options.youtubeApiFallback(channelId);
+				if (fallback?.videos?.length) {
+					return {
+						...fallback,
+						outcome: "success",
+						source: "youtube-api",
+						itemHash: createVideoItemHash(fallback.videos),
+					};
+				}
+			} catch (fallbackError) {
+				console.warn(
+					`YouTube API fallback failed for ${channelId}:`,
+					fallbackError.message,
+				);
+			}
+		}
+		const errorStatus = getHttpStatusFromError(error);
+		return {
+			outcome: classifyFeedFailure(error),
+			source: "rss",
+			videos: [],
+			itemHash: options.previousItemHash || null,
+			channelMetadata: null,
+			errorStatus,
+			errorMessage: error.message || "Failed to fetch feed",
+			transient: classifyFeedFailure(error) === "transient-failure",
+		};
+	}
 }
 
 async function fetchChannelThumbnail(channelId) {
@@ -433,8 +478,11 @@ async function fetchChannelThumbnail(channelId) {
 
 module.exports = {
 	buildVideoFromFeedItem,
+	classifyFeedFailure,
+	createVideoItemHash,
 	fetchChannelFeed,
 	fetchChannelThumbnail,
+	fetchYouTubeApiVideos,
 	fetchUploadsPlaylistFeed,
 	parseDuration,
 	parseUploadsPlaylistVideos,

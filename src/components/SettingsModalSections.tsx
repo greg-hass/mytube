@@ -66,14 +66,6 @@ export function SectionHeader({
 export function ApiConfigSection({
 	inputKey,
 	setInputKey,
-	braveInputKey,
-	setBraveInputKey,
-	opencodeInputKey,
-	setOpencodeInputKey,
-	deepseekInputKey,
-	setDeepseekInputKey,
-	customApiKeyInput,
-	setCustomApiKeyInput,
 	serverApiTokenInput,
 	setServerApiTokenInput,
 	isSaved,
@@ -81,14 +73,6 @@ export function ApiConfigSection({
 }: {
 	inputKey: string;
 	setInputKey: (v: string) => void;
-	braveInputKey: string;
-	setBraveInputKey: (v: string) => void;
-	opencodeInputKey: string;
-	setOpencodeInputKey: (v: string) => void;
-	deepseekInputKey: string;
-	setDeepseekInputKey: (v: string) => void;
-	customApiKeyInput: string;
-	setCustomApiKeyInput: (v: string) => void;
 	serverApiTokenInput: string;
 	setServerApiTokenInput: (v: string) => void;
 	isSaved: boolean;
@@ -108,8 +92,9 @@ export function ApiConfigSection({
 					isSaved={isSaved}
 					description={
 						<>
-							Optional browser-only fallback for channel handle resolution.
-							Backups and server sync do not include this key.{" "}
+							Optional fallback for channel discovery. It is sent only to
+							your same-origin MyTube server and is not included in backups
+							or sync data.{" "}
 							<a
 								href="https://console.cloud.google.com/apis/credentials"
 								target="_blank"
@@ -119,80 +104,6 @@ export function ApiConfigSection({
 								Get a key
 							</a>
 						</>
-					}
-				/>
-				<ApiKeyField
-					label="Brave Search API Key"
-					value={braveInputKey}
-					onChange={setBraveInputKey}
-					placeholder="Enter your Brave Search API key..."
-					isSaved={isSaved}
-					description={
-						<>
-							Used for Brave fallback channel search only. Stored in this
-							browser and not sent to the server.{" "}
-							<a
-								href="https://brave.com/search/api/"
-								target="_blank"
-								rel="noopener noreferrer"
-								className="text-red-600 hover:underline ml-1"
-							>
-								Get a key
-							</a>
-						</>
-					}
-				/>
-				<ApiKeyField
-					label="OpenCode API Key"
-					labelExtra="(Killer feature — free, runs by default)"
-					value={opencodeInputKey}
-					onChange={setOpencodeInputKey}
-					placeholder="Enter your OpenCode API key..."
-					isSaved={isSaved}
-					description={
-						<>
-							Powers the smart resolver: when keyword search fails, the
-							big-pickle model searches the live web (via DuckDuckGo or Brave)
-							and suggests the right channel. The model is free.{" "}
-							<a
-								href="https://opencode.ai/auth"
-								target="_blank"
-								rel="noopener noreferrer"
-								className="text-red-600 hover:underline ml-1"
-							>
-								Get a key
-							</a>
-						</>
-					}
-				/>
-				<ApiKeyField
-					label="DeepSeek API Key"
-					value={deepseekInputKey}
-					onChange={setDeepseekInputKey}
-					placeholder="Enter your DeepSeek API key..."
-					isSaved={isSaved}
-					description={
-						<>
-							~$0.60/M output tokens. DeepSeek v4 Flash is fast and cheap.{" "}
-							<a
-								href="https://platform.deepseek.com/api_keys"
-								target="_blank"
-								rel="noopener noreferrer"
-								className="text-red-600 hover:underline ml-1"
-							>
-								Get a key
-							</a>
-						</>
-					}
-				/>
-				<ApiKeyField
-					label="Custom LLM API Key"
-					value={customApiKeyInput}
-					onChange={setCustomApiKeyInput}
-					placeholder="Enter your API key..."
-					isSaved={isSaved}
-					description={
-						<>For use with a custom OpenAI-compatible provider endpoint.</>
 					}
 				/>
 				<ApiKeyField

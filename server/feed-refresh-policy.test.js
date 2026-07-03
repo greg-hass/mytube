@@ -111,12 +111,15 @@ describe('feed refresh policy', () => {
         expect(merged).toEqual({
             UC_KEEP: { lastFetchedAt: '2026-05-06T18:00:00.000Z' },
             UC_NEW: {
+                lastAttemptedAt: '2026-05-06T20:00:00.000Z',
                 lastFetchedAt: '2026-05-06T20:00:00.000Z',
                 lastSuccessfulFetchAt: '2026-05-06T20:00:00.000Z',
                 consecutiveFailures: 0,
                 backoffUntil: null,
                 lastError: null,
                 source: 'rss',
+                outcome: 'success',
+                itemHash: null,
             },
         });
     });
@@ -166,32 +169,19 @@ describe('feed refresh policy', () => {
         ]);
     });
 
-    it('retries transient RSS feed failures before returning videos', async () => {
+    it('returns transient RSS failures without an internal retry loop', async () => {
         const feedParser = {
-            parseURL: vi.fn()
-                .mockRejectedValueOnce(new Error('Status code 500'))
-                .mockResolvedValueOnce({
-                    title: 'Recovered Channel',
-                    items: [
-                        {
-                            id: 'yt:video:video-1',
-                            title: 'Recovered video',
-                            pubDate: '2026-05-14T12:00:00.000Z',
-                            mediaGroup: {},
-                        },
-                    ],
-                }),
+            parseURL: vi.fn().mockRejectedValue(new Error('Status code 500')),
         };
 
-        const result = await fetchChannelFeed('UC_RECOVERED', feedParser, {
-            maxAttempts: 2,
-            retryDelayMs: 0,
-        });
+        const result = await fetchChannelFeed('UC_RECOVERED', feedParser);
 
-        expect(feedParser.parseURL).toHaveBeenCalledTimes(2);
-        expect(result.channelMetadata).toEqual({ title: 'Recovered Channel', thumbnail: null });
-        expect(result.videos).toHaveLength(1);
-        expect(result.errorStatus).toBeUndefined();
+        expect(feedParser.parseURL).toHaveBeenCalledTimes(1);
+        expect(result).toMatchObject({
+            outcome: 'transient-failure',
+            videos: [],
+            errorStatus: 500,
+        });
     });
 
     it('does not retry permanent 404 RSS feed failures', async () => {
@@ -214,79 +204,27 @@ describe('feed refresh policy', () => {
         });
     });
 
-    it('falls back to the uploads playlist page when RSS returns no feed', async () => {
+    it('uses the YouTube API fallback when RSS returns no feed', async () => {
         const feedParser = {
             parseURL: vi.fn().mockRejectedValue(new Error('Status code 404')),
         };
-        const httpClient = {
-            get: vi.fn().mockResolvedValue({
-                status: 200,
-                data: `
-                    <script>
-                    var ytInitialData = {
-                        "metadata": {
-                            "playlistMetadataRenderer": {
-                                "title": "Fallback Channel - Videos"
-                            }
-                        },
-                        "contents": {
-                            "twoColumnBrowseResultsRenderer": {
-                                "tabs": [{
-                                    "tabRenderer": {
-                                        "content": {
-                                            "sectionListRenderer": {
-                                                "contents": [{
-                                                    "itemSectionRenderer": {
-                                                        "contents": [{
-                                                            "playlistVideoListRenderer": {
-                                                                "contents": [{
-                                                                    "playlistVideoRenderer": {
-                                                                        "videoId": "fallback-video",
-                                                                        "title": { "runs": [{ "text": "Fallback video" }] },
-                                                                        "thumbnail": { "thumbnails": [{ "url": "https://i.ytimg.com/vi/fallback-video/hqdefault.jpg" }] },
-                                                                        "publishedTimeText": { "simpleText": "2 hours ago" }
-                                                                    }
-                                                                }]
-                                                            }
-                                                        }]
-                                                    }
-                                                }]
-                                            }
-                                        }
-                                    }
-                                }]
-                            }
-                        }
-                    };
-                    </script>
-                `,
-            }),
-        };
-
-        const result = await fetchChannelFeed('UC_FALLBACK', feedParser, {
-            maxAttempts: 1,
-            httpClient,
-            now: Date.parse('2026-05-14T12:00:00.000Z'),
+        const youtubeApiFallback = vi.fn().mockResolvedValue({
+            videos: [{ id: 'fallback-video', channelId: 'UC_FALLBACK' }],
+            channelMetadata: { title: 'Fallback Channel', thumbnail: null },
         });
 
-        expect(httpClient.get).toHaveBeenCalledWith(
-            'https://www.youtube.com/playlist?list=UU_FALLBACK',
-            expect.objectContaining({
-                headers: expect.objectContaining({
-                    'User-Agent': expect.stringContaining('Mozilla'),
-                }),
-            })
-        );
+        const result = await fetchChannelFeed('UC_FALLBACK', feedParser, {
+            youtubeApiFallback,
+        });
+
+        expect(youtubeApiFallback).toHaveBeenCalledWith('UC_FALLBACK');
         expect(result).toMatchObject({
+            outcome: 'success',
+            source: 'youtube-api',
             channelMetadata: { title: 'Fallback Channel', thumbnail: null },
-            usedFallback: true,
             videos: [{
                 id: 'fallback-video',
-                title: 'Fallback video',
                 channelId: 'UC_FALLBACK',
-                channelTitle: 'Fallback Channel',
-                thumbnail: 'https://i.ytimg.com/vi/fallback-video/maxresdefault.jpg',
-                publishedAt: '2026-05-14T10:00:00.000Z',
             }],
         });
     });

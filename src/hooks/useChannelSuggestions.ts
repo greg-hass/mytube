@@ -24,17 +24,10 @@ export function useChannelSuggestions() {
 			setState({ phase: "loading" });
 
 			try {
-				const { llmProvider, llmApiKey, llmModel } = useStore.getState();
+				const { apiKey } = useStore.getState();
 				const headers: HeadersInit = {};
 
-				// Build LLM provider headers
-				if (llmProvider) headers["X-Llm-Provider"] = llmProvider;
-				if (llmApiKey) headers["X-Llm-Api-Key"] = llmApiKey;
-				if (llmModel) headers["X-Llm-Model"] = llmModel;
-
-				// Also include the OpenCode key header as fallback
-				const { opencodeApiKey } = useStore.getState();
-				if (opencodeApiKey) headers["X-Opencode-Api-Key"] = opencodeApiKey;
+				if (apiKey) headers["X-YouTube-Api-Key"] = apiKey;
 
 				const response = await fetch("/api/channel-suggestions", {
 					method: "POST",
