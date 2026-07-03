@@ -7,7 +7,10 @@ import { MobileHeaderControls } from "./MobileHeaderControls";
 import { MobileMenu } from "./MobileMenu";
 import { SettingsModal } from "./SettingsModal";
 import { useStore } from "../store/useStore";
-import { useSubscriptionStorage } from "../hooks/useSubscriptionStorage";
+import {
+	useSubscriptionCount,
+	useExportHandlers,
+} from "../hooks/useSubscriptionStorage";
 import { useHeaderHeight } from "../hooks/useHeaderHeight";
 import type { SyncStatus } from "../hooks/useRSSVideos";
 
@@ -28,6 +31,8 @@ interface HeaderProps {
 	onToggleWatched?: () => void;
 	scrollHidden?: boolean;
 	compactMobile?: boolean;
+	/** When true, only logo/settings/theme are shown — hides controls with no value before onboarding. */
+	minimal?: boolean;
 }
 
 export const Header = ({
@@ -42,6 +47,7 @@ export const Header = ({
 	onToggleWatched,
 	scrollHidden = false,
 	compactMobile = false,
+	minimal = false,
 }: HeaderProps) => {
 	const headerRef = useHeaderHeight();
 	const [isSettingsOpen, setIsSettingsOpen] = useState(false);
@@ -55,7 +61,8 @@ export const Header = ({
 		searchQuery,
 		setSearchQuery,
 	} = useStore();
-	const { count, exportOPML, exportJSON } = useSubscriptionStorage();
+	const count = useSubscriptionCount();
+	const { exportOPML, exportJSON } = useExportHandlers();
 	const [showExportMenu, setShowExportMenu] = useState(false);
 	const [showMobileMenu, setShowMobileMenu] = useState(false);
 	const [showMobileSearchPanel, setShowMobileSearchPanel] = useState(false);
@@ -127,13 +134,15 @@ export const Header = ({
 							</div>
 						</motion.div>
 
-						<HeaderSearchDesktop
-							searchPlaceholder={searchPlaceholder}
-							searchQuery={searchQuery}
-							onSearchChange={setSearchQuery}
-							onClear={clearSearch}
-							onKeyDown={handleSearchKeyDown}
-						/>
+						{!minimal && (
+							<HeaderSearchDesktop
+								searchPlaceholder={searchPlaceholder}
+								searchQuery={searchQuery}
+								onSearchChange={setSearchQuery}
+								onClear={clearSearch}
+								onKeyDown={handleSearchKeyDown}
+							/>
+						)}
 
 						<DesktopControls
 							theme={theme}
@@ -150,20 +159,23 @@ export const Header = ({
 							onViewModeChange={setViewMode}
 							onOpenSettings={() => setIsSettingsOpen(true)}
 							onToggleTheme={toggleTheme}
+							minimal={minimal}
 						/>
 
-						<MobileHeaderControls
-							showShorts={showShorts}
-							onToggleShorts={onToggleShorts}
-							hideWatched={hideWatched}
-							onToggleWatched={onToggleWatched}
-							showMobileSearch={showMobileSearch}
-							showMobileSearchPanel={showMobileSearchPanel}
-							onToggleSearch={() =>
-								setShowMobileSearchPanel((isOpen) => !isOpen)
-							}
-							onOpenMenu={() => setShowMobileMenu(true)}
-						/>
+						{!minimal && (
+							<MobileHeaderControls
+								showShorts={showShorts}
+								onToggleShorts={onToggleShorts}
+								hideWatched={hideWatched}
+								onToggleWatched={onToggleWatched}
+								showMobileSearch={showMobileSearch}
+								showMobileSearchPanel={showMobileSearchPanel}
+								onToggleSearch={() =>
+									setShowMobileSearchPanel((isOpen) => !isOpen)
+								}
+								onOpenMenu={() => setShowMobileMenu(true)}
+							/>
+						)}
 					</div>
 
 					<HeaderSearchMobile

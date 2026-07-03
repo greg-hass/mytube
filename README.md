@@ -1,4 +1,4 @@
-# MyTube
+# MyTube Diff Viewer Test
 
 YouTube's subscription feed is algorithmically curated and can hide videos.
 FreshRSS reads feeds but does not understand YouTube. MyTube is a YouTube-native

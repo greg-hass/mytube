@@ -42,6 +42,11 @@ vi.mock("../hooks/useSubscriptionStorage", () => ({
 		importOPML: vi.fn(),
 		isImporting: false,
 	}),
+	useSubscriptionCount: () => 261,
+	useExportHandlers: () => ({
+		exportOPML: vi.fn(),
+		exportJSON: vi.fn(),
+	}),
 }));
 
 vi.mock("./SettingsModal", () => ({
@@ -70,7 +75,9 @@ describe("Header", () => {
 
 		expect(menuButton).toBeInTheDocument();
 		expect(mobileControls).toBeInTheDocument();
-		expect(screen.queryByTestId("mobile-filter-button")).not.toBeInTheDocument();
+		expect(
+			screen.queryByTestId("mobile-filter-button"),
+		).not.toBeInTheDocument();
 		expect(screen.getByTestId("mobile-shorts-toggle")).toBeInTheDocument();
 		expect(screen.getByTestId("mobile-watched-toggle")).toBeInTheDocument();
 		expect(

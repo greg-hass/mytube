@@ -6,6 +6,7 @@ import {
 	getSubscriptionCount,
 	type StoredSubscription,
 } from "../lib/indexeddb";
+import { isAuthError } from "../lib/api-auth";
 import {
 	downloadJSON,
 	downloadOPML,
@@ -42,6 +43,47 @@ const SUBSCRIPTIONS_COUNT_QUERY_KEY = ["subscriptions-count"] as const;
 const RSS_VIDEOS_KEY = ["rss-videos"] as const;
 const SERVER_VIDEOS_KEY = ["server-videos"] as const;
 const SERVER_VIDEOS_STATUS_KEY = ["server-videos-status"] as const;
+
+// ---------------------------------------------------------------------------
+// Lightweight hooks — no side-effect subscriptions, safe to mount anywhere
+// ---------------------------------------------------------------------------
+
+/**
+ * Subscription count only — no sync effects, no icon repair, no auto-save.
+ * Safe for components that just need the channel count display.
+ */
+export function useSubscriptionCount(): number {
+	const { data: count = 0 } = useQuery({
+		queryKey: SUBSCRIPTIONS_COUNT_QUERY_KEY,
+		queryFn: getSubscriptionCount,
+		staleTime: 1000 * 60 * 5,
+	});
+	return count;
+}
+
+/**
+ * Export handlers for OPML/JSON — reads from the React Query cache.
+ * No sync effects. Safe for Header which only needs export on button click.
+ */
+export function useExportHandlers() {
+	const queryClient = useQueryClient();
+
+	const exportOPML = useCallback(() => {
+		const subs =
+			queryClient.getQueryData<StoredSubscription[]>(SUBSCRIPTIONS_QUERY_KEY) ||
+			[];
+		downloadOPML(subs);
+	}, [queryClient]);
+
+	const exportJSON = useCallback(() => {
+		const subs =
+			queryClient.getQueryData<StoredSubscription[]>(SUBSCRIPTIONS_QUERY_KEY) ||
+			[];
+		downloadJSON(subs, Array.from(useStore.getState().watchedVideos));
+	}, [queryClient]);
+
+	return { exportOPML, exportJSON };
+}
 
 async function deleteSubscriptionOnServer(channelId: string): Promise<void> {
 	const response = await fetch(
@@ -282,6 +324,7 @@ type EffectDeps = {
 	syncWithBackend: (opts?: SyncOptions) => Promise<void>;
 	repairChannelIcons: () => Promise<number>;
 	setIsInitialSyncing: (v: boolean) => void;
+	setNeedsServerAuth: (v: boolean) => void;
 	hasCompletedInitialSyncRef: RefObject<boolean>;
 	watchedVideos: Set<string>;
 	isLoading: boolean;
@@ -298,6 +341,7 @@ function useSubscriptionEffects(deps: EffectDeps) {
 		syncWithBackend,
 		repairChannelIcons,
 		setIsInitialSyncing,
+		setNeedsServerAuth,
 		hasCompletedInitialSyncRef,
 		watchedVideos,
 		isLoading,
@@ -317,14 +361,18 @@ function useSubscriptionEffects(deps: EffectDeps) {
 	useEffect(() => {
 		let isMounted = true;
 		void syncWithBackend({ importRemoteWatched: true })
-			.catch(() => undefined)
+			.catch((err) => {
+				// Surface auth errors so the UI can prompt for a token.
+				// Other errors are transient — the next sync will retry.
+				if (isMounted && isAuthError(err)) setNeedsServerAuth(true);
+			})
 			.finally(() => {
 				if (isMounted) setIsInitialSyncing(false);
 			});
 		return () => {
 			isMounted = false;
 		};
-	}, [syncWithBackend, setIsInitialSyncing]);
+	}, [syncWithBackend, setIsInitialSyncing, setNeedsServerAuth]);
 
 	useEffect(() => {
 		if (!subscriptions?.some(hasPlaceholderThumbnail)) return;
@@ -340,7 +388,9 @@ function useSubscriptionEffects(deps: EffectDeps) {
 		if (!isLoading && subscriptions) {
 			const timer = setTimeout(() => {
 				if (!hasCompletedInitialSyncRef.current) return;
-				syncWithBackend().catch(() => undefined);
+				syncWithBackend().catch((err) => {
+					if (isAuthError(err)) setNeedsServerAuth(true);
+				});
 			}, 2000);
 			return () => clearTimeout(timer);
 		}
@@ -351,6 +401,7 @@ function useSubscriptionEffects(deps: EffectDeps) {
 		syncWithBackend,
 		watchedVideos,
 		hasCompletedInitialSyncRef,
+		setNeedsServerAuth,
 	]);
 }
 
@@ -368,6 +419,7 @@ export const useSubscriptionStorage = () => {
 	const hasCompletedInitialSyncRef = useRef(false);
 	const lastKnownServerRevisionRef = useRef<number | null>(null);
 	const [isInitialSyncing, setIsInitialSyncing] = useState(true);
+	const [needsServerAuth, setNeedsServerAuth] = useState(false);
 
 	const recordServerRevision = useCallback<RevisionRecorder>((snapshot) => {
 		if (typeof snapshot?.syncRevision === "number") {
@@ -448,6 +500,7 @@ export const useSubscriptionStorage = () => {
 		syncWithBackend,
 		repairChannelIcons,
 		setIsInitialSyncing,
+		setNeedsServerAuth,
 		hasCompletedInitialSyncRef,
 		watchedVideos,
 		isLoading,
@@ -464,6 +517,7 @@ export const useSubscriptionStorage = () => {
 		// Loading states
 		isLoading,
 		isInitialSyncing,
+		needsServerAuth,
 		error,
 
 		// Mutations

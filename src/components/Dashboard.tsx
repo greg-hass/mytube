@@ -18,10 +18,12 @@ import {
 	Image,
 	ListVideo,
 	X,
+	ShieldAlert,
 } from "lucide-react";
 import { toast } from "sonner";
 import { FirstRunOnboarding } from "./FirstRunOnboarding";
 import { Header } from "./Header";
+import { SettingsModal } from "./SettingsModal";
 import { FloatingTabBar } from "./FloatingTabBar";
 import { SubscriptionsList } from "./SubscriptionsList";
 import { SubscriptionCard } from "./SubscriptionCard";
@@ -266,6 +268,7 @@ export const Dashboard = () => {
 	>([]);
 	const [isRepairingIcons, setIsRepairingIcons] = useState(false);
 	const [headerVisible, setHeaderVisible] = useState(true);
+	const [isAuthSettingsOpen, setIsAuthSettingsOpen] = useState(false);
 	const headerScrollYRef = useRef(0);
 	const lastActiveLatestTapAtRef = useRef<number | null>(null);
 	const {
@@ -276,6 +279,7 @@ export const Dashboard = () => {
 		toggleFavorite: toggleChannelFavorite,
 		isLoading: subscriptionsLoading,
 		isInitialSyncing: subscriptionsInitialSyncing,
+		needsServerAuth,
 	} = useSubscriptionStorage();
 	const { favoriteVideoIds, favoriteVideos: savedFavoriteVideos } =
 		useFavoriteVideos();
@@ -875,12 +879,36 @@ export const Dashboard = () => {
 				onToggleWatched={() => setHideWatched((prev) => !prev)}
 				scrollHidden={!headerVisible}
 				compactMobile={isMobileTimeline}
+				minimal={needsServerAuth || hasNoSubscriptions}
 			/>
 
 			{subscriptionsLoading || subscriptionsInitialSyncing ? (
 				<div className="min-h-[50vh] flex items-center justify-center">
 					<div className="w-10 h-10 border-4 border-red-600 border-t-transparent rounded-full animate-spin" />
 				</div>
+			) : needsServerAuth ? (
+				<main
+					data-testid="auth-required"
+					className="mx-auto flex h-[calc(100dvh-var(--app-header-height))] max-w-md flex-col items-center justify-center px-4 py-2"
+				>
+					<div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-red-50 dark:bg-red-900/20">
+						<ShieldAlert className="h-6 w-6 text-red-600 dark:text-red-400" />
+					</div>
+					<h2 className="mt-4 text-xl font-bold text-gray-900 dark:text-ios-50">
+						Server authentication required
+					</h2>
+					<p className="mt-2 text-center text-sm text-gray-500 dark:text-ios-400">
+						Enter your server API token in Settings to sync subscriptions and
+						video feeds.
+					</p>
+					<button
+						type={BTN}
+						onClick={() => setIsAuthSettingsOpen(true)}
+						className="mt-5 rounded-lg bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-700"
+					>
+						Open Settings
+					</button>
+				</main>
 			) : hasNoSubscriptions ? (
 				<FirstRunOnboarding
 					onAddChannel={() => setIsAddChannelModalOpen(true)}
@@ -1448,6 +1476,14 @@ export const Dashboard = () => {
 				isOpen={showShortcutsHelp}
 				onClose={() => setShowShortcutsHelp(false)}
 			/>
+
+			{/* Settings modal for the auth-required flow */}
+			{needsServerAuth && (
+				<SettingsModal
+					isOpen={isAuthSettingsOpen}
+					onClose={() => setIsAuthSettingsOpen(false)}
+				/>
+			)}
 		</div>
 	);
 };

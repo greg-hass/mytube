@@ -1,3 +1,4 @@
+import { AuthError } from "./api-auth";
 import type { StoredSubscription } from "./indexeddb";
 import {
 	applySubscriptionTombstones,
@@ -29,6 +30,7 @@ export type RevisionRecorder = (
 /** Fetch the current server sync snapshot. */
 export async function fetchServerSyncData(): Promise<ServerSyncData> {
 	const response = await fetch(`/api/sync?t=${Date.now()}`);
+	if (response.status === 401) throw new AuthError();
 	if (!response.ok) throw new Error("Failed to fetch from backend");
 	return response.json();
 }

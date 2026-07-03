@@ -1,3 +1,4 @@
+import { AuthError, isAuthError } from "./api-auth";
 import {
 	applyServerRedirects,
 	applyServerSettings,
@@ -178,25 +179,33 @@ export async function fetchAndMergeSubscriptions(
 ): Promise<StoredSubscription[]> {
 	const localSubs = await getAllSubscriptions();
 
-	const response = await fetch(`/api/sync?t=${Date.now()}`);
-	if (!response.ok) return localSubs;
+	try {
+		const response = await fetch(`/api/sync?t=${Date.now()}`);
+		if (response.status === 401) throw new AuthError();
+		if (!response.ok) return localSubs;
 
-	const remoteData = await response.json();
-	recordRevision(remoteData);
-	const tombstones = Array.isArray(remoteData.subscriptionTombstones)
-		? remoteData.subscriptionTombstones
-		: [];
-	const remoteSubs = applySubscriptionTombstones(
-		remoteData.subscriptions || [],
-		tombstones,
-	);
-	const mergedSubs = mergeSubscriptionLists(localSubs, remoteSubs);
+		const remoteData = await response.json();
+		recordRevision(remoteData);
+		const tombstones = Array.isArray(remoteData.subscriptionTombstones)
+			? remoteData.subscriptionTombstones
+			: [];
+		const remoteSubs = applySubscriptionTombstones(
+			remoteData.subscriptions || [],
+			tombstones,
+		);
+		const mergedSubs = mergeSubscriptionLists(localSubs, remoteSubs);
 
-	if (!subscriptionsEqual(localSubs, mergedSubs)) {
-		await addSubscriptions(mergedSubs);
+		if (!subscriptionsEqual(localSubs, mergedSubs)) {
+			await addSubscriptions(mergedSubs);
+		}
+
+		return mergedSubs;
+	} catch (err) {
+		// Auth errors must propagate so the UI can prompt for a token.
+		if (isAuthError(err)) throw err;
+		// Network/transient errors: fall back to local data.
+		return localSubs;
 	}
-
-	return mergedSubs;
 }
 
 /**
