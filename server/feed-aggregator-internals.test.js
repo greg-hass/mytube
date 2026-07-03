@@ -146,7 +146,7 @@ describe("feed aggregator — runAggregation (characterization)", () => {
 	it("completes without error when there are no subscriptions", async () => {
 		await aggregator.runAggregation();
 
-		expect(mockStore.writeData).toHaveBeenCalled();
+		expect(mockStore.updateData).toHaveBeenCalled();
 		expect(mockStore.writeVideoCache).toHaveBeenCalled();
 	});
 
@@ -178,10 +178,15 @@ describe("feed aggregator — runAggregation (characterization)", () => {
 
 		await aggregator.runAggregation();
 
-		// Data should have been written
-		expect(mockStore.writeData).toHaveBeenCalled();
-		const lastWriteData = mockStore.writeData.mock.calls.at(-1)[0];
-		expect(lastWriteData.subscriptions).toHaveLength(2);
+		// Data should have been written via the merge path
+		expect(mockStore.updateData).toHaveBeenCalled();
+		const updateCall = mockStore.updateData.mock.calls.at(-1);
+		const mergeResult = await updateCall[1]({
+			subscriptions,
+			settings: {},
+			redirects: {},
+		});
+		expect(mergeResult.subscriptions).toHaveLength(2);
 
 		// Video cache should have been written
 		expect(mockStore.writeVideoCache).toHaveBeenCalled();
@@ -211,9 +216,14 @@ describe("feed aggregator — runAggregation (characterization)", () => {
 
 		await aggregator.runAggregation();
 
-		expect(mockStore.writeData).toHaveBeenCalled();
-		const lastWriteData = mockStore.writeData.mock.calls.at(-1)[0];
-		expect(lastWriteData.redirects).toEqual(redirects);
+		expect(mockStore.updateData).toHaveBeenCalled();
+		const updateCall = mockStore.updateData.mock.calls.at(-1);
+		const mergeResult = await updateCall[1]({
+			subscriptions,
+			settings: {},
+			redirects,
+		});
+		expect(mergeResult.redirects).toEqual(redirects);
 	});
 });
 
@@ -278,5 +288,50 @@ describe("feed aggregator — aggregateOnStartupIfStale (characterization)", () 
 		// Should have triggered an aggregation (fire-and-forget via aggregateFeeds)
 		expect(mockStore.readData).toHaveBeenCalled();
 		expect(mockStore.readVideoCache).toHaveBeenCalled();
+	});
+
+	it("does not clobber subscriptions added during aggregation", async () => {
+		const subscriptions = [{ id: "UC001", title: "Channel A" }];
+		const videoCache = {
+			videos: [],
+			lastUpdated: new Date(Date.now() - 30 * 60 * 1000).toISOString(),
+			totalChannels: 1,
+			totalVideos: 0,
+			channelRefreshes: {},
+			shortsStatusById: {},
+		};
+
+		mockStore.reset({
+			data: { subscriptions, settings: {}, redirects: {} },
+			videoCache,
+		});
+
+		// Simulate a concurrent add: updateData's re-read returns TWO subs
+		const concurrentAddData = {
+			subscriptions: [
+				{ id: "UC001", title: "Channel A" },
+				{ id: "UC002", title: "Channel B" },
+			],
+			settings: {},
+			redirects: {},
+		};
+		mockStore.updateData = vi.fn(async (_fallback, updater) => {
+			const result = await updater(concurrentAddData);
+			return result;
+		});
+
+		const aggregator = createFeedAggregator(mockStore);
+		await aggregator.runAggregation();
+
+		// The merge should preserve UC002 (the concurrent add)
+		const updateCall = mockStore.updateData.mock.calls[0];
+		const mergeResult = await updateCall[1](concurrentAddData);
+		expect(mergeResult.subscriptions).toHaveLength(2);
+		expect(
+			mergeResult.subscriptions.find((s) => s.id === "UC002"),
+		).toBeDefined();
+
+		// writeData should NOT have been called for the final save
+		expect(mockStore.writeData).not.toHaveBeenCalled();
 	});
 });

@@ -444,16 +444,37 @@ function createFeedAggregator(storeOverride) {
 					: video,
 			);
 
-			// Save updated subscriptions (with metadata from RSS) back to db.json
-			// IMPORTANT: Preserve redirects that were merged during init()
-			parsedData.subscriptions = subscriptions;
-			if (!parsedData.redirects) {
-				parsedData.redirects = {};
-			}
-			await store.writeData(parsedData);
+			// Merge aggregator results with current DB state to avoid clobbering
+			// concurrent mutations (adds, deletes/tombstones, watched state).
+			const aggregatorSubs = subscriptions;
+			const aggregatorRedirects = parsedData.redirects || {};
+			const aggregatorQuotaUsed = parsedData.settings?.quotaUsed;
+			const aggregatorQuotaResetDate =
+				parsedData.settings?.lastQuotaResetDate;
+			await store.updateData(DEFAULT_DATA, (current) => {
+				const aggregatorMeta = new Map(
+					aggregatorSubs.map((s) => [s.id, s]),
+				);
+				const mergedSubs = (current.subscriptions || []).map(
+					(sub) => aggregatorMeta.get(sub.id) || sub,
+				);
+				return {
+					...current,
+					subscriptions: mergedSubs,
+					redirects: {
+						...(current.redirects || {}),
+						...aggregatorRedirects,
+					},
+					settings: {
+						...current.settings,
+						quotaUsed: aggregatorQuotaUsed,
+						lastQuotaResetDate: aggregatorQuotaResetDate,
+					},
+				};
+			});
 			console.log(
 				"💾 Saved updated subscription metadata (preserving",
-				Object.keys(parsedData.redirects).length,
+				Object.keys(aggregatorRedirects).length,
 				"redirects)",
 			);
 

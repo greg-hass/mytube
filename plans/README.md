@@ -8,14 +8,14 @@ before starting, honor its STOP conditions, and update your row when done.
 
 | Plan | Title | Priority | Effort | Depends on | Status |
 |------|-------|----------|--------|------------|--------|
-| 001  | Remove committed `.env` from git | P1 | S | — | TODO |
-| 002  | Aggregator characterization tests | P1 | M | — | TODO |
-| 003  | Fix aggregation write clobber | P1 | M | 002 | TODO |
-| 004  | ETag 304 + compression for /api/videos | P1 | M | — | TODO |
-| 005  | Add trust proxy for rate limiting | P2 | S | — | TODO |
-| 006  | IndexedDB leak + mute revision bump | P2 | S | — | TODO |
-| 007  | Fix AGENTS.md drift + .env.example | P2 | S | — | TODO |
-| 008  | Dead code cleanup (channel-search + shim) | P3 | S | — | TODO |
+| 001  | Remove committed `.env` from git | P1 | S | — | DONE |
+| 002  | Aggregator characterization tests | P1 | M | — | DONE |
+| 003  | Fix aggregation write clobber | P1 | M | 002 | DONE |
+| 004  | ETag 304 + compression for /api/videos | P1 | M | — | DONE |
+| 005  | Add trust proxy for rate limiting | P2 | S | — | DONE |
+| 006  | IndexedDB leak + mute revision bump | P2 | S | — | DONE |
+| 007  | Fix AGENTS.md drift + .env.example | P2 | S | — | DONE |
+| 008  | Dead code cleanup (channel-search + shim) | P3 | S | — | DONE |
 
 ## Dependency notes
 
