@@ -86,12 +86,21 @@ function openDatabase(name: string): Promise<IDBDatabase> {
   });
 }
 
+let dbPromise: Promise<IDBDatabase> | null = null;
+let legacyMigrationDone = false;
+
 /**
- * Get database connection
+ * Get database connection (cached singleton)
  */
 async function getDB(): Promise<IDBDatabase> {
-  const db = await openDatabase(DB_NAME);
-  await migrateLegacyDatabaseIfNeeded(db);
+  if (!dbPromise) {
+    dbPromise = openDatabase(DB_NAME);
+  }
+  const db = await dbPromise;
+  if (!legacyMigrationDone) {
+    await migrateLegacyDatabaseIfNeeded(db);
+    legacyMigrationDone = true;
+  }
   return db;
 }
 
@@ -630,6 +639,18 @@ export function isIndexedDBSupported(): boolean {
  * Delete the entire database (use with caution)
  */
 export async function deleteDatabase(): Promise<void> {
+  // Close the cached connection so deletion isn't blocked
+  if (dbPromise) {
+    try {
+      const db = await dbPromise;
+      db.close();
+    } catch {
+      // Connection may already be closed
+    }
+    dbPromise = null;
+    legacyMigrationDone = false;
+  }
+
   return new Promise((resolve, reject) => {
     const names = [DB_NAME, LEGACY_DB_NAME];
     let remaining = names.length;

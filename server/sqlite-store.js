@@ -14,7 +14,12 @@ function parseJson(value, fallback) {
 	}
 }
 
-function createSqliteStore({ databaseFile, legacyDatabaseFile, legacyDataFile, legacyVideosFile }) {
+function createSqliteStore({
+	databaseFile,
+	legacyDatabaseFile,
+	legacyDataFile,
+	legacyVideosFile,
+}) {
 	let db = null;
 
 	function getDb() {
@@ -30,7 +35,9 @@ function createSqliteStore({ databaseFile, legacyDatabaseFile, legacyDataFile, l
 
 		if (columns.length === 0) return;
 
-		const rows = sourceDb.prepare(`SELECT ${columns.join(", ")} FROM ${tableName}`).all();
+		const rows = sourceDb
+			.prepare(`SELECT ${columns.join(", ")} FROM ${tableName}`)
+			.all();
 		if (rows.length === 0) return;
 
 		const placeholders = columns.map(() => "?").join(", ");
@@ -48,23 +55,35 @@ function createSqliteStore({ databaseFile, legacyDatabaseFile, legacyDataFile, l
 	function hasDatabaseContent(database) {
 		const tableHasRows = (tableName) => {
 			try {
-				return Boolean(database.prepare(`SELECT 1 FROM ${tableName} LIMIT 1`).get());
+				return Boolean(
+					database.prepare(`SELECT 1 FROM ${tableName} LIMIT 1`).get(),
+				);
 			} catch {
 				return false;
 			}
 		};
 
-		return tableHasRows("subscriptions") || tableHasRows("videos") || tableHasRows("app_state");
+		return (
+			tableHasRows("subscriptions") ||
+			tableHasRows("videos") ||
+			tableHasRows("app_state")
+		);
 	}
 
 	async function migrateLegacyDatabaseIfNeeded() {
-		if (!legacyDatabaseFile || path.resolve(legacyDatabaseFile) === path.resolve(databaseFile)) {
+		if (
+			!legacyDatabaseFile ||
+			path.resolve(legacyDatabaseFile) === path.resolve(databaseFile)
+		) {
 			return;
 		}
 
 		try {
 			await fsPromises.access(databaseFile);
-			const existingDb = new Database(databaseFile, { fileMustExist: true, readonly: true });
+			const existingDb = new Database(databaseFile, {
+				fileMustExist: true,
+				readonly: true,
+			});
 			try {
 				if (hasDatabaseContent(existingDb)) return;
 			} finally {
@@ -81,7 +100,10 @@ function createSqliteStore({ databaseFile, legacyDatabaseFile, legacyDataFile, l
 			throw error;
 		}
 
-		const sourceDb = new Database(legacyDatabaseFile, { fileMustExist: true, readonly: true });
+		const sourceDb = new Database(legacyDatabaseFile, {
+			fileMustExist: true,
+			readonly: true,
+		});
 		try {
 			if (!hasDatabaseContent(sourceDb)) return;
 
@@ -368,11 +390,15 @@ function createSqliteStore({ databaseFile, legacyDatabaseFile, legacyDataFile, l
 
 	function applySubscriptionFieldUpdate(id, field, value) {
 		const database = getDb();
-		database
-			.prepare(`
+		const write = database.transaction(() => {
+			database
+				.prepare(`
             UPDATE subscriptions SET value_json = json_set(value_json, ?, json(?)) WHERE id = ?
         `)
-			.run(`$.${field}`, JSON.stringify(value), id);
+				.run(`$.${field}`, JSON.stringify(value), id);
+			writeAppState("sync_revision", getRevision() + 1, ISO_NOW());
+		});
+		write();
 	}
 
 	return {

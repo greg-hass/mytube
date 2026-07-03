@@ -12,14 +12,13 @@ const {
 	resolveChannelViaLlm,
 	executeToolCall,
 	executeWebSearch,
-	getOpencodeBackendStatus,
+	getLlmBackendStatus,
 	parseDuckDuckGoResults,
 	parseFinalResponse,
-	resolveChannelViaOpencode,
 	searchBrave,
 	searchDuckDuckGo,
 	stripHtml,
-} = require("./opencode-channel-resolver");
+} = require("./llm-channel-resolver");
 
 describe("module constants", () => {
 	it("exposes the expected model id", () => {
@@ -472,7 +471,7 @@ describe("searchBrave", () => {
 	});
 });
 
-describe("resolveChannelViaOpencode", () => {
+describe("resolveChannelViaLlm (opencode provider)", () => {
 	const originalEnv = { ...process.env };
 	const originalWarn = console.warn;
 
@@ -489,7 +488,7 @@ describe("resolveChannelViaOpencode", () => {
 
 	it("returns null when no API key and non-opencode provider", async () => {
 		delete process.env.OPENCODE_API_KEY;
-		const result = await resolveChannelViaOpencode("mario nawfal", {
+		const result = await resolveChannelViaLlm("mario nawfal", {
 			provider: "deepseek",
 		});
 		expect(result).toBeNull();
@@ -513,8 +512,9 @@ describe("resolveChannelViaOpencode", () => {
 					],
 				}),
 		});
-		const result = await resolveChannelViaOpencode("mario nawfal", {
+		const result = await resolveChannelViaLlm("mario nawfal", {
 			fetchImpl,
+			provider: "opencode",
 		});
 		expect(result).toEqual({
 			type: "handle",
@@ -539,7 +539,7 @@ describe("resolveChannelViaOpencode", () => {
 					],
 				}),
 		});
-		await resolveChannelViaOpencode("mkbhd", { fetchImpl });
+		await resolveChannelViaLlm("mkbhd", { fetchImpl, provider: "opencode" });
 		expect(fetchImpl).toHaveBeenCalledWith(
 			OPENCODE_ENDPOINT,
 			expect.objectContaining({
@@ -567,7 +567,7 @@ describe("resolveChannelViaOpencode", () => {
 					],
 				}),
 		});
-		await resolveChannelViaOpencode("mkbhd", { fetchImpl });
+		await resolveChannelViaLlm("mkbhd", { fetchImpl, provider: "opencode" });
 		const callArgs = JSON.parse(fetchImpl.mock.calls[0][1].body);
 		expect(callArgs.model).toBe(OPENCODE_MODEL);
 		expect(callArgs.tools).toEqual(TOOLS);
@@ -628,8 +628,9 @@ describe("resolveChannelViaOpencode", () => {
 						],
 					}),
 			});
-		const result = await resolveChannelViaOpencode("mario nawfal", {
+		const result = await resolveChannelViaLlm("mario nawfal", {
 			fetchImpl,
+			provider: "opencode",
 		});
 		expect(result).toEqual({
 			type: "handle",
@@ -643,19 +644,28 @@ describe("resolveChannelViaOpencode", () => {
 
 	it("returns null when rate-limited (429)", async () => {
 		const fetchImpl = vi.fn().mockResolvedValue({ ok: false, status: 429 });
-		const result = await resolveChannelViaOpencode("foo", { fetchImpl });
+		const result = await resolveChannelViaLlm("foo", {
+			fetchImpl,
+			provider: "opencode",
+		});
 		expect(result).toBeNull();
 	});
 
 	it("returns null on auth error (401)", async () => {
 		const fetchImpl = vi.fn().mockResolvedValue({ ok: false, status: 401 });
-		const result = await resolveChannelViaOpencode("foo", { fetchImpl });
+		const result = await resolveChannelViaLlm("foo", {
+			fetchImpl,
+			provider: "opencode",
+		});
 		expect(result).toBeNull();
 	});
 
 	it("returns null on network error", async () => {
 		const fetchImpl = vi.fn().mockRejectedValue(new Error("offline"));
-		const result = await resolveChannelViaOpencode("foo", { fetchImpl });
+		const result = await resolveChannelViaLlm("foo", {
+			fetchImpl,
+			provider: "opencode",
+		});
 		expect(result).toBeNull();
 	});
 
@@ -685,7 +695,10 @@ describe("resolveChannelViaOpencode", () => {
 					],
 				}),
 		});
-		const result = await resolveChannelViaOpencode("x", { fetchImpl });
+		const result = await resolveChannelViaLlm("x", {
+			fetchImpl,
+			provider: "opencode",
+		});
 		expect(result).toBeNull();
 		// MAX_TOOL_ITERATIONS API calls + MAX_TOOL_ITERATIONS DDG calls
 		expect(fetchImpl.mock.calls.length).toBeLessThanOrEqual(
@@ -743,9 +756,10 @@ describe("resolveChannelViaOpencode", () => {
 						],
 					}),
 			});
-		await resolveChannelViaOpencode("foo", {
+		await resolveChannelViaLlm("foo", {
 			fetchImpl,
 			braveKey: "brave-test",
+			provider: "opencode",
 		});
 		const ddgCall = fetchImpl.mock.calls.find((c) =>
 			String(c[0]).includes("duckduckgo"),
@@ -772,12 +786,15 @@ describe("resolveChannelViaOpencode", () => {
 					],
 				}),
 		});
-		const result = await resolveChannelViaOpencode("foo", { fetchImpl });
+		const result = await resolveChannelViaLlm("foo", {
+			fetchImpl,
+			provider: "opencode",
+		});
 		expect(result).toBeNull();
 	});
 });
 
-describe("getOpencodeBackendStatus", () => {
+describe("getLlmBackendStatus().opencode", () => {
 	const originalEnv = { ...process.env };
 
 	beforeEach(() => {
@@ -789,12 +806,12 @@ describe("getOpencodeBackendStatus", () => {
 
 	it("reports unavailable when no key is set", () => {
 		delete process.env.OPENCODE_API_KEY;
-		expect(getOpencodeBackendStatus().available).toBe(false);
+		expect(getLlmBackendStatus().opencode.available).toBe(false);
 	});
 
 	it("reports available when a key is set", () => {
 		process.env.OPENCODE_API_KEY = "test";
-		const status = getOpencodeBackendStatus();
+		const status = getLlmBackendStatus().opencode;
 		expect(status.available).toBe(true);
 		expect(status.model).toBe(OPENCODE_MODEL);
 	});
@@ -802,9 +819,9 @@ describe("getOpencodeBackendStatus", () => {
 	it("reports the search backend based on Brave key", () => {
 		process.env.OPENCODE_API_KEY = "x";
 		delete process.env.BRAVE_API_KEY;
-		expect(getOpencodeBackendStatus().searchBackend).toBe("duckduckgo");
+		expect(getLlmBackendStatus().searchBackend).toBe("duckduckgo");
 		process.env.BRAVE_API_KEY = "y";
-		expect(getOpencodeBackendStatus().searchBackend).toBe("brave");
+		expect(getLlmBackendStatus().searchBackend).toBe("brave");
 	});
 });
 

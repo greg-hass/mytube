@@ -13,7 +13,7 @@ It's a feed reader, not a video archive. Videos still play through YouTube.
 - **Frontend:** React 19, TypeScript, Vite 7, Tailwind CSS 3, Zustand, TanStack
   Query
 - **Server:** Node.js, Express (implied), SQLite (WAL mode)
-- **Container:** `ghcr.io/greg-hass/youtube-subscriptions:latest`
+- **Container:** `ghcr.io/greg-hass/mytube:latest`
 - **Port mapping:** Host `5173` → Container `8080`
 - **Volume:** `mytube-data` → `/app/server/data`
 - **Health check:** `http://localhost:8080/api/healthz`
@@ -25,7 +25,8 @@ It's a feed reader, not a video archive. Videos still play through YouTube.
 | `SERVER_API_TOKEN` | Yes | Bearer token for all `/api/*` requests |
 | `YOUTUBE_API_KEY` | No | Capped fallback for channel handle resolution |
 | `FEED_REFRESH_ENABLED` | No | Enable background feed refresh (default: `true`) |
-| `FEED_REFRESH_INTERVAL_MINUTES` | No | Refresh interval (default: `15`) |
+| `FEED_REFRESH_INTERVAL_MINUTES` | No | Refresh interval (default: `5`) |
+| `FEED_REFRESH_ON_START` | No | Refresh on startup when cache is stale (default: `true`) |
 | `ALLOWED_ORIGINS` | No | Comma-separated browser origin allowlist |
 
 ### Deployment
@@ -232,7 +233,7 @@ When making changes:
   handle resolution.
 - **SQLite for state:** Subscriptions, watched state, favorites, queue, feed
   cache, channel refresh state all live in
-  `server/data/youtube-subscriptions.sqlite`.
+  `server/data/mytube.sqlite`.
 - **No OAuth required.** The app uses RSS feeds and optionally a server-side API
   key for channel resolution.
 - **PWA-capable:** Frontend supports PWA install via `vite-plugin-pwa`.

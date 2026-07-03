@@ -1,7 +1,3 @@
-const {
-	pipedInstances: PIPED_INSTANCES,
-	invidiousInstances: INVIDIOUS_INSTANCES,
-} = require("./external-services.json");
 const { createLruCache } = require("./utils");
 const { searchYouTubeApiChannels } = require("./youtube-api-search");
 const { parseYouTubeUrl } = require("./brave-channel-search");
@@ -12,7 +8,6 @@ const {
 } = require("./youtube-discovery");
 const resolveChannelViaLlmProvider =
 	require("./llm-channel-resolver").resolveChannelViaLlm;
-// getOpencodeBackendStatus re-exported through opencode-channel-resolver for back-compat
 
 const SEARCH_TIMEOUT_MS = 8000;
 const SEARCH_CACHE_MS = 30000;
@@ -357,95 +352,6 @@ function normalizeThumbnail(url) {
 	return url;
 }
 
-// Legacy helper retained temporarily for backward-compatible module tests.
-// eslint-disable-next-line no-unused-vars
-async function searchPipedChannels(
-	query,
-	fetchImpl = fetch,
-	signal,
-	maxInstances = 2,
-) {
-	const instances = PIPED_INSTANCES.slice(0, maxInstances);
-	const searches = instances.map(async (instance) => {
-		try {
-			const response = await fetchImpl(
-				`${instance}/search?q=${encodeURIComponent(query)}&filter=channels`,
-				{
-					headers: { "User-Agent": "Mozilla/5.0" },
-					signal,
-				},
-			);
-
-			if (!response.ok) return [];
-
-			const data = await response.json();
-			const items = Array.isArray(data?.items) ? data.items : [];
-
-			return items.map((item) => ({
-				id: String(item.url || "")
-					.split("/")
-					.pop(),
-				title: item.name,
-				description: item.description || "",
-				thumbnail: normalizeThumbnail(item.thumbnail),
-				customUrl: item.url,
-				subscriberCount: item.subscribers
-					? String(item.subscribers)
-					: undefined,
-				videoCount: item.videos ? String(item.videos) : undefined,
-			}));
-		} catch (error) {
-			console.warn(`Channel search failed for ${instance}:`, error.message);
-			return [];
-		}
-	});
-
-	const results = await Promise.all(searches);
-	return results.flat();
-}
-
-// eslint-disable-next-line no-unused-vars
-async function searchInvidiousChannels(
-	query,
-	fetchImpl = fetch,
-	signal,
-	maxInstances = 2,
-) {
-	const instances = INVIDIOUS_INSTANCES.slice(0, maxInstances);
-	const searches = instances.map(async (instance) => {
-		try {
-			const response = await fetchImpl(
-				`${instance}/api/v1/search?q=${encodeURIComponent(query)}&type=channel`,
-				{
-					headers: { "User-Agent": "Mozilla/5.0" },
-					signal,
-				},
-			);
-
-			if (!response.ok) return [];
-
-			const data = await response.json();
-			const items = Array.isArray(data) ? data : [];
-
-			return items.map((item) => ({
-				id: item.authorId,
-				title: item.author,
-				description: item.description || "",
-				thumbnail: normalizeThumbnail(item.authorThumbnails?.at(-1)?.url),
-				customUrl: item.authorUrl,
-				subscriberCount: item.subCount ? String(item.subCount) : undefined,
-				videoCount: item.videoCount ? String(item.videoCount) : undefined,
-			}));
-		} catch (error) {
-			console.warn(`Channel search failed for ${instance}:`, error.message);
-			return [];
-		}
-	});
-
-	const results = await Promise.all(searches);
-	return results.flat();
-}
-
 function parseYouTubeChannelSearchResults(html) {
 	const results = [];
 	const matches = String(html).matchAll(
@@ -475,29 +381,6 @@ function parseYouTubeChannelSearchResults(html) {
 	}
 
 	return results;
-}
-
-// eslint-disable-next-line no-unused-vars
-async function searchYouTubePageChannels(query, fetchImpl = fetch, signal) {
-	try {
-		const response = await fetchImpl(
-			`https://www.youtube.com/results?search_query=${encodeURIComponent(query)}&sp=EgIQAg%253D%253D`,
-			{
-				headers: {
-					"User-Agent": "Mozilla/5.0",
-					"Accept-Language": "en-US,en;q=0.9",
-				},
-				signal,
-			},
-		);
-
-		if (!response.ok) return [];
-
-		return parseYouTubeChannelSearchResults(await response.text());
-	} catch (error) {
-		console.warn("YouTube channel search scrape failed:", error.message);
-		return [];
-	}
 }
 
 async function searchChannels(query, options = {}) {
@@ -573,12 +456,7 @@ async function searchChannels(query, options = {}) {
 		fetchImpl,
 		apiKey: options.youtubeApiKey,
 	});
-	const ranked = dedupeAndRankChannels(
-		trimmedQuery,
-		apiResults,
-		limit,
-		false,
-	);
+	const ranked = dedupeAndRankChannels(trimmedQuery, apiResults, limit, false);
 	setCachedResults(trimmedQuery, ranked);
 	return ranked;
 }
@@ -659,63 +537,6 @@ function detectChannelIdentity(query) {
  * @param {object} options
  * @returns {Promise<Array<{id,title,description,thumbnail,customUrl,subscriberCount,videoCount}>>}
  */
-async function resolveDirectChannel(identity, options = {}) {
-	const apiKey =
-		options.apiKey !== undefined ? options.apiKey : process.env.YOUTUBE_API_KEY;
-	if (!apiKey) return [];
-
-	const fetchImpl = options.fetchImpl || fetch;
-	const controller = new AbortController();
-	const timeoutId = setTimeout(() => controller.abort(), SEARCH_TIMEOUT_MS);
-
-	try {
-		let queryParam;
-		if (identity.type === "channel_id") {
-			queryParam = `id=${encodeURIComponent(identity.value)}`;
-		} else if (identity.type === "handle") {
-			const handle = identity.value.startsWith("@")
-				? identity.value
-				: `@${identity.value}`;
-			queryParam = `forHandle=${encodeURIComponent(handle)}`;
-		} else {
-			// "custom" and "user" → forUsername
-			queryParam = `forUsername=${encodeURIComponent(identity.value)}`;
-		}
-
-		const url =
-			`https://www.googleapis.com/youtube/v3/channels` +
-			`?part=snippet,statistics&${queryParam}&key=${apiKey}`;
-
-		const response = await fetchImpl(url, { signal: controller.signal });
-		if (!response.ok) return [];
-
-		const data = await response.json();
-		const items = Array.isArray(data?.items) ? data.items : [];
-
-		return items
-			.filter((item) => item?.id?.startsWith("UC"))
-			.map((item) => ({
-				id: item.id,
-				title: item.snippet?.title || "",
-				description: item.snippet?.description || "",
-				thumbnail:
-					item.snippet?.thumbnails?.medium?.url ||
-					item.snippet?.thumbnails?.default?.url ||
-					"",
-				customUrl: item.snippet?.customUrl,
-				subscriberCount: item.statistics?.subscriberCount,
-				videoCount: item.statistics?.videoCount,
-			}));
-	} catch (error) {
-		if (error.name !== "AbortError") {
-			console.warn("Direct channel resolution failed:", error.message);
-		}
-		return [];
-	} finally {
-		clearTimeout(timeoutId);
-	}
-}
-
 /**
  * Resolve a direct channel identity by scraping the YouTube channel page.
  * Used as a fallback when YOUTUBE_API_KEY is not set — the YouTube
@@ -842,7 +663,6 @@ module.exports = {
 	getSearchBackendStatus,
 	getSearchCacheStats,
 	parseYouTubeChannelSearchResults,
-	resolveDirectChannel,
 	resolveDirectChannelByScrape,
 	scoreChannelResult,
 	searchChannels,

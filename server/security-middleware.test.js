@@ -2,6 +2,7 @@ import { createRequire } from 'node:module';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const require = createRequire(import.meta.url);
+const request = require('supertest');
 const {
     createApiKeyAuthMiddleware,
     createBucketRateLimiter,
@@ -331,5 +332,32 @@ describe('bucket rate limiter', () => {
         if (bucket) {
             expect(bucket.count).toBe(1);
         }
+    });
+});
+
+describe('trust proxy', () => {
+    it('sets req.ip from X-Forwarded-For when trust proxy is enabled', async () => {
+        const express = require('express');
+        const app = express();
+        app.set('trust proxy', 1);
+        app.get('/test-ip', (req, res) => res.json({ ip: req.ip }));
+
+        const response = await request(app)
+            .get('/test-ip')
+            .set('X-Forwarded-For', '203.0.113.1');
+
+        expect(response.body.ip).toBe('203.0.113.1');
+    });
+
+    it('ignores X-Forwarded-For without trust proxy', async () => {
+        const express = require('express');
+        const app = express();
+        app.get('/test-ip', (req, res) => res.json({ ip: req.ip }));
+
+        const response = await request(app)
+            .get('/test-ip')
+            .set('X-Forwarded-For', '203.0.113.1');
+
+        expect(response.body.ip).not.toBe('203.0.113.1');
     });
 });

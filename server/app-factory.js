@@ -1,5 +1,6 @@
 const express = require("express");
 const cors = require("cors");
+const compression = require("compression");
 const axios = require("axios");
 const {
 	mergeIncomingSubscriptions,
@@ -165,6 +166,13 @@ function createApp({
 	if (!feedAggregator) throw new Error("createApp requires feedAggregator");
 
 	const app = express();
+
+	app.use(compression());
+
+	// Trust the single nginx reverse proxy hop so req.ip reflects the real
+	// client via X-Forwarded-For. This makes per-client rate limiting work.
+	app.set("trust proxy", 1);
+
 	const allowedOrigins = parseAllowedOrigins(
 		config.allowedOrigins ?? process.env.ALLOWED_ORIGINS,
 	);
@@ -301,14 +309,12 @@ function createApp({
 				String(req.header("x-youtube-api-key") || "").trim() ||
 				process.env.YOUTUBE_API_KEY;
 			const searches = await Promise.all(
-				list
-					.slice(0, 3)
-					.map((subscription) =>
-						searchChannels(String(subscription.title || ""), {
-							limit: 4,
-							youtubeApiKey,
-						}),
-					),
+				list.slice(0, 3).map((subscription) =>
+					searchChannels(String(subscription.title || ""), {
+						limit: 4,
+						youtubeApiKey,
+					}),
+				),
 			);
 			const suggestions = new Map();
 			for (const channel of searches.flat()) {

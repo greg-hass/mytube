@@ -12,6 +12,11 @@ dist
 .vite
 dist-ssr
 *.local
+
+# Environment files — never commit secrets
+.env
+.env.*
+!.env.example
 server/data/**/*.json
 server/data/**/*.tmp
 server/data/**/*.sqlite

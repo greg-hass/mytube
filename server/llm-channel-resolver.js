@@ -345,20 +345,6 @@ async function resolveChannelViaLlm(query, options = {}) {
 	return null;
 }
 
-/**
- * Backward-compatible alias for code that still references the old name.
- * @deprecated Use resolveChannelViaLlm instead.
- */
-async function resolveChannelViaOpencode(query, options = {}) {
-	// Map the old options shape to the new one:
-	//   old: options.apiKey → opencode-specific API key
-	//   new: options.apiKey → provider API key (same)
-	return resolveChannelViaLlm(query, {
-		...options,
-		provider: options.provider || "opencode",
-	});
-}
-
 // ─── Suggestions (no tool loop) ───────────────────────────────────────────
 
 /**
@@ -768,20 +754,6 @@ function getLlmBackendStatus() {
 	};
 }
 
-/**
- * Backward-compatible alias.
- * @deprecated Use getLlmBackendStatus instead.
- */
-function getOpencodeBackendStatus() {
-	const status = getLlmBackendStatus();
-	return {
-		available: status.opencode.available,
-		model: status.opencode.model,
-		endpoint: status.opencode.endpoint,
-		searchBackend: status.searchBackend,
-	};
-}
-
 // Backward-compat constant aliases
 const OPENCODE_MODEL = PROVIDER_CONFIG.opencode.defaultModel;
 const OPENCODE_ENDPOINT = PROVIDER_CONFIG.opencode.endpoint;
@@ -800,12 +772,10 @@ module.exports = {
 	executeToolCall,
 	executeWebSearch,
 	getLlmBackendStatus,
-	getOpencodeBackendStatus,
 	parseDuckDuckGoResults,
 	parseFinalResponse,
 	parseSuggestionsResponse,
 	resolveChannelViaLlm,
-	resolveChannelViaOpencode,
 	searchBrave,
 	searchDuckDuckGo,
 	stripHtml,

@@ -70,7 +70,8 @@ function getCurrentDateInTimezone(timeZone = QUOTA_TIMEZONE, now = new Date()) {
 	}).format(now);
 }
 
-function createFeedAggregator() {
+function createFeedAggregator(storeOverride) {
+	const store = storeOverride || appStore;
 	let aggregationPromise = null;
 	let archivedShortsBackfillPromise = null;
 	let archivedShortsBackfillLastAttemptAt = null;
@@ -112,7 +113,7 @@ function createFeedAggregator() {
 			{ ...shortsStatusById },
 			{
 				onComplete: async (completedStatuses) => {
-					const latestVideoCache = await appStore.readVideoCache({
+					const latestVideoCache = await store.readVideoCache({
 						videos: [],
 					});
 					const mergedStatuses = {
@@ -122,7 +123,7 @@ function createFeedAggregator() {
 					const latestVideos = latestVideoCache.videos || [];
 					applyLocalShortsMetadata(latestVideos, mergedStatuses);
 
-					await appStore.writeVideoCache({
+					await store.writeVideoCache({
 						...latestVideoCache,
 						videos: latestVideos,
 						shortsStatusById: mergedStatuses,
@@ -251,9 +252,9 @@ function createFeedAggregator() {
 
 		try {
 			// Read data to get subscriptions and settings
-			const parsedData = await appStore.readData(DEFAULT_DATA);
+			const parsedData = await store.readData(DEFAULT_DATA);
 			const subscriptions = parsedData.subscriptions || [];
-			const existingVideoCache = await appStore.readVideoCache({ videos: [] });
+			const existingVideoCache = await store.readVideoCache({ videos: [] });
 			let existingVideos = existingVideoCache.videos || [];
 			const shortsStatusById = existingVideoCache.shortsStatusById || {};
 			applyLocalShortsMetadata(existingVideos, shortsStatusById);
@@ -297,7 +298,7 @@ function createFeedAggregator() {
 			);
 			if (redirectResult.changed) {
 				parsedData.subscriptions = redirectResult.subscriptions;
-				await appStore.writeData(parsedData);
+				await store.writeData(parsedData);
 				console.log("💾 Updated subscriptions with redirects");
 				subscriptions.length = 0;
 				subscriptions.push(...redirectResult.subscriptions);
@@ -319,7 +320,7 @@ function createFeedAggregator() {
 
 				if (resolveResult.changed) {
 					parsedData.subscriptions = resolveResult.subscriptions;
-					await appStore.writeData(parsedData);
+					await store.writeData(parsedData);
 					console.log("💾 Updated subscriptions with resolved IDs");
 					subscriptions.length = 0;
 					subscriptions.push(...resolveResult.subscriptions);
@@ -406,7 +407,7 @@ function createFeedAggregator() {
 				const isLastBatch =
 					i + CURRENT_BATCH_SIZE >= subscriptionsToRefresh.length;
 				if (batchNumber % 5 === 0 || isLastBatch) {
-					await appStore.writeVideoCache({
+					await store.writeVideoCache({
 						videos: currentVideos,
 						lastUpdated: new Date().toISOString(),
 						totalChannels: subscriptions.length,
@@ -449,7 +450,7 @@ function createFeedAggregator() {
 			if (!parsedData.redirects) {
 				parsedData.redirects = {};
 			}
-			await appStore.writeData(parsedData);
+			await store.writeData(parsedData);
 			console.log(
 				"💾 Saved updated subscription metadata (preserving",
 				Object.keys(parsedData.redirects).length,
@@ -457,7 +458,7 @@ function createFeedAggregator() {
 			);
 
 			// Save to file
-			await appStore.writeVideoCache({
+			await store.writeVideoCache({
 				videos: archivedVideosWithShortsStatus,
 				lastUpdated: new Date().toISOString(),
 				totalChannels: subscriptions.length,
@@ -510,7 +511,9 @@ function createFeedAggregator() {
 				...aggregationStatus,
 				lastUpdated: new Date().toISOString(),
 			};
-			console.log("⏳ Feed aggregation already running; joining active refresh.");
+			console.log(
+				"⏳ Feed aggregation already running; joining active refresh.",
+			);
 			return aggregationPromise;
 		}
 
@@ -535,8 +538,8 @@ function createFeedAggregator() {
 	async function getActiveChannels({ limit = 5 } = {}) {
 		try {
 			const [data, videoCache] = await Promise.all([
-				appStore.readData(DEFAULT_DATA),
-				appStore.readVideoCache({ videos: [] }),
+				store.readData(DEFAULT_DATA),
+				store.readVideoCache({ videos: [] }),
 			]);
 			return getNextChannelsForRefresh(
 				data.subscriptions || [],
@@ -560,8 +563,8 @@ function createFeedAggregator() {
 
 		try {
 			const [data, videoCache] = await Promise.all([
-				appStore.readData(DEFAULT_DATA),
-				appStore.readVideoCache(null),
+				store.readData(DEFAULT_DATA),
+				store.readVideoCache(null),
 			]);
 
 			const subscriptionCount = data.subscriptions?.length || 0;
@@ -697,6 +700,7 @@ function createFeedAggregator() {
 	}
 
 	return {
+		runAggregation,
 		aggregateFeeds,
 		aggregateOnStartupIfStale,
 		getActiveChannels,
@@ -732,10 +736,15 @@ module.exports = {
 	isArchivedShortsBackfillDue,
 	applyLocalShortsMetadata,
 	looksLikeShortByLocalMetadata,
+	createFeedAggregator,
 	__test__: {
+		createFeedAggregator,
 		getActiveChannels: aggregator.getActiveChannels,
 		refreshBatch: aggregator.refreshBatch,
 		setRunningAggregationStatus: aggregator.setRunningAggregationStatus,
 		getAggregationStatus: aggregator.getAggregationStatus,
+		runAggregation: aggregator.runAggregation,
+		aggregateFeeds: aggregator.aggregateFeeds,
+		aggregateOnStartupIfStale: aggregator.aggregateOnStartupIfStale,
 	},
 };

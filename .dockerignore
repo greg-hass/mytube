@@ -8,6 +8,8 @@ server/node_modules
 *.log
 npm-debug.log*
 .DS_Store
+# Never include live secrets in the build context
+.env
 .env.local
 .env.*.local
 coverage

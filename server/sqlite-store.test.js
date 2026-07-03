@@ -93,7 +93,10 @@ describe("sqlite store", () => {
 	});
 
 	it("copies a legacy sqlite database into the new default location when needed", async () => {
-		const legacyDatabaseFile = path.join(tempDir, "youtube-subscriptions.sqlite");
+		const legacyDatabaseFile = path.join(
+			tempDir,
+			"youtube-subscriptions.sqlite",
+		);
 		const databaseFile = path.join(tempDir, "mytube.sqlite");
 		const legacyDb = new Database(legacyDatabaseFile);
 		legacyDb.exec(`
@@ -117,7 +120,13 @@ describe("sqlite store", () => {
 
 		const copiedDb = new Database(databaseFile, { readonly: true });
 		try {
-			expect(copiedDb.prepare("SELECT value_json FROM app_state WHERE key = 'custom_marker'").get().value_json).toBe('"legacy"');
+			expect(
+				copiedDb
+					.prepare(
+						"SELECT value_json FROM app_state WHERE key = 'custom_marker'",
+					)
+					.get().value_json,
+			).toBe('"legacy"');
 		} finally {
 			copiedDb.close();
 		}
@@ -227,6 +236,30 @@ describe("sqlite store", () => {
 		});
 
 		expect(store.getRevision()).toBe(revision + 1);
+	});
+
+	it("bumps sync_revision when updateSubscriptionField is called", async () => {
+		store = createSqliteStore({
+			databaseFile: path.join(tempDir, "youtube-subscriptions.sqlite"),
+			legacyDataFile: path.join(tempDir, "missing-db.json"),
+			legacyVideosFile: path.join(tempDir, "missing-videos.json"),
+		});
+		await store.init({ defaultData, defaultVideoCache });
+
+		// Add a subscription via updateData (bumps revision to 1)
+		await store.updateData(defaultData, (data) => ({
+			...data,
+			subscriptions: [{ id: "UC001", title: "Test Channel" }],
+		}));
+
+		const before = store.getRevision();
+		store.updateSubscriptionField("UC001", "isMuted", true);
+		const after = store.getRevision();
+		expect(after).toBeGreaterThan(before);
+
+		// Verify the field was actually updated
+		const data = await store.readData(defaultData);
+		expect(data.subscriptions[0].isMuted).toBe(true);
 	});
 
 	it("writeData removes subscriptions that are no longer in the incoming data", async () => {

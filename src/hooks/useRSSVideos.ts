@@ -1,5 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { useEffect, useMemo } from "react";
+import { useEffect, useMemo, useRef } from "react";
 import { toast } from "sonner";
 import type { YouTubeVideo } from "../types/youtube";
 
@@ -128,6 +128,10 @@ export const useRSSVideos = () => {
 		aggregationStatus?.state === "running" ||
 		aggregationStatus?.state === "queued";
 
+	// Cache last ETag and response for 304 handling
+	const videosETagRef = useRef<string | null>(null);
+	const videosDataRef = useRef<Record<string, unknown> | null>(null);
+
 	// Fetch videos from server
 	const {
 		data: serverData,
@@ -137,11 +141,24 @@ export const useRSSVideos = () => {
 	} = useQuery({
 		queryKey: ["server-videos"],
 		queryFn: async () => {
-			const response = await fetch("/api/videos");
+			const headers: Record<string, string> = {};
+			if (videosETagRef.current) {
+				headers["If-None-Match"] = videosETagRef.current;
+			}
+			const response = await fetch("/api/videos", { headers });
+			if (response.status === 304 && videosDataRef.current) {
+				return videosDataRef.current;
+			}
 			if (!response.ok) {
 				throw new Error("Failed to fetch videos from server");
 			}
-			return response.json();
+			const etag = response.headers.get("etag");
+			if (etag) {
+				videosETagRef.current = etag;
+			}
+			const data = await response.json();
+			videosDataRef.current = data;
+			return data;
 		},
 		placeholderData: (previousData) => previousData,
 		staleTime: 1000 * 60, // 1 minute
