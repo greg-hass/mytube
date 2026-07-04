@@ -6,6 +6,7 @@
   :root {
     --app-header-height: 4rem;
     --app-current-header-height: calc(env(safe-area-inset-top) + var(--app-header-height));
+    --app-sticky-top: var(--app-current-header-height);
     --app-sticky-gap: 0.5rem;
     --app-tabs-height: 3.75rem;
     --app-tab-bar-bottom-offset: max(0.75rem, calc(env(safe-area-inset-bottom) - 0.75rem));

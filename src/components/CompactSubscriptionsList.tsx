@@ -23,7 +23,9 @@ export function CompactSubscriptionsList({
 
 	const jumpTo = (section: string) => {
 		document
-			.getElementById(`subscription-section-${section === "#" ? "other" : section}`)
+			.getElementById(
+				`subscription-section-${section === "#" ? "other" : section}`,
+			)
 			?.scrollIntoView({ behavior: "smooth", block: "start" });
 	};
 
@@ -36,7 +38,7 @@ export function CompactSubscriptionsList({
 						id={`subscription-section-${section === "#" ? "other" : section}`}
 						className="scroll-mt-20"
 					>
-						<h2 className="sticky top-[var(--app-header-height)] z-10 border-y border-gray-200 bg-gray-50/95 px-2 py-1 text-xs font-semibold text-gray-500 backdrop-blur dark:border-ios-800 dark:bg-ios-950/95 dark:text-ios-400">
+						<h2 className="sticky top-[var(--app-sticky-top)] z-10 border-y border-gray-200 bg-gray-50/95 px-2 py-1 text-xs font-semibold text-gray-500 backdrop-blur dark:border-ios-800 dark:bg-ios-950/95 dark:text-ios-400">
 							{section}
 						</h2>
 						<ul className="divide-y divide-gray-200 dark:divide-ios-800">
@@ -56,11 +58,7 @@ export function CompactSubscriptionsList({
 												alt=""
 												className={`h-10 w-10 shrink-0 rounded-full object-cover ${channel.isMuted ? "grayscale opacity-50" : ""}`}
 												onError={(event) =>
-													handleImageLoadError(
-														event,
-														channel.id,
-														channel.title,
-													)
+													handleImageLoadError(event, channel.id, channel.title)
 												}
 											/>
 											<span className="min-w-0">

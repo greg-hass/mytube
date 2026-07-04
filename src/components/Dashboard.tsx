@@ -708,6 +708,13 @@ export const Dashboard = () => {
 	}, []);
 
 	useEffect(() => {
+		document.documentElement.style.setProperty(
+			"--app-sticky-top",
+			headerVisible ? "var(--app-current-header-height)" : "0px",
+		);
+	}, [headerVisible]);
+
+	useEffect(() => {
 		let ticking = false;
 
 		const onScroll = () => {

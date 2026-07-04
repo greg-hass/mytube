@@ -114,14 +114,11 @@ describe("SettingsModal", () => {
 	it("keeps the mobile settings header below the top safe area", async () => {
 		await renderModal();
 
-		// The "Settings" text is nested inside the glass header; walk up to
-		// find the modal container that carries the safe-area padding.
+		// The glass header itself carries the safe-top class (matching the
+		// main app Header pattern) — not the modal container.
 		const headerLabel = screen.getByText("Settings");
-		const modal = headerLabel.closest(
-			'[class*="pt-[env(safe-area-inset-top)]"]',
-		);
-		expect(modal?.className).toContain("pt-[env(safe-area-inset-top)]");
-		expect(modal?.className).toContain("md:pt-0");
+		const header = headerLabel.closest(".glass");
+		expect(header?.className).toContain("safe-top");
 	});
 
 	it("shows backup health counts in Settings", async () => {
