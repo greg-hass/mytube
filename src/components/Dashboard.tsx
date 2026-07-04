@@ -710,7 +710,9 @@ export const Dashboard = () => {
 	useEffect(() => {
 		document.documentElement.style.setProperty(
 			"--app-sticky-top",
-			headerVisible ? "var(--app-current-header-height)" : "0px",
+			headerVisible
+				? "var(--app-current-header-height)"
+				: "env(safe-area-inset-top)",
 		);
 	}, [headerVisible]);
 
