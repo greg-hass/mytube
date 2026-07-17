@@ -3,7 +3,6 @@ import {
 	Grid3x3,
 	TrendingUp,
 	Activity,
-	ListVideo,
 	Heart,
 	Plus,
 } from "lucide-react";
@@ -24,13 +23,12 @@ interface FloatingTabBarProps {
 	onAddChannel: () => void;
 	subscriptionCount: number;
 	activeChannelCount: number;
-	queueCount: number;
 	favoriteCount: number;
 }
 
 type FloatingTabBarCounts = Pick<
 	FloatingTabBarProps,
-	"subscriptionCount" | "activeChannelCount" | "queueCount" | "favoriteCount"
+	"subscriptionCount" | "activeChannelCount" | "favoriteCount"
 >;
 
 const TABS: Array<{
@@ -56,12 +54,6 @@ const TABS: Array<{
 		getBadge: (p) => p.activeChannelCount,
 	},
 	{
-		id: "queue",
-		label: "Queue",
-		icon: ListVideo,
-		getBadge: (p) => p.queueCount,
-	},
-	{
 		id: "favorites",
 		label: "Faves",
 		icon: Heart,
@@ -84,13 +76,11 @@ export const FloatingTabBar = ({
 	onAddChannel,
 	subscriptionCount,
 	activeChannelCount,
-	queueCount,
 	favoriteCount,
 }: FloatingTabBarProps) => {
 	const props = {
 		subscriptionCount,
 		activeChannelCount,
-		queueCount,
 		favoriteCount,
 	};
 

@@ -43,7 +43,7 @@ export function usePullToRefresh(deps: {
 			const target = event.target;
 			if (
 				target instanceof HTMLElement &&
-				target.closest("input, textarea, select, button, a")
+				target.closest("input, textarea, select")
 			) {
 				reset();
 				return;

@@ -1,4 +1,4 @@
-import { Play, Clock, Heart, CheckCircle2, ListPlus, Trash2 } from 'lucide-react';
+import { Play, Clock, Heart, CheckCircle2, Trash2 } from 'lucide-react';
 import type { YouTubeVideo } from '../types/youtube';
 import { useEffect, useRef, useState } from 'react';
 import type { MouseEvent, PointerEvent } from 'react';
@@ -40,10 +40,9 @@ const StatefulVideoCard = ({ video, channelThumbnail, onInlinePlaybackChange, on
   const thumbnailFallbackCountRef = useRef(0);
   const pointerStartRef = useRef<{ x: number; y: number; pointerId: number } | null>(null);
   const { isFavoriteVideo, toggleFavoriteVideo } = useFavoriteVideos();
-  const { isQueuedVideo, toggleQueuedVideo, removeQueuedVideo } = useQueuedVideos();
+  const { removeQueuedVideo } = useQueuedVideos();
   const { watchedVideos, markAsWatched, markAsUnwatched } = useStore();
   const isFavorite = isFavoriteVideo(video.id);
-  const isQueued = isQueuedVideo(video.id);
   const isInQueueContext = context === 'queue';
   const [progressPercent, setProgressPercent] = useState(() => getVideoProgressPercent(video.id));
   const inlinePlayerContainerRef = useRef<HTMLDivElement | null>(null);
@@ -181,7 +180,7 @@ const StatefulVideoCard = ({ video, channelThumbnail, onInlinePlaybackChange, on
 
     const deltaX = event.clientX - pointerStart.x;
     const shouldMarkWatched = deltaX <= -SWIPE_TO_WATCHED_THRESHOLD;
-    const shouldToggleQueue = deltaX >= SWIPE_TO_QUEUE_THRESHOLD;
+    const shouldRemoveFromQueue = isInQueueContext && deltaX >= SWIPE_TO_QUEUE_THRESHOLD;
 
     pointerStartRef.current = null;
     setDragOffsetX(0);
@@ -190,18 +189,13 @@ const StatefulVideoCard = ({ video, channelThumbnail, onInlinePlaybackChange, on
       if (!isWatched) {
         markAsWatched(video.id);
       }
-    } else if (shouldToggleQueue) {
-      if (isInQueueContext) {
-        // Queue tab: every video here is either queued (Watch later) or has
-        // resume progress (Continue watching). Clear the queue and flag the
-        // progress as user-removed so a later resume in Latest doesn't
-        // resurrect the card before the user re-engages with it on purpose.
-        removeQueuedVideo(video.id);
-        markVideoProgressRemoved(video.id);
-      } else {
-        // Latest tab: classic toggle.
-        toggleQueuedVideo(video);
-      }
+    } else if (shouldRemoveFromQueue) {
+      // Queue context: every video here is either queued (Watch later) or has
+      // resume progress (Continue watching). Clear the queue and flag the
+      // progress as user-removed so a later resume in Latest doesn't
+      // resurrect the card before the user re-engages with it on purpose.
+      removeQueuedVideo(video.id);
+      markVideoProgressRemoved(video.id);
     }
   };
 
@@ -233,8 +227,6 @@ const StatefulVideoCard = ({ video, channelThumbnail, onInlinePlaybackChange, on
       // resurrect the card before the user re-engages with it on purpose.
       removeQueuedVideo(video.id);
       markVideoProgressRemoved(video.id);
-    } else {
-      toggleQueuedVideo(video);
     }
   };
 
@@ -281,7 +273,8 @@ const StatefulVideoCard = ({ video, channelThumbnail, onInlinePlaybackChange, on
       style={{ transform: `translateX(${dragOffsetX}px)` }}
       className="group relative flex h-full touch-pan-y flex-col overflow-hidden rounded-xl border border-gray-200 bg-white shadow-md transition-colors duration-200 hover:border-gray-300 dark:border-ios-800 dark:bg-ios-900 dark:hover:border-ios-700 sm:hover:shadow-xl"
     >
-      {Math.abs(dragOffsetX) > SWIPE_HINT_THRESHOLD && (
+      {(dragOffsetX < -SWIPE_HINT_THRESHOLD ||
+        (isInQueueContext && dragOffsetX > SWIPE_HINT_THRESHOLD)) && (
         <div
           className={`pointer-events-none absolute inset-0 z-20 flex items-center justify-center text-sm font-semibold ${
             dragOffsetX < 0
@@ -306,12 +299,7 @@ const StatefulVideoCard = ({ video, channelThumbnail, onInlinePlaybackChange, on
                 <Trash2 className="h-5 w-5" />
                 <span>Remove from queue</span>
               </>
-            ) : (
-              <>
-                <ListPlus className="h-5 w-5" />
-                <span>{isQueued ? 'Remove from queue' : 'Add to queue'}</span>
-              </>
-            )}
+            ) : null}
           </div>
         </div>
       )}
@@ -433,7 +421,7 @@ const StatefulVideoCard = ({ video, channelThumbnail, onInlinePlaybackChange, on
           </p>
         </div>
 
-        <div className="mt-auto flex items-center gap-2 pr-36 text-xs text-gray-500">
+        <div className="mt-auto flex items-center gap-2 pr-24 text-xs text-gray-500">
           <div className="flex items-center gap-2">
             <Clock className="w-3 h-3" />
             <span>{formatDate(video.publishedAt)}</span>
@@ -449,25 +437,17 @@ const StatefulVideoCard = ({ video, channelThumbnail, onInlinePlaybackChange, on
           >
             <CheckCircle2 className={`h-5 w-5 ${isWatched ? 'fill-current' : ''}`} />
           </button>
-<button
-            type="button"
-            onClick={handleQueueClick}
-            aria-label={isInQueueContext ? 'Remove video from queue' : isQueued ? 'Remove video from queue' : 'Add video to queue'}
-            data-testid="video-card-queue-button"
-            className={`absolute bottom-3 right-14 flex h-9 w-9 flex-none items-center justify-center rounded-full transition-colors ${
-              isInQueueContext
-                ? 'text-gray-400 hover:bg-red-50 hover:text-red-500 dark:text-ios-500 dark:hover:bg-red-500/15 dark:hover:text-red-400'
-                : isQueued
-                  ? 'bg-blue-600/10 text-blue-500 dark:bg-blue-500/15 dark:text-blue-400'
-                  : 'text-gray-400 hover:bg-gray-100 hover:text-blue-500 dark:text-ios-500 dark:hover:bg-ios-800 dark:hover:text-blue-400'
-            }`}
-          >
-            {isInQueueContext ? (
+          {isInQueueContext && (
+            <button
+              type="button"
+              onClick={handleQueueClick}
+              aria-label="Remove video from queue"
+              data-testid="video-card-queue-button"
+              className="absolute bottom-3 right-14 flex h-9 w-9 flex-none items-center justify-center rounded-full text-gray-400 transition-colors hover:bg-red-50 hover:text-red-500 dark:text-ios-500 dark:hover:bg-red-500/15 dark:hover:text-red-400"
+            >
               <Trash2 className="h-5 w-5" />
-            ) : (
-              <ListPlus className={`h-5 w-5 ${isQueued ? 'stroke-[2.5]' : ''}`} />
-            )}
-          </button>
+            </button>
+          )}
           <button
             type="button"
             onClick={handleFavoriteClick}

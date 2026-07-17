@@ -39,6 +39,24 @@ describe("usePullToRefresh", () => {
 		expect(onRefresh).toHaveBeenCalledTimes(1);
 	});
 
+	it("also starts when the pull begins on a channel link or action button", () => {
+		const onRefresh = vi.fn();
+		const channelButton = document.createElement("button");
+		document.body.append(channelButton);
+		renderHook(() =>
+			usePullToRefresh({ isRefreshActive: false, onRefresh }),
+		);
+
+		act(() => {
+			channelButton.dispatchEvent(touchEvent("touchstart", 100));
+			channelButton.dispatchEvent(touchEvent("touchmove", 240));
+			channelButton.dispatchEvent(touchEvent("touchend"));
+		});
+
+		channelButton.remove();
+		expect(onRefresh).toHaveBeenCalledTimes(1);
+	});
+
 	it("does not start while the document is scrolled", () => {
 		const onRefresh = vi.fn();
 		Object.defineProperty(document.documentElement, "scrollTop", {

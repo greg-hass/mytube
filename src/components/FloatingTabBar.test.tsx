@@ -11,7 +11,6 @@ describe('FloatingTabBar', () => {
         onAddChannel={vi.fn()}
         subscriptionCount={4}
         activeChannelCount={2}
-        queueCount={1}
         favoriteCount={3}
       />,
     );
@@ -33,7 +32,6 @@ describe('FloatingTabBar', () => {
         onAddChannel={onAddChannel}
         subscriptionCount={4}
         activeChannelCount={2}
-        queueCount={1}
         favoriteCount={3}
       />,
     );
@@ -51,7 +49,6 @@ describe('FloatingTabBar', () => {
         onAddChannel={vi.fn()}
         subscriptionCount={4}
         activeChannelCount={2}
-        queueCount={1}
         favoriteCount={3}
       />,
     );
@@ -61,7 +58,7 @@ describe('FloatingTabBar', () => {
     expect(badge).not.toBeInTheDocument();
   });
 
-  it('still shows badges on Activity, Queue, and Faves when counts are positive', () => {
+  it('still shows badges on Activity and Faves when counts are positive', () => {
     render(
       <FloatingTabBar
         activeTab="latest"
@@ -69,17 +66,15 @@ describe('FloatingTabBar', () => {
         onAddChannel={vi.fn()}
         subscriptionCount={4}
         activeChannelCount={2}
-        queueCount={1}
         favoriteCount={3}
       />,
     );
 
     const activityTab = screen.getByRole('button', { name: 'Activity' });
-    const queueTab = screen.getByRole('button', { name: 'Queue' });
     const favesTab = screen.getByRole('button', { name: 'Faves' });
 
     expect(activityTab.querySelector('.bg-red-500')).toBeInTheDocument();
-    expect(queueTab.querySelector('.bg-red-500')).toBeInTheDocument();
     expect(favesTab.querySelector('.bg-red-500')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Queue' })).not.toBeInTheDocument();
   });
 });

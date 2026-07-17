@@ -368,12 +368,6 @@ describe('Dashboard', () => {
       expect(screen.getByText('No activity yet')).toBeInTheDocument();
     });
 
-    fireEvent.click(screen.getByRole('button', { name: /queue/i }));
-    await waitFor(() => {
-      expect(screen.getByTestId('dashboard-empty-state')).toHaveAttribute('data-empty-icon', 'queue');
-      expect(screen.getByText('Your queue is empty')).toBeInTheDocument();
-    });
-
     fireEvent.click(screen.getByRole('button', { name: /faves/i }));
     await waitFor(() => {
       expect(screen.getByTestId('dashboard-empty-state')).toHaveAttribute('data-empty-icon', 'favorites');
@@ -745,9 +739,8 @@ describe('Dashboard', () => {
       },
     ]));
 
+    window.history.replaceState(null, '', '/?tab=queue');
     render(<Dashboard />);
-
-    fireEvent.click(screen.getByRole('button', { name: /queue/i }));
 
     await waitFor(() => {
       expect(screen.getByText('Queued watch later video')).toBeInTheDocument();
@@ -770,9 +763,8 @@ describe('Dashboard', () => {
       },
     ]));
 
+    window.history.replaceState(null, '', '/?tab=queue');
     render(<Dashboard />);
-
-    fireEvent.click(screen.getByRole('button', { name: /queue/i }));
 
     await waitFor(() => {
       expect(screen.getByText('Watched queued video')).toBeInTheDocument();
@@ -837,9 +829,8 @@ describe('Dashboard', () => {
       },
     ]));
 
+    window.history.replaceState(null, '', '/?tab=queue');
     render(<Dashboard />);
-
-    fireEvent.click(screen.getByRole('button', { name: 'Queue' }));
 
     const continueSection = await screen.findByTestId('queue-continue-watching');
     const watchLaterSection = await screen.findByTestId('queue-watch-later');
@@ -878,9 +869,8 @@ describe('Dashboard', () => {
       'video-long': { currentTime: 25, duration: 1800, updatedAt: oneHourAgo },
     }));
 
+    window.history.replaceState(null, '', '/?tab=queue');
     render(<Dashboard />);
-
-    fireEvent.click(screen.getByRole('button', { name: 'Queue' }));
 
     const continueSection = await screen.findByTestId('queue-continue-watching');
     expect(continueSection).toHaveTextContent('Continue watching');
@@ -932,9 +922,8 @@ describe('Dashboard', () => {
       },
     }));
 
+    window.history.replaceState(null, '', '/?tab=queue');
     render(<Dashboard />);
-
-    fireEvent.click(screen.getByRole('button', { name: 'Queue' }));
 
     // Wait for Queue tab to mount. With no in-progress videos, neither
     // section renders — we get the empty state instead.
@@ -975,9 +964,8 @@ describe('Dashboard', () => {
       },
     }));
 
+    window.history.replaceState(null, '', '/?tab=queue');
     render(<Dashboard />);
-
-    fireEvent.click(screen.getByRole('button', { name: 'Queue' }));
 
     const continueSection = await screen.findByTestId('queue-continue-watching');
     expect(continueSection).toHaveTextContent('Removed ages ago');
@@ -1006,9 +994,8 @@ describe('Dashboard', () => {
       'video-tap': { currentTime: 2, duration: 1800, updatedAt: oneHourAgo },
     }));
 
+    window.history.replaceState(null, '', '/?tab=queue');
     render(<Dashboard />);
-
-    fireEvent.click(screen.getByRole('button', { name: 'Queue' }));
 
     // No videos, no sections, empty state shows.
     await waitFor(() => {

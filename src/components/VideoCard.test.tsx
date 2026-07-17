@@ -687,7 +687,7 @@ describe('VideoCard', () => {
     expect(mockStore.markAsWatched).not.toHaveBeenCalled();
   });
 
-  it('queues a video when swiped right without favoriting it', () => {
+  it('does not queue a video when swiped right on a latest card', () => {
     render(
       <MemoryRouter>
         <VideoCard video={video} index={0} />
@@ -709,7 +709,7 @@ describe('VideoCard', () => {
       clientY: 22,
     });
 
-    expect(screen.getByText('Add to queue')).toBeInTheDocument();
+    expect(screen.queryByText('Add to queue')).not.toBeInTheDocument();
 
     fireEvent.pointerUp(card, {
       pointerId: 1,
@@ -718,42 +718,19 @@ describe('VideoCard', () => {
       clientY: 22,
     });
 
-    expect(JSON.parse(localStorage.getItem('queued-video-ids') || '[]')).toEqual(['video-1']);
-    expect(JSON.parse(localStorage.getItem('favorite-video-ids') || '[]')).toEqual([]);
-  });
-
-  it('can queue a video without favoriting it', () => {
-    render(
-      <MemoryRouter>
-        <VideoCard video={video} index={0} />
-      </MemoryRouter>
-    );
-
-    fireEvent.click(screen.getByRole('button', { name: 'Add video to queue' }));
-
-    expect(JSON.parse(localStorage.getItem('queued-video-ids') || '[]')).toEqual(['video-1']);
-    expect(JSON.parse(localStorage.getItem('favorite-video-ids') || '[]')).toEqual([]);
-    expect(screen.getByRole('button', { name: 'Remove video from queue' })).toBeInTheDocument();
-  });
-
-  it('visually deselects the queue button on the second tap', () => {
-    render(
-      <MemoryRouter>
-        <VideoCard video={video} index={0} />
-      </MemoryRouter>
-    );
-
-    fireEvent.click(screen.getByRole('button', { name: 'Add video to queue' }));
-    const queuedButton = screen.getByRole('button', { name: 'Remove video from queue' });
-
-    expect(queuedButton.className).toContain('text-blue-500');
-
-    fireEvent.click(queuedButton);
-
-    const unqueuedButton = screen.getByRole('button', { name: 'Add video to queue' });
-    expect(unqueuedButton.className).toContain('text-gray-400');
-    expect(unqueuedButton.className).not.toContain('bg-blue-600/10');
     expect(JSON.parse(localStorage.getItem('queued-video-ids') || '[]')).toEqual([]);
+    expect(JSON.parse(localStorage.getItem('favorite-video-ids') || '[]')).toEqual([]);
+  });
+
+  it('does not show a queue action on latest cards', () => {
+    render(
+      <MemoryRouter>
+        <VideoCard video={video} index={0} />
+      </MemoryRouter>
+    );
+
+    expect(screen.queryByRole('button', { name: 'Add video to queue' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Remove video from queue' })).not.toBeInTheDocument();
   });
 
   it('places the favorite button at the bottom right of the details area', () => {
@@ -764,13 +741,10 @@ describe('VideoCard', () => {
     );
 
     const favoriteButton = screen.getByRole('button', { name: 'Add video to favorites' });
-    const queueButton = screen.getByRole('button', { name: 'Add video to queue' });
     expect(screen.getByTestId('video-card-info')).toContainElement(favoriteButton);
-    expect(screen.getByTestId('video-card-info')).toContainElement(queueButton);
     expect(favoriteButton.className).toContain('absolute');
     expect(favoriteButton.className).toContain('bottom-3');
     expect(favoriteButton.className).toContain('right-3');
-    expect(queueButton.className).toContain('right-14');
     expect(favoriteButton.className).not.toContain('-mb-');
     expect(favoriteButton.className).not.toContain('-mr-');
   });

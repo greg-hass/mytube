@@ -1458,7 +1458,6 @@ export const Dashboard = () => {
 						onAddChannel={() => setIsAddChannelModalOpen(true)}
 						subscriptionCount={allSubscriptions.length}
 						activeChannelCount={activeChannels.length}
-						queueCount={inProgressVideos.length}
 						favoriteCount={favoriteChannels.length + favoriteVideos.length}
 					/>
 				</div>

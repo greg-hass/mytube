@@ -122,7 +122,7 @@ export function CompactSubscriptionsList({
 			{showRail && (
 				<nav
 					aria-label="Jump to channel letter"
-					className="fixed right-1 top-1/2 z-20 flex -translate-y-1/2 flex-col rounded-full bg-white/90 px-1 py-1 shadow dark:bg-ios-900/90"
+					className="fixed right-1 top-[calc(50%+3rem)] z-20 flex -translate-y-1/2 flex-col rounded-full bg-white/90 px-1 py-1 shadow dark:bg-ios-900/90"
 				>
 					{sections.map(([section]) => (
 						<button

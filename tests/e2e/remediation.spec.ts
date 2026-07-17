@@ -111,7 +111,7 @@ test("an invalid stored token shows recovery instead of an endless loader", asyn
 	await expect(page.getByTestId("dashboard-loading")).toHaveCount(0);
 });
 
-test("authenticated desktop feed supports queue and Settings workflows", async ({
+test("authenticated desktop feed supports favorites and Settings workflows", async ({
 	page,
 }) => {
 	await page.setViewportSize({ width: 1440, height: 900 });
@@ -123,13 +123,12 @@ test("authenticated desktop feed supports queue and Settings workflows", async (
 	await expect(
 		page.getByText("Feed refresh started — pulling new videos..."),
 	).toBeVisible();
-	await page.getByRole("button", { name: "Add video to queue" }).click();
+	await page.getByRole("button", { name: "Add video to favorites" }).click();
 	await page
 		.getByTestId("floating-tab-bar")
-		.getByRole("button", { name: "Queue", exact: true })
+		.getByRole("button", { name: "Faves", exact: true })
 		.click();
 
-	await expect(page.getByText("Watch later", { exact: true })).toBeVisible();
 	await expect(page.getByText("Browser regression video")).toBeVisible();
 
 	await page.getByRole("button", { name: "Settings", exact: true }).click();
