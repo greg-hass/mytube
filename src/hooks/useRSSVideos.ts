@@ -1,5 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { useEffect, useMemo, useRef } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import type { YouTubeVideo } from "../types/youtube";
 
@@ -11,6 +11,7 @@ export interface SyncStatus {
 	errors: number;
 	videos: number;
 	state: "idle" | "running" | "queued" | "error";
+	refreshId?: string | null;
 	failedChannels: FailedChannelRefresh[];
 	scheduledRefresh?: ScheduledRefreshStatus;
 }
@@ -41,6 +42,7 @@ interface AggregationStatus {
 	startedAt: string | null;
 	completedAt: string | null;
 	lastUpdated: string | null;
+	refreshId?: string | null;
 	failedChannels?: FailedChannelRefresh[];
 	scheduledRefresh?: ScheduledRefreshStatus;
 }
@@ -67,6 +69,7 @@ function computeSyncStatus(
 		errors: aggregationStatus?.errors || 0,
 		videos: videosCount,
 		state,
+		refreshId: aggregationStatus?.refreshId || null,
 		failedChannels: aggregationStatus?.failedChannels || [],
 		scheduledRefresh: aggregationStatus?.scheduledRefresh,
 	};
@@ -110,6 +113,8 @@ function aggregationRefetchInterval(query: {
  */
 export const useRSSVideos = () => {
 	const queryClient = useQueryClient();
+	const [trackedRefreshId, setTrackedRefreshId] = useState<string | null>(null);
+	const completedRefreshIdRef = useRef<string | null>(null);
 
 	const { data: aggregationStatus } = useQuery<AggregationStatus>({
 		queryKey: ["server-videos-status"],
@@ -200,7 +205,8 @@ export const useRSSVideos = () => {
 			}
 			return response.json();
 		},
-		onSuccess: () => {
+		onSuccess: (data: { refreshId?: string | null }) => {
+			setTrackedRefreshId(data.refreshId || null);
 			queryClient.invalidateQueries({ queryKey: ["server-videos-status"] });
 			toast.success("Feed refresh started — pulling new videos...");
 		},
@@ -211,6 +217,67 @@ export const useRSSVideos = () => {
 			);
 		},
 	});
+
+	const refreshIsActive = Boolean(
+		triggerServerRefresh.isPending ||
+		(trackedRefreshId &&
+			(!aggregationStatus ||
+				aggregationStatus.refreshId !== trackedRefreshId ||
+				aggregationStatus.state === "running" ||
+				aggregationStatus.state === "queued")),
+	);
+	const refreshPhase = triggerServerRefresh.isPending
+		? "queuing"
+		: refreshIsActive
+			? "refreshing"
+			: trackedRefreshId
+				? aggregationStatus?.state === "error"
+					? "error"
+					: "done"
+				: "idle";
+	const refreshProgress =
+		refreshPhase === "idle"
+			? 0
+			: refreshPhase === "queuing"
+				? 5
+				: refreshPhase === "done" || refreshPhase === "error"
+					? 100
+					: aggregationStatus?.refreshId === trackedRefreshId &&
+						  aggregationStatus.total
+						? Math.min(
+								Math.round(
+									((aggregationStatus.current || 0) /
+										aggregationStatus.total) *
+										100,
+								),
+								100,
+							)
+						: 5;
+
+	useEffect(() => {
+		if (!trackedRefreshId || !aggregationStatus) return;
+		if (aggregationStatus.refreshId !== trackedRefreshId) return;
+		if (
+			aggregationStatus.state !== "idle" &&
+			aggregationStatus.state !== "error"
+		) {
+			return;
+		}
+
+		if (completedRefreshIdRef.current !== trackedRefreshId) {
+			completedRefreshIdRef.current = trackedRefreshId;
+			if (aggregationStatus.state === "error") {
+				toast.error("Feed refresh finished with errors");
+			} else {
+				toast.success("Feed refresh complete");
+			}
+		}
+
+		const timeout = window.setTimeout(() => {
+			setTrackedRefreshId(null);
+		}, 1500);
+		return () => window.clearTimeout(timeout);
+	}, [aggregationStatus, trackedRefreshId]);
 
 	const videos = useMemo<YouTubeVideo[]>(() => {
 		if (!serverData?.videos) return [];
@@ -240,6 +307,9 @@ export const useRSSVideos = () => {
 		// Loading states
 		isLoading,
 		isFetching: triggerServerRefresh.isPending,
+		isRefreshing: refreshIsActive,
+		refreshPhase,
+		refreshProgress,
 		isCacheLoading: isLoading,
 		syncStatus,
 

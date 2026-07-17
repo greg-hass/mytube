@@ -1,3 +1,4 @@
+const { randomUUID } = require("node:crypto");
 const appStore = require("./app-store");
 const { mergeVideoArchive } = require("./video-archive");
 const {
@@ -73,6 +74,7 @@ function getCurrentDateInTimezone(timeZone = QUOTA_TIMEZONE, now = new Date()) {
 function createFeedAggregator(storeOverride) {
 	const store = storeOverride || appStore;
 	let aggregationPromise = null;
+	let aggregationRefreshId = null;
 	let archivedShortsBackfillPromise = null;
 	let archivedShortsBackfillLastAttemptAt = null;
 	let scheduledRefreshTimer = null;
@@ -84,6 +86,7 @@ function createFeedAggregator(storeOverride) {
 	};
 	let aggregationStatus = {
 		state: "idle",
+		refreshId: null,
 		current: 0,
 		total: 0,
 		videos: 0,
@@ -221,9 +224,11 @@ function createFeedAggregator(storeOverride) {
 		subscriptions,
 		existingVideos,
 		startedAt,
+		refreshId = aggregationRefreshId,
 	}) {
 		aggregationStatus = {
 			state: "running",
+			refreshId,
 			current: skippedChannels,
 			total: subscriptions.length,
 			videos: existingVideos.length,
@@ -347,6 +352,7 @@ function createFeedAggregator(storeOverride) {
 				subscriptions,
 				existingVideos,
 				startedAt: aggregationStartedAt,
+				refreshId: aggregationRefreshId,
 			});
 
 			// Process in batches
@@ -535,20 +541,43 @@ function createFeedAggregator(storeOverride) {
 			return aggregationPromise;
 		}
 
+		aggregationRefreshId = options.refreshId || randomUUID();
+
 		aggregationPromise = (async () => {
 			try {
 				await runAggregation(options);
 			} finally {
 				aggregationPromise = null;
+				aggregationStatus = {
+					...aggregationStatus,
+					refreshId: aggregationRefreshId,
+				};
+				aggregationRefreshId = null;
 			}
 		})();
 
 		return aggregationPromise;
 	}
 
+	function requestRefresh(options = {}) {
+		const reused = Boolean(aggregationPromise);
+		const refreshId = reused
+			? aggregationRefreshId
+			: options.refreshId || randomUUID();
+		const promise = aggregateFeeds({
+			...options,
+			force: true,
+			reason: options.reason || "manual",
+			refreshId,
+		});
+
+		return { refreshId, reused, promise };
+	}
+
 	function getAggregationStatus() {
 		return {
 			...aggregationStatus,
+			refreshId: aggregationRefreshId || aggregationStatus.refreshId || null,
 			scheduledRefresh: { ...scheduledRefreshStatus },
 		};
 	}
@@ -723,6 +752,7 @@ function createFeedAggregator(storeOverride) {
 		aggregateOnStartupIfStale,
 		getActiveChannels,
 		getAggregationStatus,
+		requestRefresh,
 		getChannelsDueForRefresh,
 		getScheduledRefreshConfig,
 		refreshBatch,

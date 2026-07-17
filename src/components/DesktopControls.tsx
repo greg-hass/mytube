@@ -11,6 +11,7 @@ import {
 	Play,
 	Settings,
 	Sun,
+	RefreshCw,
 } from "lucide-react";
 import type { SortBy } from "../types/youtube";
 
@@ -35,6 +36,9 @@ interface DesktopControlsProps {
 	onViewModeChange: (mode: "grid" | "list" | "compact") => void;
 	onOpenSettings: () => void;
 	onToggleTheme: () => void;
+	onRefresh?: () => void;
+	isRefreshing?: boolean;
+	refreshProgress?: number;
 	/** When true, hide playback/filter/import/export controls — keep only Settings + Theme. */
 	minimal?: boolean;
 }
@@ -54,11 +58,35 @@ export const DesktopControls = ({
 	onViewModeChange,
 	onOpenSettings,
 	onToggleTheme,
+	onRefresh,
+	isRefreshing = false,
+	refreshProgress = 0,
 	minimal = false,
 }: DesktopControlsProps) => (
 	<div className="desktop-header-controls hidden xl:flex items-center gap-2">
 		{!minimal && (
 			<>
+				{onRefresh && (
+					<motion.button
+						whileHover={{ scale: 1.05 }}
+						whileTap={{ scale: 0.95 }}
+						onClick={onRefresh}
+						disabled={isRefreshing}
+						aria-label={
+							isRefreshing
+								? `Refreshing feeds, ${refreshProgress}% complete`
+								: "Refresh feeds"
+						}
+						title={isRefreshing ? "Refreshing feeds" : "Refresh feeds"}
+						className="flex items-center gap-2 rounded-lg bg-gray-100 px-3 py-2 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-200 disabled:cursor-wait disabled:opacity-70 dark:bg-ios-800 dark:text-ios-200 dark:hover:bg-ios-700"
+					>
+						<RefreshCw
+							className={`${ICON_MD} ${isRefreshing ? "animate-spin" : ""}`}
+						/>
+						<span>{isRefreshing ? `${refreshProgress}%` : "Refresh"}</span>
+					</motion.button>
+				)}
+
 				{/* Shorts Toggle */}
 				{onToggleShorts && (
 					<motion.button

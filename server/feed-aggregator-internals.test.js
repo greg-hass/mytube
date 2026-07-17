@@ -132,6 +132,23 @@ describe("feed aggregator — status (unit)", () => {
 			completedAt: null,
 		});
 	});
+
+	it("returns the same refresh id while a manual refresh is active", async () => {
+		const mockStore = createMockAppStore();
+		const aggregator = createFeedAggregator(mockStore);
+		const first = aggregator.requestRefresh();
+		const second = aggregator.requestRefresh();
+
+		expect(first.refreshId).toBeTruthy();
+		expect(second.refreshId).toBe(first.refreshId);
+		expect(second.reused).toBe(true);
+		await Promise.all([first.promise, second.promise]);
+
+		const next = aggregator.requestRefresh();
+		expect(next.reused).toBe(false);
+		expect(next.refreshId).not.toBe(first.refreshId);
+		await next.promise;
+	});
 });
 
 describe("feed aggregator — runAggregation (characterization)", () => {

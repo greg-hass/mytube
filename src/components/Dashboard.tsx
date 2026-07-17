@@ -36,6 +36,7 @@ import { useRSSVideos } from "../hooks/useRSSVideos";
 import { useSubscriptionStorage } from "../hooks/useSubscriptionStorage";
 import { useFavoriteVideos } from "../hooks/useFavoriteVideos";
 import { useQueuedVideos } from "../hooks/useQueuedVideos";
+import { usePullToRefresh } from "../hooks/usePullToRefresh";
 import { useStore } from "../store/useStore";
 import {
 	buildVideoFeedIndex,
@@ -304,10 +305,17 @@ export const Dashboard = () => {
 	const {
 		videos,
 		refresh: refetchVideos,
+		isRefreshing,
+		refreshPhase,
+		refreshProgress,
 		syncStatus,
 		cacheStatus,
 	} = useRSSVideos();
 	const hasNoSubscriptions = allSubscriptions.length === 0;
+	const { pullDistance } = usePullToRefresh({
+		isRefreshActive: isRefreshing,
+		onRefresh: refetchVideos,
+	});
 	const channelThumbnails = useMemo(() => {
 		return new Map(
 			allSubscriptions.map((channel) => [channel.id, channel.thumbnail]),
@@ -882,6 +890,9 @@ export const Dashboard = () => {
 				syncStatus={syncStatus}
 				cacheStatus={cacheStatus}
 				onRetryFailed={() => void refetchVideos()}
+				onRefresh={() => refetchVideos()}
+				isRefreshing={isRefreshing}
+				refreshProgress={refreshProgress}
 				showShorts={showShorts}
 				onToggleShorts={() => setShowShorts((prev) => !prev)}
 				hideWatched={hideWatched}
@@ -890,6 +901,58 @@ export const Dashboard = () => {
 				compactMobile={isMobileTimeline}
 				minimal={needsServerAuth || hasNoSubscriptions}
 			/>
+
+			{refreshPhase !== "idle" && (
+				<div
+					className="fixed inset-x-0 bottom-4 z-[70] px-4 sm:bottom-6"
+					role="status"
+					aria-live="polite"
+				>
+					<div className="mx-auto w-full max-w-md rounded-xl border border-gray-200 bg-white/95 px-4 py-3 shadow-xl backdrop-blur dark:border-ios-800 dark:bg-ios-900/95">
+						<div className="flex items-center justify-between gap-3 text-sm">
+							<div className="min-w-0">
+								<p className="font-semibold text-gray-900 dark:text-ios-100">
+									{refreshPhase === "queuing"
+										? "Queueing refresh"
+										: refreshPhase === "refreshing"
+											? "Refreshing feeds"
+											: refreshPhase === "error"
+												? "Refresh finished with errors"
+												: "Refresh complete"}
+								</p>
+								<p className="mt-0.5 truncate text-xs text-gray-500 dark:text-ios-400">
+									{refreshPhase === "queuing"
+										? "Preparing your subscriptions..."
+										: `${syncStatus.current} of ${syncStatus.total} channels processed${syncStatus.errors ? ` · ${syncStatus.errors} failed` : ""}`}
+								</p>
+							</div>
+							<span className="shrink-0 text-xs font-semibold text-red-600 dark:text-red-400">
+							{refreshProgress}%
+							</span>
+						</div>
+						<div className="mt-2 h-1.5 overflow-hidden rounded-full bg-gray-100 dark:bg-ios-800">
+							<div
+								className="h-full rounded-full bg-red-600 transition-[width] duration-500"
+								style={{ width: `${refreshProgress}%` }}
+							/>
+						</div>
+					</div>
+				</div>
+			)}
+
+			{pullDistance > 0 && !isRefreshing && (
+				<div
+					className="pointer-events-none fixed inset-x-0 top-[var(--app-current-header-height)] z-40 flex justify-center transition-opacity"
+					style={{ opacity: Math.min(1, pullDistance / 56) }}
+					aria-hidden="true"
+				>
+					<div className="rounded-full bg-white/95 px-3 py-1.5 text-xs font-medium text-gray-600 shadow-lg dark:bg-ios-900/95 dark:text-ios-300">
+						{pullDistance >= 56
+							? "Release to refresh feeds"
+							: "Pull to refresh"}
+					</div>
+				</div>
+			)}
 
 			{needsServerAuth ? (
 				<main

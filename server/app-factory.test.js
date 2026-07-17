@@ -366,6 +366,44 @@ describe("createApp integration", () => {
 		}
 	});
 
+	it("POST /api/videos/refresh returns a refresh id and joins active work", async () => {
+		const refreshPromise = Promise.resolve();
+		const { app, appStore, databaseFile } = buildApp({
+			databaseFile: createTempDatabaseFile(),
+			feedAggregator: buildFeedAggregatorStub({
+				requestRefresh: () => ({
+					refreshId: "refresh-123",
+					reused: true,
+					promise: refreshPromise,
+				}),
+				getAggregationStatus: () => ({ current: 2, total: 4 }),
+			}),
+		});
+		await appStore.init({
+			defaultData: appStore.DEFAULT_DATA,
+			defaultVideoCache: appStore.DEFAULT_VIDEO_CACHE,
+		});
+		try {
+			const response = await authedRequest(app).post("/api/videos/refresh");
+			expect(response.status).toBe(200);
+			expect(response.body).toMatchObject({
+				success: true,
+				refreshId: "refresh-123",
+				reused: true,
+				current: 2,
+				total: 4,
+				queued: 2,
+				skipped: 0,
+			});
+		} finally {
+			appStore.close();
+			await fs.promises.rm(path.dirname(databaseFile), {
+				recursive: true,
+				force: true,
+			});
+		}
+	});
+
 	it("rejects cross-origin requests when the request Origin is not in the allowlist", async () => {
 		const response = await authedRequest(resources.app)
 			.get("/api/sync")

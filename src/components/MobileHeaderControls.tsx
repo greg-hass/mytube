@@ -5,6 +5,7 @@ import {
 	Play,
 	Search,
 	X,
+	RefreshCw,
 } from "lucide-react";
 
 const ICON_MD = "w-5 h-5" as const;
@@ -18,6 +19,9 @@ interface MobileHeaderControlsProps {
 	showMobileSearchPanel: boolean;
 	onToggleSearch: () => void;
 	onOpenMenu: () => void;
+	onRefresh?: () => void;
+	isRefreshing?: boolean;
+	refreshProgress?: number;
 }
 
 export const MobileHeaderControls = ({
@@ -29,8 +33,29 @@ export const MobileHeaderControls = ({
 	showMobileSearchPanel,
 	onToggleSearch,
 	onOpenMenu,
+	onRefresh,
+	isRefreshing = false,
+	refreshProgress = 0,
 }: MobileHeaderControlsProps) => (
 	<div className="mobile-header-controls flex xl:hidden items-center gap-2">
+		{onRefresh && (
+			<button
+				data-testid="mobile-refresh-button"
+				onClick={onRefresh}
+				disabled={isRefreshing}
+				aria-label={
+					isRefreshing
+						? `Refreshing feeds, ${refreshProgress}% complete`
+						: "Refresh feeds"
+				}
+				title={isRefreshing ? "Refreshing feeds" : "Refresh feeds"}
+				className="p-2 rounded-lg bg-gray-100 text-gray-600 transition-colors hover:bg-gray-200 disabled:cursor-wait disabled:opacity-70 dark:bg-ios-800 dark:text-ios-200 dark:hover:bg-ios-700"
+			>
+				<RefreshCw
+					className={`${ICON_MD} ${isRefreshing ? "animate-spin" : ""}`}
+				/>
+			</button>
+		)}
 		{onToggleShorts && (
 			<button
 				data-testid="mobile-shorts-toggle"

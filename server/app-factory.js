@@ -458,9 +458,23 @@ function createApp({
 				Promise.resolve(feedAggregator.getAggregationStatus()),
 				feedAggregator.getActiveChannels({ limit }),
 			]);
+			const total = Number(status.total) || 0;
+			const completed = Math.min(Number(status.current) || 0, total);
+			const active =
+				status.state === "running" || status.state === "queued"
+					? Math.max(total - completed, 0)
+					: 0;
+			const failed = Number(status.errors) || 0;
 			res.json({
 				...status,
-				activeChannels,
+				total,
+				completed,
+				active,
+				queued: active,
+				running: active,
+				succeeded: Math.max(completed - failed, 0),
+				failed,
+			activeChannels,
 				searchBackends: getSearchBackendStatus(),
 			});
 		}, "Failed to read aggregation status"),
@@ -469,12 +483,35 @@ function createApp({
 	app.post(
 		"/api/videos/refresh",
 		asyncHandler(async (_req, res) => {
-			feedAggregator
-				.aggregateFeeds({ force: true })
-				.catch((err) => console.error("Background aggregation error:", err));
+			const refresh = feedAggregator.requestRefresh
+				? feedAggregator.requestRefresh({ force: true, reason: "manual" })
+				: {
+					refreshId: null,
+					reused: false,
+					promise: feedAggregator.aggregateFeeds({ force: true }),
+				};
+			refresh.promise.catch((err) =>
+				console.error("Background aggregation error:", err),
+			);
+			const status = feedAggregator.getAggregationStatus?.() || {};
+			const currentData = await appStore.readData(
+				appStore.DEFAULT_DATA || { subscriptions: [] },
+			);
+			const subscriptionCount = Array.isArray(currentData?.subscriptions)
+				? currentData.subscriptions.length
+				: 0;
+			const total = status.total || subscriptionCount;
 			res.json({
 				success: true,
-				message: "Refresh started in background. Check back in a few minutes.",
+				refreshId: refresh.refreshId,
+				reused: refresh.reused,
+				current: status.current || 0,
+				total,
+				queued: Math.max(total - (status.current || 0), 0),
+				skipped: 0,
+				message: refresh.reused
+					? "Refresh already in progress. Joining the active refresh."
+					: "Refresh queued. Check status for progress.",
 			});
 		}, "Failed to trigger refresh"),
 	);

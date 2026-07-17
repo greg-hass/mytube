@@ -25,6 +25,9 @@ interface HeaderProps {
 		videoCount: number;
 	};
 	onRetryFailed?: () => void;
+	onRefresh?: () => void;
+	isRefreshing?: boolean;
+	refreshProgress?: number;
 	showShorts?: boolean;
 	onToggleShorts?: () => void;
 	hideWatched?: boolean;
@@ -41,6 +44,9 @@ export const Header = ({
 	syncStatus,
 	cacheStatus,
 	onRetryFailed,
+	onRefresh,
+	isRefreshing = false,
+	refreshProgress = 0,
 	showShorts = true,
 	onToggleShorts,
 	hideWatched = false,
@@ -159,6 +165,9 @@ export const Header = ({
 							onViewModeChange={setViewMode}
 							onOpenSettings={() => setIsSettingsOpen(true)}
 							onToggleTheme={toggleTheme}
+							onRefresh={onRefresh}
+							isRefreshing={isRefreshing}
+							refreshProgress={refreshProgress}
 							minimal={minimal}
 						/>
 
@@ -171,9 +180,12 @@ export const Header = ({
 								showMobileSearch={showMobileSearch}
 								showMobileSearchPanel={showMobileSearchPanel}
 								onToggleSearch={() =>
-									setShowMobileSearchPanel((isOpen) => !isOpen)
-								}
+										setShowMobileSearchPanel((isOpen) => !isOpen)
+									}
 								onOpenMenu={() => setShowMobileMenu(true)}
+								onRefresh={onRefresh}
+								isRefreshing={isRefreshing}
+								refreshProgress={refreshProgress}
 							/>
 						)}
 					</div>
@@ -210,6 +222,9 @@ export const Header = ({
 				syncStatus={syncStatus}
 				cacheStatus={cacheStatus}
 				onRetryFailed={onRetryFailed}
+				onRefresh={onRefresh}
+				isRefreshing={isRefreshing}
+				refreshProgress={refreshProgress}
 			/>
 
 			<SettingsModal

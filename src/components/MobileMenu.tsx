@@ -1,5 +1,5 @@
 import { lazy, Suspense } from "react";
-import { AlignJustify, Download, Grid3x3, List, Moon, Settings, Sun, X } from "lucide-react";
+import { AlignJustify, Download, Grid3x3, List, Moon, RefreshCw, Settings, Sun, X } from "lucide-react";
 import { RefreshStatusPanel } from "./RefreshStatusPanel";
 import type { SyncStatus } from "../hooks/useRSSVideos";
 import type { SortBy } from "../types/youtube";
@@ -92,6 +92,9 @@ interface MobileMenuProps {
 		videoCount: number;
 	};
 	onRetryFailed?: () => void;
+	onRefresh?: () => void;
+	isRefreshing?: boolean;
+	refreshProgress?: number;
 }
 
 export const MobileMenu = ({
@@ -112,6 +115,9 @@ export const MobileMenu = ({
 	syncStatus,
 	cacheStatus,
 	onRetryFailed,
+	onRefresh,
+	isRefreshing = false,
+	refreshProgress = 0,
 }: MobileMenuProps) => {
 	if (!showMobileMenu) return null;
 
@@ -307,6 +313,23 @@ export const MobileMenu = ({
 							</>
 						)}
 					</div>
+					{onRefresh && (
+						<button
+							onClick={onRefresh}
+							disabled={isRefreshing}
+							aria-label={
+								isRefreshing
+									? `Refreshing feeds, ${refreshProgress}% complete`
+									: "Refresh feeds"
+							}
+							className={`${SECONDARY_BUTTON} mt-2 w-full disabled:cursor-wait disabled:opacity-70`}
+						>
+							<RefreshCw
+								className={`${ICON_SM} ${isRefreshing ? "animate-spin" : ""}`}
+							/>
+							{isRefreshing ? `Refreshing ${refreshProgress}%` : "Refresh feeds"}
+						</button>
+					)}
 				</div>
 			</aside>
 		</div>

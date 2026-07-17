@@ -119,6 +119,10 @@ test("authenticated desktop feed supports queue and Settings workflows", async (
 	await page.goto("/");
 
 	await expect(page.getByText("Browser regression video")).toBeVisible();
+	await page.getByRole("button", { name: "Refresh feeds" }).click();
+	await expect(
+		page.getByText("Feed refresh started — pulling new videos..."),
+	).toBeVisible();
 	await page.getByRole("button", { name: "Add video to queue" }).click();
 	await page
 		.getByTestId("floating-tab-bar")

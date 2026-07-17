@@ -120,6 +120,68 @@ describe("useRSSVideos", () => {
 		);
 	});
 
+	it("tracks a manual refresh operation through progress and completion", async () => {
+		let statusCalls = 0;
+		const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+			const url = String(input);
+			if (url.startsWith("/api/videos/status")) {
+				statusCalls += 1;
+				if (statusCalls === 1) {
+					return statusResponse({ refreshId: null });
+				}
+				if (statusCalls === 2) {
+					return statusResponse({
+						state: "running",
+						refreshId: "refresh-1",
+						current: 1,
+						total: 2,
+						lastUpdated: "2026-05-06T20:00:00.000Z",
+					});
+				}
+				return statusResponse({
+					state: "idle",
+					refreshId: "refresh-1",
+					current: 2,
+					total: 2,
+					lastUpdated: "2026-05-06T20:01:00.000Z",
+				});
+			}
+			if (url === "/api/videos" || url.startsWith("/api/videos?")) {
+				return videosResponse(
+					[video("Cached video", "video-1", "2026-05-06T20:00:00.000Z")],
+					"2026-05-06T20:00:00.000Z",
+				);
+			}
+			if (url === "/api/videos/refresh") {
+				return new Response(
+					JSON.stringify({ success: true, refreshId: "refresh-1" }),
+				);
+			}
+			throw new Error(`Unexpected fetch ${url}`);
+		});
+
+		vi.stubGlobal("fetch", fetchMock);
+
+		const { result } = renderHook(() => useRSSVideos(), {
+			wrapper: createWrapper(),
+		});
+
+		await waitFor(() => expect(result.current.videos).toHaveLength(1));
+		act(() => result.current.refresh());
+
+		await waitFor(() => {
+			expect(result.current.refreshPhase).toBe("refreshing");
+			expect(result.current.refreshProgress).toBe(50);
+		});
+
+		await act(async () => {
+			await new Promise((resolve) => setTimeout(resolve, 2200));
+		});
+
+		await waitFor(() => expect(result.current.refreshPhase).toBe("done"));
+		expect(toast.success).toHaveBeenCalledWith("Feed refresh complete");
+	});
+
 	it("refetches videos when server status reports a newer completed cache", async () => {
 		let statusCalls = 0;
 		let videoCalls = 0;
