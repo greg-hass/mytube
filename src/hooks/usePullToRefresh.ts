@@ -17,6 +17,15 @@ export function usePullToRefresh(deps: {
 		let startY: number | null = null;
 		let dragging = false;
 		let latestDistance = 0;
+		const listenerOptions = { capture: true } as const;
+
+		const getScrollTop = () =>
+			Math.max(
+				window.scrollY || 0,
+				document.scrollingElement?.scrollTop || 0,
+				document.documentElement.scrollTop || 0,
+				document.body.scrollTop || 0,
+			);
 
 		const reset = () => {
 			startY = null;
@@ -26,13 +35,16 @@ export function usePullToRefresh(deps: {
 		};
 
 		const onTouchStart = (event: TouchEvent) => {
-			if (window.scrollY > 4 || isRefreshActive) {
+			if (getScrollTop() > 4 || isRefreshActive) {
 				reset();
 				return;
 			}
 
-			const target = event.target as HTMLElement | null;
-			if (target?.closest("input, textarea, select, button, a")) {
+			const target = event.target;
+			if (
+				target instanceof HTMLElement &&
+				target.closest("input, textarea, select, button, a")
+			) {
 				reset();
 				return;
 			}
@@ -43,7 +55,7 @@ export function usePullToRefresh(deps: {
 		};
 
 		const onTouchMove = (event: TouchEvent) => {
-			if (startY == null || window.scrollY > 4 || isRefreshActive) return;
+			if (startY == null || getScrollTop() > 4 || isRefreshActive) return;
 
 			const currentY = event.touches[0]?.clientY ?? startY;
 			const delta = currentY - startY;
@@ -52,7 +64,7 @@ export function usePullToRefresh(deps: {
 			dragging = true;
 			latestDistance = Math.min(88, Math.round(delta * 0.45));
 			setPullDistance(latestDistance);
-			event.preventDefault();
+			if (event.cancelable) event.preventDefault();
 		};
 
 		const finishDrag = () => {
@@ -83,16 +95,22 @@ export function usePullToRefresh(deps: {
 			requestAnimationFrame(animateBack);
 		};
 
-		window.addEventListener("touchstart", onTouchStart, { passive: true });
-		window.addEventListener("touchmove", onTouchMove, { passive: false });
-		window.addEventListener("touchend", finishDrag, { passive: true });
-		window.addEventListener("touchcancel", finishDrag, { passive: true });
+		document.addEventListener("touchstart", onTouchStart, {
+			...listenerOptions,
+			passive: true,
+		});
+		document.addEventListener("touchmove", onTouchMove, {
+			...listenerOptions,
+			passive: false,
+		});
+		document.addEventListener("touchend", finishDrag, listenerOptions);
+		document.addEventListener("touchcancel", finishDrag, listenerOptions);
 
 		return () => {
-			window.removeEventListener("touchstart", onTouchStart);
-			window.removeEventListener("touchmove", onTouchMove);
-			window.removeEventListener("touchend", finishDrag);
-			window.removeEventListener("touchcancel", finishDrag);
+			document.removeEventListener("touchstart", onTouchStart, listenerOptions);
+			document.removeEventListener("touchmove", onTouchMove, listenerOptions);
+			document.removeEventListener("touchend", finishDrag, listenerOptions);
+			document.removeEventListener("touchcancel", finishDrag, listenerOptions);
 		};
 	}, [isRefreshActive, onPullCancel, onRefresh]);
 

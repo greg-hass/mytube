@@ -904,7 +904,10 @@ export const Dashboard = () => {
 
 			{refreshPhase !== "idle" && (
 				<div
-					className="fixed inset-x-0 bottom-4 z-[70] px-4 sm:bottom-6"
+					className="fixed inset-x-0 z-[70] px-4"
+					style={{
+						bottom: "calc(var(--app-tab-bar-occupied-height) + 1rem)",
+					}}
 					role="status"
 					aria-live="polite"
 				>
