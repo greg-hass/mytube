@@ -121,11 +121,7 @@ export const FloatingTabBar = ({
 								aria-pressed={isActive}
 							>
 								{isActive && (
-									<motion.div
-										layoutId="active-tab-indicator"
-										className="absolute inset-0 rounded-full bg-gray-100 dark:bg-ios-800/80 shadow-sm"
-										transition={{ type: "spring", stiffness: 400, damping: 30 }}
-									/>
+									<div className="absolute inset-0 rounded-full bg-gray-100 shadow-sm dark:bg-ios-800/80" />
 								)}
 								<div className="relative flex items-center justify-center">
 									<Icon

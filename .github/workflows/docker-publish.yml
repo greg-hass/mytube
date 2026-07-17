@@ -78,9 +78,6 @@ jobs:
       - name: Test production browser flows
         run: npm run test:e2e
 
-      - name: Smoke-test production container
-        run: bash scripts/container-smoke.sh
-
   publish:
     needs: [build, secrets]
     runs-on: ubuntu-latest

@@ -52,7 +52,6 @@ export const Header = ({
 	hideWatched = false,
 	onToggleWatched,
 	scrollHidden = false,
-	compactMobile = false,
 	minimal = false,
 }: HeaderProps) => {
 	const headerRef = useHeaderHeight();
@@ -100,16 +99,9 @@ export const Header = ({
 
 	return (
 		<>
-			<motion.header
+			<header
 				ref={headerRef}
-				initial={{ y: -100 }}
-				animate={scrollHidden ? { y: "-100%" } : { y: 0 }}
-				transition={
-					compactMobile
-						? { type: "spring", stiffness: 260, damping: 38 }
-						: { type: "spring", stiffness: 400, damping: 35 }
-				}
-				className="sticky top-0 z-50 glass safe-top border-b border-gray-200 dark:border-ios-800/80 shadow-sm"
+				className={`sticky top-0 z-50 glass safe-top border-b border-gray-200 shadow-sm transition-transform duration-200 ease-out dark:border-ios-800/80 ${scrollHidden ? "-translate-y-full" : "translate-y-0"}`}
 			>
 				<div className="max-w-7xl mx-auto px-4">
 					<div className="flex h-[var(--app-header-height)] items-center justify-between gap-3 xl:gap-4">
@@ -202,7 +194,7 @@ export const Header = ({
 						onKeyDown={handleSearchKeyDown}
 					/>
 				</div>
-			</motion.header>
+			</header>
 
 			<MobileMenu
 				showMobileMenu={showMobileMenu}
