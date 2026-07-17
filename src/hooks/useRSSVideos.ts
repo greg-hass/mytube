@@ -119,23 +119,22 @@ export const useRSSVideos = () => {
 	const { data: aggregationStatus } = useQuery<AggregationStatus>({
 		queryKey: ["server-videos-status"],
 		queryFn: async () => {
-			const response = await fetch(`/api/videos/status?t=${Date.now()}`);
+			const response = await fetch(`/api/videos/status?t=${Date.now()}`, {
+				cache: "no-store",
+				credentials: "same-origin",
+			});
 			if (!response.ok) {
 				throw new Error("Failed to fetch video refresh status");
 			}
 			return response.json();
 		},
 		staleTime: 0,
-		refetchInterval: aggregationRefetchInterval,
+		refetchInterval: trackedRefreshId ? 1500 : aggregationRefetchInterval,
 	});
 
 	const isAggregating =
 		aggregationStatus?.state === "running" ||
 		aggregationStatus?.state === "queued";
-
-	// Cache last ETag and response for 304 handling
-	const videosETagRef = useRef<string | null>(null);
-	const videosDataRef = useRef<Record<string, unknown> | null>(null);
 
 	// Fetch videos from server
 	const {
@@ -146,24 +145,14 @@ export const useRSSVideos = () => {
 	} = useQuery({
 		queryKey: ["server-videos"],
 		queryFn: async () => {
-			const headers: Record<string, string> = {};
-			if (videosETagRef.current) {
-				headers["If-None-Match"] = videosETagRef.current;
-			}
-			const response = await fetch("/api/videos", { headers });
-			if (response.status === 304 && videosDataRef.current) {
-				return videosDataRef.current;
-			}
+			const response = await fetch("/api/videos", {
+				cache: "no-store",
+				credentials: "same-origin",
+			});
 			if (!response.ok) {
 				throw new Error("Failed to fetch videos from server");
 			}
-			const etag = response.headers.get("etag");
-			if (etag) {
-				videosETagRef.current = etag;
-			}
-			const data = await response.json();
-			videosDataRef.current = data;
-			return data;
+			return response.json();
 		},
 		placeholderData: (previousData) => previousData,
 		staleTime: 1000 * 60, // 1 minute
@@ -198,6 +187,8 @@ export const useRSSVideos = () => {
 		mutationFn: async () => {
 			const response = await fetch("/api/videos/refresh", {
 				method: "POST",
+				cache: "no-store",
+				credentials: "same-origin",
 			});
 			if (!response.ok) {
 				const errorText = await response.text().catch(() => "Unknown error");
@@ -205,9 +196,18 @@ export const useRSSVideos = () => {
 			}
 			return response.json();
 		},
-		onSuccess: (data: { refreshId?: string | null }) => {
+		onSuccess: async (data: { refreshId?: string | null }) => {
 			setTrackedRefreshId(data.refreshId || null);
-			queryClient.invalidateQueries({ queryKey: ["server-videos-status"] });
+			await Promise.all([
+				queryClient.refetchQueries({
+					queryKey: ["server-videos-status"],
+					type: "active",
+				}),
+				queryClient.refetchQueries({
+					queryKey: ["server-videos"],
+					type: "active",
+				}),
+			]);
 			toast.success("Feed refresh started — pulling new videos...");
 		},
 		onError: (error) => {
@@ -257,6 +257,14 @@ export const useRSSVideos = () => {
 	useEffect(() => {
 		if (!trackedRefreshId || !aggregationStatus) return;
 		if (aggregationStatus.refreshId !== trackedRefreshId) return;
+
+		// Match Feedy's refresh controller: every status update refetches the
+		// active timeline so completed batches appear while the job is running.
+		void queryClient.refetchQueries({
+			queryKey: ["server-videos"],
+			type: "active",
+		});
+
 		if (
 			aggregationStatus.state !== "idle" &&
 			aggregationStatus.state !== "error"
@@ -277,7 +285,7 @@ export const useRSSVideos = () => {
 			setTrackedRefreshId(null);
 		}, 1500);
 		return () => window.clearTimeout(timeout);
-	}, [aggregationStatus, trackedRefreshId]);
+	}, [aggregationStatus, queryClient, trackedRefreshId]);
 
 	const videos = useMemo<YouTubeVideo[]>(() => {
 		if (!serverData?.videos) return [];

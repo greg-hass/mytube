@@ -1,5 +1,5 @@
 import { useWindowVirtualizer } from '@tanstack/react-virtual';
-import { useCallback, useMemo, useRef, useState, useEffect } from 'react';
+import { useCallback, useMemo, useRef, useState, useEffect, useLayoutEffect } from 'react';
 import { VideoCard } from './VideoCard';
 import type { YouTubeVideo } from '../types/youtube';
 import { getCurrentViewportSize, isCompactMobileViewport } from '../lib/mobile-viewport';
@@ -117,7 +117,7 @@ export const VirtualizedVideoGrid = ({ videos, columns = 4, scrollStorageKey, ch
         scrollMargin,
     });
 
-    useEffect(() => {
+    useLayoutEffect(() => {
         if (!scrollStorageKey || hasRestoredScrollRef.current) return;
         if (visibleVideos.length === 0) return;
 
@@ -126,10 +126,6 @@ export const VirtualizedVideoGrid = ({ videos, columns = 4, scrollStorageKey, ch
 
         hasRestoredScrollRef.current = true;
         window.scrollTo({ top: savedScrollTop });
-
-        requestAnimationFrame(() => {
-            window.scrollTo({ top: savedScrollTop });
-        });
     }, [scrollStorageKey, visibleVideos.length, itemsPerRow]);
 
     useEffect(() => {

@@ -110,6 +110,8 @@ describe("useRSSVideos", () => {
 		await waitFor(() => {
 			expect(fetchMock).toHaveBeenCalledWith("/api/videos/refresh", {
 				method: "POST",
+				cache: "no-store",
+				credentials: "same-origin",
 			});
 		});
 
@@ -273,7 +275,7 @@ describe("useRSSVideos", () => {
 		});
 	});
 
-	it("sends If-None-Match on subsequent polls and returns cached data on 304", async () => {
+	it("bypasses browser caching when refetching videos", async () => {
 		let videoCalls = 0;
 		let statusCalls = 0;
 
@@ -296,30 +298,24 @@ describe("useRSSVideos", () => {
 
 				if (url === "/api/videos" || url.startsWith("/api/videos?")) {
 					videoCalls += 1;
-
-					if (videoCalls === 1) {
-						// First call: return full response with ETag
-						const body = JSON.stringify({
-							videos: [
-								video("First video", "vid-1", "2026-06-01T12:00:00.000Z"),
-							],
-							lastUpdated: "2026-06-01T12:00:00.000Z",
-							totalChannels: 1,
-							totalVideos: 1,
-						});
-						return new Response(body, {
-							headers: { ETag: '"v1"', "Content-Type": "application/json" },
-						});
-					}
-
-					// Subsequent calls: verify If-None-Match header is present
-					const headers = (init as RequestInit)?.headers as
-						| Record<string, string>
-						| undefined;
-					expect(headers?.["If-None-Match"]).toBe('"v1"');
-
-					// Return 304 — no body, cached data should be returned
-					return new Response(null, { status: 304, headers: { ETag: '"v1"' } });
+					expect(init).toMatchObject({
+						cache: "no-store",
+						credentials: "same-origin",
+					});
+					return videosResponse(
+						[
+							video(
+								videoCalls === 1 ? "First video" : "Fresh video",
+								videoCalls === 1 ? "vid-1" : "vid-2",
+								videoCalls === 1
+									? "2026-06-01T12:00:00.000Z"
+									: "2026-06-01T12:01:00.000Z",
+							),
+						],
+						videoCalls === 1
+							? "2026-06-01T12:00:00.000Z"
+							: "2026-06-01T12:01:00.000Z",
+					);
 				}
 
 				throw new Error(`Unexpected fetch ${url}`);
@@ -345,12 +341,9 @@ describe("useRSSVideos", () => {
 			await new Promise((resolve) => setTimeout(resolve, 2500));
 		});
 
-		// The 304 should return the cached data, not clear videos
 		await waitFor(() => {
-			expect(result.current.videos[0]?.title).toBe("First video");
+			expect(result.current.videos[0]?.title).toBe("Fresh video");
 		});
-
-		// Verify the second videos call happened
 		expect(videoCalls).toBeGreaterThanOrEqual(2);
 	});
 });

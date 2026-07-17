@@ -408,20 +408,16 @@ function createFeedAggregator(storeOverride) {
 					lastUpdated: new Date().toISOString(),
 				};
 
-				// Write cache every 5 batches or on the last batch to reduce I/O
-				const batchNumber = Math.floor(i / CURRENT_BATCH_SIZE) + 1;
-				const isLastBatch =
-					i + CURRENT_BATCH_SIZE >= subscriptionsToRefresh.length;
-				if (batchNumber % 5 === 0 || isLastBatch) {
-					await store.writeVideoCache({
-						videos: currentVideos,
-						lastUpdated: new Date().toISOString(),
-						totalChannels: subscriptions.length,
-						totalVideos: currentVideos.length,
-						channelRefreshes,
-						shortsStatusById,
-					});
-				}
+				// Match Feedy's progressive refresh behavior: publish each completed
+				// batch so status polling can immediately reveal newly fetched videos.
+				await store.writeVideoCache({
+					videos: currentVideos,
+					lastUpdated: new Date().toISOString(),
+					totalChannels: subscriptions.length,
+					totalVideos: currentVideos.length,
+					channelRefreshes,
+					shortsStatusById,
+				});
 
 				console.log(
 					`Progress: ${Math.min(skippedChannels + i + CURRENT_BATCH_SIZE, subscriptions.length)}/${subscriptions.length}`,

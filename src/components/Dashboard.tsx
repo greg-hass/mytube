@@ -9,7 +9,6 @@ import {
 	type ErrorInfo,
 	type ReactNode,
 } from "react";
-import { motion, AnimatePresence } from "framer-motion";
 import {
 	TrendingUp,
 	Loader2,
@@ -1121,15 +1120,9 @@ export const Dashboard = () => {
 					</div>
 
 					{/* Content */}
-					<AnimatePresence mode="wait" initial={false}>
+					<>
 						{activeTab === "subscriptions" ? (
-							<motion.div
-								key="subscriptions"
-								initial={{ opacity: 0, x: -20 }}
-								animate={{ opacity: 1, x: 0 }}
-								exit={{ opacity: 0, x: 20 }}
-								transition={{ duration: 0.3 }}
-							>
+							<div>
 								<DashboardContentBoundary
 									onReturnToLatest={() => changeTab(TAB_LATEST)}
 								>
@@ -1138,16 +1131,9 @@ export const Dashboard = () => {
 										groups={subscriptionGroups}
 									/>
 								</DashboardContentBoundary>
-							</motion.div>
+							</div>
 						) : activeTab === TAB_LATEST ? (
-							<motion.div
-								key={TAB_LATEST}
-								initial={{ opacity: 0, x: 20 }}
-								animate={{ opacity: 1, x: 0 }}
-								exit={{ opacity: 0, x: -20 }}
-								transition={{ duration: 0.3 }}
-								className="px-4"
-							>
+							<div className="px-4">
 								{videos.length === 0 ? (
 									hasTemporaryChannels ? (
 										<div className="text-center py-12">
@@ -1195,16 +1181,9 @@ export const Dashboard = () => {
 										)}
 									</div>
 								)}
-							</motion.div>
+							</div>
 						) : activeTab === "queue" ? (
-							<motion.div
-								key="queue"
-								initial={{ opacity: 0, x: 20 }}
-								animate={{ opacity: 1, x: 0 }}
-								exit={{ opacity: 0, x: -20 }}
-								transition={{ duration: 0.3 }}
-								className="px-4"
-							>
+							<div className="px-4">
 								{inProgressVideos.length === 0 &&
 								watchLaterVideos.length === 0 ? (
 									<EmptyState
@@ -1256,16 +1235,9 @@ export const Dashboard = () => {
 										)}
 									</div>
 								)}
-							</motion.div>
+							</div>
 						) : activeTab === "favorites" ? (
-							<motion.div
-								key="favorites"
-								initial={{ opacity: 0, x: 20 }}
-								animate={{ opacity: 1, x: 0 }}
-								exit={{ opacity: 0, x: -20 }}
-								transition={{ duration: 0.3 }}
-								className="px-4"
-							>
+							<div className="px-4">
 								{favoriteChannels.length === 0 &&
 								favoriteVideos.length === 0 ? (
 									<EmptyState
@@ -1377,16 +1349,9 @@ export const Dashboard = () => {
 										</section>
 									</div>
 								)}
-							</motion.div>
+							</div>
 						) : (
-							<motion.div
-								key="activity"
-								initial={{ opacity: 0 }}
-								animate={{ opacity: 1 }}
-								exit={{ opacity: 0 }}
-								transition={{ duration: 0.16 }}
-								className="px-4"
-							>
+							<div className="px-4">
 								{activeChannels.length === 0 ? (
 									<EmptyState
 										icon={Activity}
@@ -1442,9 +1407,9 @@ export const Dashboard = () => {
 										</div>
 									</>
 								)}
-							</motion.div>
+							</div>
 						)}
-					</AnimatePresence>
+					</>
 
 					<FloatingTabBar
 						activeTab={activeTab}
