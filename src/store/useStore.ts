@@ -16,10 +16,8 @@ export const useStore = create<AppState>()(
 			partialize: (state) => ({
 				theme: state.theme,
 				viewMode: state.viewMode,
-				sortBy: state.sortBy,
+				 sortBy: state.sortBy,
 				apiKey: state.apiKey,
-				braveApiKey: state.braveApiKey,
-				opencodeApiKey: state.opencodeApiKey,
 				deepseekApiKey: state.deepseekApiKey,
 				customApiKey: state.customApiKey,
 				llmProvider: state.llmProvider,
@@ -34,9 +32,18 @@ export const useStore = create<AppState>()(
 				const persisted = persistedState as Partial<AppState> & {
 					watchedVideos?: string[];
 				};
+				const safePersisted = Object.fromEntries(
+					Object.entries(persisted).filter(
+						([key]) => key !== "braveApiKey" && key !== "opencodeApiKey",
+					),
+				);
 				return {
 					...currentState,
-					...persisted,
+					...safePersisted,
+					llmProvider:
+						persisted.llmProvider === "opencode"
+							? "deepseek"
+							: persisted.llmProvider ?? currentState.llmProvider,
 					watchedVideos: new Set(
 						Array.isArray(persisted.watchedVideos)
 							? persisted.watchedVideos

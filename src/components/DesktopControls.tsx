@@ -65,6 +65,8 @@ export const DesktopControls = ({
 						whileHover={{ scale: 1.05 }}
 						whileTap={{ scale: 0.95 }}
 						onClick={onToggleShorts}
+						aria-label={showShorts ? "Hide Shorts" : "Show Shorts"}
+						aria-pressed={showShorts}
 						className={`p-2 rounded-lg transition-colors ${
 							showShorts
 								? "bg-red-100 text-red-600 dark:bg-red-900/30 dark:text-red-400"
@@ -82,6 +84,8 @@ export const DesktopControls = ({
 						whileHover={{ scale: 1.05 }}
 						whileTap={{ scale: 0.95 }}
 						onClick={onToggleWatched}
+						aria-label={hideWatched ? "Show Watched" : "Hide Watched"}
+						aria-pressed={hideWatched}
 						className={`p-2 rounded-lg transition-colors ${
 							hideWatched
 								? "bg-emerald-100 text-emerald-600 dark:bg-emerald-900/30 dark:text-emerald-400"
@@ -99,6 +103,7 @@ export const DesktopControls = ({
 
 				{/* Sort */}
 				<select
+					aria-label="Sort subscriptions"
 					value={sortBy}
 					onChange={(e) => onSortChange(e.target.value as SortBy)}
 					className="hidden sm:block px-3 py-2 rounded-lg bg-gray-100 dark:bg-ios-800 border-2 border-transparent focus:border-red-500 transition-all outline-none cursor-pointer"
@@ -112,6 +117,8 @@ export const DesktopControls = ({
 				<div className="hidden sm:flex items-center gap-1 p-1 rounded-lg bg-gray-100 dark:bg-ios-800">
 					<button
 						onClick={() => onViewModeChange("grid")}
+						aria-label="Grid subscription view"
+						aria-pressed={viewMode === "grid"}
 						className={`p-2 rounded ${
 							viewMode === "grid"
 								? "bg-white dark:bg-ios-900 shadow"
@@ -122,6 +129,8 @@ export const DesktopControls = ({
 					</button>
 					<button
 						onClick={() => onViewModeChange("list")}
+						aria-label="List subscription view"
+						aria-pressed={viewMode === "list"}
 						className={`p-2 rounded ${
 							viewMode === "list"
 								? "bg-white dark:bg-ios-900 shadow"
@@ -133,6 +142,7 @@ export const DesktopControls = ({
 					<button
 						onClick={() => onViewModeChange("compact")}
 						aria-label="Compact subscription view"
+						aria-pressed={viewMode === "compact"}
 						className={`p-2 rounded ${
 							viewMode === "compact"
 								? "bg-white dark:bg-ios-900 shadow"
@@ -191,6 +201,7 @@ export const DesktopControls = ({
 			whileHover={{ scale: 1.1 }}
 			whileTap={{ scale: 0.9 }}
 			onClick={onOpenSettings}
+			aria-label="Settings"
 			className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-ios-800 transition-colors"
 			title="Settings"
 		>
@@ -202,6 +213,7 @@ export const DesktopControls = ({
 			whileHover={{ scale: 1.1 }}
 			whileTap={{ scale: 0.9 }}
 			onClick={onToggleTheme}
+			aria-label={theme === "light" ? "Use dark theme" : "Use light theme"}
 			className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-ios-800 transition-colors"
 		>
 			{theme === "light" ? (

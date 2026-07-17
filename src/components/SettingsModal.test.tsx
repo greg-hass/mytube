@@ -10,8 +10,6 @@ const invalidateQueries = vi.fn();
 const clearAllCachedVideos = vi.fn();
 const storeMocks = vi.hoisted(() => ({
 	setApiKey: vi.fn(),
-	setBraveApiKey: vi.fn(),
-	setOpencodeApiKey: vi.fn(),
 	setDeepseekApiKey: vi.fn(),
 	setCustomApiKey: vi.fn(),
 	setLlmProvider: vi.fn(),
@@ -59,16 +57,12 @@ vi.mock("framer-motion", () => ({
 vi.mock("../store/useStore", () => {
 	const state = {
 		apiKey: "key",
-		braveApiKey: "",
-		opencodeApiKey: "",
 		deepseekApiKey: "",
 		customApiKey: "",
 		llmProvider: "opencode",
 		llmApiKey: "",
 		llmModel: "big-pickle",
 		setApiKey: storeMocks.setApiKey,
-		setBraveApiKey: storeMocks.setBraveApiKey,
-		setOpencodeApiKey: storeMocks.setOpencodeApiKey,
 		setDeepseekApiKey: storeMocks.setDeepseekApiKey,
 		setCustomApiKey: storeMocks.setCustomApiKey,
 		setLlmProvider: storeMocks.setLlmProvider,

@@ -122,7 +122,7 @@ const TOOLS = [
 
 /**
  * Resolve provider config + options into { endpoint, model, apiKey, label }.
- * Priority: explicit option > provider config default > env var fallback.
+ * Priority: explicit option > the supported DeepSeek server environment key.
  */
 function resolveProvider(options = {}) {
 	const providerName = options.provider || "opencode";
@@ -141,9 +141,9 @@ function resolveProvider(options = {}) {
 	const apiKey =
 		options.apiKey !== undefined
 			? options.apiKey
-			: process.env[`${providerName.toUpperCase()}_API_KEY`] ||
-				process.env.OPENCODE_API_KEY ||
-				"";
+			: providerName === "deepseek"
+				? process.env.DEEPSEEK_API_KEY || ""
+				: "";
 
 	return {
 		endpoint: options.endpoint || config.endpoint,
@@ -167,7 +167,7 @@ function resolveProvider(options = {}) {
  * @param {string} [options.apiKey] — explicit API key (override env)
  * @param {string} [options.model] — override the provider's default model
  * @param {string} [options.endpoint] — custom endpoint (only used with provider="custom")
- * @param {string} [options.braveKey] — override process.env.BRAVE_API_KEY
+ * @param {string} [options.braveKey] — explicit key for direct callers
  * @param {function} [options.fetchImpl] — override global fetch (for tests)
  * @param {AbortSignal} [options.signal] — external abort signal
  * @param {boolean} [options.useSuggestions] — use suggestions prompt instead of resolver prompt
@@ -189,7 +189,7 @@ async function resolveChannelViaLlm(query, options = {}) {
 	const braveKey =
 		options.braveKey !== undefined
 			? options.braveKey
-			: process.env.BRAVE_API_KEY || "";
+			: "";
 
 	const useSuggestions = options.useSuggestions === true;
 
@@ -558,7 +558,7 @@ function parseDuckDuckGoResults(html, limit) {
 
 /**
  * Brave Web Search API. Higher quality than DDG but requires an API key.
- * Used automatically when BRAVE_API_KEY is set.
+ * Used only when an explicit Brave key is supplied by a direct caller.
  */
 async function searchBrave(query, limit, options) {
 	const fetchImpl = options.fetchImpl || fetch;
@@ -736,12 +736,11 @@ function parseSuggestionsResponse(content) {
  * Which LLM backends are available given the current environment.
  */
 function getLlmBackendStatus() {
-	const opencodeKey = process.env.OPENCODE_API_KEY;
 	const deepseekKey = process.env.DEEPSEEK_API_KEY;
 
 	return {
 		opencode: {
-			available: Boolean(opencodeKey),
+			available: false,
 			model: PROVIDER_CONFIG.opencode.defaultModel,
 			endpoint: PROVIDER_CONFIG.opencode.endpoint,
 		},
@@ -750,7 +749,7 @@ function getLlmBackendStatus() {
 			model: PROVIDER_CONFIG.deepseek.defaultModel,
 			endpoint: PROVIDER_CONFIG.deepseek.endpoint,
 		},
-		searchBackend: process.env.BRAVE_API_KEY ? "brave" : "duckduckgo",
+		searchBackend: "duckduckgo",
 	};
 }
 

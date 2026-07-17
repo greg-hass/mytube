@@ -5,7 +5,7 @@
 // (1 unit from the separate 10,000-unit/day pool — not the 100/day
 // search.list bucket).
 //
-// Requires BRAVE_API_KEY for discovery.
+// Requires an explicit key when used by a direct caller.
 // Requires YOUTUBE_API_KEY for handle resolution (results with
 // /channel/UC... URLs don't need resolution and work without it).
 
@@ -102,7 +102,7 @@ async function resolveChannelIdentity(identity, apiKey, fetchImpl, signal) {
  *
  * @param {string} query — the meaningful search query (e.g. "woodworking")
  * @param {object} options
- * @param {string} [options.braveKey] — override process.env.BRAVE_API_KEY
+ * @param {string} [options.braveKey] — explicit key for direct callers
  * @param {string} [options.apiKey] — override process.env.YOUTUBE_API_KEY
  * @param {function} [options.fetchImpl] — override global fetch (for tests)
  * @returns {Promise<Array<{id, title, description, thumbnail, customUrl}>>}
@@ -111,7 +111,7 @@ async function searchBraveChannels(query, options = {}) {
 	const braveKey =
 		options.braveKey !== undefined
 			? options.braveKey
-			: process.env.BRAVE_API_KEY;
+			: "";
 	if (!braveKey) return [];
 
 	const apiKey =

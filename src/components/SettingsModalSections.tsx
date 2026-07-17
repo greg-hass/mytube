@@ -463,20 +463,17 @@ export function RefreshIssuesSection({
 // ─── LLM Smart Search & Discovery section ────────────────────────────────
 
 const PROVIDER_OPTIONS: { value: string; label: string }[] = [
-	{ value: "opencode", label: "OpenCode (free)" },
 	{ value: "deepseek", label: "DeepSeek" },
 	{ value: "custom", label: "Custom" },
 ];
 
 const DEFAULT_MODELS: Record<string, string> = {
-	opencode: "big-pickle",
 	deepseek: "deepseek-v4-flash",
 	custom: "",
 };
 
 /** Models API endpoints for known providers (OpenAI-compatible /v1/models). */
 const MODELS_ENDPOINTS: Record<string, string> = {
-	opencode: "https://opencode.ai/zen/v1/models",
 	deepseek: "https://api.deepseek.com/v1/models",
 };
 
@@ -487,15 +484,6 @@ const MODELS_ENDPOINTS: Record<string, string> = {
  * of network restrictions.
  */
 const FALLBACK_MODELS: Record<string, string[]> = {
-	opencode: [
-		"big-pickle",
-		"deepseek-v4-flash-free",
-		"mimo-v2.5-free",
-		"minimax-m3-free",
-		"nemotron-3-ultra-free",
-		"north-mini-code-free",
-		"qwen3.6-plus-free",
-	],
 	deepseek: ["deepseek-v4-flash", "deepseek-v4-pro"],
 };
 
@@ -523,11 +511,6 @@ async function fetchAvailableModels(
 		const ids = (data.data || []).map((m) => m.id);
 		const unique = [...new Set(ids)].sort((a, b) => a.localeCompare(b));
 
-		// OpenCode: only show free models (big-pickle + -free suffix)
-		if (provider === "opencode") {
-			return unique.filter((m) => m === "big-pickle" || m.endsWith("-free"));
-		}
-
 		return unique;
 	} catch (err) {
 		if (err instanceof TypeError && err.message.includes("fetch")) {
@@ -543,7 +526,6 @@ export function LlmConfigSection({
 	setProvider,
 	model,
 	setModel,
-	opencodeInputKey,
 	deepseekInputKey,
 	customApiKeyInput,
 }: {
@@ -551,7 +533,6 @@ export function LlmConfigSection({
 	setProvider: (v: string) => void;
 	model: string;
 	setModel: (v: string) => void;
-	opencodeInputKey: string;
 	deepseekInputKey: string;
 	customApiKeyInput: string;
 }) {
@@ -564,14 +545,9 @@ export function LlmConfigSection({
 
 	// Subscribe to provider-specific keys from the store so the model
 	// list re-fetches when the user enters a key in API Configuration.
-	const opencodeKey = useStore((s) => s.opencodeApiKey);
 	const deepseekKey = useStore((s) => s.deepseekApiKey);
 	const currentKey =
-		provider === "opencode"
-			? opencodeKey
-			: provider === "deepseek"
-				? deepseekKey
-				: "";
+		provider === "deepseek" ? deepseekKey : "";
 
 	const loadModels = useCallback(async () => {
 		if (provider === "custom") {
@@ -632,15 +608,9 @@ export function LlmConfigSection({
 		// just the store) so the key reaches the store even if the
 		// user hasn't clicked Save in API Configuration yet.
 		const inputKey =
-			newProvider === "opencode"
-				? opencodeInputKey
-				: newProvider === "deepseek"
-					? deepseekInputKey
-					: customApiKeyInput;
+			newProvider === "deepseek" ? deepseekInputKey : customApiKeyInput;
 		if (inputKey) {
 			// Persist the provider-specific key to the store
-			if (newProvider === "opencode")
-				useStore.getState().setOpencodeApiKey(inputKey);
 			if (newProvider === "deepseek")
 				useStore.getState().setDeepseekApiKey(inputKey);
 			if (newProvider === "custom")

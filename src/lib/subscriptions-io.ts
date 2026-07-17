@@ -109,7 +109,33 @@ export function toYouTubeChannels(
 		isFavorite: sub.isFavorite,
 		isMuted: sub.isMuted,
 		group: sub.group,
+		addedAt: sub.addedAt,
 	}));
+}
+
+function getAddedAt(channel: YouTubeChannel): number | null {
+	return typeof channel.addedAt === "number" && Number.isFinite(channel.addedAt)
+		? channel.addedAt
+		: null;
+}
+
+function compareByAddedAt(
+	a: YouTubeChannel,
+	b: YouTubeChannel,
+	direction: "ascending" | "descending",
+): number {
+	const aAddedAt = getAddedAt(a);
+	const bAddedAt = getAddedAt(b);
+
+	if (aAddedAt === null && bAddedAt === null) {
+		return a.title.localeCompare(b.title);
+	}
+	if (aAddedAt === null) return 1;
+	if (bAddedAt === null) return -1;
+
+	const dateOrder =
+		direction === "ascending" ? aAddedAt - bAddedAt : bAddedAt - aAddedAt;
+	return dateOrder || a.title.localeCompare(b.title);
 }
 
 /** Filter and sort channel subscriptions for display. */
@@ -134,9 +160,9 @@ export function filterAndSortChannels(
 			case "name":
 				return a.title.localeCompare(b.title);
 			case "recent":
-				return a.title.localeCompare(b.title);
+				return compareByAddedAt(a, b, "descending");
 			case "oldest":
-				return b.title.localeCompare(a.title);
+				return compareByAddedAt(a, b, "ascending");
 			default:
 				return 0;
 		}

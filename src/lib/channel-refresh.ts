@@ -1,5 +1,10 @@
 import type { QueryClient } from "@tanstack/react-query";
-import type { StoredSubscription } from "./indexeddb";
+import {
+	addSubscriptions,
+	removeSubscription,
+	type StoredSubscription,
+} from "./indexeddb";
+import { fetchChannelInfo, fetchChannelsBatch } from "./youtube-api";
 
 const SUBSCRIPTIONS_QUERY_KEY = ["subscriptions"] as const;
 
@@ -17,7 +22,6 @@ async function fetchRealChannelUpdates(
 	realIds: string[],
 	apiKey: string,
 ): Promise<StoredSubscription[]> {
-	const { fetchChannelsBatch } = await import("./youtube-api");
 	const updatedChannels = await fetchChannelsBatch(realIds, apiKey);
 	const subsById = new Map(subscriptions.map((s) => [s.id, s]));
 
@@ -46,7 +50,6 @@ async function resolveTempChannels(
 	tempSubs: StoredSubscription[],
 	apiKey: string,
 ): Promise<RefreshResult> {
-	const { fetchChannelInfo } = await import("./youtube-api");
 	const subsById = new Map(subscriptions.map((s) => [s.id, s]));
 
 	const updates: StoredSubscription[] = [];
@@ -129,12 +132,10 @@ export async function refreshAllChannels(
 	const allUpdates = [...realUpdates, ...tempUpdates];
 
 	for (const id of removals) {
-		const { removeSubscription } = await import("./indexeddb");
 		await removeSubscription(id);
 	}
 
 	if (allUpdates.length > 0) {
-		const { addSubscriptions } = await import("./indexeddb");
 		await addSubscriptions(allUpdates);
 	}
 

@@ -12,6 +12,22 @@ env:
   IMAGE_NAME: ${{ github.repository }}
 
 jobs:
+  secrets:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout full history
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Scan repository history
+        uses: gitleaks/gitleaks-action@v3
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
   build:
     runs-on: ubuntu-latest
     permissions:
@@ -20,6 +36,9 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+
+      - name: Reject tracked environment files
+        run: bash scripts/check-no-tracked-env.sh
 
       - name: Set up Node.js
         uses: actions/setup-node@v4
@@ -40,8 +59,8 @@ jobs:
       - name: Lint
         run: npm run lint
 
-      - name: Test frontend and server
-        run: npm test -- --run
+      - name: Test frontend and server with coverage gates
+        run: npm run test:coverage
 
       - name: Audit frontend production dependencies
         run: npm audit --omit=dev
@@ -53,8 +72,17 @@ jobs:
       - name: Build frontend
         run: npm run build
 
+      - name: Install Playwright browser
+        run: npx playwright install --with-deps chromium
+
+      - name: Test production browser flows
+        run: npm run test:e2e
+
+      - name: Smoke-test production container
+        run: bash scripts/container-smoke.sh
+
   publish:
-    needs: build
+    needs: [build, secrets]
     runs-on: ubuntu-latest
     if: github.event_name != 'pull_request'
     permissions:

@@ -57,19 +57,15 @@ export function useSettingsState(onClose: () => void) {
 
 	const handleSave = useCallback(() => {
 		form.setApiKey(form.inputKey);
-		form.setBraveApiKey(form.braveInputKey);
-		form.setOpencodeApiKey(form.opencodeInputKey);
 		form.setDeepseekApiKey(form.deepseekInputKey);
 		form.setCustomApiKey(form.customApiKeyInput);
 		form.setLlmProvider(form.llmProviderInput);
 		// Derive llmApiKey from the provider-specific key so the Smart
 		// Search section doesn't need its own API key field.
 		const derivedKey =
-			form.llmProviderInput === "opencode"
-				? form.opencodeInputKey
-				: form.llmProviderInput === "deepseek"
-					? form.deepseekInputKey
-					: form.customApiKeyInput;
+			form.llmProviderInput === "deepseek"
+				? form.deepseekInputKey
+				: form.customApiKeyInput;
 		form.setLlmApiKey(derivedKey);
 		form.setLlmModel(form.llmModelInput);
 		setServerApiToken(form.serverApiTokenInput);
@@ -87,10 +83,6 @@ export function useSettingsState(onClose: () => void) {
 		// Form state (via sub-hook)
 		inputKey: form.inputKey,
 		setInputKey: form.setInputKey,
-		braveInputKey: form.braveInputKey,
-		setBraveInputKey: form.setBraveInputKey,
-		opencodeInputKey: form.opencodeInputKey,
-		setOpencodeInputKey: form.setOpencodeInputKey,
 		deepseekInputKey: form.deepseekInputKey,
 		setDeepseekInputKey: form.setDeepseekInputKey,
 		customApiKeyInput: form.customApiKeyInput,

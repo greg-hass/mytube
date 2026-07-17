@@ -477,7 +477,6 @@ describe("resolveChannelViaLlm (opencode provider)", () => {
 
 	beforeEach(() => {
 		process.env = { ...originalEnv };
-		process.env.OPENCODE_API_KEY = "test-key";
 		console.warn = vi.fn();
 	});
 
@@ -487,7 +486,6 @@ describe("resolveChannelViaLlm (opencode provider)", () => {
 	});
 
 	it("returns null when no API key and non-opencode provider", async () => {
-		delete process.env.OPENCODE_API_KEY;
 		const result = await resolveChannelViaLlm("mario nawfal", {
 			provider: "deepseek",
 		});
@@ -539,7 +537,11 @@ describe("resolveChannelViaLlm (opencode provider)", () => {
 					],
 				}),
 		});
-		await resolveChannelViaLlm("mkbhd", { fetchImpl, provider: "opencode" });
+		await resolveChannelViaLlm("mkbhd", {
+			fetchImpl,
+			provider: "opencode",
+			apiKey: "test-key",
+		});
 		expect(fetchImpl).toHaveBeenCalledWith(
 			OPENCODE_ENDPOINT,
 			expect.objectContaining({
@@ -805,23 +807,17 @@ describe("getLlmBackendStatus().opencode", () => {
 	});
 
 	it("reports unavailable when no key is set", () => {
-		delete process.env.OPENCODE_API_KEY;
 		expect(getLlmBackendStatus().opencode.available).toBe(false);
 	});
 
-	it("reports available when a key is set", () => {
-		process.env.OPENCODE_API_KEY = "test";
+	it("reports OpenCode as unavailable after its environment key is removed", () => {
 		const status = getLlmBackendStatus().opencode;
-		expect(status.available).toBe(true);
+		expect(status.available).toBe(false);
 		expect(status.model).toBe(OPENCODE_MODEL);
 	});
 
-	it("reports the search backend based on Brave key", () => {
-		process.env.OPENCODE_API_KEY = "x";
-		delete process.env.BRAVE_API_KEY;
+	it("reports DuckDuckGo as the only configured search backend", () => {
 		expect(getLlmBackendStatus().searchBackend).toBe("duckduckgo");
-		process.env.BRAVE_API_KEY = "y";
-		expect(getLlmBackendStatus().searchBackend).toBe("brave");
 	});
 });
 
@@ -856,7 +852,6 @@ describe("resolveChannelViaLlm (suggestions mode)", () => {
 
 	beforeEach(() => {
 		process.env = { ...originalEnv };
-		delete process.env.OPENCODE_API_KEY;
 	});
 
 	afterEach(() => {

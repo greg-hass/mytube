@@ -142,6 +142,10 @@ before the restored database is activated.
 The Settings screen includes a full app backup export for subscriptions, watched
 videos, favorites, queue, feed filters, groups, and settings.
 
+See [docs/state-ownership.md](docs/state-ownership.md) for the source-of-truth,
+sync, deletion, and recovery contracts across SQLite, IndexedDB, and browser
+storage.
+
 This is intended for a personal, self-hosted deployment. SQLite improves
 integrity and queryability for one app instance; it is not a multi-user
 authorization model.

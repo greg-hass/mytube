@@ -3,6 +3,7 @@ import {
 	applyServerRedirects,
 	applyServerSettings,
 	fetchServerSyncData,
+	forcePushToServer,
 	mergeSubscriptionLists,
 	pushToServer,
 	subscriptionsChanged,
@@ -223,7 +224,6 @@ export async function forcePushLocalState(
 		watchedVideos: Array.from(callbacks.getStoreState().watchedVideos),
 	};
 
-	const { forcePushToServer } = await import("./server-sync");
 	await forcePushToServer(
 		payload,
 		callbacks.getLastRevision(),

@@ -891,11 +891,7 @@ export const Dashboard = () => {
 				minimal={needsServerAuth || hasNoSubscriptions}
 			/>
 
-			{subscriptionsLoading || subscriptionsInitialSyncing ? (
-				<div className="min-h-[50vh] flex items-center justify-center">
-					<div className="w-10 h-10 border-4 border-red-600 border-t-transparent rounded-full animate-spin" />
-				</div>
-			) : needsServerAuth ? (
+			{needsServerAuth ? (
 				<main
 					data-testid="auth-required"
 					className="mx-auto flex h-[calc(100dvh-var(--app-header-height))] max-w-md flex-col items-center justify-center px-4 py-2"
@@ -918,6 +914,16 @@ export const Dashboard = () => {
 						Open Settings
 					</button>
 				</main>
+			) : subscriptionsLoading || subscriptionsInitialSyncing ? (
+				<div
+					data-testid="dashboard-loading"
+					className="min-h-[50vh] flex items-center justify-center"
+					role="status"
+					aria-live="polite"
+				>
+					<div className="w-10 h-10 border-4 border-red-600 border-t-transparent rounded-full animate-spin" />
+					<span className="sr-only">Loading subscriptions</span>
+				</div>
 			) : hasNoSubscriptions ? (
 				<FirstRunOnboarding
 					onAddChannel={() => setIsAddChannelModalOpen(true)}

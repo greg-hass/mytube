@@ -463,9 +463,9 @@ async function searchChannels(query, options = {}) {
 
 /**
  * Try the configured LLM resolver and return its suggestion.
- * OpenCode big-pickle is the sole LLM tier — it runs function-calling
- * with a custom web_search tool (DDG HTML or Brave backend) and the
- * OPENCODE_API_KEY the user already has.
+ * The LLM resolver is available only to explicit internal callers. The app's
+ * production search path does not read provider credentials from environment
+ * variables.
  *
  * Return shape:
  *   { type: "handle"|"channel_id", value, title?, provider }
@@ -486,7 +486,7 @@ async function resolveChannelViaLlm(query, options) {
 			? cfg.apiKey
 			: options.opencodeKey !== undefined
 				? options.opencodeKey
-				: process.env.OPENCODE_API_KEY;
+				: "";
 	if (!apiKey) return null;
 
 	return await resolveChannelViaLlmProvider(query, {

@@ -9,8 +9,6 @@ function getCurrentPacificDate(): string {
 
 export interface DataSlice {
 	apiKey: string;
-	braveApiKey: string;
-	opencodeApiKey: string;
 	deepseekApiKey: string;
 	customApiKey: string;
 	useApiForVideos: boolean;
@@ -23,8 +21,6 @@ export interface DataSlice {
 	llmModel: string;
 
 	setApiKey: (key: string) => void;
-	setBraveApiKey: (key: string) => void;
-	setOpencodeApiKey: (key: string) => void;
 	setDeepseekApiKey: (key: string) => void;
 	setCustomApiKey: (key: string) => void;
 	setLlmProvider: (provider: string) => void;
@@ -44,13 +40,11 @@ export interface DataSlice {
 
 export const createDataSlice: StateCreator<DataSlice> = (set, get) => ({
 	apiKey: "",
-	braveApiKey: "",
-	opencodeApiKey: "",
 	deepseekApiKey: "",
 	customApiKey: "",
-	llmProvider: "opencode",
+	llmProvider: "deepseek",
 	llmApiKey: "",
-	llmModel: "big-pickle",
+	llmModel: "deepseek-v4-flash",
 	useApiForVideos: false,
 	quotaUsed: 0,
 	apiExhausted: false,
@@ -58,8 +52,6 @@ export const createDataSlice: StateCreator<DataSlice> = (set, get) => ({
 	watchedVideos: new Set<string>(),
 
 	setApiKey: (key) => set({ apiKey: key }),
-	setBraveApiKey: (key) => set({ braveApiKey: key }),
-	setOpencodeApiKey: (key) => set({ opencodeApiKey: key }),
 	setDeepseekApiKey: (key) => set({ deepseekApiKey: key }),
 	setCustomApiKey: (key) => set({ customApiKey: key }),
 	setLlmProvider: (provider) => set({ llmProvider: provider }),

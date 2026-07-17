@@ -9,15 +9,11 @@ import { getServerApiToken } from "../lib/api-auth";
 export function useSettingsFormState() {
 	const {
 		apiKey,
-		braveApiKey,
-		opencodeApiKey,
 		deepseekApiKey,
 		customApiKey,
 		llmProvider,
 		llmModel,
 		setApiKey,
-		setBraveApiKey,
-		setOpencodeApiKey,
 		setDeepseekApiKey,
 		setCustomApiKey,
 		setLlmProvider,
@@ -26,8 +22,6 @@ export function useSettingsFormState() {
 	} = useStore();
 
 	const [inputKey, setInputKey] = useState(apiKey);
-	const [braveInputKey, setBraveInputKey] = useState(braveApiKey);
-	const [opencodeInputKey, setOpencodeInputKey] = useState(opencodeApiKey);
 	const [deepseekInputKey, setDeepseekInputKey] = useState(deepseekApiKey);
 	const [customApiKeyInput, setCustomApiKeyInput] = useState(customApiKey);
 	const [llmProviderInput, setLlmProviderInput] = useState(llmProvider);
@@ -39,10 +33,6 @@ export function useSettingsFormState() {
 	return {
 		inputKey,
 		setInputKey,
-		braveInputKey,
-		setBraveInputKey,
-		opencodeInputKey,
-		setOpencodeInputKey,
 		deepseekInputKey,
 		setDeepseekInputKey,
 		customApiKeyInput,
@@ -55,8 +45,6 @@ export function useSettingsFormState() {
 		setServerApiTokenInput,
 		// Store setters (bound to form state values)
 		setApiKey,
-		setBraveApiKey,
-		setOpencodeApiKey,
 		setDeepseekApiKey,
 		setCustomApiKey,
 		setLlmProvider,

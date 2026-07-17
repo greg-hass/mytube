@@ -85,6 +85,8 @@ let mockAllSubscriptions = [
   },
 ];
 let mockSubscriptionsInitialSyncing = false;
+let mockSubscriptionsLoading = false;
+let mockNeedsServerAuth = false;
 const mockToggleChannelFavorite = vi.fn();
 let throwSubscriptionsListError = false;
 let latestSubscriptionsListProps: { selectedGroup?: string; groups?: string[] } | undefined;
@@ -187,6 +189,10 @@ vi.mock('./AddChannelModal', () => ({
   AddChannelModal: () => null,
 }));
 
+vi.mock('./SettingsModal', () => ({
+  SettingsModal: () => null,
+}));
+
 vi.mock('./OPMLUpload', () => ({
   OPMLUpload: () => <button>Import subscriptions</button>,
 }));
@@ -217,6 +223,8 @@ vi.mock('../hooks/useSubscriptionStorage', () => ({
     toggleFavorite: mockToggleChannelFavorite,
     repairChannelIcons: vi.fn(),
     isInitialSyncing: mockSubscriptionsInitialSyncing,
+    isLoading: mockSubscriptionsLoading,
+    needsServerAuth: mockNeedsServerAuth,
   }),
 }));
 
@@ -246,6 +254,8 @@ describe('Dashboard', () => {
     mockSetSearchQuery.mockClear();
     mockToggleChannelFavorite.mockClear();
     mockSubscriptionsInitialSyncing = false;
+    mockSubscriptionsLoading = false;
+    mockNeedsServerAuth = false;
     throwSubscriptionsListError = false;
     mockAllSubscriptions = [
       {
@@ -332,6 +342,18 @@ describe('Dashboard', () => {
 
     expect(screen.queryByTestId('first-run-onboarding')).not.toBeInTheDocument();
     expect(screen.queryByText('Start with your subscriptions')).not.toBeInTheDocument();
+  });
+
+  it('shows authentication recovery ahead of a still-pending subscription load', () => {
+    mockSubscriptionsLoading = true;
+    mockSubscriptionsInitialSyncing = true;
+    mockNeedsServerAuth = true;
+
+    render(<Dashboard />);
+
+    expect(screen.getByTestId('auth-required')).toBeInTheDocument();
+    expect(screen.getByText('Server authentication required')).toBeInTheDocument();
+    expect(screen.queryByTestId('dashboard-loading')).not.toBeInTheDocument();
   });
 
   it('uses a uniform icon empty state across empty timeline tabs', async () => {

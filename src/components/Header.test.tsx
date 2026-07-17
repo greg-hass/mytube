@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, within } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import { Header } from "./Header";
 
@@ -105,6 +105,46 @@ describe("Header", () => {
 		});
 		expect(mobileControls?.className).toContain("xl:hidden");
 		expect(mobileControls?.className).not.toContain("md:hidden");
+	});
+
+	it("gives every desktop icon control an accessible name", () => {
+		render(
+			<Header
+				showShorts
+				onToggleShorts={vi.fn()}
+				hideWatched={false}
+				onToggleWatched={vi.fn()}
+			/>,
+		);
+
+		const desktopControls = document.querySelectorAll(
+			".desktop-header-controls",
+		)[1];
+		expect(desktopControls).not.toBeNull();
+		const controls = within(desktopControls as HTMLElement);
+
+		expect(
+			controls.getByRole("button", { name: "Hide Shorts" }),
+		).toBeInTheDocument();
+		expect(
+			controls.getByRole("button", { name: "Hide Watched" }),
+		).toBeInTheDocument();
+		expect(
+			controls.getByRole("combobox", { name: "Sort subscriptions" }),
+		).toBeInTheDocument();
+		expect(
+			controls.getByRole("button", { name: "Grid subscription view" }),
+		).toBeInTheDocument();
+		expect(
+			controls.getByRole("button", { name: "List subscription view" }),
+		).toBeInTheDocument();
+		expect(
+			controls.getByRole("button", { name: "Compact subscription view" }),
+		).toBeInTheDocument();
+		expect(controls.getByRole("button", { name: "Settings" })).toBeInTheDocument();
+		expect(
+			controls.getByRole("button", { name: "Use light theme" }),
+		).toBeInTheDocument();
 	});
 
 	it("publishes its measured height for sticky dashboard chrome", () => {
