@@ -12,7 +12,7 @@ interface Props {
     context?: 'latest' | 'queue';
 }
 
-const ROW_GAP = 24;
+const ROW_GAP = 12;
 const MIN_CARD_WIDTH = 260;
 const VIDEO_INFO_HEIGHT = 112;
 
@@ -181,7 +181,7 @@ export const VirtualizedVideoGrid = ({ videos, columns = 4, scrollStorageKey, ch
                             }}
                         >
                             <div
-                                className="grid gap-6"
+                                className="grid gap-3"
                                 style={{
                                     height: `${cardHeight}px`,
                                     gridTemplateColumns: `repeat(${itemsPerRow}, minmax(0, 1fr))`,

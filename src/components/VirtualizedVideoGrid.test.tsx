@@ -109,7 +109,8 @@ describe('VirtualizedVideoGrid', () => {
 
         const row = timeline.querySelector('[data-index]') as HTMLElement;
         expect(row.style.height).toBe(`${rowHeight}px`);
-        expect(row.querySelector('.grid')).toHaveStyle({ height: `${rowHeight - 24}px` });
+        expect(row.querySelector('.grid')).toHaveClass('gap-3');
+        expect(row.querySelector('.grid')).toHaveStyle({ height: `${rowHeight - 12}px` });
     });
 
     it('uses the measured virtualizer column count for the rendered grid', async () => {

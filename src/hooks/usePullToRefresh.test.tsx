@@ -57,6 +57,28 @@ describe("usePullToRefresh", () => {
 		expect(onRefresh).toHaveBeenCalledTimes(1);
 	});
 
+	it("keeps the drag active when rendering creates a new refresh callback", () => {
+		const onRefresh = vi.fn();
+		renderHook(() =>
+			usePullToRefresh({
+				isRefreshActive: false,
+				onRefresh: () => onRefresh(),
+			}),
+		);
+
+		act(() => {
+			document.dispatchEvent(touchEvent("touchstart", 100));
+		});
+		act(() => {
+			document.dispatchEvent(touchEvent("touchmove", 240));
+		});
+		act(() => {
+			document.dispatchEvent(touchEvent("touchend"));
+		});
+
+		expect(onRefresh).toHaveBeenCalledTimes(1);
+	});
+
 	it("does not start while the document is scrolled", () => {
 		const onRefresh = vi.fn();
 		Object.defineProperty(document.documentElement, "scrollTop", {

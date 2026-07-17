@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 /**
  * Matches Feedy's mobile pull-to-refresh gesture: only starts at the top of
@@ -12,6 +12,13 @@ export function usePullToRefresh(deps: {
 }) {
 	const { isRefreshActive, onRefresh, onPullCancel } = deps;
 	const [pullDistance, setPullDistance] = useState(0);
+	const onRefreshRef = useRef(onRefresh);
+	const onPullCancelRef = useRef(onPullCancel);
+
+	useEffect(() => {
+		onRefreshRef.current = onRefresh;
+		onPullCancelRef.current = onPullCancel;
+	}, [onPullCancel, onRefresh]);
 
 	useEffect(() => {
 		let startY: number | null = null;
@@ -69,9 +76,9 @@ export function usePullToRefresh(deps: {
 
 		const finishDrag = () => {
 			if (dragging && latestDistance >= 56 && !isRefreshActive) {
-				onRefresh();
+				onRefreshRef.current();
 			} else if (dragging && !isRefreshActive) {
-				onPullCancel?.();
+				onPullCancelRef.current?.();
 			}
 
 			const startDistance = latestDistance;
@@ -112,7 +119,7 @@ export function usePullToRefresh(deps: {
 			document.removeEventListener("touchend", finishDrag, listenerOptions);
 			document.removeEventListener("touchcancel", finishDrag, listenerOptions);
 		};
-	}, [isRefreshActive, onPullCancel, onRefresh]);
+	}, [isRefreshActive]);
 
 	return { pullDistance };
 }
