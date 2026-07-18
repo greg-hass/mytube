@@ -1,11 +1,8 @@
 import { motion } from "framer-motion";
-import {
-	Grid3x3,
-	TrendingUp,
-	Activity,
-	Heart,
-	Plus,
-} from "lucide-react";
+import { useEffect, useState } from "react";
+import { Grid3x3, TrendingUp, Activity, Heart, Plus } from "lucide-react";
+
+const TAB_BAR_MOUNT_KEY = "tab-bar-mounted";
 
 export type Tab =
 	| "subscriptions"
@@ -84,11 +81,36 @@ export const FloatingTabBar = ({
 		favoriteCount,
 	};
 
+	/**
+	 * Ensure the tab bar entrance animation only fires once per app
+	 * session. Without this, navigating to ChannelViewer and back
+	 * re-mounts Dashboard, which re-fires the spring entrance and
+	 * causes a visible “slide up from bottom” flicker on every return.
+	 *
+	 * The useState initializer is pure (reads sessionStorage only).
+	 * The write happens in useEffect after first paint.
+	 */
+	const [isFirstMount] = useState(
+		() =>
+			typeof sessionStorage !== "undefined" &&
+			!sessionStorage.getItem(TAB_BAR_MOUNT_KEY),
+	);
+
+	useEffect(() => {
+		if (isFirstMount) {
+			sessionStorage.setItem(TAB_BAR_MOUNT_KEY, "1");
+		}
+	}, [isFirstMount]);
+
 	return (
 		<motion.nav
-			initial={{ y: 100, opacity: 0 }}
+			initial={isFirstMount ? { y: 100, opacity: 0 } : false}
 			animate={{ y: 0, opacity: 1 }}
-			transition={{ type: "spring", stiffness: 300, damping: 30, delay: 0.2 }}
+			transition={
+				isFirstMount
+					? { type: "spring", stiffness: 300, damping: 30, delay: 0.2 }
+					: { duration: 0 }
+			}
 			data-testid="floating-tab-bar"
 			className="fixed bottom-0 left-0 right-0 z-50 pb-[var(--app-tab-bar-bottom-offset)] pointer-events-none"
 		>

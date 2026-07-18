@@ -37,16 +37,24 @@ export const AddChannelModal = ({
 	const suggestions = useChannelSuggestions();
 
 	return (
-		isOpen ? (
-			<div className="app-shell fixed inset-0 z-[100] flex h-[100dvh] flex-col overflow-hidden">
-				<AddChannelHeader onClose={onClose} />
-				<ModalBody
-					search={search}
-					suggestions={suggestions}
-					existingSubscriptions={existingSubscriptions}
-				/>
-			</div>
-		) : null
+		<AnimatePresence>
+			{isOpen && (
+				<motion.div
+					initial={{ opacity: 0 }}
+					animate={{ opacity: 1 }}
+					exit={{ opacity: 0 }}
+					transition={{ duration: 0.2, ease: "easeOut" }}
+					className="app-shell fixed inset-0 z-[100] flex h-[100dvh] flex-col overflow-hidden"
+				>
+					<AddChannelHeader onClose={onClose} />
+					<ModalBody
+						search={search}
+						suggestions={suggestions}
+						existingSubscriptions={existingSubscriptions}
+					/>
+				</motion.div>
+			)}
+		</AnimatePresence>
 	);
 };
 
