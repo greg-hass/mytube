@@ -1,7 +1,5 @@
 import {
 	Component,
-	lazy,
-	Suspense,
 	useState,
 	useEffect,
 	useMemo,
@@ -22,6 +20,7 @@ import {
 import { toast } from "sonner";
 import { FirstRunOnboarding } from "./FirstRunOnboarding";
 import { Header } from "./Header";
+import { AddChannelModal } from "./AddChannelModal";
 import { SettingsModal } from "./SettingsModal";
 import { FloatingTabBar } from "./FloatingTabBar";
 import { SubscriptionsList } from "./SubscriptionsList";
@@ -156,12 +155,6 @@ const writeDashboardTabToUrl = (tab: Tab) => {
 		`${url.pathname}${url.search}${url.hash}`,
 	);
 };
-
-const AddChannelModal = lazy(() =>
-	import("./AddChannelModal").then((module) => ({
-		default: module.AddChannelModal,
-	})),
-);
 
 const getErrorDescription = (error: unknown) =>
 	error instanceof Error ? error.message : "Unknown error";
@@ -989,7 +982,8 @@ export const Dashboard = () => {
 						Open Settings
 					</button>
 				</main>
-			) : subscriptionsLoading || subscriptionsInitialSyncing ? (
+			) : subscriptionsLoading ||
+				(subscriptionsInitialSyncing && hasNoSubscriptions) ? (
 				<div
 					data-testid="dashboard-loading"
 					className="min-h-[50vh] flex items-center justify-center"
@@ -1439,14 +1433,12 @@ export const Dashboard = () => {
 			)}
 
 			{/* Add Channel Modal */}
-			<Suspense fallback={null}>
-				<AddChannelModal
-					isOpen={isAddChannelModalOpen}
-					onClose={() => setIsAddChannelModalOpen(false)}
-					onAdd={handleAddChannel}
-					existingSubscriptions={allSubscriptions}
-				/>
-			</Suspense>
+			<AddChannelModal
+				isOpen={isAddChannelModalOpen}
+				onClose={() => setIsAddChannelModalOpen(false)}
+				onAdd={handleAddChannel}
+				existingSubscriptions={allSubscriptions}
+			/>
 
 			{isNewGroupModalOpen && (
 				<div className="fixed inset-0 z-[120]">

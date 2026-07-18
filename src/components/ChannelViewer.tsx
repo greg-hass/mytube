@@ -1,7 +1,6 @@
 import { useParams, useNavigate } from 'react-router-dom';
 import { useEffect, useMemo, useState } from 'react';
 import { ArrowLeft, CheckCircle2, RefreshCw } from 'lucide-react';
-import { motion } from 'framer-motion';
 import { Header } from './Header';
 import { VirtualizedVideoGrid } from './VirtualizedVideoGrid';
 import { useRSSVideos } from '../hooks/useRSSVideos';
@@ -79,9 +78,7 @@ export const ChannelViewer = () => {
       <div className="app-shell min-h-screen">
         <Header />
         <div className="max-w-7xl mx-auto py-8 px-4">
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
+          <div
             className="bg-red-50 dark:bg-red-900/20 rounded-lg border border-red-200 dark:border-red-800 p-6"
           >
             <p className="text-red-800 dark:text-red-200 text-center">
@@ -97,7 +94,7 @@ export const ChannelViewer = () => {
               <RefreshCw className="w-4 h-4" />
               <span>Try Again</span>
             </button>
-          </motion.div>
+          </div>
         </div>
       </div>
     );
@@ -108,9 +105,7 @@ export const ChannelViewer = () => {
       <Header />
 
       <div className="max-w-7xl mx-auto py-3 sm:py-8 px-4">
-        <motion.button
-          initial={{ opacity: 0, x: -20 }}
-          animate={{ opacity: 1, x: 0 }}
+        <button
           onClick={() => {
             setSearchQuery('');
             navigate(-1);
@@ -119,12 +114,9 @@ export const ChannelViewer = () => {
         >
           <ArrowLeft className="w-4 h-4" />
           <span>Back</span>
-        </motion.button>
+        </button>
 
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.16 }}
+        <div
           className="mb-4 flex items-center gap-3 sm:mb-6 sm:gap-4"
         >
           <img
@@ -148,12 +140,9 @@ export const ChannelViewer = () => {
               {channelVideos.length} videos
             </p>
           </div>
-        </motion.div>
+        </div>
 
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.16 }}
+        <div
         >
           {isLoading ? (
             <div className="text-center py-12">
@@ -233,7 +222,7 @@ export const ChannelViewer = () => {
               )}
             </div>
           )}
-        </motion.div>
+        </div>
       </div>
     </div>
   );

@@ -1,18 +1,11 @@
-import { lazy, Suspense, useEffect } from 'react';
+import { useEffect } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { Dashboard } from './components/Dashboard';
+import { ChannelViewer } from './components/ChannelViewer';
 import { useStore } from './store/useStore';
 import { MobileLandscapeGate } from './components/MobileLandscapeGate';
 import { Toaster } from 'sonner';
 import { useScreenWakeLock } from './hooks/useScreenWakeLock';
-
-const ChannelViewer = lazy(() => import('./components/ChannelViewer').then((module) => ({ default: module.ChannelViewer })));
-
-const AppFallback = () => (
-  <div className="app-shell min-h-screen flex items-center justify-center">
-    <div className="w-10 h-10 border-4 border-red-600 border-t-transparent rounded-full animate-spin" />
-  </div>
-);
 
 function App() {
   const { theme, checkQuotaReset } = useStore();
@@ -44,15 +37,13 @@ function App() {
         closeButton
       />
       <BrowserRouter>
-        <Suspense fallback={<AppFallback />}>
-          <MobileLandscapeGate>
-            <Routes>
-              <Route path="/" element={<Dashboard />} />
-              <Route path="/channel/:channelId" element={<ChannelViewer />} />
-              <Route path="*" element={<Navigate to="/" replace />} />
-            </Routes>
-          </MobileLandscapeGate>
-        </Suspense>
+        <MobileLandscapeGate>
+          <Routes>
+            <Route path="/" element={<Dashboard />} />
+            <Route path="/channel/:channelId" element={<ChannelViewer />} />
+            <Route path="*" element={<Navigate to="/" replace />} />
+          </Routes>
+        </MobileLandscapeGate>
       </BrowserRouter>
     </>
   );
