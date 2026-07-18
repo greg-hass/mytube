@@ -103,8 +103,8 @@ function aggregationRefetchInterval(query: {
 		return false;
 	}
 	const state = query.state.data?.state;
-	if (state === "running" || state === "queued") return 2000;
-	return 15000;
+	if (state === "running" || state === "queued") return 1500;
+	return 5000;
 }
 
 /**
@@ -163,7 +163,7 @@ export const useRSSVideos = () => {
 			) {
 				return false;
 			}
-			return isAggregating ? 5000 : 1000 * 30;
+			return isAggregating ? 3000 : 1000 * 10;
 		},
 	});
 
@@ -220,11 +220,11 @@ export const useRSSVideos = () => {
 
 	const refreshIsActive = Boolean(
 		triggerServerRefresh.isPending ||
-		(trackedRefreshId &&
-			(!aggregationStatus ||
-				aggregationStatus.refreshId !== trackedRefreshId ||
-				aggregationStatus.state === "running" ||
-				aggregationStatus.state === "queued")),
+			(trackedRefreshId &&
+				(!aggregationStatus ||
+					aggregationStatus.refreshId !== trackedRefreshId ||
+					aggregationStatus.state === "running" ||
+					aggregationStatus.state === "queued")),
 	);
 	const refreshPhase = triggerServerRefresh.isPending
 		? "queuing"
@@ -243,11 +243,10 @@ export const useRSSVideos = () => {
 				: refreshPhase === "done" || refreshPhase === "error"
 					? 100
 					: aggregationStatus?.refreshId === trackedRefreshId &&
-						  aggregationStatus.total
+							aggregationStatus.total
 						? Math.min(
 								Math.round(
-									((aggregationStatus.current || 0) /
-										aggregationStatus.total) *
+									((aggregationStatus.current || 0) / aggregationStatus.total) *
 										100,
 								),
 								100,

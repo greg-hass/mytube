@@ -31,8 +31,8 @@ const {
 	resolveTemporarySubscriptions,
 } = require("./subscription-resolver");
 
-const BATCH_SIZE = 15;
-const BATCH_DELAY = 500; // 500ms between batches
+const BATCH_SIZE = 20;
+const BATCH_DELAY = 200; // 200ms between batches
 const MAX_ARCHIVED_VIDEOS = Number(process.env.MAX_ARCHIVED_VIDEOS) || 5000;
 const API_RESOLVER_DAILY_QUOTA_CAP = 100;
 const STARTUP_CACHE_MAX_AGE_MS = 10 * 60 * 1000;

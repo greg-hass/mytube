@@ -285,7 +285,7 @@ describe("useRSSVideos", () => {
 
 				if (url.startsWith("/api/videos/status")) {
 					statusCalls += 1;
-					// First call: "running" so refetchInterval=2000ms triggers faster
+					// First call: "running" so refetchInterval=1500ms triggers faster
 					// Subsequent calls: "idle" with newer lastUpdated to trigger invalidation
 					const isFirst = statusCalls <= 1;
 					return statusResponse({

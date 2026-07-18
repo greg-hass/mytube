@@ -80,7 +80,7 @@ function ModalBody({
 					existingSubscriptions={existingSubscriptions}
 				/>
 
-				<AnimatePresence>
+				<AnimatePresence initial={false}>
 					{search.showFormats && <SupportedFormatsSection />}
 				</AnimatePresence>
 			</div>
@@ -152,11 +152,11 @@ function SearchStatusDisplay({
 }) {
 	return (
 		<>
-			<AnimatePresence>
+			<AnimatePresence initial={false}>
 				{isSearching && !hasResults && <SearchLoadingSkeleton />}
 			</AnimatePresence>
 
-			<AnimatePresence>
+			<AnimatePresence initial={false}>
 				{hasResults && (
 					<SearchResultsSection
 						results={visibleSearchResults}
@@ -186,7 +186,7 @@ function SearchStatusDisplay({
 
 			<SearchErrorStates searchError={searchError} isSearching={isSearching} />
 
-			<AnimatePresence>
+			<AnimatePresence initial={false}>
 				{channelInfo && !previewChannel && (
 					<AddChannelPreview
 						channel={channelInfo}
@@ -281,7 +281,7 @@ function NoResultsBlock({
 		!searchError;
 
 	return (
-		<AnimatePresence>
+		<AnimatePresence initial={false}>
 			{showNoResults && <NoResultsState query={input} />}
 		</AnimatePresence>
 	);
@@ -523,7 +523,7 @@ function SearchResultsSection({
 									</span>
 								</span>
 							</button>
-							<AnimatePresence>
+							<AnimatePresence initial={false}>
 								{isPreviewing && renderPreview(channel)}
 							</AnimatePresence>
 						</div>
@@ -561,7 +561,7 @@ function SearchErrorStates({
 	isSearching: boolean;
 }) {
 	return (
-		<AnimatePresence>
+		<AnimatePresence initial={false}>
 			{!isSearching && searchError === "auth" && (
 				<motion.div
 					initial={{ opacity: 0 }}
@@ -657,7 +657,7 @@ function SuggestionsSection({
 
 	return (
 		<>
-			<AnimatePresence>
+			<AnimatePresence initial={false}>
 				{showButton && (
 					<motion.div
 						initial={{ opacity: 0, y: 10 }}
@@ -676,7 +676,7 @@ function SuggestionsSection({
 				)}
 			</AnimatePresence>
 
-			<AnimatePresence>
+			<AnimatePresence initial={false}>
 				{state.phase === "loading" && (
 					<motion.div
 						initial={{ opacity: 0 }}
@@ -692,7 +692,7 @@ function SuggestionsSection({
 				)}
 			</AnimatePresence>
 
-			<AnimatePresence>
+			<AnimatePresence initial={false}>
 				{state.phase === "error" && (
 					<motion.div
 						initial={{ opacity: 0, y: 10 }}
@@ -726,7 +726,7 @@ function SuggestionsSection({
 				)}
 			</AnimatePresence>
 
-			<AnimatePresence>
+			<AnimatePresence initial={false}>
 				{state.phase === "results" && state.channels.length > 0 && (
 					<div>
 						<div className="mb-2 flex items-center justify-between">
@@ -760,7 +760,7 @@ function SuggestionsSection({
 				)}
 			</AnimatePresence>
 
-			<AnimatePresence>
+			<AnimatePresence initial={false}>
 				{state.phase === "results" && state.channels.length === 0 && (
 					<motion.div
 						initial={{ opacity: 0, y: 10 }}
