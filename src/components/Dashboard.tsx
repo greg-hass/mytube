@@ -1126,294 +1126,294 @@ export const Dashboard = () => {
 					{/* Content */}
 					<>
 						{activeTab === "subscriptions" ? (
-								<div>
-									<DashboardContentBoundary
-										onReturnToLatest={() => changeTab(TAB_LATEST)}
-									>
-										<SubscriptionsList
-											selectedGroup={selectedSubscriptionGroup}
-											groups={subscriptionGroups}
-										/>
-									</DashboardContentBoundary>
-								</div>
-							) : activeTab === TAB_LATEST ? (
-								<div className="px-4">
-									{videos.length === 0 ? (
-										hasTemporaryChannels ? (
-											<div className="text-center py-12">
-												<p className="text-gray-600 dark:text-ios-400 text-lg mb-2">
-													Some channels need channel IDs to fetch videos
-												</p>
-												<p className="text-sm text-gray-500">
-													Channels added with handles or custom names will be
-													updated automatically when videos are discovered
-												</p>
-											</div>
-										) : (
-											<EmptyState
-												icon={TrendingUp}
-												iconName={TAB_LATEST}
-												title="No videos found"
-												detail="New uploads from your subscriptions will appear here."
-											/>
-										)
-									) : (
-										<div>
-											<p className="hidden sm:block text-sm text-gray-500 dark:text-ios-400 mb-4">
-												Showing {filteredVideos.length} recent videos
+							<div>
+								<DashboardContentBoundary
+									onReturnToLatest={() => changeTab(TAB_LATEST)}
+								>
+									<SubscriptionsList
+										selectedGroup={selectedSubscriptionGroup}
+										groups={subscriptionGroups}
+									/>
+								</DashboardContentBoundary>
+							</div>
+						) : activeTab === TAB_LATEST ? (
+							<div className="px-4">
+								{videos.length === 0 ? (
+									hasTemporaryChannels ? (
+										<div className="text-center py-12">
+											<p className="text-gray-600 dark:text-ios-400 text-lg mb-2">
+												Some channels need channel IDs to fetch videos
 											</p>
-											<VirtualizedVideoGrid
-												videos={visibleLatestVideos}
-												columns={4}
-												scrollStorageKey="latest-videos-scroll"
-												channelThumbnails={channelThumbnails}
-											/>
-											{visibleLatestVideos.length < filteredVideos.length && (
-												<div className="mt-4 flex justify-center pb-8 sm:hidden">
-													<button
-														type={BTN}
-														onClick={() =>
-															setMobileVideoLimit(
-																(count) => count + MOBILE_TIMELINE_INCREMENT,
-															)
-														}
-														className="rounded-lg bg-gray-800 px-4 py-2 text-sm font-medium text-white dark:bg-ios-700"
-													>
-														Show older videos
-													</button>
-												</div>
-											)}
+											<p className="text-sm text-gray-500">
+												Channels added with handles or custom names will be
+												updated automatically when videos are discovered
+											</p>
 										</div>
-									)}
-								</div>
-							) : activeTab === "queue" ? (
-								<div className="px-4">
-									{inProgressVideos.length === 0 &&
-									watchLaterVideos.length === 0 ? (
-										<EmptyState
-											icon={ListVideo}
-											iconName="queue"
-											title="Your queue is empty"
-											detail="Swipe a video right to save it for later. Videos you start watching show up at the top."
-										/>
 									) : (
-										<div className="space-y-6">
-											{inProgressVideos.length > 0 && (
-												<section data-testid="queue-continue-watching">
-													<div className="mb-2 flex items-baseline justify-between">
-														<h3 className="text-[0.7rem] font-semibold uppercase tracking-[0.08em] text-gray-500 dark:text-ios-400">
-															Continue watching
-														</h3>
-														<span className="text-[11px] text-gray-500 dark:text-ios-500">
-															{inProgressVideos.length} paused
-														</span>
-													</div>
-													<VirtualizedVideoGrid
-														videos={inProgressVideos}
-														columns={4}
-														scrollStorageKey="queue-continue-watching-scroll"
-														channelThumbnails={channelThumbnails}
-														context="queue"
-													/>
-												</section>
-											)}
-
-											{watchLaterVideos.length > 0 && (
-												<section data-testid="queue-watch-later">
-													<div className="mb-2 flex items-baseline justify-between">
-														<h3 className="text-[0.7rem] font-semibold uppercase tracking-[0.08em] text-gray-500 dark:text-ios-400">
-															Watch later
-														</h3>
-														<span className="text-[11px] text-gray-500 dark:text-ios-500">
-															{watchLaterVideos.length} saved
-														</span>
-													</div>
-													<VirtualizedVideoGrid
-														videos={watchLaterVideos}
-														columns={4}
-														scrollStorageKey="queue-watch-later-scroll"
-														channelThumbnails={channelThumbnails}
-														context="queue"
-													/>
-												</section>
-											)}
-										</div>
-									)}
-								</div>
-							) : activeTab === "favorites" ? (
-								<div className="px-4">
-									{favoriteChannels.length === 0 &&
-									favoriteVideos.length === 0 ? (
 										<EmptyState
-											icon={Heart}
-											iconName="favorites"
-											title="No favorites yet"
-											detail="Favorite channels or videos to find them here."
+											icon={TrendingUp}
+											iconName={TAB_LATEST}
+											title="No videos found"
+											detail="New uploads from your subscriptions will appear here."
 										/>
-									) : (
-										<div className="space-y-8">
-											{(favoriteChannels.length > 0 ||
-												favoriteVideos.length > 0) && (
-												<div
-													data-testid="favorite-section-switcher"
-													className="grid grid-cols-2 gap-1 rounded-xl bg-gray-100 p-1 dark:bg-ios-900 sm:hidden"
+									)
+								) : (
+									<div>
+										<p className="hidden sm:block text-sm text-gray-500 dark:text-ios-400 mb-4">
+											Showing {filteredVideos.length} recent videos
+										</p>
+										<VirtualizedVideoGrid
+											videos={visibleLatestVideos}
+											columns={4}
+											scrollStorageKey="latest-videos-scroll"
+											channelThumbnails={channelThumbnails}
+										/>
+										{visibleLatestVideos.length < filteredVideos.length && (
+											<div className="mt-4 flex justify-center pb-8 sm:hidden">
+												<button
+													type={BTN}
+													onClick={() =>
+														setMobileVideoLimit(
+															(count) => count + MOBILE_TIMELINE_INCREMENT,
+														)
+													}
+													className="rounded-lg bg-gray-800 px-4 py-2 text-sm font-medium text-white dark:bg-ios-700"
 												>
-													<button
-														type={BTN}
-														aria-pressed={visibleFavoriteSection === "channels"}
-														onClick={() => setActiveFavoriteSection("channels")}
-														className={`rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
-															visibleFavoriteSection === "channels"
-																? "bg-white text-gray-950 shadow-sm dark:bg-ios-800 dark:text-ios-50"
-																: "text-gray-600 dark:text-ios-300"
-														}`}
-													>
-														Channels ({favoriteChannels.length})
-													</button>
-													<button
-														type={BTN}
-														aria-pressed={visibleFavoriteSection === "videos"}
-														onClick={() => setActiveFavoriteSection("videos")}
-														className={`rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
-															visibleFavoriteSection === "videos"
-																? "bg-white text-gray-950 shadow-sm dark:bg-ios-800 dark:text-ios-50"
-																: "text-gray-600 dark:text-ios-300"
-														}`}
-													>
-														Videos ({favoriteVideos.length})
-													</button>
+													Show older videos
+												</button>
+											</div>
+										)}
+									</div>
+								)}
+							</div>
+						) : activeTab === "queue" ? (
+							<div className="px-4">
+								{inProgressVideos.length === 0 &&
+								watchLaterVideos.length === 0 ? (
+									<EmptyState
+										icon={ListVideo}
+										iconName="queue"
+										title="Your queue is empty"
+										detail="Swipe a video right to save it for later. Videos you start watching show up at the top."
+									/>
+								) : (
+									<div className="space-y-6">
+										{inProgressVideos.length > 0 && (
+											<section data-testid="queue-continue-watching">
+												<div className="mb-2 flex items-baseline justify-between">
+													<h3 className="text-[0.7rem] font-semibold uppercase tracking-[0.08em] text-gray-500 dark:text-ios-400">
+														Continue watching
+													</h3>
+													<span className="text-[11px] text-gray-500 dark:text-ios-500">
+														{inProgressVideos.length} paused
+													</span>
+												</div>
+												<VirtualizedVideoGrid
+													videos={inProgressVideos}
+													columns={4}
+													scrollStorageKey="queue-continue-watching-scroll"
+													channelThumbnails={channelThumbnails}
+													context="queue"
+												/>
+											</section>
+										)}
+
+										{watchLaterVideos.length > 0 && (
+											<section data-testid="queue-watch-later">
+												<div className="mb-2 flex items-baseline justify-between">
+													<h3 className="text-[0.7rem] font-semibold uppercase tracking-[0.08em] text-gray-500 dark:text-ios-400">
+														Watch later
+													</h3>
+													<span className="text-[11px] text-gray-500 dark:text-ios-500">
+														{watchLaterVideos.length} saved
+													</span>
+												</div>
+												<VirtualizedVideoGrid
+													videos={watchLaterVideos}
+													columns={4}
+													scrollStorageKey="queue-watch-later-scroll"
+													channelThumbnails={channelThumbnails}
+													context="queue"
+												/>
+											</section>
+										)}
+									</div>
+								)}
+							</div>
+						) : activeTab === "favorites" ? (
+							<div className="px-4">
+								{favoriteChannels.length === 0 &&
+								favoriteVideos.length === 0 ? (
+									<EmptyState
+										icon={Heart}
+										iconName="favorites"
+										title="No favorites yet"
+										detail="Favorite channels or videos to find them here."
+									/>
+								) : (
+									<div className="space-y-8">
+										{(favoriteChannels.length > 0 ||
+											favoriteVideos.length > 0) && (
+											<div
+												data-testid="favorite-section-switcher"
+												className="grid grid-cols-2 gap-1 rounded-xl bg-gray-100 p-1 dark:bg-ios-900 sm:hidden"
+											>
+												<button
+													type={BTN}
+													aria-pressed={visibleFavoriteSection === "channels"}
+													onClick={() => setActiveFavoriteSection("channels")}
+													className={`rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
+														visibleFavoriteSection === "channels"
+															? "bg-white text-gray-950 shadow-sm dark:bg-ios-800 dark:text-ios-50"
+															: "text-gray-600 dark:text-ios-300"
+													}`}
+												>
+													Channels ({favoriteChannels.length})
+												</button>
+												<button
+													type={BTN}
+													aria-pressed={visibleFavoriteSection === "videos"}
+													onClick={() => setActiveFavoriteSection("videos")}
+													className={`rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
+														visibleFavoriteSection === "videos"
+															? "bg-white text-gray-950 shadow-sm dark:bg-ios-800 dark:text-ios-50"
+															: "text-gray-600 dark:text-ios-300"
+													}`}
+												>
+													Videos ({favoriteVideos.length})
+												</button>
+											</div>
+										)}
+
+										<section
+											data-testid="favorite-channels-section"
+											className={`${visibleFavoriteSection === "channels" ? "block" : "hidden sm:block"} ${favoriteChannels.length === 0 ? "sm:hidden" : ""}`}
+										>
+											<div className="mb-4 flex items-center justify-between gap-3">
+												<h2 className="text-lg font-semibold text-gray-900 dark:text-ios-100">
+													Channels
+												</h2>
+												<span className="text-sm text-gray-500 dark:text-ios-400">
+													{favoriteChannels.length}
+												</span>
+											</div>
+											{favoriteChannels.length === 0 ? (
+												<div className="rounded-xl border border-dashed border-gray-200 p-6 text-center text-sm text-gray-500 dark:border-ios-800 dark:text-ios-400">
+													No favorite channels yet
+												</div>
+											) : (
+												<div className="grid grid-cols-2 gap-3 sm:grid-cols-3 sm:gap-6 lg:grid-cols-4 xl:grid-cols-5">
+													{favoriteChannels.map((channel, index) => (
+														<SubscriptionCard
+															key={channel.id}
+															channel={channel}
+															index={index}
+															groups={subscriptionGroups}
+															onToggleFavorite={async (channelId) => {
+																const channel = allSubscriptions.find(
+																	(s) => s.id === channelId,
+																);
+																await toggleChannelFavorite(channelId);
+																if (channel) {
+																	toast.success(
+																		`Removed ${channel.title} from favorites`,
+																	);
+																}
+															}}
+														/>
+													))}
 												</div>
 											)}
+										</section>
 
-											<section
-												data-testid="favorite-channels-section"
-												className={`${visibleFavoriteSection === "channels" ? "block" : "hidden sm:block"} ${favoriteChannels.length === 0 ? "sm:hidden" : ""}`}
-											>
-												<div className="mb-4 flex items-center justify-between gap-3">
-													<h2 className="text-lg font-semibold text-gray-900 dark:text-ios-100">
-														Channels
-													</h2>
-													<span className="text-sm text-gray-500 dark:text-ios-400">
-														{favoriteChannels.length}
-													</span>
-												</div>
-												{favoriteChannels.length === 0 ? (
-													<div className="rounded-xl border border-dashed border-gray-200 p-6 text-center text-sm text-gray-500 dark:border-ios-800 dark:text-ios-400">
-														No favorite channels yet
-													</div>
-												) : (
-													<div className="grid grid-cols-2 gap-3 sm:grid-cols-3 sm:gap-6 lg:grid-cols-4 xl:grid-cols-5">
-														{favoriteChannels.map((channel, index) => (
-															<SubscriptionCard
-																key={channel.id}
-																channel={channel}
-																index={index}
-																groups={subscriptionGroups}
-																onToggleFavorite={async (channelId) => {
-																	const channel = allSubscriptions.find(
-																		(s) => s.id === channelId,
-																	);
-																	await toggleChannelFavorite(channelId);
-																	if (channel) {
-																		toast.success(
-																			`Removed ${channel.title} from favorites`,
-																		);
-																	}
-																}}
-															/>
-														))}
-													</div>
-												)}
-											</section>
-
-											<section
-												data-testid="favorite-videos-section"
-												className={`${visibleFavoriteSection === "videos" ? "block" : "hidden sm:block"} ${favoriteVideos.length === 0 ? "sm:hidden" : ""}`}
-											>
-												<div className="mb-4 flex items-center justify-between gap-3">
-													<h2 className="text-lg font-semibold text-gray-900 dark:text-ios-100">
-														Videos
-													</h2>
-													<span className="text-sm text-gray-500 dark:text-ios-400">
-														{favoriteVideos.length}
-													</span>
-												</div>
-												{favoriteVideos.length === 0 ? (
-													<div className="rounded-xl border border-dashed border-gray-200 p-6 text-center text-sm text-gray-500 dark:border-ios-800 dark:text-ios-400">
-														No favorite videos yet
-													</div>
-												) : (
-													<VirtualizedVideoGrid
-														videos={favoriteVideos}
-														columns={4}
-														scrollStorageKey="favorite-videos-scroll"
-														channelThumbnails={channelThumbnails}
-													/>
-												)}
-											</section>
-										</div>
-									)}
-								</div>
-							) : (
-								<div className="px-4">
-									{activeChannels.length === 0 ? (
-										<EmptyState
-											icon={Activity}
-											iconName="activity"
-											title="No activity yet"
-											detail="Recent uploads from your channels will appear here."
-										/>
-									) : (
-										<>
-											<div className="mb-4">
-												<h2 className="text-2xl font-bold text-gray-900 dark:text-ios-100 mb-2">
-													Most Active Channels
+										<section
+											data-testid="favorite-videos-section"
+											className={`${visibleFavoriteSection === "videos" ? "block" : "hidden sm:block"} ${favoriteVideos.length === 0 ? "sm:hidden" : ""}`}
+										>
+											<div className="mb-4 flex items-center justify-between gap-3">
+												<h2 className="text-lg font-semibold text-gray-900 dark:text-ios-100">
+													Videos
 												</h2>
-												<p className="text-sm text-gray-500 dark:text-ios-400">
-													Top {activeChannels.length} channels by uploads in the
-													past 7 days
-												</p>
+												<span className="text-sm text-gray-500 dark:text-ios-400">
+													{favoriteVideos.length}
+												</span>
 											</div>
-											<div className="space-y-3">
-												{activeChannels.map((item, index) => (
-													<div
-														key={item.channel.id}
-														onClick={() => openChannel(item.channel.id)}
-														className="flex items-center gap-4 p-4 bg-white dark:bg-ios-800 rounded-xl shadow-sm hover:shadow-md transition-all cursor-pointer border border-gray-200 dark:border-ios-700"
-													>
-														<div className="flex-shrink-0 w-12 h-12 bg-gradient-to-br from-green-500 to-emerald-600 rounded-full flex items-center justify-center text-white font-bold text-lg">
-															#{index + 1}
-														</div>
-														<img
-															src={item.channel.thumbnail}
-															alt={item.channel.title}
-															className="w-16 h-16 rounded-full object-cover"
-														/>
-														<div className="flex-1 min-w-0">
-															<h3 className="font-semibold text-gray-900 dark:text-ios-100 truncate">
-																{item.channel.title}
-															</h3>
-															<p className="text-sm text-gray-500 dark:text-ios-400">
-																{item.count} video{item.count !== 1 ? "s" : ""}{" "}
-																this week
-															</p>
-														</div>
-														<div className="text-right">
-															<p className="text-xs text-gray-500 dark:text-ios-400">
-																Latest upload
-															</p>
-															<p className="text-sm font-medium text-gray-700 dark:text-ios-300">
-																{formatTimeAgo(item.latestVideo)}
-															</p>
-														</div>
+											{favoriteVideos.length === 0 ? (
+												<div className="rounded-xl border border-dashed border-gray-200 p-6 text-center text-sm text-gray-500 dark:border-ios-800 dark:text-ios-400">
+													No favorite videos yet
+												</div>
+											) : (
+												<VirtualizedVideoGrid
+													videos={favoriteVideos}
+													columns={4}
+													scrollStorageKey="favorite-videos-scroll"
+													channelThumbnails={channelThumbnails}
+												/>
+											)}
+										</section>
+									</div>
+								)}
+							</div>
+						) : (
+							<div className="px-4">
+								{activeChannels.length === 0 ? (
+									<EmptyState
+										icon={Activity}
+										iconName="activity"
+										title="No activity yet"
+										detail="Recent uploads from your channels will appear here."
+									/>
+								) : (
+									<>
+										<div className="mb-4">
+											<h2 className="text-2xl font-bold text-gray-900 dark:text-ios-100 mb-2">
+												Most Active Channels
+											</h2>
+											<p className="text-sm text-gray-500 dark:text-ios-400">
+												Top {activeChannels.length} channels by uploads in the
+												past 7 days
+											</p>
+										</div>
+										<div className="space-y-3">
+											{activeChannels.map((item, index) => (
+												<div
+													key={item.channel.id}
+													onClick={() => openChannel(item.channel.id)}
+													className="flex items-center gap-4 p-4 bg-white dark:bg-ios-800 rounded-xl shadow-sm hover:shadow-md transition-all cursor-pointer border border-gray-200 dark:border-ios-700"
+												>
+													<div className="flex-shrink-0 w-12 h-12 bg-gradient-to-br from-green-500 to-emerald-600 rounded-full flex items-center justify-center text-white font-bold text-lg">
+														#{index + 1}
 													</div>
-												))}
-											</div>
-										</>
-									)}
-								</div>
-							)}
-						</>
+													<img
+														src={item.channel.thumbnail}
+														alt={item.channel.title}
+														className="w-16 h-16 rounded-full object-cover"
+													/>
+													<div className="flex-1 min-w-0">
+														<h3 className="font-semibold text-gray-900 dark:text-ios-100 truncate">
+															{item.channel.title}
+														</h3>
+														<p className="text-sm text-gray-500 dark:text-ios-400">
+															{item.count} video{item.count !== 1 ? "s" : ""}{" "}
+															this week
+														</p>
+													</div>
+													<div className="text-right">
+														<p className="text-xs text-gray-500 dark:text-ios-400">
+															Latest upload
+														</p>
+														<p className="text-sm font-medium text-gray-700 dark:text-ios-300">
+															{formatTimeAgo(item.latestVideo)}
+														</p>
+													</div>
+												</div>
+											))}
+										</div>
+									</>
+								)}
+							</div>
+						)}
+					</>
 
 					<FloatingTabBar
 						activeTab={activeTab}
