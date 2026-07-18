@@ -24,6 +24,10 @@ vi.mock('./components/Dashboard', () => ({
   Dashboard: () => <main>Empty dashboard onboarding</main>,
 }));
 
+vi.mock('./components/ChannelViewer', () => ({
+  ChannelViewer: () => <main>Channel viewer</main>,
+}));
+
 vi.mock('./components/MobileLandscapeGate', () => ({
   MobileLandscapeGate: ({ children }: { children: React.ReactNode }) => <>{children}</>,
 }));
