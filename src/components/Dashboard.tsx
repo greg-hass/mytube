@@ -18,7 +18,6 @@ import {
 	ShieldAlert,
 } from "lucide-react";
 import { toast } from "sonner";
-import { AnimatePresence, motion } from "framer-motion";
 import { FirstRunOnboarding } from "./FirstRunOnboarding";
 import { Header } from "./Header";
 import { AddChannelModal } from "./AddChannelModal";
@@ -1125,15 +1124,8 @@ export const Dashboard = () => {
 					</div>
 
 					{/* Content */}
-					<AnimatePresence mode="wait">
-						<motion.div
-							key={activeTab}
-							initial={{ opacity: 0 }}
-							animate={{ opacity: 1 }}
-							exit={{ opacity: 0 }}
-							transition={{ duration: 0.15, ease: "easeOut" }}
-						>
-							{activeTab === "subscriptions" ? (
+					<>
+						{activeTab === "subscriptions" ? (
 								<div>
 									<DashboardContentBoundary
 										onReturnToLatest={() => changeTab(TAB_LATEST)}
@@ -1421,8 +1413,7 @@ export const Dashboard = () => {
 									)}
 								</div>
 							)}
-						</motion.div>
-					</AnimatePresence>
+						</>
 
 					<FloatingTabBar
 						activeTab={activeTab}
