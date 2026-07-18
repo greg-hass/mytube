@@ -34,7 +34,7 @@ describe('SubscriptionCard', () => {
     );
 
     expect(screen.getByText('Fast Channel')).toBeInTheDocument();
-    expect(motionProps[0].transition).toEqual({ duration: 0.16 });
+    expect(motionProps[0].transition).toBeUndefined();
   });
 
   it('lets a channel be assigned to a group without opening it', () => {

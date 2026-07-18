@@ -565,21 +565,31 @@ export const Dashboard = () => {
 	}, [queuedVideos, inProgressVideos]);
 
 	const changeTab = (tab: Tab) => {
+		const isTabChange = tab !== activeTab;
+		const currentScrollTop = Math.round(window.scrollY);
+
+		// Move the document to the new tab's top before React swaps its content.
+		// Otherwise the old tab's scroll offset is applied to the new tab for one
+		// paint, which produces a visible jump—especially when opening Subs.
+		if (isTabChange) {
+			if (activeTab === TAB_LATEST && currentScrollTop > 0) {
+				sessionStorage.setItem(
+					LATEST_TIMELINE_SCROLL_STORAGE_KEY,
+					String(currentScrollTop),
+				);
+			}
+			window.scrollTo({ top: 0, behavior: "auto" });
+		}
+
 		setActiveTab(tab);
 		writeDashboardTabToUrl(tab);
 
 		if (tab === "favorites") {
 			sessionStorage.removeItem("favorite-videos-scroll");
-			requestAnimationFrame(() => {
-				window.scrollTo({ top: 0 });
-			});
 		}
 
 		if (tab === "queue") {
 			sessionStorage.removeItem("queued-videos-scroll");
-			requestAnimationFrame(() => {
-				window.scrollTo({ top: 0 });
-			});
 		}
 	};
 

@@ -1117,7 +1117,7 @@ describe('Dashboard', () => {
       expect(screen.getByText('Top favorite video')).toBeInTheDocument();
     });
     expect(sessionStorage.getItem('favorite-videos-scroll')).toBeNull();
-    expect(window.scrollTo).toHaveBeenCalledWith({ top: 0 });
+    expect(window.scrollTo).toHaveBeenCalledWith({ top: 0, behavior: 'auto' });
   });
 
   it('hides videos that look like Shorts when the Shorts toggle is off', () => {

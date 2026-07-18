@@ -25,9 +25,6 @@ export const SubscriptionCard = memo(({ channel, groups = [], onRemove, onToggle
 
   return (
     <motion.div
-      initial={{ opacity: 0, y: 20 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.16 }}
       whileHover={{ y: -8, scale: 1.02 }}
       onClick={openChannel}
       className="group cursor-pointer bg-white dark:bg-ios-900 rounded-2xl overflow-hidden shadow-lg hover:shadow-2xl transition-all duration-300 border border-gray-200 dark:border-ios-800"
