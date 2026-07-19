@@ -13,7 +13,7 @@ services:
       - SERVER_API_TOKEN=${SERVER_API_TOKEN:?Set SERVER_API_TOKEN to a long random value before starting the stack}
       - YOUTUBE_API_KEY=${YOUTUBE_API_KEY:-}
       - FEED_REFRESH_ENABLED=true
-      - FEED_REFRESH_INTERVAL_MINUTES=5
+      - FEED_REFRESH_INTERVAL_MINUTES=15
       - FEED_REFRESH_ON_START=true
     healthcheck:
       test: ["CMD", "curl", "-fsS", "http://localhost:8080/api/healthz"]

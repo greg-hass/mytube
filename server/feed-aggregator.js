@@ -1,4 +1,4 @@
-const { randomUUID } = require("node:crypto");
+const logger = require("./logger");
 const appStore = require("./app-store");
 const { mergeVideoArchive } = require("./video-archive");
 const {
@@ -74,7 +74,6 @@ function getCurrentDateInTimezone(timeZone = QUOTA_TIMEZONE, now = new Date()) {
 function createFeedAggregator(storeOverride) {
 	const store = storeOverride || appStore;
 	let aggregationPromise = null;
-	let aggregationRefreshId = null;
 	let archivedShortsBackfillPromise = null;
 	let archivedShortsBackfillLastAttemptAt = null;
 	let scheduledRefreshTimer = null;
@@ -86,7 +85,6 @@ function createFeedAggregator(storeOverride) {
 	};
 	let aggregationStatus = {
 		state: "idle",
-		refreshId: null,
 		current: 0,
 		total: 0,
 		videos: 0,
@@ -135,7 +133,7 @@ function createFeedAggregator(storeOverride) {
 						...aggregationStatus,
 						lastUpdated: new Date().toISOString(),
 					};
-					console.log("✅ Archived Shorts metadata backfill saved");
+					logger.info("✅ Archived Shorts metadata backfill saved");
 				},
 			},
 		).finally(() => {
@@ -198,7 +196,8 @@ function createFeedAggregator(storeOverride) {
 		const batchResults = await Promise.all(batchPromises);
 		batchResults.forEach((videos) => batchVideos.push(...videos));
 
-		const thumbnailPromises = batch.map(async (sub) => {
+		const thumbnailUpdates = [];
+		for (const sub of batch) {
 			const subIndex = subscriptions.findIndex(
 				(subscription) => subscription.id === sub.id,
 			);
@@ -212,48 +211,14 @@ function createFeedAggregator(storeOverride) {
 					subscriptions[subIndex].thumbnail = thumbnail;
 				}
 			}
-		});
-
-		await Promise.all(thumbnailPromises);
+		}
+		await Promise.all(thumbnailUpdates);
 
 		return { batchRefreshResults, batchVideos };
 	}
 
-	function setRunningAggregationStatus({
-		skippedChannels,
-		subscriptions,
-		existingVideos,
-		startedAt,
-		refreshId = aggregationRefreshId,
-	}) {
-		aggregationStatus = {
-			state: "running",
-			refreshId,
-			current: skippedChannels,
-			total: subscriptions.length,
-			videos: existingVideos.length,
-			errors: 0,
-			failedChannels: [],
-			startedAt,
-			completedAt: null,
-			lastUpdated: new Date().toISOString(),
-		};
-	}
-
-	async function runAggregation(options = {}) {
-		if (archivedShortsBackfillPromise) {
-			aggregationStatus = {
-				...aggregationStatus,
-				state: "queued",
-				lastUpdated: new Date().toISOString(),
-			};
-			console.log(
-				"⏳ Waiting for archived Shorts metadata maintenance before the next refresh.",
-			);
-			await archivedShortsBackfillPromise;
-		}
-
-		console.log("🔄 Starting feed aggregation...");
+	async function runAggregation() {
+		logger.info("🔄 Starting feed aggregation...");
 
 		try {
 			// Read data to get subscriptions and settings
@@ -285,11 +250,11 @@ function createFeedAggregator(storeOverride) {
 			);
 
 			if (apiKey && useResolverApi)
-				console.log(
+				logger.info(
 					"🔑 API key available as capped fallback; discovery and videos remain RSS/HTML-first",
 				);
 			else if (apiKey)
-				console.log(
+				logger.info(
 					"ℹ️ API resolver quota cap reached or unavailable; using RSS/public fallbacks only",
 				);
 
@@ -304,7 +269,7 @@ function createFeedAggregator(storeOverride) {
 			if (redirectResult.changed) {
 				parsedData.subscriptions = redirectResult.subscriptions;
 				await store.writeData(parsedData);
-				console.log("💾 Updated subscriptions with redirects");
+				logger.info("💾 Updated subscriptions with redirects");
 				subscriptions.length = 0;
 				subscriptions.push(...redirectResult.subscriptions);
 			}
@@ -326,34 +291,25 @@ function createFeedAggregator(storeOverride) {
 				if (resolveResult.changed) {
 					parsedData.subscriptions = resolveResult.subscriptions;
 					await store.writeData(parsedData);
-					console.log("💾 Updated subscriptions with resolved IDs");
+					logger.info("💾 Updated subscriptions with resolved IDs");
 					subscriptions.length = 0;
 					subscriptions.push(...resolveResult.subscriptions);
 				}
 			}
 
-			const subscriptionsToRefresh = getChannelsDueForRefresh(
-				subscriptions,
-				channelRefreshes,
-				{ force: options.force },
-			);
-			const skippedChannels =
-				subscriptions.length - subscriptionsToRefresh.length;
-
-			if (skippedChannels > 0 && !options.force) {
-				console.log(
-					`⚡ RSS cache: skipping ${skippedChannels} recently checked channels; ${subscriptionsToRefresh.length} due`,
-				);
-			}
-
+			const subscriptionsToRefresh = subscriptions;
 			const aggregationStartedAt = new Date().toISOString();
-			setRunningAggregationStatus({
-				skippedChannels,
-				subscriptions,
-				existingVideos,
+			aggregationStatus = {
+				state: "running",
+				current: 0,
+				total: subscriptions.length,
+				videos: existingVideos.length,
+				errors: 0,
+				failedChannels: [],
 				startedAt: aggregationStartedAt,
-				refreshId: aggregationRefreshId,
-			});
+				completedAt: null,
+				lastUpdated: new Date().toISOString(),
+			};
 
 			// Process in batches
 			const CURRENT_BATCH_SIZE = BATCH_SIZE;
@@ -397,10 +353,7 @@ function createFeedAggregator(storeOverride) {
 
 				aggregationStatus = {
 					...aggregationStatus,
-					current: Math.min(
-						skippedChannels + i + CURRENT_BATCH_SIZE,
-						subscriptions.length,
-					),
+					current: Math.min(i + CURRENT_BATCH_SIZE, subscriptions.length),
 					videos: currentVideos.length,
 					errors: failedChannels.length,
 					failedChannels,
@@ -419,8 +372,8 @@ function createFeedAggregator(storeOverride) {
 					shortsStatusById,
 				});
 
-				console.log(
-					`Progress: ${Math.min(skippedChannels + i + CURRENT_BATCH_SIZE, subscriptions.length)}/${subscriptions.length}`,
+				logger.info(
+					`Progress: ${Math.min(i + CURRENT_BATCH_SIZE, subscriptions.length)}/${subscriptions.length}`,
 				);
 
 				// Delay between batches
@@ -436,7 +389,7 @@ function createFeedAggregator(storeOverride) {
 					cacheUpdatedAt: existingVideoCache.lastUpdated,
 				});
 			if (totalEvicted > 0) {
-				console.log(
+				logger.info(
 					`📦 Archive cap (${MAX_ARCHIVED_VIDEOS}): ${totalEvicted} old videos evicted`,
 				);
 			}
@@ -471,7 +424,7 @@ function createFeedAggregator(storeOverride) {
 					},
 				};
 			});
-			console.log(
+			logger.info(
 				"💾 Saved updated subscription metadata (preserving",
 				Object.keys(aggregatorRedirects).length,
 				"redirects)",
@@ -505,7 +458,7 @@ function createFeedAggregator(storeOverride) {
 				lastUpdated: new Date().toISOString(),
 			};
 
-			console.log(
+			logger.info(
 				`✅ Aggregation complete: ${archivedVideosWithShortsStatus.length} archived videos from ${subscriptions.length} channels`,
 			);
 			scheduleArchivedShortsStatusBackfill(
@@ -521,59 +474,36 @@ function createFeedAggregator(storeOverride) {
 				completedAt: new Date().toISOString(),
 				lastUpdated: new Date().toISOString(),
 			};
-			console.error("❌ Aggregation failed:", error);
+			logger.error("❌ Aggregation failed:", error);
 		}
 	}
 
-	async function aggregateFeeds(options = {}) {
+	async function aggregateFeeds() {
 		if (aggregationPromise) {
 			aggregationStatus = {
 				...aggregationStatus,
 				lastUpdated: new Date().toISOString(),
 			};
-			console.log(
+			logger.info(
 				"⏳ Feed aggregation already running; joining active refresh.",
 			);
 			return aggregationPromise;
 		}
 
-		aggregationRefreshId = options.refreshId || randomUUID();
-
 		aggregationPromise = (async () => {
 			try {
-				await runAggregation(options);
+				await runAggregation();
 			} finally {
 				aggregationPromise = null;
-				aggregationStatus = {
-					...aggregationStatus,
-					refreshId: aggregationRefreshId,
-				};
-				aggregationRefreshId = null;
 			}
 		})();
 
 		return aggregationPromise;
 	}
 
-	function requestRefresh(options = {}) {
-		const reused = Boolean(aggregationPromise);
-		const refreshId = reused
-			? aggregationRefreshId
-			: options.refreshId || randomUUID();
-		const promise = aggregateFeeds({
-			...options,
-			force: true,
-			reason: options.reason || "manual",
-			refreshId,
-		});
-
-		return { refreshId, reused, promise };
-	}
-
 	function getAggregationStatus() {
 		return {
 			...aggregationStatus,
-			refreshId: aggregationRefreshId || aggregationStatus.refreshId || null,
 			scheduledRefresh: { ...scheduledRefreshStatus },
 		};
 	}
@@ -590,7 +520,7 @@ function createFeedAggregator(storeOverride) {
 				{ limit },
 			);
 		} catch (error) {
-			console.warn("Failed to compute active channels:", error.message);
+			logger.warn("Failed to compute active channels:", error.message);
 			return [];
 		}
 	}
@@ -598,7 +528,7 @@ function createFeedAggregator(storeOverride) {
 	async function aggregateOnStartupIfStale() {
 		const scheduledConfig = getScheduledRefreshConfig();
 		if (!scheduledConfig.refreshOnStartup) {
-			console.log(
+			logger.info(
 				"⏭️ Startup feed refresh disabled by FEED_REFRESH_ON_START=false",
 			);
 			return;
@@ -639,7 +569,7 @@ function createFeedAggregator(storeOverride) {
 					completedAt: videoCache.lastUpdated,
 					lastUpdated: videoCache.lastUpdated,
 				};
-				console.log(
+				logger.info(
 					`✅ Using fresh video cache: ${videoCache.totalVideos} videos from ${videoCache.totalChannels} channels`,
 				);
 				return;
@@ -650,12 +580,12 @@ function createFeedAggregator(storeOverride) {
 				cacheHasVideos &&
 				!cacheHasCompleteShortsMetadata
 			) {
-				console.log(
+				logger.info(
 					`🩳 Video cache has Shorts metadata for ${shortsStatusCount}/${videoCache.totalVideos || 0} videos; refreshing to finish Shorts filter data`,
 				);
 			}
 		} catch (err) {
-			console.warn(
+			logger.warn(
 				"Could not check startup video cache, refreshing feeds:",
 				err.message,
 			);
@@ -692,7 +622,7 @@ function createFeedAggregator(storeOverride) {
 		};
 
 		if (!config.enabled) {
-			console.log(
+			logger.info(
 				"⏭️ Scheduled feed refresh disabled by FEED_REFRESH_ENABLED=false",
 			);
 			return scheduledRefreshStatus;
@@ -720,7 +650,7 @@ function createFeedAggregator(storeOverride) {
 					nextRunAt: null,
 				};
 				scheduledRunPromise = runRefresh({ force: true, reason: "scheduled" })
-					.catch((err) => console.error("Scheduled aggregation failed:", err))
+					.catch((err) => logger.error("Scheduled aggregation failed:", err))
 					.finally(() => {
 						scheduledRunPromise = null;
 					});
@@ -731,7 +661,7 @@ function createFeedAggregator(storeOverride) {
 		};
 
 		scheduleNext();
-		console.log(
+		logger.info(
 			`⏱️ Scheduled feed refresh every ${Math.round(config.intervalMs / 60000)} minutes`,
 		);
 		return scheduledRefreshStatus;
@@ -748,7 +678,6 @@ function createFeedAggregator(storeOverride) {
 		aggregateOnStartupIfStale,
 		getActiveChannels,
 		getAggregationStatus,
-		requestRefresh,
 		getChannelsDueForRefresh,
 		getScheduledRefreshConfig,
 		refreshBatch,
@@ -760,7 +689,6 @@ function createFeedAggregator(storeOverride) {
 		backfillArchivedShortsStatus,
 		isArchivedShortsBackfillDue,
 		startArchivedShortsStatusBackfill,
-		setRunningAggregationStatus,
 	};
 }
 
@@ -785,7 +713,6 @@ module.exports = {
 		createFeedAggregator,
 		getActiveChannels: aggregator.getActiveChannels,
 		refreshBatch: aggregator.refreshBatch,
-		setRunningAggregationStatus: aggregator.setRunningAggregationStatus,
 		getAggregationStatus: aggregator.getAggregationStatus,
 		runAggregation: aggregator.runAggregation,
 		aggregateFeeds: aggregator.aggregateFeeds,

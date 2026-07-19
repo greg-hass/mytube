@@ -1,7 +1,5 @@
-const CHANNEL_REFRESH_INTERVAL_MS = 5 * 60 * 1000;
+const CHANNEL_REFRESH_INTERVAL_MS = 15 * 60 * 1000;
 const DEFAULT_SCHEDULED_REFRESH_INTERVAL_MS = 5 * 60 * 1000;
-const CHANNEL_FAILURE_BACKOFF_MS = 6 * 60 * 60 * 1000;
-const CHANNEL_FAILURE_BACKOFF_THRESHOLD = 3;
 
 function getFailureReason(result) {
 	return result.errorStatus
@@ -24,47 +22,17 @@ function isFailedRefreshResult(result) {
 }
 
 function summarizeFailedChannels(results = [], channelRefreshes = {}) {
-	return results.filter(isFailedRefreshResult).map((result) => {
-		const refreshInfo = channelRefreshes[result.id] || {};
-		return {
-			id: result.id,
-			title: result.title || result.id,
-			reason: refreshInfo.lastError || getFailureReason(result),
-			lastSuccessfulFetchAt: refreshInfo.lastSuccessfulFetchAt,
-			lastFailedFetchAt: refreshInfo.lastFailedFetchAt,
-			consecutiveFailures: refreshInfo.consecutiveFailures,
-			backoffUntil: refreshInfo.backoffUntil,
-		};
-	});
+	return results.filter(isFailedRefreshResult).map((result) => ({
+		id: result.id,
+		title: result.title || result.id,
+		reason: getFailureReason(result),
+		lastSuccessfulFetchAt:
+			channelRefreshes[result.id]?.lastSuccessfulFetchAt || null,
+	}));
 }
 
-function getChannelsDueForRefresh(
-	subscriptions = [],
-	channelRefreshes = {},
-	options = {},
-) {
-	const now = options.now ?? Date.now();
-	const force = Boolean(options.force);
-
-	if (force) return subscriptions;
-
-	return subscriptions.filter((sub) => {
-		const refreshInfo = channelRefreshes[sub.id];
-		const backoffUntil = refreshInfo?.backoffUntil;
-
-		if (backoffUntil) {
-			const backoffTime = new Date(backoffUntil).getTime();
-			if (Number.isFinite(backoffTime) && now < backoffTime) return false;
-		}
-
-		const lastFetchedAt = refreshInfo?.lastFetchedAt;
-		if (!lastFetchedAt) return true;
-
-		const lastFetchedTime = new Date(lastFetchedAt).getTime();
-		if (!Number.isFinite(lastFetchedTime)) return true;
-
-		return now - lastFetchedTime >= CHANNEL_REFRESH_INTERVAL_MS;
-	});
+function getChannelsDueForRefresh(subscriptions = []) {
+	return subscriptions;
 }
 
 function parseBooleanEnv(value, defaultValue = true) {
@@ -112,8 +80,17 @@ function getNextChannelsForRefresh(
 		thumbnail: sub.thumbnail,
 		lastSuccessfulFetchAt:
 			channelRefreshes[sub.id]?.lastSuccessfulFetchAt || null,
-		consecutiveFailures: channelRefreshes[sub.id]?.consecutiveFailures || 0,
 	}));
+}
+
+function channelOutcome(channel) {
+	if (isFailedRefreshResult(channel)) {
+		return (
+			channel.outcome ||
+			(channel.transient ? "transient-failure" : "permanent-failure")
+		);
+	}
+	return channel.outcome || "success";
 }
 
 function mergeChannelRefreshes(
@@ -123,7 +100,6 @@ function mergeChannelRefreshes(
 	fetchedAt = new Date().toISOString(),
 ) {
 	const merged = {};
-	const fetchedTime = new Date(fetchedAt).getTime();
 
 	for (const [channelId, refreshInfo] of Object.entries(
 		existingRefreshes || {},
@@ -139,43 +115,10 @@ function mergeChannelRefreshes(
 			const failed = isFailedRefreshResult(channel);
 			const source = channel.source || "rss";
 
-			if (failed) {
-				const consecutiveFailures = (previous.consecutiveFailures || 0) + 1;
-				const shouldBackoff =
-					consecutiveFailures >= CHANNEL_FAILURE_BACKOFF_THRESHOLD &&
-					Number.isFinite(fetchedTime);
-
-				merged[channel.id] = {
-					...previous,
-					lastAttemptedAt: fetchedAt,
-					lastFetchedAt: fetchedAt,
-					lastFailedFetchAt: fetchedAt,
-					outcome:
-						channel.outcome ||
-						(channel.transient ? "transient-failure" : "permanent-failure"),
-					itemHash: channel.itemHash || previous.itemHash || null,
-					...(channel.etag || previous.etag
-						? { etag: channel.etag || previous.etag }
-						: {}),
-					...(channel.lastModified || previous.lastModified
-						? { lastModified: channel.lastModified || previous.lastModified }
-						: {}),
-					lastError: getFailureReason(channel),
-					consecutiveFailures,
-					backoffUntil: shouldBackoff
-						? new Date(fetchedTime + CHANNEL_FAILURE_BACKOFF_MS).toISOString()
-						: previous.backoffUntil || null,
-					source,
-				};
-				continue;
-			}
-
 			merged[channel.id] = {
 				...previous,
-				lastAttemptedAt: fetchedAt,
 				lastFetchedAt: fetchedAt,
-				lastSuccessfulFetchAt: fetchedAt,
-				outcome: channel.outcome || "success",
+				outcome: channelOutcome(channel),
 				itemHash: channel.itemHash || previous.itemHash || null,
 				...(channel.etag || previous.etag
 					? { etag: channel.etag || previous.etag }
@@ -183,10 +126,9 @@ function mergeChannelRefreshes(
 				...(channel.lastModified || previous.lastModified
 					? { lastModified: channel.lastModified || previous.lastModified }
 					: {}),
-				consecutiveFailures: 0,
-				backoffUntil: null,
-				lastError: null,
+				lastError: failed ? getFailureReason(channel) : null,
 				source,
+				...(failed ? {} : { lastSuccessfulFetchAt: fetchedAt }),
 			};
 		}
 	}
@@ -196,8 +138,6 @@ function mergeChannelRefreshes(
 
 module.exports = {
 	CHANNEL_REFRESH_INTERVAL_MS,
-	CHANNEL_FAILURE_BACKOFF_MS,
-	CHANNEL_FAILURE_BACKOFF_THRESHOLD,
 	DEFAULT_SCHEDULED_REFRESH_INTERVAL_MS,
 	getChannelsDueForRefresh,
 	getNextChannelsForRefresh,

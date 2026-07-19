@@ -6,6 +6,9 @@ const { afterEach, beforeEach, describe, expect, it } = globalThis;
 const { createSqliteStore } = require("./sqlite-store");
 const { createApp } = require("./app-factory");
 
+const LOCAL_ORIGIN = "http://localhost:5173"; // ast-grep-ignore: hardcoded-url-js (test fixture)
+const EVIL_ORIGIN = "https://evil.example.com"; // ast-grep-ignore: hardcoded-url-js (test fixture)
+
 const TEST_TOKEN = "test-token";
 
 function createTempDatabaseFile() {
@@ -78,7 +81,7 @@ function buildApp({
 		appStore,
 		feedAggregator: aggregator,
 		config: {
-			allowedOrigins: ["http://localhost:5173"],
+			allowedOrigins: [LOCAL_ORIGIN],
 			apiKey,
 			allowInsecureUnauthenticatedApi: false,
 			...config,
@@ -366,17 +369,16 @@ describe("createApp integration", () => {
 		}
 	});
 
-	it("POST /api/videos/refresh returns a refresh id and joins active work", async () => {
-		const refreshPromise = Promise.resolve();
+	it("POST /api/videos/refresh triggers aggregation and reports status", async () => {
 		const { app, appStore, databaseFile } = buildApp({
 			databaseFile: createTempDatabaseFile(),
 			feedAggregator: buildFeedAggregatorStub({
-				requestRefresh: () => ({
-					refreshId: "refresh-123",
-					reused: true,
-					promise: refreshPromise,
+				aggregateFeeds: async () => {},
+				getAggregationStatus: () => ({
+					state: "running",
+					current: 2,
+					total: 4,
 				}),
-				getAggregationStatus: () => ({ current: 2, total: 4 }),
 			}),
 		});
 		await appStore.init({
@@ -388,13 +390,12 @@ describe("createApp integration", () => {
 			expect(response.status).toBe(200);
 			expect(response.body).toMatchObject({
 				success: true,
-				refreshId: "refresh-123",
-				reused: true,
 				current: 2,
 				total: 4,
 				queued: 2,
-				skipped: 0,
+				message: "Refresh already in progress. Joining the active refresh.",
 			});
+			expect(response.body).not.toHaveProperty("refreshId");
 		} finally {
 			appStore.close();
 			await fs.promises.rm(path.dirname(databaseFile), {
@@ -407,14 +408,14 @@ describe("createApp integration", () => {
 	it("rejects cross-origin requests when the request Origin is not in the allowlist", async () => {
 		const response = await authedRequest(resources.app)
 			.get("/api/sync")
-			.set("Origin", "https://evil.example.com");
+			.set("Origin", EVIL_ORIGIN);
 		expect(response.status).toBe(403);
 	});
 
 	it("accepts same-origin requests from the allowlist", async () => {
 		const response = await authedRequest(resources.app)
 			.get("/api/sync")
-			.set("Origin", "http://localhost:5173");
+			.set("Origin", LOCAL_ORIGIN);
 		expect(response.status).toBe(200);
 	});
 

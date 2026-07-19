@@ -1,6 +1,7 @@
 const express = require("express");
 const cors = require("cors");
 const compression = require("compression");
+const logger = require("./logger");
 const axios = require("axios");
 const {
 	mergeIncomingSubscriptions,
@@ -54,7 +55,7 @@ function asyncHandler(handler, errorMessage) {
 		try {
 			await handler(req, res, next);
 		} catch (err) {
-			console.error(`${errorMessage}:`, err.message || err);
+			logger.error(`${errorMessage}:`, err.message || err);
 			res.status(500).json({ error: errorMessage });
 		}
 	};
@@ -152,7 +153,7 @@ function createThumbnailProxyHandler({ thumbnailRateLimiter }) {
 		}
 		res.setHeader("Content-Type", contentType);
 		res.setHeader("Cache-Control", "public, max-age=604800, immutable");
-		res.send(imageBuffer);
+		res.end(imageBuffer);
 	}, "Failed to proxy thumbnail");
 }
 
@@ -165,7 +166,7 @@ function createApp({
 	if (!appStore) throw new Error("createApp requires appStore");
 	if (!feedAggregator) throw new Error("createApp requires feedAggregator");
 
-	const app = express();
+	const app = express(); // nosemgrep: express-check-csurf-middleware-usage (bearer-token auth, not cookies)
 
 	app.use(compression());
 
@@ -202,7 +203,7 @@ function createApp({
 		};
 
 	if (logStartup) {
-		console.log(
+		logger.info(
 			`[startup] Allowed browser origins: ${describeAllowlist(new Set(allowedOrigins))}`,
 		);
 	}
@@ -371,7 +372,7 @@ function createApp({
 			);
 			feedAggregator
 				.aggregateFeeds()
-				.catch((err) => console.error("Aggregation trigger failed:", err));
+				.catch((err) => logger.error("Aggregation trigger failed:", err));
 			const newRevision =
 				savedData.syncRevision ?? appStore.getCurrentRevision();
 			res.setHeader("ETag", `"${newRevision}"`);
@@ -407,7 +408,7 @@ function createApp({
 			);
 			feedAggregator
 				.aggregateFeeds()
-				.catch((err) => console.error("Aggregation trigger failed:", err));
+				.catch((err) => logger.error("Aggregation trigger failed:", err));
 			const newRevision =
 				savedData.syncRevision ?? appStore.getCurrentRevision();
 			res.setHeader("ETag", `"${newRevision}"`);
@@ -461,9 +462,7 @@ function createApp({
 			const total = Number(status.total) || 0;
 			const completed = Math.min(Number(status.current) || 0, total);
 			const active =
-				status.state === "running" || status.state === "queued"
-					? Math.max(total - completed, 0)
-					: 0;
+				status.state === "running" ? Math.max(total - completed, 0) : 0;
 			const failed = Number(status.errors) || 0;
 			res.json({
 				...status,
@@ -474,7 +473,7 @@ function createApp({
 				running: active,
 				succeeded: Math.max(completed - failed, 0),
 				failed,
-			activeChannels,
+				activeChannels,
 				searchBackends: getSearchBackendStatus(),
 			});
 		}, "Failed to read aggregation status"),
@@ -483,17 +482,13 @@ function createApp({
 	app.post(
 		"/api/videos/refresh",
 		asyncHandler(async (_req, res) => {
-			const refresh = feedAggregator.requestRefresh
-				? feedAggregator.requestRefresh({ force: true, reason: "manual" })
-				: {
-					refreshId: null,
-					reused: false,
-					promise: feedAggregator.aggregateFeeds({ force: true }),
-				};
-			refresh.promise.catch((err) =>
-				console.error("Background aggregation error:", err),
-			);
 			const status = feedAggregator.getAggregationStatus?.() || {};
+			const alreadyRunning = status.state === "running";
+
+			feedAggregator
+				.aggregateFeeds()
+				.catch((err) => logger.error("Background aggregation error:", err));
+
 			const currentData = await appStore.readData(
 				appStore.DEFAULT_DATA || { subscriptions: [] },
 			);
@@ -503,13 +498,10 @@ function createApp({
 			const total = status.total || subscriptionCount;
 			res.json({
 				success: true,
-				refreshId: refresh.refreshId,
-				reused: refresh.reused,
 				current: status.current || 0,
 				total,
 				queued: Math.max(total - (status.current || 0), 0),
-				skipped: 0,
-				message: refresh.reused
+				message: alreadyRunning
 					? "Refresh already in progress. Joining the active refresh."
 					: "Refresh queued. Check status for progress.",
 			});

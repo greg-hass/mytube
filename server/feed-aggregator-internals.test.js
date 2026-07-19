@@ -1,6 +1,19 @@
 import { createRequire } from "node:module";
 import { describe, expect, it, vi, beforeEach } from "vitest";
 
+vi.mock("./feed-fetcher", () => ({
+	buildVideoFromFeedItem: vi.fn(),
+	fetchChannelFeed: vi.fn().mockResolvedValue({
+		videos: [],
+		channelMetadata: null,
+	}),
+	fetchChannelThumbnail: vi.fn().mockResolvedValue(null),
+	fetchYouTubeApiVideos: vi.fn(),
+}));
+
+const THUMB_PREFIX = "https://thumb.example";
+const FIXTURE_THUMBNAIL = "https://example.com/thumb.jpg";
+
 const require = createRequire(import.meta.url);
 const { createFeedAggregator, __test__ } = require("./feed-aggregator");
 
@@ -22,18 +35,18 @@ function createMockAppStore(overrides = {}) {
 	};
 
 	return {
-		readData: vi.fn(async () => JSON.parse(JSON.stringify(data))),
+		readData: vi.fn(async () => structuredClone(data)),
 		writeData: vi.fn(async (d) => {
 			data = d;
 			return d;
 		}),
 		updateData: vi.fn(async (_fallback, updater) => {
-			const current = JSON.parse(JSON.stringify(data));
+			const current = structuredClone(data);
 			const updated = await updater(current);
 			data = updated || current;
 			return data;
 		}),
-		readVideoCache: vi.fn(async () => JSON.parse(JSON.stringify(videoCache))),
+		readVideoCache: vi.fn(async () => structuredClone(videoCache)),
 		writeVideoCache: vi.fn(async (c) => {
 			videoCache = c;
 			return c;
@@ -66,7 +79,7 @@ describe("feed aggregator — refreshBatch (unit)", () => {
 			{
 				id: "UC_2",
 				title: "Two",
-				thumbnail: "https://example.com/thumb.jpg",
+				thumbnail: FIXTURE_THUMBNAIL,
 			},
 		];
 		const fetchedChannelResults = [];
@@ -81,7 +94,7 @@ describe("feed aggregator — refreshBatch (unit)", () => {
 			channelMetadata: { title: `${id}-updated`, thumbnail: null },
 		}));
 		const fetchChannelThumbnail = vi.fn(
-			async (id) => `https://thumb.example/${id}.jpg`,
+			async (id) => `${THUMB_PREFIX}/${id}.jpg`,
 		);
 
 		const result = await __test__.refreshBatch(
@@ -94,8 +107,8 @@ describe("feed aggregator — refreshBatch (unit)", () => {
 		expect(fetchChannelFeed).toHaveBeenCalledTimes(2);
 		expect(fetchChannelThumbnail).toHaveBeenCalledTimes(1);
 		expect(subscriptions[0].title).toBe("UC_1-updated");
-		expect(subscriptions[0].thumbnail).toBe("https://thumb.example/UC_1.jpg");
-		expect(subscriptions[1].thumbnail).toBe("https://example.com/thumb.jpg");
+		expect(subscriptions[0].thumbnail).toBe(`${THUMB_PREFIX}/UC_1.jpg`);
+		expect(subscriptions[1].thumbnail).toBe(FIXTURE_THUMBNAIL);
 		expect(fetchedChannelResults).toHaveLength(2);
 		expect(result.batchRefreshResults).toHaveLength(2);
 		expect(result.batchVideos).toEqual([
@@ -110,44 +123,6 @@ describe("feed aggregator — refreshBatch (unit)", () => {
 				publishedAt: "2026-05-31T18:00:00.000Z",
 			},
 		]);
-	});
-});
-
-describe("feed aggregator — status (unit)", () => {
-	it("updates running aggregation status with an explicit startedAt timestamp", () => {
-		__test__.setRunningAggregationStatus({
-			skippedChannels: 3,
-			subscriptions: [{ id: "UC_1" }, { id: "UC_2" }],
-			existingVideos: [{ id: "video-1" }],
-			startedAt: "2026-05-31T18:00:00.000Z",
-		});
-
-		expect(__test__.getAggregationStatus()).toMatchObject({
-			state: "running",
-			current: 3,
-			total: 2,
-			videos: 1,
-			errors: 0,
-			startedAt: "2026-05-31T18:00:00.000Z",
-			completedAt: null,
-		});
-	});
-
-	it("returns the same refresh id while a manual refresh is active", async () => {
-		const mockStore = createMockAppStore();
-		const aggregator = createFeedAggregator(mockStore);
-		const first = aggregator.requestRefresh();
-		const second = aggregator.requestRefresh();
-
-		expect(first.refreshId).toBeTruthy();
-		expect(second.refreshId).toBe(first.refreshId);
-		expect(second.reused).toBe(true);
-		await Promise.all([first.promise, second.promise]);
-
-		const next = aggregator.requestRefresh();
-		expect(next.reused).toBe(false);
-		expect(next.refreshId).not.toBe(first.refreshId);
-		await next.promise;
 	});
 });
 
@@ -173,8 +148,7 @@ describe("feed aggregator — runAggregation (characterization)", () => {
 			{ id: "UC_B", title: "Channel B" },
 		];
 
-		// Pre-populate channel refreshes so getChannelsDueForRefresh
-		// skips all of them (no feed fetching needed for this test).
+		// All subscriptions are processed every cycle — no skip mechanism.
 		const recent = new Date().toISOString();
 		const videoCache = {
 			videos: [],

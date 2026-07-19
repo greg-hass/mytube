@@ -128,13 +128,12 @@ describe("useRSSVideos", () => {
 			const url = String(input);
 			if (url.startsWith("/api/videos/status")) {
 				statusCalls += 1;
-				if (statusCalls === 1) {
-					return statusResponse({ refreshId: null });
+				if (statusCalls <= 1) {
+					return statusResponse({ state: "idle" });
 				}
 				if (statusCalls === 2) {
 					return statusResponse({
 						state: "running",
-						refreshId: "refresh-1",
 						current: 1,
 						total: 2,
 						lastUpdated: "2026-05-06T20:00:00.000Z",
@@ -142,7 +141,6 @@ describe("useRSSVideos", () => {
 				}
 				return statusResponse({
 					state: "idle",
-					refreshId: "refresh-1",
 					current: 2,
 					total: 2,
 					lastUpdated: "2026-05-06T20:01:00.000Z",
@@ -155,9 +153,7 @@ describe("useRSSVideos", () => {
 				);
 			}
 			if (url === "/api/videos/refresh") {
-				return new Response(
-					JSON.stringify({ success: true, refreshId: "refresh-1" }),
-				);
+				return new Response(JSON.stringify({ success: true }));
 			}
 			throw new Error(`Unexpected fetch ${url}`);
 		});

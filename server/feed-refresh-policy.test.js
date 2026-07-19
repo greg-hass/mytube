@@ -23,91 +23,31 @@ const {
 	applyLocalShortsMetadata,
 } = require("./feed-aggregator");
 
+const FIXTURE_THUMBNAIL = "https://example.com/thumb.jpg"; // ast-grep-ignore: hardcoded-url-js (test fixture)
+const FIXTURE_YOUTUBE = "https://www.youtube.com/watch?v/unknown-video"; // ast-grep-ignore: hardcoded-url-js (test fixture)
+const FIXTURE_YT_THUMB =
+	"https://i.ytimg.com/vi/portrait-thumbnail-short/oar2.jpg"; // ast-grep-ignore: hardcoded-url-js (test fixture)
+
 describe("feed refresh policy", () => {
 	afterEach(() => {
 		vi.useRealTimers();
 		stopScheduledRefresh();
 	});
 
-	it("only refreshes channels whose RSS cache is due during automatic runs", () => {
-		const now = Date.parse("2026-05-06T20:00:00.000Z");
+	it("refreshes ALL channels every cycle regardless of last-fetched time", () => {
 		const subscriptions = [
 			{ id: "UC_FRESH" },
 			{ id: "UC_DUE" },
 			{ id: "UC_NEW" },
 		];
-		const channelRefreshes = {
-			UC_FRESH: {
-				lastFetchedAt: new Date(
-					now - CHANNEL_REFRESH_INTERVAL_MS + 1000,
-				).toISOString(),
-			},
-			UC_DUE: {
-				lastFetchedAt: new Date(
-					now - CHANNEL_REFRESH_INTERVAL_MS - 1000,
-				).toISOString(),
-			},
-		};
 
-		const due = getChannelsDueForRefresh(subscriptions, channelRefreshes, {
-			now,
-			force: false,
-		});
+		const due = getChannelsDueForRefresh(subscriptions);
 
-		expect(due.map((channel) => channel.id)).toEqual(["UC_DUE", "UC_NEW"]);
-	});
-
-	it("refreshes every channel when the user manually forces a refresh", () => {
-		const now = Date.parse("2026-05-06T20:00:00.000Z");
-		const subscriptions = [{ id: "UC_FRESH" }, { id: "UC_DUE" }];
-		const channelRefreshes = {
-			UC_FRESH: { lastFetchedAt: new Date(now).toISOString() },
-			UC_DUE: { lastFetchedAt: new Date(now).toISOString() },
-		};
-
-		const due = getChannelsDueForRefresh(subscriptions, channelRefreshes, {
-			now,
-			force: true,
-		});
-
-		expect(due.map((channel) => channel.id)).toEqual(["UC_FRESH", "UC_DUE"]);
-	});
-
-	it("backs off channels with repeated failures during automatic refreshes", () => {
-		const now = new Date("2026-05-14T12:00:00.000Z").getTime();
-		const subscriptions = [{ id: "UC_FAIL" }, { id: "UC_OK" }];
-		const channelRefreshes = {
-			UC_FAIL: {
-				lastFetchedAt: "2026-05-14T11:30:00.000Z",
-				consecutiveFailures: 3,
-				backoffUntil: "2026-05-14T18:00:00.000Z",
-			},
-			UC_OK: {
-				lastFetchedAt: "2026-05-14T11:30:00.000Z",
-			},
-		};
-
-		expect(
-			getChannelsDueForRefresh(subscriptions, channelRefreshes, { now }).map(
-				(channel) => channel.id,
-			),
-		).toEqual(["UC_OK"]);
-	});
-
-	it("manual refresh bypasses repeated failure backoff", () => {
-		const subscriptions = [{ id: "UC_FAIL" }];
-		const channelRefreshes = {
-			UC_FAIL: {
-				consecutiveFailures: 3,
-				backoffUntil: "2026-05-14T18:00:00.000Z",
-			},
-		};
-
-		expect(
-			getChannelsDueForRefresh(subscriptions, channelRefreshes, {
-				force: true,
-			}).map((channel) => channel.id),
-		).toEqual(["UC_FAIL"]);
+		expect(due.map((channel) => channel.id)).toEqual([
+			"UC_FRESH",
+			"UC_DUE",
+			"UC_NEW",
+		]);
 	});
 
 	it("keeps refresh metadata only for subscribed channels and updates fetched channels", () => {
@@ -124,11 +64,8 @@ describe("feed refresh policy", () => {
 		expect(merged).toEqual({
 			UC_KEEP: { lastFetchedAt: "2026-05-06T18:00:00.000Z" },
 			UC_NEW: {
-				lastAttemptedAt: "2026-05-06T20:00:00.000Z",
 				lastFetchedAt: "2026-05-06T20:00:00.000Z",
 				lastSuccessfulFetchAt: "2026-05-06T20:00:00.000Z",
-				consecutiveFailures: 0,
-				backoffUntil: null,
 				lastError: null,
 				source: "rss",
 				outcome: "success",
@@ -137,68 +74,43 @@ describe("feed refresh policy", () => {
 		});
 	});
 
-	it("tracks failed refresh metadata and opens a backoff after repeated failures", () => {
-		const merged = mergeChannelRefreshes(
-			{
-				UC_FAIL: {
-					lastFetchedAt: "2026-05-06T18:00:00.000Z",
-					consecutiveFailures: 2,
-				},
-			},
-			new Set(["UC_FAIL"]),
+	it("summarizes failed channel refreshes for status output", () => {
+		const failedChannels = summarizeFailedChannels(
 			[
 				{
-					id: "UC_FAIL",
+					id: "UC_OK",
+					title: "OK",
+					expected: true,
+					videos: [{ id: "video-1" }],
+					channelMetadata: { title: "OK" },
+				},
+				{
+					id: "UC_BAD",
+					title: "Bad Channel",
 					expected: true,
 					videos: [],
 					channelMetadata: null,
 					errorStatus: 404,
 				},
+				{
+					id: "UC_SKIPPED",
+					title: "Skipped",
+					expected: false,
+					videos: [],
+					channelMetadata: null,
+				},
 			],
-			"2026-05-06T20:00:00.000Z",
+			{
+				UC_BAD: { lastSuccessfulFetchAt: "2026-05-06T18:00:00.000Z" },
+			},
 		);
-
-		expect(merged.UC_FAIL).toMatchObject({
-			lastFetchedAt: "2026-05-06T20:00:00.000Z",
-			lastFailedFetchAt: "2026-05-06T20:00:00.000Z",
-			lastError: "RSS feed failed with HTTP 404",
-			consecutiveFailures: 3,
-			source: "rss",
-		});
-		expect(merged.UC_FAIL.backoffUntil).toBe("2026-05-07T02:00:00.000Z");
-	});
-
-	it("summarizes failed channel refreshes for status output", () => {
-		const failedChannels = summarizeFailedChannels([
-			{
-				id: "UC_OK",
-				title: "OK",
-				expected: true,
-				videos: [{ id: "video-1" }],
-				channelMetadata: { title: "OK" },
-			},
-			{
-				id: "UC_BAD",
-				title: "Bad Channel",
-				expected: true,
-				videos: [],
-				channelMetadata: null,
-				errorStatus: 404,
-			},
-			{
-				id: "UC_SKIPPED",
-				title: "Skipped",
-				expected: false,
-				videos: [],
-				channelMetadata: null,
-			},
-		]);
 
 		expect(failedChannels).toEqual([
 			{
 				id: "UC_BAD",
 				title: "Bad Channel",
 				reason: "RSS feed failed with HTTP 404",
+				lastSuccessfulFetchAt: "2026-05-06T18:00:00.000Z",
 			},
 		]);
 	});
@@ -301,7 +213,7 @@ describe("feed refresh policy", () => {
 				title: "Quick clip",
 				pubDate: "2026-05-13T12:00:00.000Z",
 				mediaGroup: {
-					"media:thumbnail": [{ $: { url: "https://example.com/thumb.jpg" } }],
+					"media:thumbnail": [{ $: { url: FIXTURE_THUMBNAIL } }],
 					"media:description": ["A clipped segment #shorts"],
 				},
 			},
@@ -316,7 +228,7 @@ describe("feed refresh policy", () => {
 			title: "Quick clip",
 			channelId: "UC123",
 			channelTitle: "Test Channel",
-			thumbnail: "https://example.com/thumb.jpg",
+			thumbnail: FIXTURE_THUMBNAIL,
 			description: "A clipped segment #shorts",
 			duration: null,
 			isShort: true,
@@ -341,7 +253,7 @@ describe("feed refresh policy", () => {
 				id: "portrait-thumbnail-short",
 				title: "Quick clip",
 				description: "",
-				thumbnail: "https://i.ytimg.com/vi/portrait-thumbnail-short/oar2.jpg",
+				thumbnail: FIXTURE_YT_THUMB,
 				duration: null,
 			},
 		];
@@ -442,7 +354,7 @@ describe("feed refresh policy", () => {
 						lookupFinished.then(() => ({
 							status: 303,
 							headers: {
-								location: "https://www.youtube.com/watch?v=unknown-video",
+								location: FIXTURE_YOUTUBE,
 							},
 						})),
 					),
@@ -552,9 +464,9 @@ describe("feed refresh policy", () => {
 		).toBe(DEFAULT_SCHEDULED_REFRESH_INTERVAL_MS);
 	});
 
-	it("uses a 5 minute default for both scheduled and per-channel refresh intervals", () => {
+	it("uses a 5 minute scheduled default and 15 minute per-channel refresh interval", () => {
 		expect(DEFAULT_SCHEDULED_REFRESH_INTERVAL_MS).toBe(5 * 60 * 1000);
-		expect(CHANNEL_REFRESH_INTERVAL_MS).toBe(5 * 60 * 1000);
+		expect(CHANNEL_REFRESH_INTERVAL_MS).toBe(15 * 60 * 1000);
 	});
 
 	it("forces scheduled refreshes so every subscribed channel is checked every interval", async () => {
