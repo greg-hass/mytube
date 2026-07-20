@@ -2,6 +2,9 @@ import { createRequire } from "node:module";
 import { beforeEach, describe, expect, it } from "vitest";
 
 const require = createRequire(import.meta.url);
+const EXAMPLE_DEFAULT_THUMB = "https://example.com/default.jpg"; // ast-grep-ignore: hardcoded-url-js (test fixture)
+const EXAMPLE_MEDIUM_THUMB = "https://example.com/medium.jpg"; // ast-grep-ignore: hardcoded-url-js (test fixture)
+const GOOGLEAPIS_SEARCH_URL = "googleapis.com/youtube/v3/search";
 const {
 	searchYouTubeApiChannels,
 	getQuotaStats,
@@ -16,15 +19,25 @@ describe("YouTube API channel search", () => {
 	});
 
 	it("returns empty array when no API key is available", async () => {
-		const results = await searchYouTubeApiChannels("woodworking", {
-			apiKey: undefined,
-		});
-		expect(results).toEqual([]);
+		const originalApiKey = process.env.YOUTUBE_API_KEY;
+		delete process.env.YOUTUBE_API_KEY;
+		try {
+			const results = await searchYouTubeApiChannels("woodworking", {
+				apiKey: undefined,
+			});
+			expect(results).toEqual([]);
+		} finally {
+			if (originalApiKey !== undefined) {
+				process.env.YOUTUBE_API_KEY = originalApiKey;
+			} else {
+				delete process.env.YOUTUBE_API_KEY;
+			}
+		}
 	});
 
 	it("parses search.list channel results correctly", async () => {
 		const fetchImpl = async (url) => {
-			if (String(url).includes("googleapis.com/youtube/v3/search")) {
+			if (String(url).includes(GOOGLEAPIS_SEARCH_URL)) {
 				return {
 					ok: true,
 					status: 200,
@@ -40,10 +53,10 @@ describe("YouTube API channel search", () => {
 									description: "Fine woodworking tutorials",
 									thumbnails: {
 										default: {
-											url: "https://example.com/default.jpg",
+											url: EXAMPLE_DEFAULT_THUMB,
 										},
 										medium: {
-											url: "https://example.com/medium.jpg",
+											url: EXAMPLE_MEDIUM_THUMB,
 										},
 									},
 								},
@@ -65,7 +78,7 @@ describe("YouTube API channel search", () => {
 				id: "UC1234567890123456789012",
 				title: "Woodworking Art",
 				description: "Fine woodworking tutorials",
-				thumbnail: "https://example.com/medium.jpg",
+				thumbnail: EXAMPLE_MEDIUM_THUMB,
 				customUrl: undefined,
 			},
 		]);
@@ -178,8 +191,8 @@ describe("YouTube API channel search", () => {
 						snippet: {
 							title: "Test",
 							thumbnails: {
-								default: { url: "https://example.com/default.jpg" },
-								medium: { url: "https://example.com/medium.jpg" },
+								default: { url: EXAMPLE_DEFAULT_THUMB },
+								medium: { url: EXAMPLE_MEDIUM_THUMB },
 							},
 						},
 					},
@@ -192,7 +205,7 @@ describe("YouTube API channel search", () => {
 			fetchImpl,
 		});
 
-		expect(results[0].thumbnail).toBe("https://example.com/medium.jpg");
+		expect(results[0].thumbnail).toBe(EXAMPLE_MEDIUM_THUMB);
 	});
 
 	it("falls back to default thumbnail when medium is missing", async () => {
@@ -206,7 +219,7 @@ describe("YouTube API channel search", () => {
 						snippet: {
 							title: "Test",
 							thumbnails: {
-								default: { url: "https://example.com/default.jpg" },
+								default: { url: EXAMPLE_DEFAULT_THUMB },
 							},
 						},
 					},
@@ -219,6 +232,6 @@ describe("YouTube API channel search", () => {
 			fetchImpl,
 		});
 
-		expect(results[0].thumbnail).toBe("https://example.com/default.jpg");
+		expect(results[0].thumbnail).toBe(EXAMPLE_DEFAULT_THUMB);
 	});
 });
