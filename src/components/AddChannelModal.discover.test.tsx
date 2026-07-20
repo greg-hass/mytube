@@ -6,24 +6,51 @@ import { AddChannelModal } from "./AddChannelModal";
 vi.mock("framer-motion", () => ({
 	AnimatePresence: ({ children }: { children: ReactNode }) => <>{children}</>,
 	motion: {
-		div: ({ animate, children, exit, initial, whileHover, ...props }: any) => {
-			void animate;
-			void exit;
-			void initial;
-			void whileHover;
-			return <div {...props}>{children}</div>;
-		},
-		section: ({
+		div: ({
 			animate,
 			children,
 			exit,
 			initial,
+			transition,
 			whileHover,
 			...props
 		}: any) => {
 			void animate;
 			void exit;
 			void initial;
+			void transition;
+			void whileHover;
+			return <div {...props}>{children}</div>;
+		},
+		span: ({
+			animate,
+			children,
+			exit,
+			initial,
+			transition,
+			whileHover,
+			...props
+		}: any) => {
+			void animate;
+			void exit;
+			void initial;
+			void transition;
+			void whileHover;
+			return <span {...props}>{children}</span>;
+		},
+		section: ({
+			animate,
+			children,
+			exit,
+			initial,
+			transition,
+			whileHover,
+			...props
+		}: any) => {
+			void animate;
+			void exit;
+			void initial;
+			void transition;
 			void whileHover;
 			return <section {...props}>{children}</section>;
 		},
@@ -73,12 +100,12 @@ describe("AddChannelModal — Discover Channels", () => {
 		expect(busyButton).toBeDisabled();
 		expect(busyButton).toHaveAttribute("aria-busy", "true");
 
-		// Skeleton list loading state
+		// Skeleton list loading state with shimmer overlay
 		const loading = screen.getByTestId("discover-loading");
 		expect(loading).toHaveTextContent("Discovering channels…");
-		expect(loading.querySelectorAll(".animate-pulse").length).toBeGreaterThan(
-			0,
-		);
+		expect(
+			loading.querySelectorAll(".bg-gradient-to-r").length,
+		).toBe(3);
 
 		resolveSuggestions({
 			ok: true,

@@ -11,7 +11,15 @@ describe("PullToRefreshIndicator", () => {
 		expect(container).toBeEmptyDOMElement();
 	});
 
-	it("shows a progress ring that fills and rotates with the pull distance", () => {
+	it("disappears once the refresh starts — the progress card takes over", () => {
+		const { container } = render(
+			<PullToRefreshIndicator pullDistance={40} isRefreshing={true} />,
+		);
+
+		expect(container).toBeEmptyDOMElement();
+	});
+
+	it("shows a progress ring that fills, rotates and fades in with the pull", () => {
 		const { container } = render(
 			<PullToRefreshIndicator pullDistance={28} isRefreshing={false} />,
 		);
@@ -25,15 +33,18 @@ describe("PullToRefreshIndicator", () => {
 		expect(container.querySelector("svg")?.style.transform).toContain(
 			"rotate",
 		);
-		expect(container.querySelector(".animate-spin")).toBeNull();
+
+		const chip = container.querySelector(".rounded-full") as HTMLElement;
+		expect(chip.style.opacity).toBe("0.5");
 	});
 
-	it("snaps into a spinning loader once refreshing", () => {
+	it("sits above the content inside the translated feed container", () => {
 		const { container } = render(
-			<PullToRefreshIndicator pullDistance={0} isRefreshing={true} />,
+			<PullToRefreshIndicator pullDistance={28} isRefreshing={false} />,
 		);
 
-		expect(container.querySelector(".animate-spin")).not.toBeNull();
-		expect(container.querySelector("svg")).toBeNull();
+		const wrapper = container.firstElementChild as HTMLElement;
+		expect(wrapper.className).toContain("absolute");
+		expect(wrapper.className).not.toContain("fixed");
 	});
 });

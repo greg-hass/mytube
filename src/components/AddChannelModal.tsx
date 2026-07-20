@@ -11,6 +11,7 @@ import {
 	CloudOff,
 	Sparkles,
 	RotateCw,
+	Loader2,
 } from "lucide-react";
 import { getDisplayText } from "../lib/youtube-parser";
 import { useAddChannelSearch } from "../hooks/useAddChannelSearch";
@@ -709,20 +710,37 @@ function SuggestionsSection({
 						className="space-y-3"
 					>
 						<div className="flex items-center gap-2 text-sm text-gray-500 dark:text-ios-400">
-							<div className="w-4 h-4 border-2 border-red-600 border-t-transparent rounded-full animate-spin" />
+							<motion.span
+								className="inline-flex"
+								animate={{ rotate: 360 }}
+								transition={{ repeat: Infinity, duration: 1, ease: "linear" }}
+							>
+								<Loader2 className="w-4 h-4 text-red-600" />
+							</motion.span>
 							Discovering channels…
 						</div>
 						<div className="space-y-2 pr-1">
 							{[1, 2, 3].map((i) => (
 								<div
 									key={i}
-									className="flex items-center gap-3 rounded-xl border border-gray-100 dark:border-ios-800 bg-gray-50 dark:bg-ios-800/30 p-3"
+									className="relative overflow-hidden flex items-center gap-3 rounded-xl border border-gray-100 dark:border-ios-800 bg-gray-50 dark:bg-ios-800/30 p-3"
 								>
-									<div className="h-11 w-11 flex-none rounded-full bg-gray-200 dark:bg-ios-700 animate-pulse" />
+									<div className="h-11 w-11 flex-none rounded-full bg-gray-200 dark:bg-ios-700" />
 									<div className="flex-1 space-y-2">
-										<div className="h-4 w-3/4 bg-gray-200 dark:bg-ios-700 rounded animate-pulse" />
-										<div className="h-3 w-1/2 bg-gray-200 dark:bg-ios-700 rounded animate-pulse" />
+										<div className="h-4 w-3/4 bg-gray-200 dark:bg-ios-700 rounded" />
+										<div className="h-3 w-1/2 bg-gray-200 dark:bg-ios-700 rounded" />
 									</div>
+									<motion.div
+										aria-hidden="true"
+										className="pointer-events-none absolute inset-0 bg-gradient-to-r from-transparent via-white/70 to-transparent dark:via-white/10"
+										animate={{ x: ["-100%", "100%"] }}
+										transition={{
+											repeat: Infinity,
+											duration: 1.4,
+											ease: "easeInOut",
+											delay: i * 0.15,
+										}}
+									/>
 								</div>
 							))}
 						</div>

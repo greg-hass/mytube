@@ -96,7 +96,6 @@ type HeaderMockProps = {
   onToggleShorts?: () => void;
   hideWatched?: boolean;
   onToggleWatched?: () => void;
-  scrollHidden?: boolean;
   compactMobile?: boolean;
 };
 const headerMockState = vi.hoisted(() => ({
@@ -1158,23 +1157,7 @@ describe('Dashboard', () => {
     expect(screen.getByText('Quick tip AJ#shorts')).toBeInTheDocument();
   });
 
-  it('hides the header after scrolling down past 8px', async () => {
-    render(<Dashboard />);
-
-    expect(headerMockState.latestProps?.scrollHidden).toBe(false);
-
-    Object.defineProperty(window, 'scrollY', {
-      configurable: true,
-      value: 9,
-    });
-    fireEvent.scroll(window);
-
-    await waitFor(() => {
-      expect(headerMockState.latestProps?.scrollHidden).toBe(true);
-    });
-  });
-
-  it('waits a little longer before hiding the header on compact mobile screens', async () => {
+  it('flags compact mobile viewports to the header', () => {
     Object.defineProperty(window, 'innerWidth', {
       configurable: true,
       value: 390,
@@ -1184,39 +1167,9 @@ describe('Dashboard', () => {
       value: 844,
     });
 
-    const firstRender = render(<Dashboard />);
-    const firstHeaderProps = headerMockState.latestProps as HeaderMockProps | undefined;
-
-    expect(firstHeaderProps?.compactMobile).toBe(true);
-    expect(firstHeaderProps?.scrollHidden).toBe(false);
-
-    Object.defineProperty(window, 'scrollY', {
-      configurable: true,
-      value: 10,
-    });
-    fireEvent.scroll(window);
-
-    await waitFor(() => {
-      expect(headerMockState.latestProps?.scrollHidden).toBe(false);
-    });
-
-    firstRender.unmount();
-    headerMockState.latestProps = undefined;
-
     render(<Dashboard />);
-    const secondHeaderProps = headerMockState.latestProps as HeaderMockProps | undefined;
 
-    expect(secondHeaderProps?.compactMobile).toBe(true);
-
-    Object.defineProperty(window, 'scrollY', {
-      configurable: true,
-      value: 25,
-    });
-    fireEvent.scroll(window);
-
-    await waitFor(() => {
-      expect(headerMockState.latestProps?.scrollHidden).toBe(true);
-    });
+    expect(headerMockState.latestProps?.compactMobile).toBe(true);
   });
 
   it('hides videos marked as Shorts even when the title has no Shorts text', () => {

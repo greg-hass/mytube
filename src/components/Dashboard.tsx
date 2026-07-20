@@ -261,9 +261,7 @@ export const Dashboard = () => {
 		string[]
 	>([]);
 	const [isRepairingIcons, setIsRepairingIcons] = useState(false);
-	const [headerVisible, setHeaderVisible] = useState(true);
 	const [isAuthSettingsOpen, setIsAuthSettingsOpen] = useState(false);
-	const headerScrollYRef = useRef(0);
 	const lastActiveLatestTapAtRef = useRef<number | null>(null);
 	const {
 		allSubscriptions,
@@ -718,48 +716,6 @@ export const Dashboard = () => {
 			);
 	}, []);
 
-	useEffect(() => {
-		document.documentElement.style.setProperty(
-			"--app-sticky-top",
-			headerVisible
-				? "var(--app-current-header-height)"
-				: "env(safe-area-inset-top)",
-		);
-	}, [headerVisible]);
-
-	useEffect(() => {
-		let ticking = false;
-
-		const onScroll = () => {
-			if (!ticking) {
-				requestAnimationFrame(() => {
-					const currentY = window.scrollY;
-					const delta = currentY - headerScrollYRef.current;
-					const compactMobile = isCompactMobileViewport(
-						getCurrentViewportSize(),
-					);
-					const headerHideThreshold = compactMobile ? 12 : 8;
-					const headerShowThreshold = compactMobile ? -5 : -3;
-
-					if (currentY < headerHideThreshold) {
-						setHeaderVisible(true);
-					} else if (delta > headerHideThreshold) {
-						setHeaderVisible(false);
-					} else if (delta < headerShowThreshold) {
-						setHeaderVisible(true);
-					}
-
-					headerScrollYRef.current = currentY;
-					ticking = false;
-				});
-				ticking = true;
-			}
-		};
-
-		window.addEventListener("scroll", onScroll, { passive: true });
-		return () => window.removeEventListener("scroll", onScroll);
-	}, []);
-
 	const getCurrentFeedViewFilters = (): FeedViewFilters => ({
 		showShorts,
 		hideWatched,
@@ -900,10 +856,8 @@ export const Dashboard = () => {
 				onToggleShorts={() => setShowShorts((prev) => !prev)}
 				hideWatched={hideWatched}
 				onToggleWatched={() => setHideWatched((prev) => !prev)}
-				scrollHidden={!headerVisible}
 				compactMobile={isMobileTimeline}
 				minimal={needsServerAuth || hasNoSubscriptions}
-				activeTab={activeTab}
 			/>
 
 			{refreshPhase !== "idle" && (
@@ -946,11 +900,6 @@ export const Dashboard = () => {
 					</div>
 				</div>
 			)}
-
-			<PullToRefreshIndicator
-				pullDistance={pullDistance}
-				isRefreshing={isPullRefreshing}
-			/>
 
 			{needsServerAuth ? (
 				<main
@@ -998,8 +947,19 @@ export const Dashboard = () => {
 			) : (
 				<div
 					data-testid="dashboard-page-chrome"
-					className="max-w-7xl mx-auto pt-[var(--app-sticky-gap)] pb-[calc(5rem+env(safe-area-inset-bottom))] sm:pb-[calc(6rem+env(safe-area-inset-bottom))]"
+					className="relative max-w-7xl mx-auto pt-[var(--app-sticky-gap)] pb-[calc(5rem+env(safe-area-inset-bottom))] sm:pb-[calc(6rem+env(safe-area-inset-bottom))]"
+					style={{
+						transform:
+							pullDistance > 0
+								? `translateY(${pullDistance}px)`
+								: undefined,
+						willChange: pullDistance > 0 ? "transform" : undefined,
+					}}
 				>
+					<PullToRefreshIndicator
+						pullDistance={pullDistance}
+						isRefreshing={isPullRefreshing}
+					/>
 					{/* Toolbars */}
 					<div className="px-4 pt-[var(--app-sticky-gap)] pb-[var(--app-sticky-gap)]">
 						{activeTab === "subscriptions" && (

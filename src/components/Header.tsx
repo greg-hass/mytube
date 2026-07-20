@@ -32,12 +32,9 @@ interface HeaderProps {
 	onToggleShorts?: () => void;
 	hideWatched?: boolean;
 	onToggleWatched?: () => void;
-	scrollHidden?: boolean;
 	compactMobile?: boolean;
 	/** When true, only logo/settings/theme are shown — hides controls with no value before onboarding. */
 	minimal?: boolean;
-	/** Active dashboard tab — the "N channels" subtitle only shows on the Subs tab. */
-	activeTab?: string;
 }
 
 export const Header = ({
@@ -53,9 +50,7 @@ export const Header = ({
 	onToggleShorts,
 	hideWatched = false,
 	onToggleWatched,
-	scrollHidden = false,
 	minimal = false,
-	activeTab,
 }: HeaderProps) => {
 	const headerRef = useHeaderHeight();
 	const [isSettingsOpen, setIsSettingsOpen] = useState(false);
@@ -104,7 +99,7 @@ export const Header = ({
 		<>
 			<header
 				ref={headerRef}
-				className={`sticky top-0 z-50 glass safe-top border-b border-gray-200 shadow-sm transition-transform duration-300 ease-out will-change-transform dark:border-ios-800/80 ${scrollHidden ? "-translate-y-full" : "translate-y-0"}`}
+				className="glass safe-top border-b border-gray-200 shadow-sm dark:border-ios-800/80"
 			>
 				<div className="max-w-7xl mx-auto px-4">
 					<div className="flex h-[var(--app-header-height)] items-center justify-between gap-3 xl:gap-4">
@@ -130,7 +125,7 @@ export const Header = ({
 											className="h-2 w-2 rounded-full bg-emerald-500 shadow-[0_0_0_4px_rgba(16,185,129,0.15)] animate-pulse"
 										/>
 									)}
-									{activeTab === "subscriptions" && <p>{count} channels</p>}
+									<p>{count} channels</p>
 								</div>
 							</div>
 						</motion.div>

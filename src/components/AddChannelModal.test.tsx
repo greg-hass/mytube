@@ -5,24 +5,51 @@ import { registerAddChannelModalTests } from "./AddChannelModal.test-helpers";
 vi.mock("framer-motion", () => ({
 	AnimatePresence: ({ children }: { children: ReactNode }) => <>{children}</>,
 	motion: {
-		div: ({ animate, children, exit, initial, whileHover, ...props }: any) => {
-			void animate;
-			void exit;
-			void initial;
-			void whileHover;
-			return <div {...props}>{children}</div>;
-		},
-		section: ({
+		div: ({
 			animate,
 			children,
 			exit,
 			initial,
+			transition,
 			whileHover,
 			...props
 		}: any) => {
 			void animate;
 			void exit;
 			void initial;
+			void transition;
+			void whileHover;
+			return <div {...props}>{children}</div>;
+		},
+		span: ({
+			animate,
+			children,
+			exit,
+			initial,
+			transition,
+			whileHover,
+			...props
+		}: any) => {
+			void animate;
+			void exit;
+			void initial;
+			void transition;
+			void whileHover;
+			return <span {...props}>{children}</span>;
+		},
+		section: ({
+			animate,
+			children,
+			exit,
+			initial,
+			transition,
+			whileHover,
+			...props
+		}: any) => {
+			void animate;
+			void exit;
+			void initial;
+			void transition;
 			void whileHover;
 			return <section {...props}>{children}</section>;
 		},
