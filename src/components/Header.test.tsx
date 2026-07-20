@@ -147,6 +147,29 @@ describe("Header", () => {
 		).toBeInTheDocument();
 	});
 
+	it("keeps refresh on desktop controls only — mobile uses pull-to-refresh", () => {
+		render(
+			<Header
+				onRefresh={vi.fn()}
+				isRefreshing={false}
+				refreshProgress={0}
+			/>,
+		);
+
+		expect(
+			screen.queryByTestId("mobile-refresh-button"),
+		).not.toBeInTheDocument();
+
+		const desktopControls = document.querySelectorAll(
+			".desktop-header-controls",
+		)[1];
+		expect(
+			within(desktopControls as HTMLElement).getByRole("button", {
+				name: "Refresh feeds",
+			}),
+		).toBeInTheDocument();
+	});
+
 	it("publishes its measured height for sticky dashboard chrome", () => {
 		const offsetHeightSpy = vi
 			.spyOn(HTMLElement.prototype, "offsetHeight", "get")

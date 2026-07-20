@@ -12,13 +12,27 @@ export function usePullToRefresh(deps: {
 }) {
 	const { isRefreshActive, onRefresh, onPullCancel } = deps;
 	const [pullDistance, setPullDistance] = useState(0);
+	const [isPullRefreshing, setIsPullRefreshing] = useState(false);
 	const onRefreshRef = useRef(onRefresh);
 	const onPullCancelRef = useRef(onPullCancel);
+	const isRefreshActiveRef = useRef(isRefreshActive);
+
+	// Collapse the spinner once the pull-triggered refresh completes.
+	// (setState-during-render is the sanctioned pattern for prop-driven resets.)
+	const [prevRefreshActive, setPrevRefreshActive] = useState(isRefreshActive);
+	if (prevRefreshActive !== isRefreshActive) {
+		setPrevRefreshActive(isRefreshActive);
+		if (!isRefreshActive) setIsPullRefreshing(false);
+	}
 
 	useEffect(() => {
 		onRefreshRef.current = onRefresh;
 		onPullCancelRef.current = onPullCancel;
 	}, [onPullCancel, onRefresh]);
+
+	useEffect(() => {
+		isRefreshActiveRef.current = isRefreshActive;
+	}, [isRefreshActive]);
 
 	useEffect(() => {
 		let startY: number | null = null;
@@ -76,6 +90,7 @@ export function usePullToRefresh(deps: {
 
 		const finishDrag = () => {
 			if (dragging && latestDistance >= 56 && !isRefreshActive) {
+				setIsPullRefreshing(true);
 				onRefreshRef.current();
 			} else if (dragging && !isRefreshActive) {
 				onPullCancelRef.current?.();
@@ -96,8 +111,14 @@ export function usePullToRefresh(deps: {
 				const progress = Math.min(1, (now - animationStart) / 220);
 				const eased = 1 - Math.pow(1 - progress, 3);
 				setPullDistance(Math.round(startDistance * (1 - eased)));
-				if (progress < 1) requestAnimationFrame(animateBack);
-				else setPullDistance(0);
+				if (progress < 1) {
+					requestAnimationFrame(animateBack);
+				} else {
+					setPullDistance(0);
+					// The refresh never actually started (e.g. it was a no-op) —
+					// don't leave the spinner latched on.
+					if (!isRefreshActiveRef.current) setIsPullRefreshing(false);
+				}
 			};
 			requestAnimationFrame(animateBack);
 		};
@@ -121,5 +142,5 @@ export function usePullToRefresh(deps: {
 		};
 	}, [isRefreshActive]);
 
-	return { pullDistance };
+	return { pullDistance, isPullRefreshing };
 }

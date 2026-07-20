@@ -30,6 +30,7 @@ import { EmptyState } from "./EmptyState";
 import { SavedFeedViews } from "./SavedFeedViews";
 import { useKeyboardShortcuts } from "../hooks/useKeyboardShortcuts";
 import { KeyboardShortcutsHelp } from "./KeyboardShortcutsHelp";
+import { PullToRefreshIndicator } from "./PullToRefreshIndicator";
 import { useRSSVideos } from "../hooks/useRSSVideos";
 import { useSubscriptionStorage } from "../hooks/useSubscriptionStorage";
 import { useFavoriteVideos } from "../hooks/useFavoriteVideos";
@@ -304,7 +305,7 @@ export const Dashboard = () => {
 		cacheStatus,
 	} = useRSSVideos();
 	const hasNoSubscriptions = allSubscriptions.length === 0;
-	const { pullDistance } = usePullToRefresh({
+	const { pullDistance, isPullRefreshing } = usePullToRefresh({
 		isRefreshActive: isRefreshing,
 		onRefresh: refetchVideos,
 	});
@@ -946,19 +947,10 @@ export const Dashboard = () => {
 				</div>
 			)}
 
-			{pullDistance > 0 && !isRefreshing && (
-				<div
-					className="pointer-events-none fixed inset-x-0 top-[var(--app-current-header-height)] z-40 flex justify-center transition-opacity"
-					style={{ opacity: Math.min(1, pullDistance / 56) }}
-					aria-hidden="true"
-				>
-					<div className="rounded-full bg-white/95 px-3 py-1.5 text-xs font-medium text-gray-600 shadow-lg dark:bg-ios-900/95 dark:text-ios-300">
-						{pullDistance >= 56
-							? "Release to refresh feeds"
-							: "Pull to refresh"}
-					</div>
-				</div>
-			)}
+			<PullToRefreshIndicator
+				pullDistance={pullDistance}
+				isRefreshing={isPullRefreshing}
+			/>
 
 			{needsServerAuth ? (
 				<main

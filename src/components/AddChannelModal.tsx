@@ -218,7 +218,8 @@ function ChannelAddActions({
 		!search.channelInfo &&
 		!search.validationError &&
 		!search.searchError &&
-		suggestions.state.phase === "idle" &&
+		(suggestions.state.phase === "idle" ||
+			suggestions.state.phase === "loading") &&
 		search.input.trim().length < 2;
 
 	const handleDiscover = async () => {
@@ -450,9 +451,9 @@ function SearchResultsSection({
 }) {
 	return (
 		<motion.section
-			initial={{ opacity: 0, height: 0 }}
-			animate={{ opacity: 1, height: "auto" }}
-			exit={{ opacity: 0, height: 0 }}
+			initial={{ opacity: 0, y: 8 }}
+			animate={{ opacity: 1, y: 0 }}
+			exit={{ opacity: 0, y: 8 }}
 			className="space-y-3"
 		>
 			<div className="flex items-center justify-between">
@@ -661,12 +662,14 @@ function SuggestionsSection({
 	onClear: () => void;
 }) {
 	const { state } = suggestions;
+	const isDiscovering = state.phase === "loading";
 
 	return (
 		<>
 			<AnimatePresence initial={false}>
 				{showButton && (
 					<motion.div
+						key="discover-button"
 						initial={{ opacity: 0, y: 10 }}
 						animate={{ opacity: 1, y: 0 }}
 						exit={{ opacity: 0, y: 10 }}
@@ -674,10 +677,21 @@ function SuggestionsSection({
 						<button
 							type="button"
 							onClick={onDiscover}
-							className="w-full flex items-center justify-center gap-2 rounded-xl border border-gray-200 bg-gray-100 px-4 py-4 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-200 dark:border-ios-700 dark:bg-ios-800 dark:text-ios-200 dark:hover:bg-ios-700"
+							disabled={isDiscovering}
+							aria-busy={isDiscovering}
+							className="w-full flex items-center justify-center gap-2 rounded-xl border border-gray-200 bg-gray-100 px-4 py-4 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-200 disabled:cursor-wait disabled:opacity-80 dark:border-ios-700 dark:bg-ios-800 dark:text-ios-200 dark:hover:bg-ios-700"
 						>
-							<Sparkles className="w-5 h-5" />
-							Discover Channels
+							{isDiscovering ? (
+								<>
+									<div className="w-4 h-4 border-2 border-red-600 border-t-transparent rounded-full animate-spin" />
+									Discovering channels…
+								</>
+							) : (
+								<>
+									<Sparkles className="w-5 h-5" />
+									Discover Channels
+								</>
+							)}
 						</button>
 					</motion.div>
 				)}
@@ -685,17 +699,34 @@ function SuggestionsSection({
 
 			<AnimatePresence initial={false}>
 				{state.phase === "loading" && (
-					<motion.div
+					<motion.section
+						key="discover-loading"
+						data-testid="discover-loading"
+						role="status"
 						initial={{ opacity: 0 }}
 						animate={{ opacity: 1 }}
 						exit={{ opacity: 0 }}
-						className="text-center py-6"
+						className="space-y-3"
 					>
-						<div className="w-6 h-6 border-2 border-red-600 border-t-transparent rounded-full animate-spin mx-auto mb-2" />
-						<p className="text-sm text-gray-500 dark:text-ios-400">
-							Finding channels you&apos;ll like...
-						</p>
-					</motion.div>
+						<div className="flex items-center gap-2 text-sm text-gray-500 dark:text-ios-400">
+							<div className="w-4 h-4 border-2 border-red-600 border-t-transparent rounded-full animate-spin" />
+							Discovering channels…
+						</div>
+						<div className="space-y-2 pr-1">
+							{[1, 2, 3].map((i) => (
+								<div
+									key={i}
+									className="flex items-center gap-3 rounded-xl border border-gray-100 dark:border-ios-800 bg-gray-50 dark:bg-ios-800/30 p-3"
+								>
+									<div className="h-11 w-11 flex-none rounded-full bg-gray-200 dark:bg-ios-700 animate-pulse" />
+									<div className="flex-1 space-y-2">
+										<div className="h-4 w-3/4 bg-gray-200 dark:bg-ios-700 rounded animate-pulse" />
+										<div className="h-3 w-1/2 bg-gray-200 dark:bg-ios-700 rounded animate-pulse" />
+									</div>
+								</div>
+							))}
+						</div>
+					</motion.section>
 				)}
 			</AnimatePresence>
 
@@ -735,7 +766,12 @@ function SuggestionsSection({
 
 			<AnimatePresence initial={false}>
 				{state.phase === "results" && state.channels.length > 0 && (
-					<div>
+					<motion.div
+						key="discover-results"
+						initial={{ opacity: 0, y: 10 }}
+						animate={{ opacity: 1, y: 0 }}
+						exit={{ opacity: 0, y: 10 }}
+					>
 						<div className="mb-2 flex items-center justify-between">
 							<p className="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-ios-400">
 								Discovered channels
@@ -763,7 +799,7 @@ function SuggestionsSection({
 								/>
 							)}
 						/>
-					</div>
+					</motion.div>
 				)}
 			</AnimatePresence>
 

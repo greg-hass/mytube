@@ -40,7 +40,7 @@ export function CompactSubscriptionsList({
 						id={`subscription-section-${section === "#" ? "other" : section}`}
 						className="scroll-mt-20"
 					>
-						<h2 className="sticky top-[var(--app-sticky-top)] z-10 border-y border-gray-200 bg-gray-50/95 px-2 py-1 text-xs font-semibold text-gray-500 backdrop-blur dark:border-ios-800 dark:bg-ios-950/95 dark:text-ios-400">
+						<h2 className="sticky top-[var(--app-sticky-top)] z-10 border-y border-gray-200 bg-gray-50/95 px-2 py-1 text-xs font-semibold text-gray-500 backdrop-blur transition-[top] duration-300 ease-out dark:border-ios-800 dark:bg-ios-950/95 dark:text-ios-400">
 							{section}
 						</h2>
 						<ul className="divide-y divide-gray-200 dark:divide-ios-800">

@@ -97,4 +97,31 @@ describe("usePullToRefresh", () => {
 
 		expect(onRefresh).not.toHaveBeenCalled();
 	});
+
+	it("latches the refreshing state until the refresh completes", () => {
+		const onRefresh = vi.fn();
+		const { result, rerender } = renderHook(
+			({ isRefreshActive }: { isRefreshActive: boolean }) =>
+				usePullToRefresh({ isRefreshActive, onRefresh }),
+			{ initialProps: { isRefreshActive: false } },
+		);
+
+		act(() => {
+			document.dispatchEvent(touchEvent("touchstart", 100));
+			document.dispatchEvent(touchEvent("touchmove", 240));
+			document.dispatchEvent(touchEvent("touchend"));
+		});
+
+		expect(result.current.isPullRefreshing).toBe(true);
+
+		act(() => {
+			rerender({ isRefreshActive: true });
+		});
+		expect(result.current.isPullRefreshing).toBe(true);
+
+		act(() => {
+			rerender({ isRefreshActive: false });
+		});
+		expect(result.current.isPullRefreshing).toBe(false);
+	});
 });

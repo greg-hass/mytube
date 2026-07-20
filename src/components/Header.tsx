@@ -104,7 +104,7 @@ export const Header = ({
 		<>
 			<header
 				ref={headerRef}
-				className={`sticky top-0 z-50 glass safe-top border-b border-gray-200 shadow-sm transition-transform duration-200 ease-out dark:border-ios-800/80 ${scrollHidden ? "-translate-y-full" : "translate-y-0"}`}
+				className={`sticky top-0 z-50 glass safe-top border-b border-gray-200 shadow-sm transition-transform duration-300 ease-out will-change-transform dark:border-ios-800/80 ${scrollHidden ? "-translate-y-full" : "translate-y-0"}`}
 			>
 				<div className="max-w-7xl mx-auto px-4">
 					<div className="flex h-[var(--app-header-height)] items-center justify-between gap-3 xl:gap-4">
@@ -178,9 +178,6 @@ export const Header = ({
 										setShowMobileSearchPanel((isOpen) => !isOpen)
 									}
 								onOpenMenu={() => setShowMobileMenu(true)}
-								onRefresh={onRefresh}
-								isRefreshing={isRefreshing}
-								refreshProgress={refreshProgress}
 							/>
 						)}
 					</div>
