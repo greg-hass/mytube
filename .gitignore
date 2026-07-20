@@ -37,3 +37,5 @@ server/data/**/*.sqlite-*
 output/playwright/
 output/coverage/
 coverage/
+server/data/innertube-creds.json
+.playwright-profile/

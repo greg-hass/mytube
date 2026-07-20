@@ -333,9 +333,12 @@ async function fetchYouTubeApiVideos(
 		`https://www.googleapis.com/youtube/v3/search?${params.toString()}`,
 	);
 	if (!response.ok) {
-		throw Object.assign(new Error(`YouTube API returned HTTP ${response.status}`), {
-			status: response.status,
-		});
+		throw Object.assign(
+			new Error(`YouTube API returned HTTP ${response.status}`),
+			{
+				status: response.status,
+			},
+		);
 	}
 	const payload = await response.json();
 	const items = Array.isArray(payload?.items) ? payload.items : [];
@@ -520,10 +523,16 @@ module.exports = {
 	buildVideoFromFeedItem,
 	classifyFeedFailure,
 	createVideoItemHash,
+	extractBalancedJson,
 	fetchChannelFeed,
 	fetchChannelThumbnail,
 	fetchYouTubeApiVideos,
 	fetchUploadsPlaylistFeed,
+	getBestThumbnailUrl,
+	getTextValue,
 	parseDuration,
+	parseRelativePublishedAt,
 	parseUploadsPlaylistVideos,
+	parseYtInitialData,
+	walkYouTubeRenderers,
 };

@@ -3,10 +3,15 @@ const appStore = require("./app-store");
 const { mergeVideoArchive } = require("./video-archive");
 const {
 	buildVideoFromFeedItem,
+	createVideoItemHash,
 	fetchChannelFeed,
 	fetchChannelThumbnail,
 	fetchYouTubeApiVideos,
 } = require("./feed-fetcher");
+const {
+	isInnerTubeAvailable,
+	fetchSubscriptionFeed,
+} = require("./innertube-fetcher");
 const {
 	CHANNEL_REFRESH_INTERVAL_MS,
 	DEFAULT_SCHEDULED_REFRESH_INTERVAL_MS,
@@ -311,76 +316,158 @@ function createFeedAggregator(storeOverride) {
 				lastUpdated: new Date().toISOString(),
 			};
 
-			// Process in batches
-			const CURRENT_BATCH_SIZE = BATCH_SIZE;
+			// Try InnerTube subscription feed first (one call for all channels).
+			// Falls back to per-channel RSS polling if unavailable or failed.
+			let usedInnerTube = false;
+			if (isInnerTubeAvailable()) {
+				try {
+					const innertubeResult = await fetchSubscriptionFeed();
+					if (innertubeResult?.videos?.length > 0) {
+						const channelCount = Object.keys(
+							innertubeResult.channelMetadata,
+						).length;
+						logger.info(
+							`⚡ InnerTube: ${innertubeResult.videos.length} videos from ${channelCount} channels — skipping RSS polling`,
+						);
+						allVideos.push(...innertubeResult.videos);
 
-			for (
-				let i = 0;
-				i < subscriptionsToRefresh.length;
-				i += CURRENT_BATCH_SIZE
-			) {
-				const batch = subscriptionsToRefresh.slice(i, i + CURRENT_BATCH_SIZE);
+						// Build channel refresh results for all channels that had videos
+						const videosByChannel = new Map();
+						for (const video of innertubeResult.videos) {
+							if (!videosByChannel.has(video.channelId)) {
+								videosByChannel.set(video.channelId, []);
+							}
+							videosByChannel.get(video.channelId).push(video);
+						}
 
-				const { batchRefreshResults, batchVideos } = await refreshBatch(
-					batch,
-					subscriptions,
-					fetchedChannelResults,
-					{ channelRefreshes },
-				);
+						for (const [channelId, channelVideos] of videosByChannel) {
+							const sub = subscriptions.find((s) => s.id === channelId);
+							fetchedChannelResults.push({
+								...sub,
+								id: channelId,
+								expected: true,
+								outcome: "success",
+								source: "innertube",
+								videos: channelVideos,
+								itemHash: createVideoItemHash(channelVideos),
+							});
+						}
 
-				await enrichVideosWithShortsStatus(batchVideos, shortsStatusById);
-				allVideos.push(...batchVideos);
+						// Update channel titles from InnerTube metadata
+						for (const video of innertubeResult.videos) {
+							const subIndex = subscriptions.findIndex(
+								(s) => s.id === video.channelId,
+							);
+							if (subIndex !== -1 && video.channelTitle) {
+								subscriptions[subIndex].title = video.channelTitle;
+							}
+						}
 
-				const { videos: currentVideos } = mergeVideoArchive(
-					existingVideos,
-					allVideos,
-					{
-						activeChannelIds: new Set(subscriptions.map((sub) => sub.id)),
-						maxVideos: MAX_ARCHIVED_VIDEOS,
-						cacheUpdatedAt: existingVideoCache.lastUpdated,
-					},
-				);
-				channelRefreshes = mergeChannelRefreshes(
-					channelRefreshes,
-					new Set(subscriptions.map((sub) => sub.id)),
-					batchRefreshResults.length > 0 ? batchRefreshResults : batch,
-					new Date().toISOString(),
-				);
-				failedChannels = summarizeFailedChannels(
-					fetchedChannelResults,
-					channelRefreshes,
-				);
+						await enrichVideosWithShortsStatus(allVideos, shortsStatusById);
+						channelRefreshes = mergeChannelRefreshes(
+							channelRefreshes,
+							new Set(subscriptions.map((sub) => sub.id)),
+							fetchedChannelResults,
+							new Date().toISOString(),
+						);
 
-				aggregationStatus = {
-					...aggregationStatus,
-					current: Math.min(i + CURRENT_BATCH_SIZE, subscriptions.length),
-					videos: currentVideos.length,
-					errors: failedChannels.length,
-					failedChannels,
-					outcomes: countRefreshOutcomes(fetchedChannelResults),
-					lastUpdated: new Date().toISOString(),
-				};
+						aggregationStatus = {
+							...aggregationStatus,
+							current: subscriptions.length,
+							total: subscriptions.length,
+							videos: allVideos.length,
+							errors: 0,
+							failedChannels: [],
+							outcomes: {
+								success: fetchedChannelResults.length,
+								notModified: 0,
+								transientFailure: 0,
+								permanentFailure: 0,
+							},
+							lastUpdated: new Date().toISOString(),
+						};
 
-				// Match Feedy's progressive refresh behavior: publish each completed
-				// batch so status polling can immediately reveal newly fetched videos.
-				await store.writeVideoCache({
-					videos: currentVideos,
-					lastUpdated: new Date().toISOString(),
-					totalChannels: subscriptions.length,
-					totalVideos: currentVideos.length,
-					channelRefreshes,
-					shortsStatusById,
-				});
-
-				logger.info(
-					`Progress: ${Math.min(i + CURRENT_BATCH_SIZE, subscriptions.length)}/${subscriptions.length}`,
-				);
-
-				// Delay between batches
-				if (i + CURRENT_BATCH_SIZE < subscriptionsToRefresh.length) {
-					await new Promise((resolve) => setTimeout(resolve, BATCH_DELAY));
+						usedInnerTube = true;
+					}
+				} catch (innertubeError) {
+					logger.warn(
+						`⚠️ InnerTube fetch failed, falling back to RSS: ${innertubeError.message}`,
+					);
 				}
 			}
+
+			if (!usedInnerTube) {
+				// Process in batches
+				const CURRENT_BATCH_SIZE = BATCH_SIZE;
+
+				for (
+					let i = 0;
+					i < subscriptionsToRefresh.length;
+					i += CURRENT_BATCH_SIZE
+				) {
+					const batch = subscriptionsToRefresh.slice(i, i + CURRENT_BATCH_SIZE);
+
+					const { batchRefreshResults, batchVideos } = await refreshBatch(
+						batch,
+						subscriptions,
+						fetchedChannelResults,
+						{ channelRefreshes },
+					);
+
+					await enrichVideosWithShortsStatus(batchVideos, shortsStatusById);
+					allVideos.push(...batchVideos);
+
+					const { videos: currentVideos } = mergeVideoArchive(
+						existingVideos,
+						allVideos,
+						{
+							activeChannelIds: new Set(subscriptions.map((sub) => sub.id)),
+							maxVideos: MAX_ARCHIVED_VIDEOS,
+							cacheUpdatedAt: existingVideoCache.lastUpdated,
+						},
+					);
+					channelRefreshes = mergeChannelRefreshes(
+						channelRefreshes,
+						new Set(subscriptions.map((sub) => sub.id)),
+						batchRefreshResults.length > 0 ? batchRefreshResults : batch,
+						new Date().toISOString(),
+					);
+					failedChannels = summarizeFailedChannels(
+						fetchedChannelResults,
+						channelRefreshes,
+					);
+
+					aggregationStatus = {
+						...aggregationStatus,
+						current: Math.min(i + CURRENT_BATCH_SIZE, subscriptions.length),
+						videos: currentVideos.length,
+						errors: failedChannels.length,
+						failedChannels,
+						outcomes: countRefreshOutcomes(fetchedChannelResults),
+						lastUpdated: new Date().toISOString(),
+					};
+
+					// Match Feedy's progressive refresh behavior: publish each completed
+					// batch so status polling can immediately reveal newly fetched videos.
+					await store.writeVideoCache({
+						videos: currentVideos,
+						lastUpdated: new Date().toISOString(),
+						totalChannels: subscriptions.length,
+						totalVideos: currentVideos.length,
+						channelRefreshes,
+						shortsStatusById,
+					});
+
+					logger.info(
+						`Progress: ${Math.min(i + CURRENT_BATCH_SIZE, subscriptions.length)}/${subscriptions.length}`,
+					);
+
+					// Delay between batches
+					if (i + CURRENT_BATCH_SIZE < subscriptionsToRefresh.length) {
+						await new Promise((resolve) => setTimeout(resolve, BATCH_DELAY));
+					}
+				}
+			} // end if (!usedInnerTube)
 
 			const { videos: archivedVideos, evictedCount: totalEvicted } =
 				mergeVideoArchive(existingVideos, allVideos, {
