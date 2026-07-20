@@ -10,6 +10,7 @@ export interface YouTubeChannel {
   addedAt?: number;
   subscriberCount?: string;
   videoCount?: string;
+  reason?: string;
 }
 
 export interface YouTubeVideo {

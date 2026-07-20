@@ -1,9 +1,11 @@
 /**
  * useChannelSuggestions — state machine for on-demand channel
- * suggestions via the LLM provider. Triggered by user tapping
- * "Discover Channels" in the Add Channel modal.
+ * suggestions, triggered by the user tapping "Discover Channels" in
+ * the Add Channel modal. The server personalises suggestions via an
+ * LLM when DEEPSEEK_API_KEY is configured, and otherwise falls back
+ * to related-channel search.
  *
- * The caller provides the current subscription list so the LLM
+ * The caller provides the current subscription list so the server
  * can personalise suggestions.
  */
 import { useCallback, useState } from "react";

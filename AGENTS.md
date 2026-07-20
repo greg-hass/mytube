@@ -24,6 +24,7 @@ It's a feed reader, not a video archive. Videos still play through YouTube.
 |----------|----------|---------|
 | `SERVER_API_TOKEN` | Yes | Bearer token for all `/api/*` requests |
 | `YOUTUBE_API_KEY` | No | Capped fallback for channel handle resolution |
+| `DEEPSEEK_API_KEY` | No | Enables LLM-personalised "Discover Channels" suggestions (deepseek-v4-flash); falls back to related-channel search when unset |
 | `FEED_REFRESH_ENABLED` | No | Enable background feed refresh (default: `true`) |
 | `FEED_REFRESH_INTERVAL_MINUTES` | No | Refresh interval (default: `5`) |
 | `FEED_REFRESH_ON_START` | No | Refresh on startup when cache is stale (default: `true`) |
@@ -236,6 +237,11 @@ When making changes:
   `server/data/mytube.sqlite`.
 - **No OAuth required.** The app uses RSS feeds and optionally a server-side API
   key for channel resolution.
+- **LLM channel discovery (optional):** With `DEEPSEEK_API_KEY` set, "Discover
+  Channels" personalises suggestions via deepseek-v4-flash
+  (`server/channel-suggestions.js`); every suggested handle is verified by
+  scraping the channel page. Without the key it falls back to related-channel
+  search.
 - **PWA-capable:** Frontend supports PWA install via `vite-plugin-pwa`.
 - **Rate limiting:** Mutating API requests are rate-limited (`30 req / 60s
   window` by default).

@@ -505,6 +505,11 @@ function SearchResultsSection({
 											{channel.description}
 										</span>
 									)}
+									{channel.reason && (
+										<span className="line-clamp-2 text-sm italic text-gray-500 dark:text-ios-400">
+											{channel.reason}
+										</span>
+									)}
 									{(formatSubscriberCount(channel.subscriberCount) ||
 										formatVideoCount(channel.videoCount)) && (
 										<span className="mt-1 inline-flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-gray-500 dark:text-ios-400">

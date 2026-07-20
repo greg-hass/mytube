@@ -12,6 +12,7 @@ const {
 	getSearchBackendStatus,
 	searchChannels,
 } = require("./channel-search");
+const { getChannelSuggestions } = require("./channel-suggestions");
 const { normalizeVideoCacheThumbnails } = require("./video-thumbnails");
 const { extractYouTubeChannelMetadata } = require("./youtube-html-parser");
 const {
@@ -305,24 +306,11 @@ function createApp({
 			if (list.length === 0) {
 				return res.status(400).json({ error: "No subscriptions provided" });
 			}
-			const existingIds = new Set(list.map((subscription) => subscription.id));
 			const youtubeApiKey =
 				String(req.header("x-youtube-api-key") || "").trim() ||
 				process.env.YOUTUBE_API_KEY;
-			const searches = await Promise.all(
-				list.slice(0, 3).map((subscription) =>
-					searchChannels(String(subscription.title || ""), {
-						limit: 4,
-						youtubeApiKey,
-					}),
-				),
-			);
-			const suggestions = new Map();
-			for (const channel of searches.flat()) {
-				if (!channel?.id || existingIds.has(channel.id)) continue;
-				suggestions.set(channel.id, channel);
-			}
-			res.json({ results: Array.from(suggestions.values()).slice(0, 8) });
+			const results = await getChannelSuggestions(list, { youtubeApiKey });
+			res.json({ results });
 		}, "Failed to generate suggestions"),
 	);
 
