@@ -412,9 +412,10 @@ function buildChannelMetadata(videos) {
  * Fetch the subscription feed via InnerTube browse endpoint.
  *
  * @param {object} options
- * @param {number} [options.maxVideos=200] - Maximum videos to return.
+ * @param {number} [options.maxVideos=200] - Maximum videos to return across all pages.
+ * @param {number} [options.maxPages=1] - Maximum continuation pages to fetch (1 = first page only).
  * @param {typeof fetch} [options.fetchImpl=fetch] - Fetch implementation (for tests).
- * @param {number} [options.timeoutMs=15000] - Request timeout.
+ * @param {number} [options.timeoutMs=15000] - Request timeout per request.
  * @returns {Promise<{videos: Array, channelMetadata: object, source: string, continuationToken: string|null}|null>}
  *   Returns null if InnerTube is not configured or the request fails.
  */
@@ -423,6 +424,7 @@ async function fetchSubscriptionFeed(options = {}) {
 
 	const {
 		maxVideos = MAX_SUBSCRIPTION_VIDEOS,
+		maxPages = 1,
 		fetchImpl = fetch,
 		timeoutMs = 15000,
 	} = options;
@@ -440,6 +442,7 @@ async function fetchSubscriptionFeed(options = {}) {
 	const controller = new AbortController();
 	const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
 
+	let firstPageToken = null;
 	try {
 		const response = await fetchImpl(
 			`${INNERTUBE_BASE_URL}?prettyPrint=false`,
@@ -459,19 +462,41 @@ async function fetchSubscriptionFeed(options = {}) {
 		}
 
 		const data = await response.json();
-		const videos = extractVideosFromResponse(data).slice(0, maxVideos);
+		const videos = extractVideosFromResponse(data);
 		const channelMetadata = buildChannelMetadata(videos);
-		const continuationToken = extractContinuationToken(data);
+		firstPageToken = extractContinuationToken(data);
+
+		let continuationToken = firstPageToken;
+		let pagesFetched = 1;
+		while (continuationToken && pagesFetched < maxPages) {
+			const pageResult = await fetchSubscriptionFeedPage(continuationToken, {
+				fetchImpl,
+				timeoutMs,
+			});
+			if (!pageResult || pageResult.videos.length === 0) break;
+			for (const video of pageResult.videos) {
+				if (videos.some((v) => v.id === video.id)) continue;
+				videos.push(video);
+				if (video.channelId && !channelMetadata[video.channelId]) {
+					channelMetadata[video.channelId] = {
+						title: video.channelTitle,
+						thumbnail: null,
+					};
+				}
+			}
+			continuationToken = pageResult.continuationToken;
+			pagesFetched += 1;
+		}
 
 		console.info(
 			`[innertube] Fetched ${videos.length} subscription videos from ${Object.keys(channelMetadata).length} channels`,
 		);
 
 		return {
-			videos,
+			videos: videos.slice(0, maxVideos),
 			channelMetadata,
 			source: "innertube",
-			continuationToken,
+			continuationToken: continuationToken || firstPageToken,
 		};
 	} catch (error) {
 		if (error.name === "AbortError") {

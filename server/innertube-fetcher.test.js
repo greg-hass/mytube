@@ -1,5 +1,13 @@
 import { createRequire } from "node:module";
-import { describe, test, beforeAll, afterAll, afterEach, expect } from "vitest";
+import {
+	describe,
+	test,
+	beforeAll,
+	afterAll,
+	afterEach,
+	expect,
+	vi,
+} from "vitest";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -25,6 +33,7 @@ const {
 	extractContinuationToken,
 	buildChannelMetadata,
 	buildContext,
+	fetchSubscriptionFeed,
 	MAX_SUBSCRIPTION_VIDEOS,
 	SUBSCRIPTIONS_BROWSE_ID,
 } = require("./innertube-fetcher");
@@ -554,6 +563,161 @@ describe("innertube-fetcher", () => {
 			expect(ctx.client.gl).toBe("US");
 			delete process.env.YOUTUBE_INNERTUBE_HL;
 			delete process.env.YOUTUBE_INNERTUBE_GL;
+		});
+	});
+
+	describe("fetchSubscriptionFeed", () => {
+		function makeVideoRendererPage(items, token = null) {
+			return {
+				ok: true,
+				status: 200,
+				headers: new Map(),
+				json: async () => ({
+					contents: {
+						twoColumnBrowseResultsRenderer: {
+							tabs: [
+								{
+									tabRenderer: {
+										content: {
+											richGridRenderer: {
+												contents: [
+													...items.map((video) => ({
+														videoRenderer: {
+															videoId: video.id,
+															title: { runs: [{ text: video.title }] },
+															publishedTimeText: {
+																simpleText: video.publishedText,
+															},
+															lengthText: { simpleText: video.duration },
+															longBylineText: {
+																runs: [
+																	{
+																		text: video.channelTitle,
+																		navigationEndpoint: {
+																			browseEndpoint: {
+																				browseId: video.channelId,
+																			},
+																		},
+																	},
+																],
+															},
+															thumbnail: {
+																thumbnails: [
+																	{ url: "https://example.com/thumb.jpg" },
+																],
+															},
+														},
+													})),
+													...(token
+														? [
+																{
+																	continuationItemRenderer: {
+																		continuationEndpoint: {
+																			continuationCommand: { token },
+																		},
+																	},
+																},
+															]
+														: []),
+												],
+											},
+										},
+									},
+								},
+							],
+						},
+					},
+				}),
+			};
+		}
+
+		test("fetches multiple continuation pages when maxPages > 1", async () => {
+			process.env.YOUTUBE_INNERTUBE_COOKIE =
+				"SAPISID=test-sapisid; SID=test-sid";
+			const fetchImpl = vi
+				.fn()
+				.mockResolvedValueOnce(
+					makeVideoRendererPage(
+						[
+							{
+								id: "vid1",
+								channelId: "UC_A",
+								title: "Video 1",
+								channelTitle: "Channel A",
+								publishedText: "10 minutes ago",
+								duration: "5:30",
+							},
+						],
+						"TOKEN1",
+					),
+				)
+				.mockResolvedValueOnce(
+					makeVideoRendererPage(
+						[
+							{
+								id: "vid2",
+								channelId: "UC_B",
+								title: "Video 2",
+								channelTitle: "Channel B",
+								publishedText: "20 minutes ago",
+								duration: "10:15",
+							},
+						],
+						null,
+					),
+				);
+
+			const result = await fetchSubscriptionFeed({ maxPages: 2, fetchImpl });
+			expect(result).not.toBeNull();
+			expect(result.videos).toHaveLength(2);
+			expect(result.videos[0].id).toBe("vid1");
+			expect(result.videos[1].id).toBe("vid2");
+			expect(fetchImpl).toHaveBeenCalledTimes(2);
+		});
+
+		test("respects maxVideos across pages", async () => {
+			process.env.YOUTUBE_INNERTUBE_COOKIE =
+				"SAPISID=test-sapisid; SID=test-sid";
+			const fetchImpl = vi
+				.fn()
+				.mockResolvedValueOnce(
+					makeVideoRendererPage(
+						[
+							{
+								id: "vid1",
+								channelId: "UC_A",
+								title: "Video 1",
+								channelTitle: "Channel A",
+								publishedText: "10 minutes ago",
+								duration: "5:30",
+							},
+						],
+						"TOKEN1",
+					),
+				)
+				.mockResolvedValueOnce(
+					makeVideoRendererPage(
+						[
+							{
+								id: "vid2",
+								channelId: "UC_B",
+								title: "Video 2",
+								channelTitle: "Channel B",
+								publishedText: "20 minutes ago",
+								duration: "10:15",
+							},
+						],
+						null,
+					),
+				);
+
+			const result = await fetchSubscriptionFeed({
+				maxPages: 2,
+				maxVideos: 1,
+				fetchImpl,
+			});
+			expect(result.videos).toHaveLength(1);
+			expect(result.videos[0].id).toBe("vid1");
 		});
 	});
 

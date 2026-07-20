@@ -316,18 +316,18 @@ function createFeedAggregator(storeOverride) {
 				lastUpdated: new Date().toISOString(),
 			};
 
-			// Try InnerTube subscription feed first (one call for all channels).
-			// Falls back to per-channel RSS polling if unavailable or failed.
-			let usedInnerTube = false;
+			// Try InnerTube subscription feed first (up to 5 pages).
+			// Falls back to per-channel RSS polling for any subscription not returned by InnerTube.
+			let innerTubeCoveredChannelIds = new Set();
 			if (isInnerTubeAvailable()) {
 				try {
-					const innertubeResult = await fetchSubscriptionFeed();
+					const innertubeResult = await fetchSubscriptionFeed({ maxPages: 5 });
 					if (innertubeResult?.videos?.length > 0) {
 						const channelCount = Object.keys(
 							innertubeResult.channelMetadata,
 						).length;
 						logger.info(
-							`⚡ InnerTube: ${innertubeResult.videos.length} videos from ${channelCount} channels — skipping RSS polling`,
+							`⚡ InnerTube: ${innertubeResult.videos.length} videos from ${channelCount} channels`,
 						);
 						allVideos.push(...innertubeResult.videos);
 
@@ -371,23 +371,7 @@ function createFeedAggregator(storeOverride) {
 							new Date().toISOString(),
 						);
 
-						aggregationStatus = {
-							...aggregationStatus,
-							current: subscriptions.length,
-							total: subscriptions.length,
-							videos: allVideos.length,
-							errors: 0,
-							failedChannels: [],
-							outcomes: {
-								success: fetchedChannelResults.length,
-								notModified: 0,
-								transientFailure: 0,
-								permanentFailure: 0,
-							},
-							lastUpdated: new Date().toISOString(),
-						};
-
-						usedInnerTube = true;
+						innerTubeCoveredChannelIds = new Set(videosByChannel.keys());
 					}
 				} catch (innertubeError) {
 					logger.warn(
@@ -396,16 +380,25 @@ function createFeedAggregator(storeOverride) {
 				}
 			}
 
-			if (!usedInnerTube) {
+			// RSS fallback for any channels not covered by InnerTube.
+			const rssSubscriptions = subscriptionsToRefresh.filter(
+				(sub) => !innerTubeCoveredChannelIds.has(sub.id),
+			);
+
+			if (rssSubscriptions.length > 0) {
+				logger.info(
+					`🐢 RSS fallback: refreshing ${rssSubscriptions.length} channels not covered by InnerTube`,
+				);
+
 				// Process in batches
 				const CURRENT_BATCH_SIZE = BATCH_SIZE;
 
 				for (
 					let i = 0;
-					i < subscriptionsToRefresh.length;
+					i < rssSubscriptions.length;
 					i += CURRENT_BATCH_SIZE
 				) {
-					const batch = subscriptionsToRefresh.slice(i, i + CURRENT_BATCH_SIZE);
+					const batch = rssSubscriptions.slice(i, i + CURRENT_BATCH_SIZE);
 
 					const { batchRefreshResults, batchVideos } = await refreshBatch(
 						batch,
@@ -439,7 +432,10 @@ function createFeedAggregator(storeOverride) {
 
 					aggregationStatus = {
 						...aggregationStatus,
-						current: Math.min(i + CURRENT_BATCH_SIZE, subscriptions.length),
+						current: Math.min(
+							i + CURRENT_BATCH_SIZE,
+							rssSubscriptions.length,
+						),
 						videos: currentVideos.length,
 						errors: failedChannels.length,
 						failedChannels,
@@ -459,15 +455,22 @@ function createFeedAggregator(storeOverride) {
 					});
 
 					logger.info(
-						`Progress: ${Math.min(i + CURRENT_BATCH_SIZE, subscriptions.length)}/${subscriptions.length}`,
+						`RSS fallback progress: ${Math.min(
+							i + CURRENT_BATCH_SIZE,
+							rssSubscriptions.length,
+						)}/${rssSubscriptions.length}`,
 					);
 
 					// Delay between batches
-					if (i + CURRENT_BATCH_SIZE < subscriptionsToRefresh.length) {
+					if (i + CURRENT_BATCH_SIZE < rssSubscriptions.length) {
 						await new Promise((resolve) => setTimeout(resolve, BATCH_DELAY));
 					}
 				}
-			} // end if (!usedInnerTube)
+			} else if (allVideos.length === 0) {
+				logger.info(
+					"⚠️ No videos returned by InnerTube or RSS; nothing to aggregate.",
+				);
+			}
 
 			const { videos: archivedVideos, evictedCount: totalEvicted } =
 				mergeVideoArchive(existingVideos, allVideos, {
