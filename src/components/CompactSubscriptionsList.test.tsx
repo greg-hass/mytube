@@ -50,12 +50,78 @@ describe("compact subscriptions", () => {
 		expect(favorite).toHaveAttribute("aria-pressed", "true");
 		fireEvent.click(favorite);
 		fireEvent.click(screen.getByRole("button", { name: "Mute Alpha" }));
+
+		// Unsubscribe requires a confirm step before onRemove fires
 		fireEvent.click(
 			screen.getByRole("button", { name: "Unsubscribe from Alpha" }),
 		);
+		expect(onRemove).not.toHaveBeenCalled();
+		fireEvent.click(
+			screen.getByRole("button", { name: "Confirm unsubscribe from Alpha" }),
+		);
+
 		expect(onToggleFavorite).toHaveBeenCalledWith("UC_TEST");
 		expect(onToggleMute).toHaveBeenCalledWith("UC_TEST");
 		expect(onRemove).toHaveBeenCalledWith("UC_TEST");
+	});
+
+	it("cancelling the unsubscribe confirm keeps the channel", () => {
+		const onRemove = vi.fn();
+		render(
+			<MemoryRouter>
+				<CompactSubscriptionsList
+					channels={[
+						{ id: "UC_TEST", title: "Alpha", description: "", thumbnail: "" },
+					]}
+					onRemove={onRemove}
+					onToggleFavorite={vi.fn()}
+					onToggleMute={vi.fn()}
+				/>
+			</MemoryRouter>,
+		);
+
+		fireEvent.click(
+			screen.getByRole("button", { name: "Unsubscribe from Alpha" }),
+		);
+		fireEvent.click(
+			screen.getByRole("button", { name: "Cancel unsubscribe from Alpha" }),
+		);
+
+		expect(onRemove).not.toHaveBeenCalled();
+		expect(
+			screen.getByRole("button", { name: "Unsubscribe from Alpha" }),
+		).toBeInTheDocument();
+	});
+
+	it("shows the channel @handle under the title when available", () => {
+		render(
+			<MemoryRouter>
+				<CompactSubscriptionsList
+					channels={[
+						{
+							id: "UC_TEST",
+							title: "Alpha",
+							description: "",
+							thumbnail: "",
+							customUrl: "@alphachannel",
+						},
+						{
+							id: "UC_OTHER",
+							title: "Beta",
+							description: "",
+							thumbnail: "",
+							customUrl: "beta",
+						},
+					]}
+					onRemove={vi.fn()}
+					onToggleFavorite={vi.fn()}
+					onToggleMute={vi.fn()}
+				/>
+			</MemoryRouter>,
+		);
+
+		expect(screen.getByText("@alphachannel")).toBeInTheDocument();
+		expect(screen.getByText("@beta")).toBeInTheDocument();
 	});
 
 	it("shows a jump rail only for a sufficiently large list", () => {

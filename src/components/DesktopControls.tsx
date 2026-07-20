@@ -147,6 +147,7 @@ export const DesktopControls = ({
 						onClick={() => onViewModeChange("grid")}
 						aria-label="Grid subscription view"
 						aria-pressed={viewMode === "grid"}
+						title="Grid view"
 						className={`p-2 rounded ${
 							viewMode === "grid"
 								? "bg-white dark:bg-ios-900 shadow"
@@ -159,6 +160,7 @@ export const DesktopControls = ({
 						onClick={() => onViewModeChange("list")}
 						aria-label="List subscription view"
 						aria-pressed={viewMode === "list"}
+						title="List view"
 						className={`p-2 rounded ${
 							viewMode === "list"
 								? "bg-white dark:bg-ios-900 shadow"
@@ -171,6 +173,7 @@ export const DesktopControls = ({
 						onClick={() => onViewModeChange("compact")}
 						aria-label="Compact subscription view"
 						aria-pressed={viewMode === "compact"}
+						title="Compact view"
 						className={`p-2 rounded ${
 							viewMode === "compact"
 								? "bg-white dark:bg-ios-900 shadow"
@@ -192,6 +195,8 @@ export const DesktopControls = ({
 						whileHover={{ scale: 1.05 }}
 						whileTap={{ scale: 0.95 }}
 						onClick={onToggleExportMenu}
+						aria-label="Export subscriptions"
+						title="Export subscriptions"
 						className="flex items-center gap-2 px-4 py-2 rounded-lg bg-gray-100 dark:bg-ios-800 hover:bg-gray-200 dark:hover:bg-ios-700 transition-colors"
 					>
 						<Download className="w-4 h-4" />
@@ -242,6 +247,7 @@ export const DesktopControls = ({
 			whileTap={{ scale: 0.9 }}
 			onClick={onToggleTheme}
 			aria-label={theme === "light" ? "Use dark theme" : "Use light theme"}
+			title={theme === "light" ? "Use dark theme" : "Use light theme"}
 			className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-ios-800 transition-colors"
 		>
 			{theme === "light" ? (

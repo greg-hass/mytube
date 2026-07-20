@@ -173,6 +173,7 @@ describe("Header", () => {
 	it("shows a pulsing refresh dot next to the channel count while syncing", () => {
 		render(
 			<Header
+				activeTab="subscriptions"
 				syncStatus={{
 					total: 1,
 					current: 1,
@@ -194,12 +195,23 @@ describe("Header", () => {
 	});
 
 	it("hides the refresh dot when not syncing", () => {
-		render(<Header />);
+		render(<Header activeTab="subscriptions" />);
 
 		expect(screen.getByText("261 channels")).toBeInTheDocument();
 		expect(
 			document.querySelector(".bg-emerald-500.animate-pulse"),
 		).not.toBeInTheDocument();
+	});
+
+	it("only shows the channel count subtitle on the Subs tab", () => {
+		const { rerender } = render(<Header activeTab="subscriptions" />);
+		expect(screen.getByText("261 channels")).toBeInTheDocument();
+
+		rerender(<Header activeTab="latest" />);
+		expect(screen.queryByText("261 channels")).not.toBeInTheDocument();
+
+		rerender(<Header />);
+		expect(screen.queryByText("261 channels")).not.toBeInTheDocument();
 	});
 
 	it("renders the mobile menu overlay outside the animated header", () => {

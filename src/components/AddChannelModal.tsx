@@ -1,9 +1,11 @@
 import { motion, AnimatePresence } from "framer-motion";
+import { useState } from "react";
 import {
 	X,
 	Plus,
 	Check,
 	AlertCircle,
+	ChevronDown,
 	Search,
 	ShieldAlert,
 	CloudOff,
@@ -672,7 +674,7 @@ function SuggestionsSection({
 						<button
 							type="button"
 							onClick={onDiscover}
-							className="w-full flex items-center justify-center gap-2 rounded-xl border-2 border-dashed border-gray-300 dark:border-ios-700 px-4 py-4 text-sm font-medium text-gray-600 dark:text-ios-300 transition-all hover:border-red-400 hover:text-red-600 dark:hover:border-red-500 dark:hover:text-red-400 bg-transparent"
+							className="w-full flex items-center justify-center gap-2 rounded-xl border border-gray-200 bg-gray-100 px-4 py-4 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-200 dark:border-ios-700 dark:bg-ios-800 dark:text-ios-200 dark:hover:bg-ios-700"
 						>
 							<Sparkles className="w-5 h-5" />
 							Discover Channels
@@ -801,6 +803,8 @@ function SuggestionsSection({
 }
 
 function SupportedFormatsSection() {
+	const [isExpanded, setIsExpanded] = useState(false);
+
 	return (
 		<motion.section
 			initial={{ opacity: 0, y: 10 }}
@@ -808,29 +812,39 @@ function SupportedFormatsSection() {
 			exit={{ opacity: 0, y: 10 }}
 			className="rounded-xl border border-gray-100 dark:border-ios-800 bg-gray-50 dark:bg-ios-800/30 p-4 space-y-3"
 		>
-			<h3 className="text-sm font-semibold text-gray-900 dark:text-white">
-				Supported formats
-			</h3>
-			<div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-				{[
-					{ label: "Channel ID", example: "UCxxxxxxxxxxxxxxxxxxxxxx" },
-					{ label: "Handle", example: "@channelname" },
-					{ label: "Custom URL", example: "youtube.com/c/name" },
-					{ label: "Full URL", example: "youtube.com/channel/UC..." },
-				].map((format) => (
-					<div
-						key={format.label}
-						className="rounded-lg border border-gray-200 dark:border-ios-700 bg-white dark:bg-ios-900 px-3 py-2.5"
-					>
-						<p className="text-xs font-medium text-gray-500 dark:text-ios-400">
-							{format.label}
-						</p>
-						<code className="text-xs text-gray-800 dark:text-ios-200 font-mono mt-0.5 block">
-							{format.example}
-						</code>
-					</div>
-				))}
-			</div>
+			<button
+				type="button"
+				onClick={() => setIsExpanded((expanded) => !expanded)}
+				aria-expanded={isExpanded}
+				className="flex w-full items-center justify-between text-sm font-semibold text-gray-900 dark:text-white"
+			>
+				<span>Supported formats</span>
+				<ChevronDown
+					className={`w-4 h-4 text-gray-500 dark:text-ios-400 transition-transform ${isExpanded ? "rotate-180" : ""}`}
+				/>
+			</button>
+			{isExpanded && (
+				<div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+					{[
+						{ label: "Channel ID", example: "UCxxxxxxxxxxxxxxxxxxxxxx" },
+						{ label: "Handle", example: "@channelname" },
+						{ label: "Custom URL", example: "youtube.com/c/name" },
+						{ label: "Full URL", example: "youtube.com/channel/UC..." },
+					].map((format) => (
+						<div
+							key={format.label}
+							className="rounded-lg border border-gray-200 dark:border-ios-700 bg-white dark:bg-ios-900 px-3 py-2.5"
+						>
+							<p className="text-xs font-medium text-gray-500 dark:text-ios-400">
+								{format.label}
+							</p>
+							<code className="text-xs text-gray-800 dark:text-ios-200 font-mono mt-0.5 block">
+								{format.example}
+							</code>
+						</div>
+					))}
+				</div>
+			)}
 		</motion.section>
 	);
 }

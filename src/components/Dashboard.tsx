@@ -902,6 +902,7 @@ export const Dashboard = () => {
 				scrollHidden={!headerVisible}
 				compactMobile={isMobileTimeline}
 				minimal={needsServerAuth || hasNoSubscriptions}
+				activeTab={activeTab}
 			/>
 
 			{refreshPhase !== "idle" && (

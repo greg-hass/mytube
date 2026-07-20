@@ -1061,4 +1061,27 @@ describe("VideoCard", () => {
 
 		expect(screen.queryByText("LIVE")).not.toBeInTheDocument();
 	});
+
+	it("formats the duration badge as m:ss or h:mm:ss", () => {
+		const { rerender } = render(
+			<MemoryRouter>
+				<VideoCard video={{ ...video, duration: 2930 }} index={0} />
+			</MemoryRouter>,
+		);
+		expect(screen.getByText("48:50")).toBeInTheDocument();
+
+		rerender(
+			<MemoryRouter>
+				<VideoCard video={{ ...video, duration: 7194 }} index={0} />
+			</MemoryRouter>,
+		);
+		expect(screen.getByText("1:59:54")).toBeInTheDocument();
+
+		rerender(
+			<MemoryRouter>
+				<VideoCard video={{ ...video, duration: 9 }} index={0} />
+			</MemoryRouter>,
+		);
+		expect(screen.getByText("0:09")).toBeInTheDocument();
+	});
 });

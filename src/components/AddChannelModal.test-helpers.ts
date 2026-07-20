@@ -174,6 +174,7 @@ export function registerAddChannelModalTests() {
 	registerExistingSubscriptionFilterTest();
 	registerNaturalLanguageSearchTest();
 	registerAuthErrorTest();
+	registerFormatsDisclosureTest();
 }
 
 function renderModal(props: {
@@ -254,5 +255,19 @@ function registerAuthErrorTest() {
 		install401FetchMock();
 		renderModal();
 		await assertAuthErrorWorkflow("the best woodworking channels", consoleError);
+	});
+}
+
+function registerFormatsDisclosureTest() {
+	it("keeps the supported formats card collapsed until the toggle is tapped", () => {
+		renderModal();
+
+		const toggle = screen.getByRole("button", { name: "Supported formats" });
+		expect(toggle).toHaveAttribute("aria-expanded", "false");
+		expect(screen.queryByText("Channel ID")).not.toBeInTheDocument();
+
+		fireEvent.click(toggle);
+		expect(toggle).toHaveAttribute("aria-expanded", "true");
+		expect(screen.getByText("Channel ID")).toBeInTheDocument();
 	});
 }

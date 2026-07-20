@@ -1,4 +1,5 @@
 import { Heart, Trash2, Volume2, VolumeX } from "lucide-react";
+import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { getDisplayThumbnail, handleImageLoadError } from "../lib/icon-loader";
 import type { YouTubeChannel } from "../types/youtube";
@@ -18,6 +19,7 @@ export function CompactSubscriptionsList({
 	onToggleMute,
 }: Props) {
 	const navigate = useNavigate();
+	const [pendingRemoveId, setPendingRemoveId] = useState<string | null>(null);
 	const sections = groupCompactSubscriptions(channels);
 	const showRail = channels.length >= 12 && sections.length >= 3;
 
@@ -65,6 +67,13 @@ export function CompactSubscriptionsList({
 												<span className="block truncate text-sm font-medium text-gray-900 dark:text-ios-100">
 													{channel.title}
 												</span>
+												{channel.customUrl && (
+													<span className="block truncate text-xs text-gray-500 dark:text-ios-400">
+														{channel.customUrl.startsWith("@")
+															? channel.customUrl
+															: `@${channel.customUrl}`}
+													</span>
+												)}
 												{channel.group && (
 													<span className="block truncate text-xs text-gray-500 dark:text-ios-400">
 														{channel.group}
@@ -104,14 +113,42 @@ export function CompactSubscriptionsList({
 												<Volume2 className="h-4 w-4" />
 											)}
 										</button>
-										<button
-											type="button"
-											aria-label={`Unsubscribe from ${channel.title}`}
-											onClick={() => onRemove(channel.id)}
-											className="rounded-lg p-2 text-gray-500 hover:bg-red-50 hover:text-red-600 dark:text-ios-400 dark:hover:bg-red-950/30"
-										>
-											<Trash2 className="h-4 w-4" />
-										</button>
+										{pendingRemoveId === channel.id ? (
+											<span className="flex items-center gap-1">
+												<span className="text-xs text-gray-500 dark:text-ios-400">
+													Delete?
+												</span>
+												<button
+													type="button"
+													aria-label={`Confirm unsubscribe from ${channel.title}`}
+													onClick={() => {
+														setPendingRemoveId(null);
+														onRemove(channel.id);
+													}}
+													className="rounded-lg px-2 py-1.5 text-xs font-semibold text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-950/30"
+												>
+													Confirm
+												</button>
+												<button
+													type="button"
+													aria-label={`Cancel unsubscribe from ${channel.title}`}
+													onClick={() => setPendingRemoveId(null)}
+													className="rounded-lg px-2 py-1.5 text-xs font-medium text-gray-500 hover:bg-gray-100 dark:text-ios-400 dark:hover:bg-ios-800"
+												>
+													Cancel
+												</button>
+											</span>
+										) : (
+											<button
+												type="button"
+												aria-label={`Unsubscribe from ${channel.title}`}
+												title={`Unsubscribe from ${channel.title}`}
+												onClick={() => setPendingRemoveId(channel.id)}
+												className="rounded-lg p-2 text-gray-500 hover:bg-red-50 hover:text-red-600 dark:text-ios-400 dark:hover:bg-red-950/30"
+											>
+												<Trash2 className="h-4 w-4" />
+											</button>
+										)}
 									</div>
 								</li>
 							))}

@@ -60,6 +60,8 @@ export const MobileHeaderControls = ({
 			<button
 				data-testid="mobile-shorts-toggle"
 				onClick={onToggleShorts}
+				aria-label={showShorts ? "Hide Shorts" : "Show Shorts"}
+				aria-pressed={showShorts}
 				className={`p-2 rounded-lg transition-colors ${
 					showShorts
 						? "bg-red-100 text-red-600 dark:bg-red-900/30 dark:text-red-400"
@@ -74,6 +76,8 @@ export const MobileHeaderControls = ({
 			<button
 				data-testid="mobile-watched-toggle"
 				onClick={onToggleWatched}
+				aria-label={hideWatched ? "Show Watched" : "Hide Watched"}
+				aria-pressed={hideWatched}
 				className={`p-2 rounded-lg transition-colors ${
 					hideWatched
 						? "bg-emerald-100 text-emerald-600 dark:bg-emerald-900/30 dark:text-emerald-400"
@@ -92,6 +96,7 @@ export const MobileHeaderControls = ({
 			<button
 				data-testid="mobile-search-button"
 				onClick={onToggleSearch}
+				aria-label={showMobileSearchPanel ? "Close search" : "Search"}
 				className="p-2 rounded-lg bg-gray-100 dark:bg-ios-800 hover:bg-gray-200 dark:hover:bg-ios-700 transition-colors"
 				title="Search"
 			>
@@ -105,6 +110,7 @@ export const MobileHeaderControls = ({
 		<button
 			data-testid="mobile-menu-button"
 			onClick={onOpenMenu}
+			aria-label="Open menu"
 			className="p-2 rounded-lg bg-gray-100 dark:bg-ios-800 hover:bg-gray-200 dark:hover:bg-ios-700 transition-colors"
 			title="Open menu"
 		>

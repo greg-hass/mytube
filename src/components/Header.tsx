@@ -36,6 +36,8 @@ interface HeaderProps {
 	compactMobile?: boolean;
 	/** When true, only logo/settings/theme are shown — hides controls with no value before onboarding. */
 	minimal?: boolean;
+	/** Active dashboard tab — the "N channels" subtitle only shows on the Subs tab. */
+	activeTab?: string;
 }
 
 export const Header = ({
@@ -53,6 +55,7 @@ export const Header = ({
 	onToggleWatched,
 	scrollHidden = false,
 	minimal = false,
+	activeTab,
 }: HeaderProps) => {
 	const headerRef = useHeaderHeight();
 	const [isSettingsOpen, setIsSettingsOpen] = useState(false);
@@ -127,7 +130,7 @@ export const Header = ({
 											className="h-2 w-2 rounded-full bg-emerald-500 shadow-[0_0_0_4px_rgba(16,185,129,0.15)] animate-pulse"
 										/>
 									)}
-									<p>{count} channels</p>
+									{activeTab === "subscriptions" && <p>{count} channels</p>}
 								</div>
 							</div>
 						</motion.div>

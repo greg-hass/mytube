@@ -291,6 +291,16 @@ const StatefulVideoCard = ({
 		return true;
 	};
 
+	const formatDuration = (totalSeconds: number) => {
+		const seconds = Math.max(0, Math.floor(totalSeconds));
+		const hours = Math.floor(seconds / 3600);
+		const mins = Math.floor((seconds % 3600) / 60);
+		const secs = String(seconds % 60).padStart(2, "0");
+		if (hours > 0)
+			return `${hours}:${String(mins).padStart(2, "0")}:${secs}`;
+		return `${mins}:${secs}`;
+	};
+
 	const formatDate = (dateString: string) => {
 		const date = new Date(dateString);
 		const now = new Date();
@@ -432,9 +442,9 @@ const StatefulVideoCard = ({
 					</div>
 				)}
 
-				{!isPlayingInline && video.duration && (
-					<div className="absolute bottom-2 right-2 bg-black/80 px-2 py-1 rounded text-xs text-white font-medium">
-						{video.duration}
+				{!isPlayingInline && video.duration != null && video.duration > 0 && (
+					<div className="absolute bottom-2 right-2 rounded-md bg-black/80 px-1.5 py-0.5 text-xs font-medium tabular-nums text-white shadow-sm">
+						{formatDuration(video.duration)}
 					</div>
 				)}
 
@@ -451,7 +461,7 @@ const StatefulVideoCard = ({
 			{/* Info */}
 			<div data-testid="video-card-info" className="flex h-28 flex-col p-3">
 				<div className="mb-1 h-10">
-					<h4 className="font-medium text-sm line-clamp-2 group-hover:text-red-600 dark:group-hover:text-red-400 transition-colors">
+					<h4 className="font-medium text-sm line-clamp-2 text-gray-900 dark:text-ios-50 transition-colors">
 						<span className="line-clamp-2 text-left transition-colors">
 							{video.title}
 						</span>
