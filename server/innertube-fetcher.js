@@ -36,13 +36,13 @@ const MAX_SUBSCRIPTION_VIDEOS = 200;
  * YouTube accepts a stripped-down context — the full device fingerprint
  * from the browser is not required.
  */
-function buildContext() {
+function buildContext(clientVersion = "2.20260715.04.00") {
 	return {
 		client: {
 			hl: process.env.YOUTUBE_INNERTUBE_HL || "en-GB",
 			gl: process.env.YOUTUBE_INNERTUBE_GL || "GB",
 			clientName: "WEB",
-			clientVersion: "2.20260715.04.00",
+			clientVersion,
 			platform: "DESKTOP",
 			userAgent:
 				"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) " +
@@ -76,20 +76,20 @@ function extractSapisid(cookie) {
 const YOUTUBE_ORIGIN = "https://www.youtube.com";
 
 /**
- * Get the InnerTube cookie from env var or creds file.
+ * Get the InnerTube credentials from env vars or the refresh output file.
  */
-function getInnerTubeCookie() {
+function getInnerTubeCredentials() {
 	if (process.env.YOUTUBE_INNERTUBE_COOKIE) {
-		return process.env.YOUTUBE_INNERTUBE_COOKIE;
+		return { cookieString: process.env.YOUTUBE_INNERTUBE_COOKIE };
 	}
-	// Try reading from the creds file (written by refresh-innertube-auth.js)
 	try {
 		const path = require("node:path");
 		const fs = require("node:fs");
 		const credsPath = path.join(__dirname, "data", "innertube-creds.json");
 		if (fs.existsSync(credsPath)) {
 			const creds = JSON.parse(fs.readFileSync(credsPath, "utf-8"));
-			return creds.cookieString || creds.cookie || null;
+			const cookieString = creds.cookieString || creds.cookie;
+			return cookieString ? { ...creds, cookieString } : null;
 		}
 	} catch {
 		// ignore file read errors
@@ -97,31 +97,48 @@ function getInnerTubeCookie() {
 	return null;
 }
 
+function getInnerTubeCookie() {
+	return getInnerTubeCredentials()?.cookieString || null;
+}
+
 /**
  * Compute a single SAPISIDHASH variant.
  * Format: <scheme> <timestamp>_<sha1(timestamp + " " + cookieValue + " " + origin)>_u
  */
-function computeHash(scheme, cookieValue, origin = YOUTUBE_ORIGIN) {
+function computeHash(
+	scheme,
+	cookieValue,
+	origin = YOUTUBE_ORIGIN,
+	hashSuffix = "_u",
+) {
 	const timestamp = Math.floor(Date.now() / 1000);
 	const hash = createHash("sha1")
 		.update(`${timestamp} ${cookieValue} ${origin}`)
 		.digest("hex");
-	return `${scheme} ${timestamp}_${hash}_u`;
+	return `${scheme} ${timestamp}_${hash}${hashSuffix}`;
 }
 
 /**
  * Compute the full Authorization header with all three SAPISID hash variants.
  * YouTube requires SAPISIDHASH, SAPISID1PHASH, and SAPISID3PHASH joined by spaces.
  */
-function computeAuthorizationHeader(cookie) {
+function computeAuthorizationHeader(cookie, authConfig = {}) {
+	const suffix = authConfig.hashSuffix ?? "_u";
+	const useCombined = !authConfig.hashVariant?.startsWith("sapisid");
 	const parts = [];
 	const sapisid = extractCookieValue(cookie, "SAPISID");
 	const sapisid1p = extractCookieValue(cookie, "__Secure-1PAPISID");
 	const sapisid3p = extractCookieValue(cookie, "__Secure-3PAPISID");
 
-	if (sapisid) parts.push(computeHash("SAPISIDHASH", sapisid));
-	if (sapisid1p) parts.push(computeHash("SAPISID1PHASH", sapisid1p));
-	if (sapisid3p) parts.push(computeHash("SAPISID3PHASH", sapisid3p));
+	if (sapisid) {
+		parts.push(computeHash("SAPISIDHASH", sapisid, YOUTUBE_ORIGIN, suffix));
+	}
+	if (useCombined && sapisid1p) {
+		parts.push(computeHash("SAPISID1PHASH", sapisid1p, YOUTUBE_ORIGIN, suffix));
+	}
+	if (useCombined && sapisid3p) {
+		parts.push(computeHash("SAPISID3PHASH", sapisid3p, YOUTUBE_ORIGIN, suffix));
+	}
 
 	if (parts.length === 0) return null;
 	return parts.join(" ");
@@ -130,8 +147,8 @@ function computeAuthorizationHeader(cookie) {
 /**
  * Build the full set of headers required for authenticated InnerTube requests.
  */
-function buildAuthHeaders(cookie) {
-	const auth = computeAuthorizationHeader(cookie);
+function buildAuthHeaders(cookie, authConfig = {}) {
+	const auth = computeAuthorizationHeader(cookie, authConfig);
 	if (!auth) return null;
 	return {
 		"Content-Type": "application/json",
@@ -140,9 +157,9 @@ function buildAuthHeaders(cookie) {
 		Origin: YOUTUBE_ORIGIN,
 		"X-Origin": YOUTUBE_ORIGIN,
 		Referer: `${YOUTUBE_ORIGIN}/feed/subscriptions`,
-		"X-Goog-AuthUser": "0",
+		"X-Goog-AuthUser": authConfig.authUser || "0",
 		"X-Youtube-Client-Name": "1",
-		"X-Youtube-Client-Version": "2.20260715.04.00",
+		"X-Youtube-Client-Version": authConfig.clientVersion || "2.20260715.04.00",
 		"User-Agent":
 			"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) " +
 			"AppleWebKit/537.36 (KHTML, like Gecko) " +
@@ -170,6 +187,100 @@ function parseDurationString(text) {
 	if (parts.length === 2) return parts[0] * 60 + parts[1];
 	if (parts.length === 1) return parts[0];
 	return null;
+}
+
+function getLockupChannelMetadata(lockup) {
+	const rows =
+		lockup.metadata?.lockupMetadataViewModel?.metadata?.contentMetadataViewModel
+			?.metadataRows || [];
+	const channelPart = rows[0]?.metadataParts?.[0]?.text;
+	const channelTitle = channelPart?.content || "Unknown";
+	const commandRun = channelPart?.commandRuns?.[0];
+	const channelId =
+		commandRun?.onTap?.innertubeCommand?.browseEndpoint?.browseId || "";
+	return { channelTitle, channelId };
+}
+
+function getLockupPublishedText(lockup) {
+	const rows =
+		lockup.metadata?.lockupMetadataViewModel?.metadata?.contentMetadataViewModel
+			?.metadataRows || [];
+	for (let i = 1; i < rows.length; i += 1) {
+		const parts = rows[i].metadataParts || [];
+		for (const part of parts) {
+			const text = part.text?.content || "";
+			if (
+				/\d+\s+(second|minute|hour|day|week|month|year)s?\s+ago/i.test(text)
+			) {
+				return text;
+			}
+		}
+	}
+	return null;
+}
+
+function getLockupDuration(lockup) {
+	const overlays = lockup.contentImage?.thumbnailViewModel?.overlays || [];
+	for (const overlay of overlays) {
+		const badge =
+			overlay.thumbnailBottomOverlayViewModel?.badges?.[0]
+				?.thumbnailBadgeViewModel;
+		if (!badge) continue;
+		if (badge.badgeStyle === "THUMBNAIL_OVERLAY_BADGE_STYLE_LIVE") {
+			return null;
+		}
+		return parseDurationString(badge.text);
+	}
+	return null;
+}
+
+function getLockupThumbnail(lockup) {
+	const sources = lockup.contentImage?.thumbnailViewModel?.image?.sources || [];
+	return getBestThumbnailUrl(sources);
+}
+
+/**
+ * Parse a new-style lockup view model (richItemRenderer content) into MyTube's video format.
+ */
+function parseLockupViewModel(lockup, { now = Date.now() } = {}) {
+	if (
+		!lockup?.contentId ||
+		lockup.contentType !== "LOCKUP_CONTENT_TYPE_VIDEO"
+	) {
+		return null;
+	}
+
+	const title =
+		lockup.metadata?.lockupMetadataViewModel?.title?.content || "Untitled";
+	const publishedText = getLockupPublishedText(lockup);
+	const publishedAt = parseRelativePublishedAt(publishedText, now);
+	if (!publishedAt) return null;
+
+	const { channelId, channelTitle } = getLockupChannelMetadata(lockup);
+	const duration = getLockupDuration(lockup);
+	const thumbnail = getHighResolutionVideoThumbnail(
+		getLockupThumbnail(lockup),
+		lockup.contentId,
+	);
+
+	const video = {
+		id: lockup.contentId,
+		title,
+		channelId,
+		channelTitle,
+		publishedAt,
+		thumbnail,
+		description: "",
+		duration,
+		fetchedVia: "innertube",
+		publishedAtSource: "innertube-relative-time",
+	};
+
+	if (duration !== null && duration <= 61) {
+		video.isShort = true;
+	}
+
+	return video;
 }
 
 /**
@@ -262,10 +373,19 @@ function extractVideosFromResponse(responseData, { now = Date.now() } = {}) {
 
 	walkYouTubeRenderers(responseData, (node) => {
 		const renderer = node.videoRenderer || node.gridVideoRenderer;
-		if (!renderer?.videoId || seen.has(renderer.videoId)) return;
-		seen.add(renderer.videoId);
-		const video = parseVideoRenderer(renderer, { now });
-		if (video) videos.push(video);
+		if (renderer?.videoId && !seen.has(renderer.videoId)) {
+			seen.add(renderer.videoId);
+			const video = parseVideoRenderer(renderer, { now });
+			if (video) videos.push(video);
+			return;
+		}
+
+		const lockup = node.richItemRenderer?.content?.lockupViewModel;
+		if (lockup?.contentId && !seen.has(lockup.contentId)) {
+			seen.add(lockup.contentId);
+			const video = parseLockupViewModel(lockup, { now });
+			if (video) videos.push(video);
+		}
 	});
 
 	return videos;
@@ -307,12 +427,13 @@ async function fetchSubscriptionFeed(options = {}) {
 		timeoutMs = 15000,
 	} = options;
 
-	const cookie = getInnerTubeCookie();
-	const headers = buildAuthHeaders(cookie);
+	const credentials = getInnerTubeCredentials();
+	const cookie = credentials?.cookieString;
+	const headers = buildAuthHeaders(cookie, credentials || undefined);
 	if (!headers) return null;
 
 	const body = {
-		context: buildContext(),
+		context: buildContext(credentials?.clientVersion),
 		browseId: SUBSCRIPTIONS_BROWSE_ID,
 	};
 
@@ -375,12 +496,13 @@ async function fetchSubscriptionFeedPage(continuationToken, options = {}) {
 	if (!isInnerTubeAvailable() || !continuationToken) return null;
 
 	const { fetchImpl = fetch, timeoutMs = 15000 } = options;
-	const cookie = getInnerTubeCookie();
-	const headers = buildAuthHeaders(cookie);
+	const credentials = getInnerTubeCredentials();
+	const cookie = credentials?.cookieString;
+	const headers = buildAuthHeaders(cookie, credentials || undefined);
 	if (!headers) return null;
 
 	const body = {
-		context: buildContext(),
+		context: buildContext(credentials?.clientVersion),
 		continuation: continuationToken,
 	};
 
@@ -427,11 +549,13 @@ module.exports = {
 	fetchSubscriptionFeed,
 	fetchSubscriptionFeedPage,
 	getInnerTubeCookie,
+	getInnerTubeCredentials,
 	extractSapisid,
 	extractCookieValue,
 	computeHash,
 	computeAuthorizationHeader,
 	buildAuthHeaders,
+	parseLockupViewModel,
 	extractVideosFromResponse,
 	extractContinuationToken,
 	parseVideoRenderer,

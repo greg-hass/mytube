@@ -9,7 +9,7 @@
         "migrate": "node migrations-runner.js",
         "backup:sqlite": "node sqlite-backup.js backup",
         "restore:sqlite": "node sqlite-backup.js restore",
-        "refresh:innertube": "node ../scripts/refresh-innertube-auth.js"
+        "refresh:innertube": "node ../scripts/refresh-innertube-auth.cjs"
     },
     "dependencies": {
         "axios": "^1.6.0",

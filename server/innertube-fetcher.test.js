@@ -1,13 +1,26 @@
 import { createRequire } from "node:module";
-import { describe, test, afterEach, expect } from "vitest";
+import { describe, test, beforeAll, afterAll, afterEach, expect } from "vitest";
+import fs from "node:fs";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 const require = createRequire(import.meta.url);
+const credsPath = path.join(__dirname, "data", "innertube-creds.json");
+const credsBackupPath = path.join(
+	__dirname,
+	"data",
+	"innertube-creds.json.test-backup",
+);
+
 const {
 	isInnerTubeAvailable,
 	parseDurationString,
 	extractChannelId,
 	extractChannelTitle,
 	parseVideoRenderer,
+	parseLockupViewModel,
 	extractVideosFromResponse,
 	extractContinuationToken,
 	buildChannelMetadata,
@@ -19,6 +32,20 @@ const {
 describe("innertube-fetcher", () => {
 	describe("isInnerTubeAvailable", () => {
 		const origEnv = { ...process.env };
+		let hadCredsFile = false;
+
+		beforeAll(() => {
+			if (fs.existsSync(credsPath)) {
+				hadCredsFile = true;
+				fs.renameSync(credsPath, credsBackupPath);
+			}
+		});
+
+		afterAll(() => {
+			if (hadCredsFile) {
+				fs.renameSync(credsBackupPath, credsPath);
+			}
+		});
 
 		afterEach(() => {
 			process.env = { ...origEnv };
@@ -316,6 +343,138 @@ describe("innertube-fetcher", () => {
 		test("returns empty array for empty response", () => {
 			expect(extractVideosFromResponse({})).toEqual([]);
 			expect(extractVideosFromResponse(null)).toEqual([]);
+		});
+	});
+
+	describe("parseLockupViewModel", () => {
+		const now = new Date("2026-07-20T10:00:00.000Z").getTime();
+
+		function makeLockup({
+			videoId = "abc123",
+			title = "Test Video",
+			channel = "Test Channel",
+			channelId = "UCtest123",
+			published = "8 minutes ago",
+			durationText = "10:30",
+			isLive = false,
+		}) {
+			return {
+				contentId: videoId,
+				contentType: "LOCKUP_CONTENT_TYPE_VIDEO",
+				contentImage: {
+					thumbnailViewModel: {
+						image: {
+							sources: [
+								{ url: "https://example.com/v1.jpg", width: 360 },
+								{ url: "https://example.com/v2.jpg", width: 720 },
+							],
+						},
+						overlays: [
+							{
+								thumbnailBottomOverlayViewModel: {
+									badges: [
+										{
+											thumbnailBadgeViewModel: {
+												text: isLive ? "LIVE" : durationText,
+												badgeStyle: isLive
+													? "THUMBNAIL_OVERLAY_BADGE_STYLE_LIVE"
+													: "THUMBNAIL_OVERLAY_BADGE_STYLE_DEFAULT",
+												rendererContext: {
+													accessibilityContext: {
+														label: isLive ? "LIVE" : "10 minutes, 30 seconds",
+													},
+												},
+											},
+										},
+									],
+								},
+							},
+						],
+					},
+				},
+				metadata: {
+					lockupMetadataViewModel: {
+						title: { content: title },
+						image: {
+							decoratedAvatarViewModel: {
+								a11yLabel: `Go to channel ${channel}`,
+							},
+						},
+						metadata: {
+							contentMetadataViewModel: {
+								metadataRows: [
+									{
+										metadataParts: [
+											{
+												text: {
+													content: channel,
+													commandRuns: [
+														{
+															onTap: {
+																innertubeCommand: {
+																	browseEndpoint: { browseId: channelId },
+																},
+															},
+														},
+													],
+												},
+											},
+										],
+									},
+									{
+										metadataParts: [
+											{
+												text: {
+													content: `513 views | ${published}`,
+												},
+											},
+										],
+									},
+								],
+							},
+						},
+					},
+				},
+			};
+		}
+
+		test("parses a complete lockup view model", () => {
+			const video = parseLockupViewModel(makeLockup({}), { now });
+			expect(video).not.toBeNull();
+			expect(video.id).toBe("abc123");
+			expect(video.title).toBe("Test Video");
+			expect(video.channelId).toBe("UCtest123");
+			expect(video.channelTitle).toBe("Test Channel");
+			expect(video.duration).toBe(630);
+			expect(video.fetchedVia).toBe("innertube");
+			expect(video.publishedAt).toBeTruthy();
+		});
+
+		test("returns null for missing contentId", () => {
+			const lockup = makeLockup({});
+			delete lockup.contentId;
+			expect(parseLockupViewModel(lockup, { now })).toBeNull();
+		});
+
+		test("returns null for non-video lockups", () => {
+			const lockup = makeLockup({});
+			lockup.contentType = "LOCKUP_CONTENT_TYPE_PLAYLIST";
+			expect(parseLockupViewModel(lockup, { now })).toBeNull();
+		});
+
+		test("handles live videos with no duration", () => {
+			const video = parseLockupViewModel(makeLockup({ isLive: true }), { now });
+			expect(video).not.toBeNull();
+			expect(video.duration).toBeNull();
+		});
+
+		test("extracts relative time from multi-part metadata", () => {
+			const video = parseLockupViewModel(
+				makeLockup({ published: "Streamed 2 hours ago" }),
+				{ now },
+			);
+			expect(video).not.toBeNull();
+			expect(video.publishedAtSource).toBe("innertube-relative-time");
 		});
 	});
 
