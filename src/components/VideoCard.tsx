@@ -39,8 +39,6 @@ const SWIPE_TO_WATCHED_THRESHOLD = 80;
 const SWIPE_TO_QUEUE_THRESHOLD = 80;
 const SWIPE_VERTICAL_CANCEL_THRESHOLD = 48;
 const SWIPE_HINT_THRESHOLD = 12;
-const WATCHED_PERCENT_THRESHOLD = 0.5;
-const WATCHED_SECONDS_THRESHOLD = 30;
 
 const StatefulVideoCard = ({
 	video,
@@ -125,14 +123,15 @@ const StatefulVideoCard = ({
 				setProgressPercent(
 					Math.min(100, Math.max(0, (currentTime / duration) * 100)),
 				);
-				if (
-					currentTime >= WATCHED_SECONDS_THRESHOLD ||
-					currentTime / duration >= WATCHED_PERCENT_THRESHOLD
-				) {
-					markAsWatched(video.id);
-				}
 			}
 		};
+
+		const handlePageHide = () => persistCurrentProgress();
+		const handleVisibilityChange = () => {
+			if (document.visibilityState === "hidden") persistCurrentProgress();
+		};
+		window.addEventListener("pagehide", handlePageHide);
+		document.addEventListener("visibilitychange", handleVisibilityChange);
 
 		loadYouTubeIframeApi().then((youtubeApi) => {
 			if (!isMounted || !inlinePlayerContainerRef.current) return;
@@ -166,6 +165,7 @@ const StatefulVideoCard = ({
 							if (event.data === youtubeApi.PlayerState.ENDED) {
 								clearVideoProgress(video.id);
 								setProgressPercent(0);
+								markAsWatched(video.id);
 							} else {
 								persistCurrentProgress();
 							}
@@ -184,6 +184,8 @@ const StatefulVideoCard = ({
 		return () => {
 			isMounted = false;
 			persistCurrentProgress();
+			window.removeEventListener("pagehide", handlePageHide);
+			document.removeEventListener("visibilitychange", handleVisibilityChange);
 			if (inlineSaveIntervalRef.current)
 				window.clearInterval(inlineSaveIntervalRef.current);
 			inlineSaveIntervalRef.current = null;
@@ -296,8 +298,7 @@ const StatefulVideoCard = ({
 		const hours = Math.floor(seconds / 3600);
 		const mins = Math.floor((seconds % 3600) / 60);
 		const secs = String(seconds % 60).padStart(2, "0");
-		if (hours > 0)
-			return `${hours}:${String(mins).padStart(2, "0")}:${secs}`;
+		if (hours > 0) return `${hours}:${String(mins).padStart(2, "0")}:${secs}`;
 		return `${mins}:${secs}`;
 	};
 
@@ -499,10 +500,22 @@ const StatefulVideoCard = ({
 								: "text-gray-400 hover:bg-gray-100 hover:text-emerald-500 dark:text-ios-500 dark:hover:bg-ios-800 dark:hover:text-emerald-400"
 						}`}
 					>
-						<CheckCircle2
-							className={`h-5 w-5 ${isWatched ? "fill-current" : ""}`}
-						/>
+						{isWatched ? (
+							<CheckCircle2 className="h-5 w-5 fill-current" />
+						) : progressPercent > 0 ? (
+							<span
+								data-testid="video-progress-indicator"
+								aria-hidden="true"
+								className="h-5 w-5 rounded-full border-2 border-current"
+								style={{
+									background: `linear-gradient(to top, currentColor ${progressPercent}%, transparent ${progressPercent}%)`,
+								}}
+							/>
+						) : (
+							<CheckCircle2 className="h-5 w-5" />
+						)}
 					</button>
+
 					<button
 						type="button"
 						onClick={handleFavoriteClick}

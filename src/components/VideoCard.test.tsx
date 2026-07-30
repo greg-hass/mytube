@@ -558,6 +558,7 @@ describe("VideoCard", () => {
 	});
 
 	it("saves inline playback progress so queued videos can resume", async () => {
+		let currentTime = 45;
 		window.YT = {
 			PlayerState: { ENDED: 0 },
 			Player: class {
@@ -565,7 +566,7 @@ describe("VideoCard", () => {
 					window.setTimeout(() => options.events.onReady({ target: this }), 0);
 				}
 
-				getCurrentTime = () => 45;
+				getCurrentTime = () => currentTime;
 				getDuration = () => 120;
 				destroy = vi.fn();
 				seekTo = vi.fn();
@@ -596,7 +597,21 @@ describe("VideoCard", () => {
 				},
 			});
 		});
-		expect(mockStore.markAsWatched).toHaveBeenCalledWith("video-1");
+		expect(mockStore.markAsWatched).not.toHaveBeenCalled();
+		expect(screen.getByTestId("video-progress-indicator")).toBeInTheDocument();
+
+		currentTime = 72;
+		fireEvent(window, new Event("pagehide"));
+		await waitFor(() => {
+			expect(
+				JSON.parse(localStorage.getItem("video-playback-progress") || "{}"),
+			).toMatchObject({
+				"video-1": { currentTime: 72, duration: 120 },
+			});
+		});
+		expect(
+			screen.getByTestId("video-progress-indicator").getAttribute("style"),
+		).toContain("60%");
 		expect(screen.getByTestId("location")).toHaveTextContent("/");
 	});
 
@@ -640,6 +655,10 @@ describe("VideoCard", () => {
 			expect(screen.getByTestId("inline-video-player")).toBeInTheDocument();
 			expect(destroy).not.toHaveBeenCalled();
 		});
+		expect(mockStore.markAsWatched).toHaveBeenCalledWith("video-1");
+		expect(localStorage.getItem("video-playback-progress")).toBe(
+			JSON.stringify({}),
+		);
 	});
 
 	it("does not overwrite inline resume progress with the player startup time", async () => {
@@ -653,6 +672,7 @@ describe("VideoCard", () => {
 				},
 			}),
 		);
+		const seekTo = vi.fn();
 		window.YT = {
 			PlayerState: { ENDED: 0 },
 			Player: class {
@@ -663,7 +683,7 @@ describe("VideoCard", () => {
 				getCurrentTime = () => 0;
 				getDuration = () => 300;
 				destroy = vi.fn();
-				seekTo = vi.fn();
+				seekTo = seekTo;
 				playVideo = vi.fn();
 			},
 		};
@@ -684,6 +704,7 @@ describe("VideoCard", () => {
 		await waitFor(() => {
 			expect(screen.getByTitle("A useful video player")).toBeInTheDocument();
 		});
+		expect(seekTo).toHaveBeenCalledWith(75, true);
 		expect(
 			JSON.parse(localStorage.getItem("video-playback-progress") || "{}"),
 		).toMatchObject({
