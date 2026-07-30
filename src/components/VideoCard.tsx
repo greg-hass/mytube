@@ -78,7 +78,14 @@ const StatefulVideoCard = ({
 		typeof window.setInterval
 	> | null>(null);
 	const isWatched = watchedVideos.has(video.id);
+	const isWatchedRef = useRef(isWatched);
+	const hasPlaybackProgress = progressPercent > 0;
+	const showWatchedState = isWatched && !hasPlaybackProgress;
 	const isLive = isLiveVideo(video);
+
+	useEffect(() => {
+		isWatchedRef.current = isWatched;
+	}, [isWatched]);
 
 	useEffect(() => {
 		const updateProgress = () =>
@@ -96,6 +103,7 @@ const StatefulVideoCard = ({
 		let isMounted = true;
 		let hasReachedResumePoint = false;
 		let resumeFromSeconds = 0;
+		let hasClearedStaleWatchedState = false;
 
 		const persistCurrentProgress = () => {
 			const player = inlinePlayerRef.current;
@@ -123,6 +131,15 @@ const StatefulVideoCard = ({
 				setProgressPercent(
 					Math.min(100, Math.max(0, (currentTime / duration) * 100)),
 				);
+				if (
+					currentTime > 0 &&
+					currentTime < duration &&
+					isWatchedRef.current &&
+					!hasClearedStaleWatchedState
+				) {
+					markAsUnwatched(video.id);
+					hasClearedStaleWatchedState = true;
+				}
 			}
 		};
 
@@ -193,7 +210,13 @@ const StatefulVideoCard = ({
 			inlinePlayerRef.current = null;
 			onInlinePlaybackChange?.(video.id, false);
 		};
-	}, [isPlayingInline, markAsWatched, onInlinePlaybackChange, video.id]);
+	}, [
+		isPlayingInline,
+		markAsUnwatched,
+		markAsWatched,
+		onInlinePlaybackChange,
+		video.id,
+	]);
 
 	const playInline = () => {
 		setIsPlayingInline(true);
@@ -434,7 +457,7 @@ const StatefulVideoCard = ({
 					</div>
 				)}
 
-				{!isPlayingInline && isWatched && (
+				{!isPlayingInline && showWatchedState && (
 					<div
 						className={`absolute left-2 ${isLive ? "top-10" : "top-2"} z-10 flex items-center gap-1.5 rounded bg-emerald-600 px-2 py-1 text-[11px] font-bold uppercase tracking-wide text-white shadow-sm`}
 					>
@@ -449,7 +472,7 @@ const StatefulVideoCard = ({
 					</div>
 				)}
 
-				{!isPlayingInline && progressPercent > 0 && !isWatched && (
+				{!isPlayingInline && hasPlaybackProgress && !showWatchedState && (
 					<div
 						data-testid="video-progress-badge"
 						className="absolute top-2 right-2 rounded bg-black/70 px-2 py-1 text-[11px] font-semibold tabular-nums text-white shadow-sm"
@@ -495,14 +518,12 @@ const StatefulVideoCard = ({
 							isWatched ? "Mark video as unwatched" : "Mark video as watched"
 						}
 						className={`absolute bottom-3 right-14 flex h-9 w-9 flex-none items-center justify-center rounded-full transition-colors ${
-							isWatched
+							showWatchedState
 								? "bg-emerald-600/10 text-emerald-500 dark:bg-emerald-500/15 dark:text-emerald-400"
 								: "text-gray-400 hover:bg-gray-100 hover:text-emerald-500 dark:text-ios-500 dark:hover:bg-ios-800 dark:hover:text-emerald-400"
 						}`}
 					>
-						{isWatched ? (
-							<CheckCircle2 className="h-5 w-5 fill-current" />
-						) : progressPercent > 0 ? (
+						{hasPlaybackProgress ? (
 							<span
 								data-testid="video-progress-indicator"
 								aria-hidden="true"
@@ -511,6 +532,8 @@ const StatefulVideoCard = ({
 									background: `linear-gradient(to top, currentColor ${progressPercent}%, transparent ${progressPercent}%)`,
 								}}
 							/>
+						) : showWatchedState ? (
+							<CheckCircle2 className="h-5 w-5 fill-current" />
 						) : (
 							<CheckCircle2 className="h-5 w-5" />
 						)}

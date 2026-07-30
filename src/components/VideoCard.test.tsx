@@ -558,6 +558,7 @@ describe("VideoCard", () => {
 	});
 
 	it("saves inline playback progress so queued videos can resume", async () => {
+		mockStore.watchedVideos = new Set(["video-1"]);
 		let currentTime = 45;
 		window.YT = {
 			PlayerState: { ENDED: 0 },
@@ -598,6 +599,7 @@ describe("VideoCard", () => {
 			});
 		});
 		expect(mockStore.markAsWatched).not.toHaveBeenCalled();
+		expect(mockStore.markAsUnwatched).toHaveBeenCalledWith("video-1");
 		expect(screen.getByTestId("video-progress-indicator")).toBeInTheDocument();
 
 		currentTime = 72;
@@ -1020,6 +1022,32 @@ describe("VideoCard", () => {
 
 		expect(progressBar).toBeInTheDocument();
 		expect(progressBar).toHaveStyle({ width: "25%" });
+	});
+
+	it("shows partial progress instead of a stale watched state", () => {
+		mockStore.watchedVideos = new Set(["video-1"]);
+		localStorage.setItem(
+			"video-playback-progress",
+			JSON.stringify({
+				"video-1": {
+					currentTime: 30,
+					duration: 120,
+					updatedAt: Date.now(),
+				},
+			}),
+		);
+
+		render(
+			<MemoryRouter>
+				<VideoCard video={video} index={0} />
+			</MemoryRouter>,
+		);
+
+		expect(screen.queryByText("Watched")).not.toBeInTheDocument();
+		expect(screen.getByTestId("video-progress-indicator")).toHaveStyle({
+			background: "linear-gradient(to top, currentColor 25%, transparent 25%)",
+		});
+		expect(screen.getByTestId("video-progress-badge")).toHaveTextContent("25%");
 	});
 
 	it("updates the bottom progress bar when playback progress changes", async () => {
