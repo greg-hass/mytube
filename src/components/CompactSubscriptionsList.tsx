@@ -1,6 +1,6 @@
 import { Heart, Trash2, Volume2, VolumeX } from "lucide-react";
 import { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate } from "react-router";
 import { getDisplayThumbnail, handleImageLoadError } from "../lib/icon-loader";
 import type { YouTubeChannel } from "../types/youtube";
 import { groupCompactSubscriptions } from "./compact-subscriptions";

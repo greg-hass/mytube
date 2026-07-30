@@ -2,7 +2,7 @@ import { motion } from 'framer-motion';
 import { ExternalLink, Users, Video, Trash2, Heart, Volume2, VolumeX } from 'lucide-react';
 import type { YouTubeChannel } from '../types/youtube';
 import { useState, memo } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate } from 'react-router';
 import { getDisplayThumbnail, handleImageLoadError } from '../lib/icon-loader';
 
 interface Props {

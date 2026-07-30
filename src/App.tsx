@@ -1,5 +1,5 @@
 import { useEffect } from 'react';
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router';
 import { Dashboard } from './components/Dashboard';
 import { ChannelViewer } from './components/ChannelViewer';
 import { useStore } from './store/useStore';
