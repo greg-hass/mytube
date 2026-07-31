@@ -531,8 +531,9 @@ export const Dashboard = () => {
 				continue;
 			}
 			// 5s floor — captures anything you actually watched, ignores
-			// accidental taps. saveVideoProgress already auto-clears at
-			// 95% / within 10s of end, so we don't need an upper bound here.
+			// accidental taps. Videos are only marked watched when playback
+			// reaches the end (or via manual mark), so partial progress stays
+			// visible here until then.
 			if (progress.currentTime < 5) continue;
 			// Honor explicit user removal. saveVideoProgress will clear the
 			// flag the next time the user resumes the video in Latest, so
