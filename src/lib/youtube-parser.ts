@@ -54,12 +54,28 @@ export function parseChannelInput(input: string): ParsedChannelInput {
   try {
     url = new URL(trimmedInput);
   } catch {
-    // If it's not a valid URL, try treating it as a custom URL without domain
-    return {
-      type: 'custom_url',
-      value: trimmedInput,
-      originalInput: trimmedInput,
-    };
+    // Schemeless YouTube URLs (e.g. "www.youtube.com/@name" or
+    // "youtube.com/c/name") fail URL parsing; retry with a scheme so the
+    // path rules below still apply instead of misclassifying the whole
+    // string as a custom URL slug.
+    if (/^(www\.|m\.)?youtube\.com\//i.test(trimmedInput)) {
+      try {
+        url = new URL(`https://${trimmedInput}`);
+      } catch {
+        return {
+          type: 'invalid',
+          value: '',
+          originalInput: trimmedInput,
+        };
+      }
+    } else {
+      // If it's not a valid URL, try treating it as a custom URL without domain
+      return {
+        type: 'custom_url',
+        value: trimmedInput,
+        originalInput: trimmedInput,
+      };
+    }
   }
 
   // Only process YouTube URLs

@@ -11,19 +11,12 @@ vi.mock("./feed-fetcher", () => ({
 	fetchYouTubeApiVideos: vi.fn(),
 }));
 
-vi.mock("./innertube-fetcher", () => ({
-	isInnerTubeAvailable: vi.fn().mockReturnValue(false),
-	fetchSubscriptionFeed: vi.fn().mockResolvedValue(null),
-}));
-
 const THUMB_PREFIX = "https://thumb.example";
 const FIXTURE_THUMBNAIL = "https://example.com/thumb.jpg";
 
 const { createFeedAggregator, __test__ } = feedAggregator;
 
 beforeEach(() => {
-	// Ensure InnerTube is disabled so tests do not depend on local credentials.
-	process.env.YOUTUBE_INNERTUBE_COOKIE = "SID=foo";
 	vi.clearAllMocks();
 });
 
