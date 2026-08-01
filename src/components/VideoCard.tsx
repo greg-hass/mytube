@@ -33,6 +33,9 @@ interface Props {
 	onInlinePlaybackChange?: (videoId: string, isPlaying: boolean) => void;
 	onUnavailable?: (videoId: string) => void;
 	context?: "latest" | "queue";
+	selectable?: boolean;
+	selected?: boolean;
+	onToggleSelect?: (videoId: string) => void;
 }
 
 const SWIPE_TO_WATCHED_THRESHOLD = 80;
@@ -46,6 +49,9 @@ const StatefulVideoCard = ({
 	onInlinePlaybackChange,
 	onUnavailable,
 	context = "latest",
+	selectable = false,
+	selected = false,
+	onToggleSelect,
 }: Props) => {
 	const isLikelyShort =
 		video.isShort === true || isShortVideo({ ...video, isShort: undefined });
@@ -385,6 +391,20 @@ const StatefulVideoCard = ({
 			)}
 			{/* Thumbnail */}
 			<div className="relative aspect-video overflow-hidden bg-black">
+				{selectable && onToggleSelect && (
+					<label
+						className="absolute left-2 top-2 z-20 flex h-8 w-8 cursor-pointer items-center justify-center rounded-full bg-black/60 backdrop-blur-sm"
+						onClick={(event) => event.stopPropagation()}
+					>
+						<input
+							type="checkbox"
+							checked={selected}
+							onChange={() => onToggleSelect(video.id)}
+							aria-label={`Select ${video.title}`}
+							className="h-4 w-4 accent-red-600"
+						/>
+					</label>
+				)}
 				{isPlayingInline ? (
 					<div
 						ref={inlinePlayerContainerRef}
@@ -514,10 +534,12 @@ const StatefulVideoCard = ({
 					<button
 						type="button"
 						onClick={handleWatchedClick}
+						aria-pressed={isWatched}
 						aria-label={
 							isWatched ? "Mark video as unwatched" : "Mark video as watched"
 						}
-						className={`absolute bottom-3 right-14 flex h-9 w-9 flex-none items-center justify-center rounded-full transition-colors ${
+						title={isWatched ? "Mark as unwatched" : "Mark as watched"}
+						className={`absolute bottom-3 right-14 flex h-10 w-10 flex-none items-center justify-center rounded-full transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-500 ${
 							showWatchedState
 								? "bg-emerald-600/10 text-emerald-500 dark:bg-emerald-500/15 dark:text-emerald-400"
 								: "text-gray-400 hover:bg-gray-100 hover:text-emerald-500 dark:text-ios-500 dark:hover:bg-ios-800 dark:hover:text-emerald-400"
@@ -542,12 +564,14 @@ const StatefulVideoCard = ({
 					<button
 						type="button"
 						onClick={handleFavoriteClick}
+						aria-pressed={isFavorite}
 						aria-label={
 							isFavorite
 								? "Remove video from favorites"
 								: "Add video to favorites"
 						}
-						className={`absolute bottom-3 right-3 flex h-9 w-9 flex-none items-center justify-center rounded-full transition-colors ${
+						title={isFavorite ? "Remove from favorites" : "Add to favorites"}
+						className={`absolute bottom-3 right-3 flex h-10 w-10 flex-none items-center justify-center rounded-full transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-500 ${
 							isFavorite
 								? "bg-red-600/10 text-red-500 dark:bg-red-500/15 dark:text-red-400"
 								: "text-gray-400 hover:bg-gray-100 hover:text-red-500 dark:text-ios-500 dark:hover:bg-ios-800 dark:hover:text-red-400"

@@ -9,6 +9,25 @@ type EmptyStateProps = {
   action?: ReactNode;
 };
 
+type EmptyStateActionProps = {
+  children: ReactNode;
+  onClick: () => void;
+  disabled?: boolean;
+};
+
+export function EmptyStateAction({ children, onClick, disabled = false }: EmptyStateActionProps) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      className="rounded-lg bg-gray-900 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-gray-700 disabled:cursor-not-allowed disabled:opacity-60 dark:bg-ios-100 dark:text-ios-950 dark:hover:bg-ios-200"
+    >
+      {children}
+    </button>
+  );
+}
+
 export function EmptyState({ icon: Icon, iconName, title, detail, action }: EmptyStateProps) {
   return (
     <section

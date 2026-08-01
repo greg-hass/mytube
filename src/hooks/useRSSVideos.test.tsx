@@ -81,6 +81,18 @@ describe("useRSSVideos", () => {
 		vi.useRealTimers();
 	});
 
+	it("does not poll server video endpoints while authentication is required", async () => {
+		const fetchMock = vi.fn();
+		vi.stubGlobal("fetch", fetchMock);
+
+		renderHook(() => useRSSVideos({ enabled: false }), {
+			wrapper: createWrapper(),
+		});
+
+		await act(async () => {});
+		expect(fetchMock).not.toHaveBeenCalled();
+	});
+
 	it("keeps manual refresh quiet and leaves cached videos visible", async () => {
 		const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
 			const url = String(input);
@@ -235,6 +247,47 @@ describe("useRSSVideos", () => {
 		await waitFor(() => {
 			expect(result.current.videos[0]?.title).toBe("Fresh scheduled video");
 		});
+	});
+
+	it("retries one channel without replacing cached videos", async () => {
+		const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+			const url = String(input);
+			if (url.startsWith("/api/videos/status")) return statusResponse();
+			if (url === "/api/videos" || url.startsWith("/api/videos?")) {
+				return videosResponse(
+					[video("Cached video", "video-1", "2026-05-06T20:00:00.000Z")],
+					"2026-05-06T20:00:00.000Z",
+				);
+			}
+			if (url === "/api/videos/refresh/channel/UC_FAIL") {
+				return new Response(JSON.stringify({ success: true }));
+			}
+			throw new Error(`Unexpected fetch ${url}`);
+		});
+
+		vi.stubGlobal("fetch", fetchMock);
+
+		const { result } = renderHook(() => useRSSVideos(), {
+			wrapper: createWrapper(),
+		});
+
+		await waitFor(() => expect(result.current.videos).toHaveLength(1));
+		act(() => result.current.retryChannel("UC_FAIL"));
+
+		await waitFor(() => {
+			expect(fetchMock).toHaveBeenCalledWith(
+				"/api/videos/refresh/channel/UC_FAIL",
+				{
+					method: "POST",
+					cache: "no-store",
+					credentials: "same-origin",
+				},
+			);
+		});
+		await waitFor(() =>
+			expect(toast.success).toHaveBeenCalledWith("Refresh queued for UC_FAIL"),
+		);
+		expect(result.current.videos[0].title).toBe("Cached video");
 	});
 
 	it("exposes scheduled refresh timing from the server status", async () => {

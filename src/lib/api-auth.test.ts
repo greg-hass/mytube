@@ -5,6 +5,7 @@ import {
   SERVER_API_TOKEN_STORAGE_KEY,
   setServerApiToken,
   uninstallAuthenticatedFetchForTests,
+  verifyServerApiToken,
 } from './api-auth';
 
 describe('api auth fetch wrapper', () => {
@@ -166,5 +167,23 @@ describe('api auth fetch wrapper', () => {
     const headers = init?.headers as Headers | undefined;
     const auth = headers instanceof Headers ? headers.get('Authorization') : undefined;
     expect(auth).toBeFalsy();
+  });
+
+  it('accepts a successful authenticated server connection check', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(new Response('{}'));
+
+    await expect(verifyServerApiToken(fetchMock)).resolves.toBeUndefined();
+    expect(fetchMock).toHaveBeenCalledWith(
+      expect.stringMatching(/^\/api\/sync\?t=\d+$/),
+      expect.anything(),
+    );
+  });
+
+  it('rejects an unauthorized server connection check as an AuthError', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(new Response('{}', { status: 401 }));
+
+    await expect(verifyServerApiToken(fetchMock)).rejects.toMatchObject({
+      name: 'AuthError',
+    });
   });
 });

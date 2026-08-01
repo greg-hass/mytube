@@ -2,8 +2,8 @@
 
 YouTube's subscription feed is algorithmically curated and can hide videos.
 FreshRSS reads feeds but does not understand YouTube. MyTube is a YouTube-native
-feed reader that tracks watched state, filters Shorts, queues videos for later,
-and stays RSS-first so routine refreshes do not burn YouTube API quota.
+feed reader that tracks watched state, filters Shorts, highlights favorites, and
+stays RSS-first so routine refreshes do not burn YouTube API quota.
 
 It is a feed reader, not a video archive. Videos still play through YouTube, so
 deleted, private, age-restricted, or region-blocked videos may become
@@ -14,7 +14,7 @@ unavailable.
 YouTube already has subscriptions, but the feed is not a clean chronological
 inbox. General RSS readers solve chronology, but miss YouTube-specific workflow:
 watched state, Shorts detection, duration filters, channel health, embedded
-playback, favorites, and a watch-later queue.
+playback, and favorites.
 
 This app sits in the middle: self-hosted, chronological, YouTube-aware, and
 deliberately not recommendation-driven.
@@ -63,7 +63,7 @@ The frontend runs at `http://localhost:5173`.
 ## What It Does
 
 - Builds a chronological feed from YouTube RSS feeds by default
-- Keeps subscriptions, watched videos, favorites, queue, filters, and settings
+- Keeps subscriptions, watched videos, favorites, filters, and settings
   under your control
 - Imports OPML and Google Takeout subscription exports
 - Finds channels by search without requiring the YouTube Data API
@@ -83,7 +83,7 @@ checklist.
 
 Suggested first set:
 
-- Main feed with mixed channels, durations, queue/favorite controls, and refresh
+- Main feed with mixed channels, durations, favorite controls, and refresh
   status
 - Mobile swipe-to-watch interaction
 - Settings data safety and backup/restore section
@@ -96,7 +96,7 @@ Suggested first set:
 | Chronological subscriptions | Yes | Yes | Not reliably |
 | YouTube watched state | Yes | No | Yes |
 | Shorts filtering | Yes | No | Limited |
-| Queue/favorites | Yes | Generic only | Algorithm-coupled |
+| Favorites | Yes | Generic only | Algorithm-coupled |
 | Duration and replay filters | Yes | No | Limited |
 | RSS-first/no routine API quota | Yes | Yes | No |
 | Self-hosted data | Yes | Yes | No |
@@ -140,7 +140,8 @@ recovery snapshot of the current database, and removes old SQLite WAL sidecars
 before the restored database is activated.
 
 The Settings screen includes a full app backup export for subscriptions, watched
-videos, favorites, queue, feed filters, groups, and settings.
+videos, favorites, feed filters, groups, and settings. Legacy queued-video
+fields remain in backups so older browser data and exports stay restorable.
 
 See [docs/state-ownership.md](docs/state-ownership.md) for the source-of-truth,
 sync, deletion, and recovery contracts across SQLite, IndexedDB, and browser

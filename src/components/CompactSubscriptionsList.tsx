@@ -7,6 +7,9 @@ import { groupCompactSubscriptions } from "./compact-subscriptions";
 
 interface Props {
 	channels: YouTubeChannel[];
+	selectable?: boolean;
+	selectedChannelIds?: ReadonlySet<string>;
+	onToggleSelect?: (channelId: string) => void;
 	onRemove: (channelId: string) => void | Promise<void>;
 	onToggleFavorite: (channelId: string) => void | Promise<void>;
 	onToggleMute: (channelId: string) => void | Promise<void>;
@@ -14,6 +17,9 @@ interface Props {
 
 export function CompactSubscriptionsList({
 	channels,
+	selectable = false,
+	selectedChannelIds,
+	onToggleSelect,
 	onRemove,
 	onToggleFavorite,
 	onToggleMute,
@@ -47,6 +53,20 @@ export function CompactSubscriptionsList({
 							{sectionChannels.map((channel) => (
 								<li key={channel.id}>
 									<div className="flex min-h-14 items-center gap-3 px-2 py-2">
+										{selectable && onToggleSelect && (
+											<label
+												className="flex h-8 w-8 shrink-0 cursor-pointer items-center justify-center rounded-lg hover:bg-gray-100 dark:hover:bg-ios-800"
+												onClick={(event) => event.stopPropagation()}
+											>
+												<input
+													type="checkbox"
+													checked={selectedChannelIds?.has(channel.id) ?? false}
+													onChange={() => onToggleSelect(channel.id)}
+													aria-label={`Select ${channel.title}`}
+													className="h-4 w-4 accent-red-600"
+												/>
+											</label>
+										)}
 										<button
 											type="button"
 											onClick={() => navigate(`/channel/${channel.id}`)}

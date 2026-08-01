@@ -405,7 +405,50 @@ function createApp({
 				deletedId: id,
 				syncRevision: newRevision,
 			});
-		}, "Failed to delete subscription"),
+	}, "Failed to delete subscription"),
+	);
+
+	app.post(
+		"/api/subscriptions/restore",
+		asyncHandler(async (req, res) => {
+			const subscriptions = req.body?.subscriptions;
+			const validation = validateSyncPayload({
+				subscriptions,
+				settings: {},
+				watchedVideos: [],
+			});
+			if (!validation.valid) {
+				return res.status(400).json({ error: validation.error });
+			}
+
+			const restoredById = new Map(
+				subscriptions.map((subscription) => [subscription.id, subscription]),
+			);
+			const savedData = await appStore.updateData(
+				defaultData,
+				(data) => ({
+					...data,
+					subscriptions: [
+						...(data.subscriptions || []).filter(
+							(subscription) => !restoredById.has(subscription.id),
+						),
+						...restoredById.values(),
+					],
+				}),
+				{ trackSubscriptionChanges: false },
+			);
+			feedAggregator
+				.aggregateFeeds()
+				.catch((err) => logger.error("Aggregation trigger failed:", err));
+			const newRevision =
+				savedData.syncRevision ?? appStore.getCurrentRevision();
+			res.setHeader("ETag", `"${newRevision}"`);
+			res.json({
+				success: true,
+				restoredIds: Array.from(restoredById.keys()),
+				syncRevision: newRevision,
+			});
+		}, "Failed to restore subscriptions"),
 	);
 
 	app.get(
@@ -494,6 +537,48 @@ function createApp({
 					: "Refresh queued. Check status for progress.",
 			});
 		}, "Failed to trigger refresh"),
+	);
+
+	app.post(
+		"/api/videos/refresh/channel/:channelId",
+		asyncHandler(async (req, res) => {
+			const { channelId } = req.params;
+			if (
+				typeof channelId !== "string" ||
+				!/^UC[\w-]{2,}$/.test(channelId)
+			) {
+				return res.status(400).json({ error: "Invalid channel ID" });
+			}
+
+			const data = await appStore.readData(
+				appStore.DEFAULT_DATA || { subscriptions: [] },
+			);
+			if (!data.subscriptions?.some((subscription) => subscription.id === channelId)) {
+				return res.status(404).json({ error: "Subscription not found" });
+			}
+
+			const status = feedAggregator.getAggregationStatus?.() || {};
+			if (status.state === "running") {
+				return res.json({
+					success: true,
+					channelId,
+					alreadyRunning: true,
+					message: "A feed refresh is already in progress.",
+				});
+			}
+
+			feedAggregator
+				.aggregateFeeds({ channelId })
+				.catch((err) =>
+					logger.error(`Background refresh failed for ${channelId}:`, err),
+				);
+
+			res.json({
+				success: true,
+				channelId,
+				message: "Channel refresh queued.",
+			});
+		}, "Failed to trigger channel refresh"),
 	);
 
 	app.post(

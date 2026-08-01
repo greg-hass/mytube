@@ -7,6 +7,20 @@ function getFailureReason(result) {
 		: result.errorMessage || "No RSS videos or metadata returned";
 }
 
+function getFailureKind(result) {
+	const outcome =
+		result.outcome || (result.transient ? "transient-failure" : "permanent-failure");
+	if (outcome === "transient-failure") return "transient";
+
+	if (result.errorStatus === 404 || result.errorStatus === 410) {
+		return "unavailable";
+	}
+	if (result.errorStatus === 401 || result.errorStatus === 403) {
+		return "restricted";
+	}
+	return "permanent";
+}
+
 function isFailedRefreshResult(result) {
 	if (result.outcome) {
 		return (
@@ -26,6 +40,7 @@ function summarizeFailedChannels(results = [], channelRefreshes = {}) {
 		id: result.id,
 		title: result.title || result.id,
 		reason: getFailureReason(result),
+		failureKind: getFailureKind(result),
 		lastSuccessfulFetchAt:
 			channelRefreshes[result.id]?.lastSuccessfulFetchAt || null,
 	}));

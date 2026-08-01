@@ -1,5 +1,6 @@
 import { AlertTriangle, Clock3, Loader2, RefreshCw } from "lucide-react";
 import type { SyncStatus } from "../hooks/useRSSVideos";
+import { getRefreshFailureGuidance } from "../lib/refresh-failure";
 
 type CacheStatus = {
 	hasCache: boolean;
@@ -12,6 +13,8 @@ type Props = {
 	status: SyncStatus;
 	cacheStatus: CacheStatus;
 	onRetryFailed: () => void;
+	onRetryChannel?: (channelId: string) => void;
+	retryingChannelId?: string | null;
 	variant?: "timeline" | "menu" | "compact";
 };
 
@@ -68,10 +71,14 @@ function FailedChannels({
 	channels,
 	limit,
 	isCompact,
+	onRetryChannel,
+	retryingChannelId,
 }: {
 	channels: SyncStatus["failedChannels"];
 	limit: number;
 	isCompact: boolean;
+	onRetryChannel?: (channelId: string) => void;
+	retryingChannelId?: string | null;
 }) {
 	if (!channels || channels.length === 0) return null;
 	return (
@@ -85,15 +92,49 @@ function FailedChannels({
 						{channels.length === 1 ? "s" : ""} attention
 					</p>
 					{!isCompact &&
-						channels.slice(0, limit).map((channel) => (
-							<p
-								key={channel.id}
-								className="text-xs text-amber-800 dark:text-amber-200"
-							>
-								<span className="font-medium">{channel.title}</span>:{" "}
-								{channel.reason}
-							</p>
-						))}
+						channels.slice(0, limit).map((channel) => {
+							const guidance = getRefreshFailureGuidance(channel);
+							return (
+								<div
+									key={channel.id}
+									className="flex items-start justify-between gap-3 text-xs text-amber-800 dark:text-amber-200"
+								>
+									<div className="min-w-0">
+										<p>
+											<span className="font-medium">{channel.title}</span>: {" "}
+											{channel.reason}
+										</p>
+										<p className="mt-1 font-medium text-amber-950 dark:text-amber-100">
+											{guidance.label}
+										</p>
+										<p className="mt-1 text-[0.7rem] text-amber-700 dark:text-amber-300">
+											{guidance.hint}
+										</p>
+										<p className="mt-1 text-[0.7rem] text-amber-700 dark:text-amber-300">
+											{channel.lastSuccessfulFetchAt
+												? `Last successful refresh ${formatRelativeAge(new Date(channel.lastSuccessfulFetchAt).getTime())}`
+												: "No successful refresh recorded"}
+										</p>
+									</div>
+									{onRetryChannel && (
+										<button
+											type="button"
+											onClick={() => onRetryChannel(channel.id)}
+											disabled={Boolean(retryingChannelId)}
+											aria-label={`Retry ${channel.title}`}
+											className="inline-flex shrink-0 items-center gap-1 rounded-md border border-amber-300 px-2 py-1 text-[0.7rem] font-medium text-amber-950 hover:bg-amber-100 disabled:cursor-wait disabled:opacity-60 dark:border-amber-700 dark:text-amber-100 dark:hover:bg-amber-900/50"
+										>
+											{retryingChannelId === channel.id ? (
+												<Loader2 className="h-3 w-3 animate-spin" />
+											) : (
+												<RefreshCw className="h-3 w-3" />
+											)}
+											Retry this channel
+										</button>
+									)}
+								</div>
+							);
+						})}
 					{!isCompact && channels.length > limit && (
 						<p className="text-xs text-amber-800 dark:text-amber-200">
 							+{channels.length - limit} more
@@ -109,6 +150,8 @@ export function RefreshStatusPanel({
 	status,
 	cacheStatus,
 	onRetryFailed,
+	onRetryChannel,
+	retryingChannelId,
 	variant = "timeline",
 }: Props) {
 	const failedChannels = status.failedChannels || [];
@@ -170,6 +213,8 @@ export function RefreshStatusPanel({
 				channels={failedChannels}
 				limit={failedPreviewLimit}
 				isCompact={isCompact}
+				onRetryChannel={onRetryChannel}
+				retryingChannelId={retryingChannelId}
 			/>
 		</section>
 	);
@@ -177,7 +222,8 @@ export function RefreshStatusPanel({
 
 function formatRelativeAge(timestamp: number) {
 	if (!timestamp || !Number.isFinite(timestamp)) return "unknown";
-	return `${formatDuration(Math.max(0, Date.now() - timestamp))} ago`;
+	const duration = formatDuration(Math.max(0, Date.now() - timestamp));
+	return duration === "just now" ? duration : `${duration} ago`;
 }
 
 function formatDuration(durationMs: number) {

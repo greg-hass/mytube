@@ -12,12 +12,21 @@ that synchronization, backup, deletion, and recovery code must preserve.
 | Subscription favorites, mute state, and group | SQLite subscription rows | IndexedDB | Preserved during metadata refresh and ID redirects. Browser mutations update its cache and are pushed through the revisioned sync endpoint. |
 | Watched video IDs | SQLite sync snapshot | Zustand/localStorage | Browser actions update local state immediately. Reconciliation imports remote state only when explicitly requested and otherwise pushes the merged browser set. |
 | Feed videos and channel refresh health | SQLite | React Query memory cache | The server refresh worker is authoritative. Browser cache is disposable and may use ETags/304 responses. |
-| Queue and favorite videos | Browser localStorage | React hook state | Device-local by design. Full video snapshots are stored alongside IDs so entries survive feed-cache eviction. Included in full app backup, not server sync. |
+| Favorite videos | Browser localStorage | React hook state | Device-local by design. Full video snapshots are stored alongside IDs so entries survive feed-cache eviction. Included in full app backup, not server sync. Legacy queued-video fields remain supported for backward-compatible restore. |
 | Playback progress | Browser localStorage | React hook state | Device-local and replaceable. It does not affect server watched state until the normal watched workflow runs. |
 | Feed filters and saved presets | Browser localStorage | Zustand/React state | Device-local UI preference. Included in full app backup. |
 | Theme, layout, sort, quota display, and UI preferences | Browser localStorage | Zustand | Device-local. Selected sync-safe settings may be copied to SQLite, but server data must not overwrite unrelated browser preferences. |
 | Server API token | Browser localStorage | Authenticated fetch wrapper | Sent only to same-origin `/api/*` requests. Never included in app backup or server sync. Clearing or replacing it must take effect on the next request. |
 | Optional provider credentials | Server environment where supported; otherwise browser localStorage | Zustand | Treat browser-stored keys as readable by any successful same-origin script injection. Never include them in Git, logs, exports, or sync payloads. |
+
+Subscription health is a derived view over the IndexedDB subscription rows. It
+reports temporary channel IDs, placeholder artwork, missing names, and stable
+identity collisions; matching titles alone are not treated as duplicates. The
+Settings repair actions are explicit and reversible: temporary IDs use the
+YouTube key only for those unresolved channels, while artwork repair uses the
+existing server metadata merge. Health checks never delete or merge rows.
+Duplicate review may remove one exact subscription only after a second
+confirmation; it never combines records or chooses a winner automatically.
 
 ## Required invariants
 
@@ -49,8 +58,9 @@ that synchronization, backup, deletion, and recovery code must preserve.
 ### Backup and recovery
 
 - SQLite backup/restore is the authoritative server recovery path.
-- Full app backup is the browser recovery path for device-local queue,
-  favorites, filters, groups, and settings.
+- Full app backup is the browser recovery path for device-local favorites,
+  filters, groups, and settings. Legacy queued-video fields remain supported
+  for backward-compatible restore even though Queue is no longer a destination.
 - Browser caches and React Query state are reconstructable and are not backups.
 - Secrets and the server API token are deliberately excluded from exports.
 

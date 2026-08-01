@@ -54,6 +54,7 @@ describe("RefreshStatusPanel", () => {
 							id: "UC_FAIL",
 							title: "Broken Channel",
 							reason: "RSS feed failed with HTTP 404",
+							failureKind: "unavailable",
 						},
 					],
 				}}
@@ -88,6 +89,7 @@ describe("RefreshStatusPanel", () => {
 							id: "UC_FAIL",
 							title: "Broken Channel",
 							reason: "RSS feed failed with HTTP 404",
+							failureKind: "unavailable",
 						},
 					],
 				}}
@@ -101,8 +103,53 @@ describe("RefreshStatusPanel", () => {
 			/>,
 		);
 
-		expect(
+			expect(
 			screen.getByText(/RSS feed failed with HTTP 404/i),
 		).toBeInTheDocument();
+		expect(screen.getByText("Channel unavailable")).toBeInTheDocument();
+		expect(
+			screen.getByText(/Check whether the channel still exists/i),
+		).toBeInTheDocument();
+	});
+
+	it("shows channel refresh age and retries only that channel", () => {
+		const retryChannel = vi.fn();
+		render(
+			<RefreshStatusPanel
+				status={{
+					total: 1,
+					current: 1,
+					isSyncing: false,
+					lastUpdated: Date.now(),
+					errors: 1,
+					videos: 10,
+					state: "error",
+					failedChannels: [
+						{
+							id: "UC_FAIL",
+							title: "Broken Channel",
+							reason: "RSS feed failed",
+							failureKind: "transient",
+							lastSuccessfulFetchAt: new Date(
+								Date.now() - 2 * 60 * 60 * 1000,
+							).toISOString(),
+						},
+					],
+				}}
+				cacheStatus={{
+					hasCache: true,
+					isStale: true,
+					age: 2 * 60 * 60 * 1000,
+					videoCount: 10,
+				}}
+				onRetryFailed={vi.fn()}
+				onRetryChannel={retryChannel}
+			/>,
+		);
+
+		expect(screen.getByText(/Last successful refresh 2h ago/i)).toBeInTheDocument();
+		expect(screen.getByText("Temporary feed problem")).toBeInTheDocument();
+		fireEvent.click(screen.getByRole("button", { name: "Retry Broken Channel" }));
+		expect(retryChannel).toHaveBeenCalledWith("UC_FAIL");
 	});
 });

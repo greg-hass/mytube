@@ -20,7 +20,13 @@ interface OPMLChannel {
 	group?: string;
 }
 
-type ImportFormat = "opml" | "csv";
+export type ImportFormat = "opml" | "csv";
+
+type ChannelParseResult = {
+	channels: OPMLChannel[];
+	duplicateCount: number;
+	skippedCount: number;
+};
 
 /**
  * OPML outline element structure
@@ -124,7 +130,7 @@ function extractChannelIdFromText(value: string): string | null {
 	return match?.[0] || null;
 }
 
-function parseTakeoutCSV(csv: string): OPMLChannel[] {
+function parseTakeoutCSVWithStats(csv: string): ChannelParseResult {
 	if (!csv || csv.trim().length === 0) {
 		throw new Error("CSV content is empty");
 	}
@@ -152,6 +158,8 @@ function parseTakeoutCSV(csv: string): OPMLChannel[] {
 
 	const channels: OPMLChannel[] = [];
 	const seen = new Set<string>();
+	let duplicateCount = 0;
+	let skippedCount = 0;
 
 	for (const row of rows.slice(1)) {
 		const idValue = idIndex >= 0 ? row[idIndex] || "" : "";
@@ -159,7 +167,14 @@ function parseTakeoutCSV(csv: string): OPMLChannel[] {
 		const channelId =
 			extractChannelIdFromText(idValue) || extractChannelIdFromText(urlValue);
 
-		if (!channelId || seen.has(channelId)) continue;
+		if (!channelId) {
+			skippedCount += 1;
+			continue;
+		}
+		if (seen.has(channelId)) {
+			duplicateCount += 1;
+			continue;
+		}
 
 		seen.add(channelId);
 		channels.push({
@@ -173,7 +188,11 @@ function parseTakeoutCSV(csv: string): OPMLChannel[] {
 		throw new Error("No YouTube channels found in CSV file");
 	}
 
-	return channels;
+	return { channels, duplicateCount, skippedCount };
+}
+
+function parseTakeoutCSV(csv: string): OPMLChannel[] {
+	return parseTakeoutCSVWithStats(csv).channels;
 }
 
 function detectImportFormat(content: string): ImportFormat | null {
@@ -200,10 +219,14 @@ function detectImportFormat(content: string): ImportFormat | null {
 function extractChannelsFromOutline(
 	outline: OPMLOutline | OPMLOutline[],
 	channels: OPMLChannel[],
+	seenChannelIds: Set<string>,
+	stats: Pick<ChannelParseResult, "duplicateCount" | "skippedCount">,
 ): void {
 	// Handle array of outlines
 	if (Array.isArray(outline)) {
-		outline.forEach((item) => extractChannelsFromOutline(item, channels));
+		outline.forEach((item) =>
+			extractChannelsFromOutline(item, channels, seenChannelIds, stats),
+		);
 		return;
 	}
 
@@ -213,26 +236,37 @@ function extractChannelsFromOutline(
 		const channelId = extractChannelId(xmlUrl);
 
 		if (channelId) {
-			// Prefer title over text, fallback to "Unknown Channel"
-			const title =
-				outline["@_title"] || outline["@_text"] || "Unknown Channel";
+			if (seenChannelIds.has(channelId)) {
+				stats.duplicateCount += 1;
+			} else {
+				seenChannelIds.add(channelId);
+				// Prefer title over text, fallback to "Unknown Channel"
+				const title =
+					outline["@_title"] || outline["@_text"] || "Unknown Channel";
 
-			channels.push({
-				title,
-				channelId,
-				xmlUrl,
-				isFavorite: outline["@_isFavorite"] === "true",
-				isMuted: outline["@_isMuted"] === "true",
-				group: outline["@_group"] || undefined,
-			});
+				channels.push({
+					title,
+					channelId,
+					xmlUrl,
+					isFavorite: outline["@_isFavorite"] === "true",
+					isMuted: outline["@_isMuted"] === "true",
+					group: outline["@_group"] || undefined,
+				});
+			}
 		} else {
+			stats.skippedCount += 1;
 			console.warn("Skipping outline with invalid channel URL:", xmlUrl);
 		}
 	}
 
 	// Recursively process nested outlines
 	if (outline.outline) {
-		extractChannelsFromOutline(outline.outline, channels);
+		extractChannelsFromOutline(
+			outline.outline,
+			channels,
+			seenChannelIds,
+			stats,
+		);
 	}
 }
 
@@ -243,7 +277,7 @@ function extractChannelsFromOutline(
  * @returns Array of channel data extracted from OPML
  * @throws Error if XML parsing fails or OPML structure is invalid
  */
-export function parseOPML(opmlXML: string): OPMLChannel[] {
+function parseOPMLWithStats(opmlXML: string): ChannelParseResult {
 	if (!opmlXML || opmlXML.trim().length === 0) {
 		throw new Error("OPML content is empty");
 	}
@@ -281,13 +315,26 @@ export function parseOPML(opmlXML: string): OPMLChannel[] {
 
 	// Extract all channels from outline hierarchy
 	const channels: OPMLChannel[] = [];
-	extractChannelsFromOutline(parsed.opml.body.outline, channels);
+	const stats: Pick<ChannelParseResult, "duplicateCount" | "skippedCount"> = {
+		duplicateCount: 0,
+		skippedCount: 0,
+	};
+	extractChannelsFromOutline(
+		parsed.opml.body.outline,
+		channels,
+		new Set<string>(),
+		stats,
+	);
 
 	if (channels.length === 0) {
 		throw new Error("No YouTube channels found in OPML file");
 	}
 
-	return channels;
+	return { channels, ...stats };
+}
+
+export function parseOPML(opmlXML: string): OPMLChannel[] {
+	return parseOPMLWithStats(opmlXML).channels;
 }
 
 /**
@@ -329,19 +376,40 @@ export function parseOPMLToSubscriptions(
 export function parseSubscriptionImportToSubscriptions(
 	content: string,
 ): StoredSubscription[] {
+	return parseSubscriptionImportPreview(content).subscriptions;
+}
+
+export type SubscriptionImportPreview = {
+	format: ImportFormat;
+	subscriptions: StoredSubscription[];
+	channelCount: number;
+	duplicateCount: number;
+	skippedCount: number;
+};
+
+export function parseSubscriptionImportPreview(
+	content: string,
+): SubscriptionImportPreview {
 	const format = detectImportFormat(content);
+	let parsed: ChannelParseResult;
 
 	if (format === "opml") {
-		return parseOPMLToSubscriptions(content);
+		parsed = parseOPMLWithStats(content);
+	} else if (format === "csv") {
+		parsed = parseTakeoutCSVWithStats(content);
+	} else {
+		throw new Error(
+			"Invalid import format. Please upload a Google Takeout subscriptions.csv file or an OPML file.",
+		);
 	}
 
-	if (format === "csv") {
-		return channelsToSubscriptions(parseTakeoutCSV(content));
-	}
-
-	throw new Error(
-		"Invalid import format. Please upload a Google Takeout subscriptions.csv file or an OPML file.",
-	);
+	return {
+		format,
+		subscriptions: channelsToSubscriptions(parsed.channels),
+		channelCount: parsed.channels.length,
+		duplicateCount: parsed.duplicateCount,
+		skippedCount: parsed.skippedCount,
+	};
 }
 
 /**
@@ -412,31 +480,26 @@ export function escapeXml(text: string): string {
 export function getSubscriptionImportStats(content: string): {
 	isValid: boolean;
 	channelCount: number;
+	duplicateCount: number;
+	skippedCount: number;
 	format?: ImportFormat;
 	error?: string;
 } {
 	try {
-		const format = detectImportFormat(content);
-
-		if (format === "opml") {
-			const channels = parseOPML(content);
-			return { isValid: true, channelCount: channels.length, format };
-		}
-
-		if (format === "csv") {
-			const channels = parseTakeoutCSV(content);
-			return { isValid: true, channelCount: channels.length, format };
-		}
-
+		const preview = parseSubscriptionImportPreview(content);
 		return {
-			isValid: false,
-			channelCount: 0,
-			error: "Invalid import format",
+			isValid: true,
+			channelCount: preview.channelCount,
+			duplicateCount: preview.duplicateCount,
+			skippedCount: preview.skippedCount,
+			format: preview.format,
 		};
 	} catch (error) {
 		return {
 			isValid: false,
 			channelCount: 0,
+			duplicateCount: 0,
+			skippedCount: 0,
 			error: error instanceof Error ? error.message : String(error),
 		};
 	}

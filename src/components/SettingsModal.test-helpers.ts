@@ -5,6 +5,7 @@
  * body itself reads like a list of user-visible assertions.
  */
 import { vi } from "vitest";
+import type { RefreshFailureKind } from "../types/server";
 
 export interface HealthDataIntegrityEvent {
 	file: string;
@@ -32,6 +33,8 @@ export interface VideosStatusPayload {
 		id: string;
 		title: string;
 		reason: string;
+		lastSuccessfulFetchAt?: string | null;
+		failureKind?: RefreshFailureKind;
 	}>;
 }
 
@@ -59,6 +62,8 @@ export const VIDEOS_STATUS_PAYLOAD: VideosStatusPayload = {
 			id: "UC_BAD",
 			title: "Broken Channel",
 			reason: "No RSS videos or metadata returned",
+			lastSuccessfulFetchAt: "2026-05-09T20:00:00.000Z",
+			failureKind: "permanent",
 		},
 	],
 };

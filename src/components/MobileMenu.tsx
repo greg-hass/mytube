@@ -92,6 +92,8 @@ interface MobileMenuProps {
 		videoCount: number;
 	};
 	onRetryFailed?: () => void;
+	onRetryChannel?: (channelId: string) => void;
+	retryingChannelId?: string | null;
 	onRefresh?: () => void;
 	isRefreshing?: boolean;
 	refreshProgress?: number;
@@ -115,6 +117,8 @@ export const MobileMenu = ({
 	syncStatus,
 	cacheStatus,
 	onRetryFailed,
+	onRetryChannel,
+	retryingChannelId,
 	onRefresh,
 	isRefreshing = false,
 	refreshProgress = 0,
@@ -307,6 +311,8 @@ export const MobileMenu = ({
 										status={syncStatus}
 										cacheStatus={cacheStatus}
 										onRetryFailed={onRetryFailed}
+										onRetryChannel={onRetryChannel}
+										retryingChannelId={retryingChannelId}
 										variant="menu"
 									/>
 								</section>

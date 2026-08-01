@@ -1,11 +1,17 @@
 import type { ChangeEvent, KeyboardEvent } from "react";
 import { Search, X } from "lucide-react";
+import {
+	SEARCH_SCOPE_OPTIONS,
+	type SearchScope,
+} from "../lib/unified-search";
 
 const ICON_SM = "h-4 w-4" as const;
 
 interface HeaderSearchMobileProps {
 	searchPlaceholder: string;
 	searchQuery: string;
+	searchScope?: SearchScope;
+	onSearchScopeChange?: (scope: SearchScope) => void;
 	visible: boolean;
 	onSearchChange: (value: string) => void;
 	onClear: () => void;
@@ -15,6 +21,8 @@ interface HeaderSearchMobileProps {
 export const HeaderSearchMobile = ({
 	searchPlaceholder,
 	searchQuery,
+	searchScope = "all",
+	onSearchScopeChange,
 	visible,
 	onSearchChange,
 	onClear,
@@ -24,6 +32,24 @@ export const HeaderSearchMobile = ({
 
 	return (
 		<div className="mobile-header-search pb-3 xl:hidden">
+			<label htmlFor="mobile-search-scope" className="sr-only">
+				Search scope
+			</label>
+			<select
+				id="mobile-search-scope"
+				aria-label="Search scope"
+				value={searchScope}
+				onChange={(event) =>
+					onSearchScopeChange?.(event.target.value as SearchScope)
+				}
+				className="mb-2 rounded-full bg-gray-100 px-3 py-2 text-sm text-gray-700 outline-none focus:border-red-500 dark:bg-ios-800 dark:text-ios-200"
+			>
+				{SEARCH_SCOPE_OPTIONS.map((option) => (
+					<option key={option.value} value={option.value}>
+						{option.label}
+					</option>
+				))}
+			</select>
 			<div className="relative">
 				<Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
 				<input

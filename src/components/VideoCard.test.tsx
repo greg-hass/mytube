@@ -71,6 +71,25 @@ describe("VideoCard", () => {
 		).toBeTruthy();
 	});
 
+	it("supports selecting a video for bulk actions", () => {
+		const onToggleSelect = vi.fn();
+
+		render(
+			<MemoryRouter>
+				<VideoCard
+					video={video}
+					index={0}
+					selectable
+					onToggleSelect={onToggleSelect}
+				/>
+			</MemoryRouter>,
+		);
+
+		fireEvent.click(screen.getByRole("checkbox", { name: "Select A useful video" }));
+
+		expect(onToggleSelect).toHaveBeenCalledWith("video-1");
+	});
+
 	it("uses max resolution YouTube thumbnails with fallback", () => {
 		render(
 			<MemoryRouter>
@@ -734,6 +753,28 @@ describe("VideoCard", () => {
 		expect(
 			screen.getByRole("button", { name: "Remove video from favorites" }),
 		).toBeInTheDocument();
+	});
+
+	it("exposes mobile-friendly state controls with pressed semantics", () => {
+		render(
+			<MemoryRouter>
+				<VideoCard video={video} index={0} />
+			</MemoryRouter>,
+		);
+
+		const watchedButton = screen.getByRole("button", {
+			name: "Mark video as watched",
+		});
+		const favoriteButton = screen.getByRole("button", {
+			name: "Add video to favorites",
+		});
+
+		expect(watchedButton).toHaveAttribute("aria-pressed", "false");
+		expect(favoriteButton).toHaveAttribute("aria-pressed", "false");
+		expect(watchedButton).toHaveClass("h-10", "w-10");
+		expect(favoriteButton).toHaveClass("h-10", "w-10");
+		expect(watchedButton).toHaveAttribute("title", "Mark as watched");
+		expect(favoriteButton).toHaveAttribute("title", "Add to favorites");
 	});
 
 	it("can mark a video watched without opening it", () => {

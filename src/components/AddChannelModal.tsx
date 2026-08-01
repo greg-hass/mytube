@@ -16,6 +16,7 @@ import {
 import { getDisplayText } from "../lib/youtube-parser";
 import { useAddChannelSearch } from "../hooks/useAddChannelSearch";
 import { useChannelSuggestions } from "../hooks/useChannelSuggestions";
+import { useModalFocus } from "../hooks/useModalFocus";
 import { formatSubscriberCount, formatVideoCount } from "./channelSearch";
 import { AddChannelPreview } from "./AddChannelPreview";
 import type { YouTubeChannel } from "../types/youtube";
@@ -38,9 +39,22 @@ export const AddChannelModal = ({
 		onAdd,
 	});
 	const suggestions = useChannelSuggestions();
+	const { modalRef, onKeyDown } = useModalFocus<HTMLDivElement>({
+		isOpen,
+		onClose,
+		initialFocusRef: search.inputRef,
+	});
 
 	return isOpen ? (
-		<div className="app-shell fixed inset-0 z-[100] flex h-[100dvh] flex-col overflow-hidden">
+		<div
+			ref={modalRef}
+			role="dialog"
+			aria-modal="true"
+			aria-labelledby="add-channel-title"
+			tabIndex={-1}
+			onKeyDown={onKeyDown}
+			className="app-shell fixed inset-0 z-[100] flex h-[100dvh] flex-col overflow-hidden"
+		>
 			<AddChannelHeader onClose={onClose} />
 			<ModalBody
 				search={search}
@@ -107,7 +121,7 @@ function SearchResultsBody({
 				hasResults={search.hasResults}
 				visibleSearchResults={search.visibleSearchResults}
 				previewChannel={search.previewChannel}
-				addedChannelIds={search.addedChannelIds}
+				isChannelKnown={search.isChannelKnown}
 				channelInfo={search.channelInfo}
 				searchError={search.searchError}
 				input={search.input}
@@ -131,7 +145,7 @@ function SearchStatusDisplay({
 	hasResults,
 	visibleSearchResults,
 	previewChannel,
-	addedChannelIds,
+	isChannelKnown,
 	channelInfo,
 	searchError,
 	input,
@@ -144,7 +158,7 @@ function SearchStatusDisplay({
 	hasResults: boolean;
 	visibleSearchResults: YouTubeChannel[];
 	previewChannel: YouTubeChannel | null;
-	addedChannelIds: Set<string>;
+	isChannelKnown: (channel: YouTubeChannel) => boolean;
 	channelInfo: YouTubeChannel | null;
 	searchError: "auth" | "network" | null;
 	input: string;
@@ -164,13 +178,13 @@ function SearchStatusDisplay({
 					<SearchResultsSection
 						results={visibleSearchResults}
 						previewingId={previewChannel?.id ?? null}
-						addedIds={addedChannelIds}
+						isChannelKnown={isChannelKnown}
 						onSelectPreview={onSelectPreview}
 						renderPreview={(channel) => (
 							<AddChannelPreview
 								channel={channel}
 								isLoading={isLoading}
-								isAdded={addedChannelIds.has(channel.id)}
+								isAdded={isChannelKnown(channel)}
 								onAdd={onAdd}
 								onDismiss={onDismiss}
 							/>
@@ -194,7 +208,7 @@ function SearchStatusDisplay({
 					<AddChannelPreview
 						channel={channelInfo}
 						isLoading={isLoading}
-						isAdded={addedChannelIds.has(channelInfo.id)}
+						isAdded={isChannelKnown(channelInfo)}
 						onAdd={onAdd}
 						onDismiss={onDismiss}
 					/>
@@ -242,13 +256,14 @@ function ChannelAddActions({
 							: search.input.trim()
 					}
 					isLoading={search.isLoading}
+					isKnown={search.isParsedInputKnown}
 					onAdd={search.handleAddParsedInput}
 				/>
 			)}
 
 			<SuggestionsSection
 				suggestions={suggestions}
-				addedIds={search.addedChannelIds}
+				isChannelKnown={search.isChannelKnown}
 				previewChannel={search.previewChannel}
 				isLoading={search.isLoading}
 				onSelectPreview={search.handleSelectPreviewChannel}
@@ -311,7 +326,7 @@ function AddChannelHeader({ onClose }: { onClose: () => void }) {
 								<span className="text-red-600 dark:text-red-500">Tube</span>
 							</h1>
 							<div className="mt-0.5 flex items-center gap-1.5 text-xs text-gray-500 dark:text-ios-400">
-								<p>Add Channel</p>
+								<p id="add-channel-title">Add Channel</p>
 							</div>
 						</div>
 					</motion.div>
@@ -440,13 +455,13 @@ function SearchLoadingSkeleton() {
 function SearchResultsSection({
 	results,
 	previewingId,
-	addedIds,
+	isChannelKnown,
 	onSelectPreview,
 	renderPreview,
 }: {
 	results: YouTubeChannel[];
 	previewingId: string | null;
-	addedIds: Set<string>;
+	isChannelKnown: (channel: YouTubeChannel) => boolean;
 	onSelectPreview: (channel: YouTubeChannel) => void;
 	renderPreview: (channel: YouTubeChannel) => React.ReactNode;
 }) {
@@ -466,7 +481,7 @@ function SearchResultsSection({
 			</div>
 			<div className="space-y-2 pr-1">
 				{results.map((channel) => {
-					const isAdded = addedIds.has(channel.id);
+					const isAdded = isChannelKnown(channel);
 					const isPreviewing = previewingId === channel.id;
 					return (
 						<div key={channel.id} className="overflow-hidden rounded-xl">
@@ -609,10 +624,12 @@ function SearchErrorStates({
 function AddParsedInputButton({
 	displayText,
 	isLoading,
+	isKnown,
 	onAdd,
 }: {
 	displayText: string;
 	isLoading: boolean;
+	isKnown: boolean;
 	onAdd: () => Promise<void>;
 }) {
 	return (
@@ -623,12 +640,14 @@ function AddParsedInputButton({
 			<button
 				type="button"
 				onClick={onAdd}
-				disabled={isLoading}
-				aria-label={`Add ${displayText}`}
+				disabled={isLoading || isKnown}
+				aria-label={isKnown ? `Already subscribed: ${displayText}` : `Add ${displayText}`}
 				className="flex h-10 w-10 flex-none items-center justify-center rounded-full bg-red-600 text-white transition-all hover:bg-red-700 disabled:opacity-60"
 			>
 				{isLoading ? (
 					<span className="h-4 w-4 rounded-full border-2 border-white/40 border-t-white animate-spin" />
+				) : isKnown ? (
+					<Check className="h-5 w-5" />
 				) : (
 					<Plus className="h-5 w-5" />
 				)}
@@ -641,7 +660,7 @@ function AddParsedInputButton({
 
 function SuggestionsSection({
 	suggestions,
-	addedIds,
+	isChannelKnown,
 	previewChannel,
 	isLoading,
 	onSelectPreview,
@@ -652,7 +671,7 @@ function SuggestionsSection({
 	onClear,
 }: {
 	suggestions: ReturnType<typeof useChannelSuggestions>;
-	addedIds: Set<string>;
+	isChannelKnown: (channel: YouTubeChannel) => boolean;
 	previewChannel: YouTubeChannel | null;
 	isLoading: boolean;
 	onSelectPreview: (channel: YouTubeChannel) => void;
@@ -805,13 +824,13 @@ function SuggestionsSection({
 						<SearchResultsSection
 							results={state.channels}
 							previewingId={previewChannel?.id ?? null}
-							addedIds={addedIds}
+							isChannelKnown={isChannelKnown}
 							onSelectPreview={onSelectPreview}
 							renderPreview={(channel) => (
 								<AddChannelPreview
 									channel={channel}
 									isLoading={isLoading}
-									isAdded={addedIds.has(channel.id)}
+									isAdded={isChannelKnown(channel)}
 									onAdd={onAdd}
 									onDismiss={onDismiss}
 								/>

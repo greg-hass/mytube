@@ -1,6 +1,6 @@
 import { Grid3x3 } from 'lucide-react';
 import { toast } from 'sonner';
-import { EmptyState } from './EmptyState';
+import { EmptyState, EmptyStateAction } from './EmptyState';
 import { SubscriptionCard } from './SubscriptionCard';
 import { CompactSubscriptionsList } from './CompactSubscriptionsList';
 import { SkeletonCard } from './SkeletonCard';
@@ -10,11 +10,19 @@ import { useStore } from '../store/useStore';
 interface SubscriptionsListProps {
   selectedGroup?: string;
   groups?: string[];
+  onClearGroup?: () => void;
+  selectable?: boolean;
+  selectedChannelIds?: ReadonlySet<string>;
+  onToggleSelect?: (channelId: string) => void;
 }
 
 export const SubscriptionsList = ({
   selectedGroup = 'all',
   groups,
+  onClearGroup,
+  selectable = false,
+  selectedChannelIds,
+  onToggleSelect,
 }: SubscriptionsListProps) => {
   const { subscriptions, rawSubscriptions, isLoading, removeSubscription, addSubscriptions, toggleFavorite, toggleMute, setSubscriptionGroup } = useSubscriptionStorage();
   const { viewMode } = useStore();
@@ -55,12 +63,23 @@ export const SubscriptionsList = ({
   }
 
   if (visibleSubscriptions.length === 0) {
+    const isEmptyGroup = selectedGroup !== 'all';
+
     return (
       <EmptyState
         icon={Grid3x3}
         iconName="subscriptions"
-        title="No subscriptions found"
-        detail="Subscribe to channels to see them here."
+        title={isEmptyGroup ? `No subscriptions in ${selectedGroup}` : 'No subscriptions found'}
+        detail={
+          isEmptyGroup
+            ? 'This group is empty. View all subscriptions to choose another group.'
+            : 'Subscribe to channels to see them here.'
+        }
+        action={
+          isEmptyGroup && onClearGroup ? (
+            <EmptyStateAction onClick={onClearGroup}>Show all subscriptions</EmptyStateAction>
+          ) : undefined
+        }
       />
     );
   }
@@ -107,6 +126,9 @@ export const SubscriptionsList = ({
       {viewMode === 'compact' ? (
         <CompactSubscriptionsList
           channels={visibleSubscriptions}
+          selectable={selectable}
+          selectedChannelIds={selectedChannelIds}
+          onToggleSelect={onToggleSelect}
           onRemove={handleRemove}
           onToggleFavorite={handleFavorite}
           onToggleMute={handleMute}
@@ -125,6 +147,9 @@ export const SubscriptionsList = ({
             channel={channel}
             index={index}
             groups={subscriptionGroups}
+            selectable={selectable}
+            selected={selectedChannelIds?.has(channel.id) ?? false}
+            onToggleSelect={onToggleSelect}
             onRemove={handleRemove}
             onToggleFavorite={handleFavorite}
             onToggleMute={handleMute}

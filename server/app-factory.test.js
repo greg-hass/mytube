@@ -2,7 +2,7 @@ const fs = require("fs");
 const os = require("os");
 const path = require("path");
 const request = require("supertest");
-const { afterEach, beforeEach, describe, expect, it } = globalThis;
+const { afterEach, beforeEach, describe, expect, it, vi } = globalThis;
 const { createSqliteStore } = require("./sqlite-store");
 const { createApp } = require("./app-factory");
 
@@ -245,6 +245,34 @@ describe("createApp integration", () => {
 		]);
 	});
 
+	it("POST /api/subscriptions/restore clears tombstones and restores channels", async () => {
+		const subscription = {
+			id: "UCaaaaaaaaaaaaaaaaaaaaaa",
+			title: "Restore Me",
+			thumbnail: "",
+			description: "",
+			addedAt: 123,
+			isFavorite: true,
+			group: "Tech",
+		};
+		await authedRequest(resources.app)
+			.post("/api/sync")
+			.send({ subscriptions: [subscription], settings: {}, watchedVideos: [] });
+		await authedRequest(resources.app).delete(
+			`/api/subscriptions/${subscription.id}`,
+		);
+
+		const restored = await authedRequest(resources.app)
+			.post("/api/subscriptions/restore")
+			.send({ subscriptions: [subscription] });
+		expect(restored.status).toBe(200);
+		expect(restored.body.restoredIds).toEqual([subscription.id]);
+
+		const snapshot = await authedRequest(resources.app).get("/api/sync");
+		expect(snapshot.body.subscriptions).toEqual([subscription]);
+		expect(snapshot.body.subscriptionTombstones).toEqual([]);
+	});
+
 	it("POST /api/sync with stale If-Match returns 412 and current ETag", async () => {
 		const first = await authedRequest(resources.app)
 			.post("/api/sync")
@@ -396,6 +424,76 @@ describe("createApp integration", () => {
 				message: "Refresh already in progress. Joining the active refresh.",
 			});
 			expect(response.body).not.toHaveProperty("refreshId");
+		} finally {
+			appStore.close();
+			await fs.promises.rm(path.dirname(databaseFile), {
+				recursive: true,
+				force: true,
+			});
+		}
+	});
+
+	it("POST /api/videos/refresh/channel/:channelId queues a targeted refresh", async () => {
+		const aggregateFeeds = vi.fn().mockResolvedValue(undefined);
+		const { app, appStore, databaseFile } = buildApp({
+			databaseFile: createTempDatabaseFile(),
+			feedAggregator: buildFeedAggregatorStub({ aggregateFeeds }),
+		});
+		await appStore.init({
+			defaultData: appStore.DEFAULT_DATA,
+			defaultVideoCache: appStore.DEFAULT_VIDEO_CACHE,
+		});
+		await appStore.writeData({
+			subscriptions: [{ id: "UC_TARGET", title: "Target" }],
+			settings: {},
+			watchedVideos: [],
+			redirects: {},
+		});
+		try {
+			const response = await authedRequest(app).post(
+				"/api/videos/refresh/channel/UC_TARGET",
+			);
+			expect(response.status).toBe(200);
+			expect(response.body).toMatchObject({
+				success: true,
+				channelId: "UC_TARGET",
+				message: "Channel refresh queued.",
+			});
+			expect(aggregateFeeds).toHaveBeenCalledWith({ channelId: "UC_TARGET" });
+		} finally {
+			appStore.close();
+			await fs.promises.rm(path.dirname(databaseFile), {
+				recursive: true,
+				force: true,
+			});
+		}
+	});
+
+	it("rejects targeted refreshes for unknown or malformed channel IDs", async () => {
+		const { app, appStore, databaseFile } = buildApp({
+			databaseFile: createTempDatabaseFile(),
+		});
+		await appStore.init({
+			defaultData: appStore.DEFAULT_DATA,
+			defaultVideoCache: appStore.DEFAULT_VIDEO_CACHE,
+		});
+		await appStore.writeData({
+			subscriptions: [{ id: "UC_TARGET", title: "Target" }],
+			settings: {},
+			watchedVideos: [],
+			redirects: {},
+		});
+		try {
+			expect(
+				(await authedRequest(app).post(
+					"/api/videos/refresh/channel/UC_MISSING",
+				)).status,
+			).toBe(404);
+			expect(
+				(await authedRequest(app).post(
+					"/api/videos/refresh/channel/not-a-channel",
+				)).status,
+			).toBe(400);
 		} finally {
 			appStore.close();
 			await fs.promises.rm(path.dirname(databaseFile), {

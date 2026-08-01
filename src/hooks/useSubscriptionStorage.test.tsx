@@ -95,6 +95,21 @@ describe("useSubscriptionStorage", () => {
 		});
 	});
 
+	it("surfaces authentication failure without retrying the subscription query", async () => {
+		const fetchMock = vi.fn().mockResolvedValue(
+			new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401 }),
+		);
+		vi.stubGlobal("fetch", fetchMock);
+
+		const { result } = renderHook(() => useSubscriptionStorage(), { wrapper });
+
+		await waitFor(() => {
+			expect(result.current.needsServerAuth).toBe(true);
+		});
+
+		expect(fetchMock).toHaveBeenCalledTimes(2);
+	});
+
 	it("deletes a subscription on the backend before removing it locally", async () => {
 		let getCallCount = 0;
 		const fetchMock = vi.fn(async (_url: string, init?: RequestInit) => {
@@ -279,5 +294,52 @@ describe("useSubscriptionStorage", () => {
 			expect(pushedSync).toBe(true);
 		});
 		expect(postCallCount).toBeGreaterThan(0);
+	});
+
+	it("force-pushes previewed new subscriptions after confirmation", async () => {
+		const fetchMock = vi.fn(async (_url: string, init?: RequestInit) => {
+			if (init?.method === "POST") {
+				return {
+					ok: true,
+					json: async () => ({
+						success: true,
+						syncRevision: 2,
+						timestamp: "now",
+					}),
+				};
+			}
+
+			return {
+				ok: true,
+				json: async () => ({
+					subscriptions: [],
+					watchedVideos: [],
+					redirects: {},
+					syncRevision: 1,
+				}),
+			};
+		});
+		vi.stubGlobal("fetch", fetchMock);
+
+		const { result } = renderHook(() => useSubscriptionStorage(), { wrapper });
+		await waitFor(() => {
+			expect(result.current.allSubscriptions).toEqual([]);
+		});
+
+		const importedSubscription = {
+			id: "UCabcdefghijklmnopqrstuv",
+			title: "New channel",
+			addedAt: 2,
+		};
+		await act(async () => {
+			await result.current.importSubscriptions([importedSubscription]);
+		});
+
+		expect(addSubscriptions).toHaveBeenCalledWith([importedSubscription]);
+		expect(
+			fetchMock.mock.calls.some(
+				([url, init]) => String(url) === "/api/sync" && init?.method === "POST",
+			),
+		).toBe(true);
 	});
 });

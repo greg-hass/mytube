@@ -110,8 +110,38 @@ describe("feed refresh policy", () => {
 				id: "UC_BAD",
 				title: "Bad Channel",
 				reason: "RSS feed failed with HTTP 404",
+				failureKind: "unavailable",
 				lastSuccessfulFetchAt: "2026-05-06T18:00:00.000Z",
 			},
+		]);
+	});
+
+	it("classifies transient, restricted, and other permanent failures", () => {
+		const failedChannels = summarizeFailedChannels([
+			{
+				id: "UC_TRANSIENT",
+				title: "Temporary Channel",
+				outcome: "transient-failure",
+				errorStatus: 503,
+			},
+			{
+				id: "UC_RESTRICTED",
+				title: "Restricted Channel",
+				outcome: "permanent-failure",
+				errorStatus: 403,
+			},
+			{
+				id: "UC_PERMANENT",
+				title: "Malformed Channel",
+				outcome: "permanent-failure",
+				errorStatus: 400,
+			},
+		]);
+
+		expect(failedChannels.map(({ failureKind }) => failureKind)).toEqual([
+			"transient",
+			"restricted",
+			"permanent",
 		]);
 	});
 

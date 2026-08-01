@@ -7,7 +7,7 @@
  */
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
-import { createElement } from "react";
+import { createElement, Fragment } from "react";
 import type { YouTubeChannel } from "../types/youtube";
 import { AddChannelModal } from "./AddChannelModal";
 
@@ -75,7 +75,7 @@ export function assertInitialState(container: HTMLElement) {
 	expect(screen.getByText("Add Channel")).toBeInTheDocument();
 	expect(container.querySelector(".bg-black\\/60")).toBeNull();
 	expect(container.querySelector(".shadow-2xl")).toBeNull();
-	expect(screen.getByLabelText("YouTube Channel")).not.toHaveFocus();
+	expect(screen.getByLabelText("YouTube Channel")).toHaveFocus();
 }
 
 export async function searchFor(query: string) {
@@ -172,9 +172,12 @@ export function registerAddChannelModalTests() {
 	});
 	registerPreviewWorkflowTest();
 	registerExistingSubscriptionFilterTest();
+	registerEquivalentSubscriptionFilterTest();
+	registerDirectDuplicateTest();
 	registerNaturalLanguageSearchTest();
 	registerAuthErrorTest();
 	registerFormatsDisclosureTest();
+	registerModalFocusTest();
 }
 
 function renderModal(props: {
@@ -228,6 +231,66 @@ function registerExistingSubscriptionFilterTest() {
 	});
 }
 
+function registerEquivalentSubscriptionFilterTest() {
+	it("filters canonical results matching an unresolved handle subscription", async () => {
+		installCustomFetchMock([
+			{
+				id: "UC1234567890123456789012",
+				title: "Linux Tech Channel",
+				description: "Linux tutorials and reviews",
+				thumbnail: "https://example.com/channel.jpg",
+				customUrl: "/@linux_tech",
+			},
+		]);
+		renderModal({
+			existingSubscriptions: [
+				{
+					id: "handle_linux_tech",
+					title: "@linux_tech",
+					description: "",
+					thumbnail: "",
+				},
+			],
+		});
+
+		await searchFor("linux tech");
+		expect(screen.queryByText("Linux Tech Channel")).not.toBeInTheDocument();
+	});
+}
+
+function registerDirectDuplicateTest() {
+	it("shows a direct handle as already subscribed when its canonical result matches", async () => {
+		installCustomFetchMock([
+			{
+				id: "UC1234567890123456789012",
+				title: "Linux Tech Channel",
+				description: "Linux tutorials and reviews",
+				thumbnail: "https://example.com/channel.jpg",
+				customUrl: "/@linux_tech",
+			},
+		]);
+		renderModal({
+			existingSubscriptions: [
+				{
+					id: "handle_linux_tech",
+					title: "@linux_tech",
+					description: "",
+					thumbnail: "",
+				},
+			],
+		});
+
+		fireEvent.change(screen.getByLabelText("YouTube Channel"), {
+			target: { value: "@linux_tech" },
+		});
+
+		const duplicateButton = await screen.findByRole("button", {
+			name: "Added",
+		});
+		expect(duplicateButton).toBeDisabled();
+	});
+}
+
 function registerNaturalLanguageSearchTest() {
 	it("sends natural-language search phrases to the backend unchanged", async () => {
 		installCustomFetchMock([
@@ -269,5 +332,74 @@ function registerFormatsDisclosureTest() {
 		fireEvent.click(toggle);
 		expect(toggle).toHaveAttribute("aria-expanded", "true");
 		expect(screen.getByText("Channel ID")).toBeInTheDocument();
+	});
+}
+
+function registerModalFocusTest() {
+	it("contains keyboard focus and restores the opener when closed", async () => {
+		const onClose = vi.fn();
+		const { rerender } = render(
+			createElement(
+				Fragment,
+				null,
+				createElement("button", { type: "button" }, "Open Add Channel"),
+				createElement(AddChannelModal, {
+					isOpen: false,
+					onClose,
+					onAdd: vi.fn(),
+				}),
+			),
+		);
+		const opener = screen.getByRole("button", { name: "Open Add Channel" });
+		opener.focus();
+
+		rerender(
+			createElement(
+				Fragment,
+				null,
+				createElement("button", { type: "button" }, "Open Add Channel"),
+				createElement(AddChannelModal, {
+					isOpen: true,
+					onClose,
+					onAdd: vi.fn(),
+				}),
+			),
+		);
+
+		const dialog = await screen.findByRole("dialog", { name: "Add Channel" });
+		const input = screen.getByLabelText("YouTube Channel");
+		const focusableElements = Array.from(
+			dialog.querySelectorAll<HTMLElement>(
+				'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])',
+			),
+		);
+		const firstElement = focusableElements[0];
+		const lastElement = focusableElements[focusableElements.length - 1];
+
+		expect(input).toHaveFocus();
+
+		firstElement.focus();
+		fireEvent.keyDown(firstElement, { key: "Tab", shiftKey: true });
+		expect(lastElement).toHaveFocus();
+
+		fireEvent.keyDown(lastElement, { key: "Tab" });
+		expect(firstElement).toHaveFocus();
+
+		fireEvent.keyDown(input, { key: "Escape" });
+		expect(onClose).toHaveBeenCalledOnce();
+
+		rerender(
+			createElement(
+				Fragment,
+				null,
+				createElement("button", { type: "button" }, "Open Add Channel"),
+				createElement(AddChannelModal, {
+					isOpen: false,
+					onClose,
+					onAdd: vi.fn(),
+				}),
+			),
+		);
+		expect(opener).toHaveFocus();
 	});
 }

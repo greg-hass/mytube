@@ -6,6 +6,7 @@ import {
   type AppBackupLocalData,
 } from './app-backup';
 import { FEED_VIEW_PRESETS_CHANGED_EVENT } from './feed-view-presets';
+import { SUBSCRIPTION_GROUPS_CHANGED_EVENT } from './subscription-groups';
 import type { YouTubeChannel } from '../types/youtube';
 
 const channels: YouTubeChannel[] = [
@@ -28,6 +29,7 @@ describe('app backup', () => {
       queuedVideoIds: ['video-2'],
       queuedVideos: [{ id: 'video-2', title: 'Queued', description: '', thumbnail: '', channelId: 'UC123', channelTitle: 'Test Channel', publishedAt: '2026-05-09T12:00:00.000Z' }],
       feedQualityFilters: { durationFilter: '10-30', hidePremieres: true },
+      subscriptionGroups: ['Personal', 'Tech'],
     };
 
     const backup = createAppBackup({
@@ -50,6 +52,7 @@ describe('app backup', () => {
         videoIds: ['video-2'],
       },
       feedQualityFilters: { durationFilter: '10-30', hidePremieres: true },
+      subscriptionGroups: ['Personal', 'Tech'],
     });
     expect(backup.settings).toEqual({});
   });
@@ -67,6 +70,7 @@ describe('app backup', () => {
         queuedVideoIds: ['video-2'],
         queuedVideos: [{ id: 'video-2', title: 'Queued', description: '', thumbnail: '', channelId: 'UC123', channelTitle: 'Test Channel', publishedAt: '2026-05-09T12:00:00.000Z' }],
         feedQualityFilters: { mutedKeywordText: 'rumor' },
+        subscriptionGroups: ['Personal'],
       },
       exportedAt: '2026-05-09T12:00:00.000Z',
     });
@@ -84,9 +88,11 @@ describe('app backup', () => {
     expect(JSON.parse(storage.get('favorite-video-ids') || '[]')).toEqual(['video-1']);
     expect(JSON.parse(storage.get('queued-video-ids') || '[]')).toEqual(['video-2']);
     expect(JSON.parse(storage.get('feed-quality-filters') || '{}')).toEqual({ mutedKeywordText: 'rumor' });
+    expect(JSON.parse(storage.get('subscription-groups') || '[]')).toEqual(['Personal']);
     expect(dispatchEvent).toHaveBeenCalledWith('favorite-videos-changed');
     expect(dispatchEvent).toHaveBeenCalledWith('queued-videos-changed');
     expect(dispatchEvent).toHaveBeenCalledWith(FEED_VIEW_PRESETS_CHANGED_EVENT);
+    expect(dispatchEvent).toHaveBeenCalledWith(SUBSCRIPTION_GROUPS_CHANGED_EVENT);
   });
 
   it('exports and restores saved feed views', () => {
@@ -115,6 +121,7 @@ describe('app backup', () => {
         updatedAt: '2026-05-16T10:00:00.000Z',
       },
     ]));
+    storage.set('subscription-groups', JSON.stringify(['Personal']));
 
     const backup = createAppBackup({
       subscriptions: [],
@@ -125,11 +132,13 @@ describe('app backup', () => {
     });
 
     expect(backup.feedViewPresets).toHaveLength(1);
+    expect(backup.subscriptionGroups).toEqual(['Personal']);
 
     restoreAppBackup(JSON.stringify(backup), { storage: fakeStorage, dispatchEvent });
 
     expect(JSON.parse(storage.get('feed-view-presets') || '[]')).toEqual(backup.feedViewPresets);
     expect(dispatchEvent).toHaveBeenCalledWith(FEED_VIEW_PRESETS_CHANGED_EVENT);
+    expect(dispatchEvent).toHaveBeenCalledWith(SUBSCRIPTION_GROUPS_CHANGED_EVENT);
   });
 
   it('restores missing or malformed saved feed views as an empty list', () => {
@@ -149,9 +158,12 @@ describe('app backup', () => {
       queue: { videoIds: [], videos: [] },
       feedQualityFilters: {},
       feedViewPresets: {},
+      subscriptionGroups: {},
     }), { storage: fakeStorage, dispatchEvent });
 
     expect(JSON.parse(storage.get('feed-view-presets') || 'null')).toEqual([]);
     expect(dispatchEvent).toHaveBeenCalledWith(FEED_VIEW_PRESETS_CHANGED_EVENT);
+    expect(dispatchEvent).toHaveBeenCalledWith(SUBSCRIPTION_GROUPS_CHANGED_EVENT);
+    expect(JSON.parse(storage.get('subscription-groups') || 'null')).toEqual([]);
   });
 });

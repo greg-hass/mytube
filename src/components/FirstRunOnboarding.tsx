@@ -1,6 +1,6 @@
 import { lazy, Suspense } from "react";
 import { motion } from "framer-motion";
-import { Upload, Plus } from "lucide-react";
+import { Activity, Heart, ListOrdered, Plus, Upload } from "lucide-react";
 
 const OPMLUpload = lazy(() =>
 	import("./OPMLUpload").then((module) => ({ default: module.OPMLUpload })),
@@ -17,7 +17,7 @@ export const FirstRunOnboarding = ({
 }: FirstRunOnboardingProps) => (
 	<main
 		data-testid="first-run-onboarding"
-		className="mx-auto flex h-[calc(100dvh-var(--app-header-height))] max-w-lg flex-col items-center justify-center px-4 py-2"
+		className="mx-auto flex min-h-[calc(100dvh-var(--app-header-height))] max-w-lg flex-col justify-center overflow-y-auto px-4 py-6 sm:py-8"
 	>
 		<motion.div
 			initial={{ opacity: 0, y: 10 }}
@@ -36,12 +36,17 @@ export const FirstRunOnboarding = ({
 					MyTube
 				</h1>
 			</div>
+			<p className="mb-5 max-w-md text-sm leading-5 text-gray-500 dark:text-ios-400">
+				Build a calm feed from the channels you choose, with no algorithmic
+				ranking.
+			</p>
 
 			{/* Action Cards */}
 			<div className="grid gap-2">
 				<button
 					type="button"
 					onClick={onAddChannel}
+					aria-label="Add a channel"
 					className="flex items-center gap-3 rounded-xl border border-gray-200 bg-white p-3 text-left shadow-sm transition-all active:scale-[0.98] dark:border-ios-800 dark:bg-ios-900"
 				>
 					<div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-gray-100 dark:bg-ios-800">
@@ -75,7 +80,63 @@ export const FirstRunOnboarding = ({
 				</div>
 			</div>
 
-			<p className="mt-4 text-center text-xs text-gray-400 dark:text-ios-600">
+			<section
+				className="mt-6"
+				aria-labelledby="first-run-destinations-heading"
+			>
+				<h2
+					id="first-run-destinations-heading"
+					className="text-sm font-semibold text-gray-900 dark:text-ios-100"
+				>
+					How MyTube works
+				</h2>
+				<ul className="mt-2 grid gap-2" data-testid="first-run-destinations">
+					<li className="flex items-start gap-3 rounded-xl border border-gray-200/80 bg-gray-50/80 p-3 dark:border-ios-800 dark:bg-ios-950/50">
+						<ListOrdered
+							aria-hidden="true"
+							className="mt-0.5 h-5 w-5 shrink-0 text-red-600 dark:text-red-400"
+						/>
+						<div>
+							<h3 className="text-xs font-semibold text-gray-900 dark:text-ios-100">
+								Latest
+							</h3>
+							<p className="text-xs leading-5 text-gray-500 dark:text-ios-400">
+								Strictly chronological — no algorithmic ranking.
+							</p>
+						</div>
+					</li>
+					<li className="flex items-start gap-3 rounded-xl border border-gray-200/80 bg-gray-50/80 p-3 dark:border-ios-800 dark:bg-ios-950/50">
+						<Activity
+							aria-hidden="true"
+							className="mt-0.5 h-5 w-5 shrink-0 text-red-600 dark:text-red-400"
+						/>
+						<div>
+							<h3 className="text-xs font-semibold text-gray-900 dark:text-ios-100">
+								Activity
+							</h3>
+							<p className="text-xs leading-5 text-gray-500 dark:text-ios-400">
+								See which channels have posted recently.
+							</p>
+						</div>
+					</li>
+					<li className="flex items-start gap-3 rounded-xl border border-gray-200/80 bg-gray-50/80 p-3 dark:border-ios-800 dark:bg-ios-950/50">
+						<Heart
+							aria-hidden="true"
+							className="mt-0.5 h-5 w-5 shrink-0 text-red-600 dark:text-red-400"
+						/>
+						<div>
+							<h3 className="text-xs font-semibold text-gray-900 dark:text-ios-100">
+								Favourites
+							</h3>
+							<p className="text-xs leading-5 text-gray-500 dark:text-ios-400">
+								Keep saved channels and videos in one place.
+							</p>
+						</div>
+					</li>
+				</ul>
+			</section>
+
+			<p className="mt-5 text-center text-xs text-gray-400 dark:text-ios-600">
 				Your feed refreshes automatically once channels are added.
 			</p>
 		</motion.div>

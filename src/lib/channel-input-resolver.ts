@@ -70,7 +70,9 @@ export async function resolveChannelFromParsedInput(
 			description: "",
 			thumbnail: thumbnail || placeholderThumbnail(parsedInput.originalInput),
 			customUrl:
-				parsedInput.type === "custom_url" ? parsedInput.value : undefined,
+				parsedInput.type === "custom_url"
+					? parsedInput.value
+					: `/@${parsedInput.value.replace(/^@/, "")}`,
 		};
 	}
 

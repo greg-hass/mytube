@@ -5,7 +5,9 @@ import {
 	useMemo,
 	useRef,
 	type ErrorInfo,
+	type Dispatch,
 	type ReactNode,
+	type SetStateAction,
 } from "react";
 import {
 	TrendingUp,
@@ -13,9 +15,8 @@ import {
 	Activity,
 	Heart,
 	Image,
-	ListVideo,
+	Filter,
 	X,
-	ShieldAlert,
 } from "lucide-react";
 import { toast } from "sonner";
 import { FirstRunOnboarding } from "./FirstRunOnboarding";
@@ -26,15 +27,23 @@ import { FloatingTabBar } from "./FloatingTabBar";
 import { SubscriptionsList } from "./SubscriptionsList";
 import { SubscriptionCard } from "./SubscriptionCard";
 import { VirtualizedVideoGrid } from "./VirtualizedVideoGrid";
-import { EmptyState } from "./EmptyState";
+import { EmptyState, EmptyStateAction } from "./EmptyState";
+import {
+	FirstRefreshGuide,
+	type FirstRefreshState,
+} from "./FirstRefreshGuide";
+import { ServerAuthSetup } from "./ServerAuthSetup";
 import { SavedFeedViews } from "./SavedFeedViews";
+import { FeedFiltersPanel } from "./FeedFiltersPanel";
+import { UnifiedSearchResults } from "./UnifiedSearchResults";
+import { BulkSelectionToolbar } from "./BulkSelectionToolbar";
 import { useKeyboardShortcuts } from "../hooks/useKeyboardShortcuts";
+import { useModalFocus } from "../hooks/useModalFocus";
 import { KeyboardShortcutsHelp } from "./KeyboardShortcutsHelp";
 import { PullToRefreshIndicator } from "./PullToRefreshIndicator";
 import { useRSSVideos } from "../hooks/useRSSVideos";
 import { useSubscriptionStorage } from "../hooks/useSubscriptionStorage";
 import { useFavoriteVideos } from "../hooks/useFavoriteVideos";
-import { useQueuedVideos } from "../hooks/useQueuedVideos";
 import { usePullToRefresh } from "../hooks/usePullToRefresh";
 import { useStore } from "../store/useStore";
 import {
@@ -51,6 +60,11 @@ import {
 	type FeedViewPreset,
 } from "../lib/feed-view-presets";
 import {
+	readSubscriptionGroups,
+	writeSubscriptionGroups,
+	SUBSCRIPTION_GROUPS_CHANGED_EVENT,
+} from "../lib/subscription-groups";
+import {
 	getVideoIdsOlderThan,
 	getVisibleVideoIds,
 } from "../lib/feed-bulk-actions";
@@ -64,17 +78,22 @@ import {
 	isCompactMobileViewport,
 } from "../lib/mobile-viewport";
 import { formatTimeAgo, formatRefreshAge } from "../lib/format";
-import { getAllVideoProgress } from "../lib/video-progress";
-import type { YouTubeChannel, YouTubeVideo } from "../types/youtube";
+import { getServerApiToken } from "../lib/api-auth";
+import { getRecentChannelActivity } from "../lib/channel-activity";
+import {
+	buildUnifiedSearchResults,
+	type SearchScope,
+} from "../lib/unified-search";
+import type { YouTubeChannel } from "../types/youtube";
 
-type Tab = "subscriptions" | "latest" | "queue" | "activity" | "favorites";
+type Tab = "subscriptions" | "latest" | "activity" | "favorites";
 type FavoriteSection = "channels" | "videos";
+type SubscriptionGroupManagerMode = "list" | "rename" | "delete";
 const TAB_LATEST: Tab = "latest";
 const BTN = "button" as const;
 const DASHBOARD_TABS: Tab[] = [
 	"subscriptions",
 	TAB_LATEST,
-	"queue",
 	"activity",
 	"favorites",
 ];
@@ -221,6 +240,9 @@ export const Dashboard = () => {
 		readDashboardTabFromUrl(),
 	);
 	const [isAddChannelModalOpen, setIsAddChannelModalOpen] = useState(false);
+	const [firstRefreshState, setFirstRefreshState] =
+		useState<FirstRefreshState | null>(null);
+	const firstRefreshGuideRef = useRef<HTMLElement | null>(null);
 	const [showShortcutsHelp, setShowShortcutsHelp] = useState(false);
 	const [showShorts, setShowShorts] = useState(
 		Boolean(persistedQualityFilters.showShorts),
@@ -249,6 +271,18 @@ export const Dashboard = () => {
 	);
 	const [activeFavoriteSection, setActiveFavoriteSection] =
 		useState<FavoriteSection>("channels");
+	const [selectedFavoriteVideoIds, setSelectedFavoriteVideoIds] = useState<
+		Set<string>
+	>(() => new Set());
+	const [selectedFavoriteChannelIds, setSelectedFavoriteChannelIds] = useState<
+		Set<string>
+	>(() => new Set());
+	const [selectedLatestVideoIds, setSelectedLatestVideoIds] = useState<
+		Set<string>
+	>(() => new Set());
+	const [selectedSubscriptionChannelIds, setSelectedSubscriptionChannelIds] =
+		useState<Set<string>>(() => new Set());
+	const [searchScope, setSearchScope] = useState<SearchScope>("all");
 	const [isMobileTimeline, setIsMobileTimeline] = useState(false);
 	const [mobileVideoLimit, setMobileVideoLimit] = useState(
 		MOBILE_TIMELINE_INITIAL_LIMIT,
@@ -257,36 +291,89 @@ export const Dashboard = () => {
 		useState("all");
 	const [newSubscriptionGroupName, setNewSubscriptionGroupName] = useState("");
 	const [isNewGroupModalOpen, setIsNewGroupModalOpen] = useState(false);
-	const [customSubscriptionGroups, setCustomSubscriptionGroups] = useState<
-		string[]
-	>([]);
+	const [customSubscriptionGroups, setCustomSubscriptionGroups] = useState<string[]>(
+		() => readSubscriptionGroups(),
+	);
+	const [isGroupManagerOpen, setIsGroupManagerOpen] = useState(false);
+	const [groupManagerMode, setGroupManagerMode] =
+		useState<SubscriptionGroupManagerMode>("list");
+	const [groupManagerTarget, setGroupManagerTarget] = useState<string | null>(
+		null,
+	);
+	const [renamedGroupName, setRenamedGroupName] = useState("");
+	const [isManagingGroup, setIsManagingGroup] = useState(false);
+	const [isBulkUnsubscribeConfirmOpen, setIsBulkUnsubscribeConfirmOpen] =
+		useState(false);
+	const [isBulkUnsubscribing, setIsBulkUnsubscribing] = useState(false);
 	const [isRepairingIcons, setIsRepairingIcons] = useState(false);
+	const [isFeedFiltersOpen, setIsFeedFiltersOpen] = useState(false);
 	const [isAuthSettingsOpen, setIsAuthSettingsOpen] = useState(false);
+	const newSubscriptionGroupInputRef = useRef<HTMLInputElement>(null);
+	const groupManagerInputRef = useRef<HTMLInputElement>(null);
+	const closeNewGroupModal = () => {
+		setIsNewGroupModalOpen(false);
+		setNewSubscriptionGroupName("");
+	};
+	const newGroupModalFocus = useModalFocus<HTMLFormElement>({
+		isOpen: isNewGroupModalOpen,
+		onClose: closeNewGroupModal,
+		initialFocusRef: newSubscriptionGroupInputRef,
+	});
+	const closeGroupManager = () => {
+		if (isManagingGroup) return;
+		setIsGroupManagerOpen(false);
+		setGroupManagerMode("list");
+		setGroupManagerTarget(null);
+		setRenamedGroupName("");
+	};
+	const returnToGroupList = () => {
+		if (isManagingGroup) return;
+		setGroupManagerMode("list");
+		setGroupManagerTarget(null);
+		setRenamedGroupName("");
+	};
+	const groupManagerFocus = useModalFocus<HTMLDivElement>({
+		isOpen: isGroupManagerOpen,
+		onClose: closeGroupManager,
+		initialFocusRef: groupManagerInputRef,
+	});
+	const closeBulkUnsubscribeConfirm = () => {
+		if (isBulkUnsubscribing) return;
+		setIsBulkUnsubscribeConfirmOpen(false);
+	};
+	const bulkUnsubscribeConfirmFocus = useModalFocus<HTMLDivElement>({
+		isOpen: isBulkUnsubscribeConfirmOpen,
+		onClose: closeBulkUnsubscribeConfirm,
+	});
 	const lastActiveLatestTapAtRef = useRef<number | null>(null);
 	const {
 		allSubscriptions,
 		addSubscriptions,
+		restoreSubscriptions,
+		removeSubscription,
 		rawSubscriptions,
 		repairChannelIcons,
 		toggleFavorite: toggleChannelFavorite,
+		toggleMute: toggleChannelMute,
 		isLoading: subscriptionsLoading,
 		isInitialSyncing: subscriptionsInitialSyncing,
 		needsServerAuth,
+		clearServerAuth,
+		setSubscriptionGroup,
 	} = useSubscriptionStorage();
-	const { favoriteVideoIds, favoriteVideos: savedFavoriteVideos } =
+	const {
+		favoriteVideoIds,
+		favoriteVideos: savedFavoriteVideos,
+		toggleFavoriteVideo,
+	} =
 		useFavoriteVideos();
-	const { queuedVideoIds, queuedVideos: savedQueuedVideos } = useQueuedVideos();
-	const { searchQuery, watchedVideos, markAsWatched, setSearchQuery } =
-		useStore();
-
-	// Re-render the queue when a video is started/resumed elsewhere in the app
-	// (the video-progress-changed event fires from saveVideoProgress/clearVideoProgress).
-	const [videoProgressVersion, setVideoProgressVersion] = useState(0);
-	useEffect(() => {
-		const handler = () => setVideoProgressVersion((version) => version + 1);
-		window.addEventListener("video-progress-changed", handler);
-		return () => window.removeEventListener("video-progress-changed", handler);
-	}, []);
+	const {
+		searchQuery,
+		watchedVideos,
+		markAsWatched,
+		markAsUnwatched,
+		setSearchQuery,
+	} = useStore();
 
 	// Check if any channels have temporary IDs (can't fetch videos)
 	const hasTemporaryChannels = rawSubscriptions.some(
@@ -301,7 +388,9 @@ export const Dashboard = () => {
 		refreshProgress,
 		syncStatus,
 		cacheStatus,
-	} = useRSSVideos();
+		retryChannel,
+		retryingChannelId,
+	} = useRSSVideos({ enabled: !needsServerAuth });
 	const hasNoSubscriptions = allSubscriptions.length === 0;
 	const { pullDistance, isPullRefreshing } = usePullToRefresh({
 		isRefreshActive: isRefreshing,
@@ -318,10 +407,19 @@ export const Dashboard = () => {
 				...allSubscriptions
 					.map((channel) => channel.group?.trim())
 					.filter((group): group is string => Boolean(group)),
-				...customSubscriptionGroups,
-			]),
-		).sort((a, b) => a.localeCompare(b));
+		...customSubscriptionGroups,
+		]),
+	).sort((a, b) => a.localeCompare(b));
 	}, [allSubscriptions, customSubscriptionGroups]);
+	const visibleSubscriptionChannels = useMemo(
+		() =>
+			selectedSubscriptionGroup === "all"
+				? allSubscriptions
+				: allSubscriptions.filter(
+						(channel) => (channel.group || "") === selectedSubscriptionGroup,
+					),
+		[selectedSubscriptionGroup, allSubscriptions],
+	);
 	const videoFeedIndex = useMemo(() => {
 		return buildVideoFeedIndex(videos, allSubscriptions);
 	}, [videos, allSubscriptions]);
@@ -337,6 +435,13 @@ export const Dashboard = () => {
 			.map((keyword) => keyword.trim())
 			.filter(Boolean);
 	}, [boostedKeywordText]);
+	const activeAdvancedFilterCount =
+		(durationFilter !== "any" ? 1 : 0) +
+		(hideLiveReplays ? 1 : 0) +
+		(hidePremieres ? 1 : 0) +
+		(hideDuplicateTitles ? 1 : 0) +
+		(mutedKeywordText.trim() ? 1 : 0) +
+		(boostedKeywordText.trim() ? 1 : 0);
 
 	const filteredVideos = useMemo(() => {
 		return filterIndexedVideos(videoFeedIndex, {
@@ -373,55 +478,40 @@ export const Dashboard = () => {
 		});
 	}, [filteredVideos, isMobileTimeline, mobileVideoLimit, searchQuery]);
 
-	// Calculate most active channels in the past week
-	// Optimized to reduce re-renders and heavy calculations
-	const activeChannels = useMemo(() => {
-		if (videos.length === 0) return [];
+	const activeChannels = useMemo(
+		() => getRecentChannelActivity(videos, allSubscriptions),
+		[videos, allSubscriptions],
+	);
 
-		const oneWeekAgo = Date.now() - 7 * 24 * 60 * 60 * 1000;
-
-		// Group videos by channel and count those from past week
-		const channelActivity = new Map<
-			string,
-			{ count: number; channel: YouTubeChannel; latestVideo: Date }
-		>();
-
-		// Only process recent videos to avoid iterating over thousands of old videos
-		// Assuming videos are somewhat sorted by date, but we'll check the first 500 just in case
-		const recentVideos = videos.slice(0, 1000);
-		const channelById = new Map(allSubscriptions.map((sub) => [sub.id, sub]));
-
-		for (const video of recentVideos) {
-			const videoDate = new Date(video.publishedAt).getTime();
-
-			// If we hit videos older than a week and we've processed a fair amount, we can stop
-			// (This assumes videos are sorted by date descending, which they usually are)
-			if (videoDate < oneWeekAgo) continue;
-
-			const existing = channelActivity.get(video.channelId);
-			const channel = channelById.get(video.channelId);
-
-			if (channel) {
-				if (existing) {
-					existing.count++;
-					if (videoDate > existing.latestVideo.getTime()) {
-						existing.latestVideo = new Date(videoDate);
-					}
-				} else {
-					channelActivity.set(video.channelId, {
-						count: 1,
-						channel,
-						latestVideo: new Date(videoDate),
-					});
-				}
-			}
+	useEffect(() => {
+		if (!firstRefreshState) return;
+		if (videos.length > 0) {
+			setFirstRefreshState(null);
+			return;
 		}
+		const refreshHasCompleted =
+			syncStatus.total > 0 &&
+			syncStatus.current >= syncStatus.total &&
+			!syncStatus.isSyncing;
+		if (refreshPhase === "queuing" || refreshPhase === "refreshing") {
+			setFirstRefreshState("refreshing");
+		} else if (
+			syncStatus.isSyncing ||
+			syncStatus.state === "running"
+		) {
+			setFirstRefreshState("refreshing");
+		} else if (refreshHasCompleted && syncStatus.errors > 0) {
+			setFirstRefreshState("error");
+		} else if (refreshHasCompleted || refreshPhase === "done") {
+			setFirstRefreshState("empty");
+		}
+	}, [firstRefreshState, refreshPhase, syncStatus, videos.length]);
 
-		// Sort by count and take top 20
-		return Array.from(channelActivity.values())
-			.sort((a, b) => b.count - a.count)
-			.slice(0, 20);
-	}, [videos, allSubscriptions]);
+	useEffect(() => {
+		if (firstRefreshState) {
+			firstRefreshGuideRef.current?.focus();
+		}
+	}, [firstRefreshState]);
 
 	// Keyboard shortcuts
 	useKeyboardShortcuts([
@@ -484,78 +574,350 @@ export const Dashboard = () => {
 		favoriteChannels.length > 0 || favoriteVideos.length === 0
 			? activeFavoriteSection
 			: "videos";
+	const unifiedSearchResults = useMemo(
+		() =>
+			buildUnifiedSearchResults(searchQuery, {
+				videos,
+				channels: allSubscriptions,
+				favoriteVideos,
+				favoriteChannels,
+			}),
+		[searchQuery, videos, allSubscriptions, favoriteVideos, favoriteChannels],
+	);
+	const selectedFavoriteVideos = favoriteVideos.filter((video) =>
+		selectedFavoriteVideoIds.has(video.id),
+	);
+	const selectedFavoriteChannels = favoriteChannels.filter((channel) =>
+		selectedFavoriteChannelIds.has(channel.id),
+	);
+	const selectedLatestVideos = visibleLatestVideos.filter((video) =>
+		selectedLatestVideoIds.has(video.id),
+	);
+	const selectedSubscriptionChannels = allSubscriptions.filter((channel) =>
+		selectedSubscriptionChannelIds.has(channel.id),
+	);
 
-	const queuedVideos = useMemo(() => {
-		const currentVideosById = new Map(videos.map((video) => [video.id, video]));
-		const queuedById = new Map(
-			savedQueuedVideos.map((video) => [
-				video.id,
-				currentVideosById.get(video.id) ?? video,
-			]),
+	useEffect(() => {
+		const favoriteVideoIdSet = new Set(favoriteVideos.map((video) => video.id));
+		const favoriteChannelIdSet = new Set(
+			favoriteChannels.map((channel) => channel.id),
+		);
+		setSelectedFavoriteVideoIds((current) => {
+			const next = new Set(
+				Array.from(current).filter((id) => favoriteVideoIdSet.has(id)),
+			);
+			return next.size === current.size ? current : next;
+		});
+		setSelectedFavoriteChannelIds((current) => {
+			const next = new Set(
+				Array.from(current).filter((id) => favoriteChannelIdSet.has(id)),
+			);
+			return next.size === current.size ? current : next;
+		});
+	}, [favoriteChannels, favoriteVideos]);
+
+	useEffect(() => {
+		const latestVideoIdSet = new Set(visibleLatestVideos.map((video) => video.id));
+		setSelectedLatestVideoIds((current) => {
+			const next = new Set(
+				Array.from(current).filter((id) => latestVideoIdSet.has(id)),
+			);
+			return next.size === current.size ? current : next;
+		});
+	}, [visibleLatestVideos]);
+
+	useEffect(() => {
+		const subscriptionIdSet = new Set(allSubscriptions.map((channel) => channel.id));
+		setSelectedSubscriptionChannelIds((current) => {
+			const next = new Set(
+				Array.from(current).filter((id) => subscriptionIdSet.has(id)),
+			);
+			return next.size === current.size ? current : next;
+		});
+	}, [allSubscriptions]);
+
+	const clearFavoriteSelection = () => {
+		setSelectedFavoriteVideoIds(new Set());
+		setSelectedFavoriteChannelIds(new Set());
+	};
+
+	const clearLatestSelection = () => {
+		setSelectedLatestVideoIds(new Set());
+	};
+
+	const clearSubscriptionSelection = () => {
+		setSelectedSubscriptionChannelIds(new Set());
+	};
+
+	const toggleSelectionId = (
+		setter: Dispatch<SetStateAction<Set<string>>>,
+		id: string,
+	) => {
+		setter((current) => {
+			const next = new Set(current);
+			if (next.has(id)) next.delete(id);
+			else next.add(id);
+			return next;
+		});
+	};
+
+	const toggleAllSelectionIds = (
+		setter: Dispatch<SetStateAction<Set<string>>>,
+		ids: string[],
+	) => {
+		setter((current) => {
+			const allSelected = ids.length > 0 && ids.every((id) => current.has(id));
+			const next = new Set(current);
+			ids.forEach((id) => {
+				if (allSelected) next.delete(id);
+				else next.add(id);
+			});
+			return next;
+		});
+	};
+
+	const allVisibleSubscriptionChannelsSelected =
+		visibleSubscriptionChannels.length > 0 &&
+		visibleSubscriptionChannels.every((channel) =>
+			selectedSubscriptionChannelIds.has(channel.id),
+		);
+	const allFavoriteChannelsSelected =
+		favoriteChannels.length > 0 &&
+		favoriteChannels.every((channel) => selectedFavoriteChannelIds.has(channel.id));
+	const allFavoriteVideosSelected =
+		favoriteVideos.length > 0 &&
+		favoriteVideos.every((video) => selectedFavoriteVideoIds.has(video.id));
+	const allVisibleLatestVideosSelected =
+		visibleLatestVideos.length > 0 &&
+		visibleLatestVideos.every((video) => selectedLatestVideoIds.has(video.id));
+
+	const markSelectedFavoritesWatched = () => {
+		selectedFavoriteVideos.forEach((video) => markAsWatched(video.id));
+		clearFavoriteSelection();
+		toast.success("Marked selected videos as watched");
+	};
+
+	const markSelectedFavoritesUnwatched = () => {
+		selectedFavoriteVideos.forEach((video) => markAsUnwatched(video.id));
+		clearFavoriteSelection();
+		toast.success("Marked selected videos as unwatched");
+	};
+
+	const updateSelectedLatestWatchedState = (isWatched: boolean) => {
+		const videosToUpdate = selectedLatestVideos.filter(
+			(video) => watchedVideos.has(video.id) !== isWatched,
+		);
+		if (videosToUpdate.length === 0) return;
+
+		videosToUpdate.forEach((video) =>
+			(isWatched ? markAsWatched : markAsUnwatched)(video.id),
+		);
+		clearLatestSelection();
+		toast.success(
+			`Marked ${videosToUpdate.length} video${videosToUpdate.length === 1 ? "" : "s"} as ${isWatched ? "watched" : "unwatched"}`,
+		);
+	};
+
+	const markSelectedLatestWatched = () =>
+		updateSelectedLatestWatchedState(true);
+
+	const markSelectedLatestUnwatched = () =>
+		updateSelectedLatestWatchedState(false);
+
+	const removeSelectedFavorites = async () => {
+		try {
+			await Promise.all([
+				...selectedFavoriteChannels.map((channel) =>
+					toggleChannelFavorite(channel.id),
+				),
+				...selectedFavoriteVideos.map((video) => toggleFavoriteVideo(video)),
+			]);
+			clearFavoriteSelection();
+			toast.success("Removed selected items from Favourites");
+		} catch {
+			toast.error("Could not remove the selected items from Favourites");
+		}
+	};
+
+	const updateSelectedSubscriptionFavoriteState = async (isFavorite: boolean) => {
+		const channelsToUpdate = selectedSubscriptionChannels.filter(
+			(channel) => Boolean(channel.isFavorite) !== isFavorite,
+		);
+		if (channelsToUpdate.length === 0) return;
+
+		try {
+			await Promise.all(
+				channelsToUpdate.map((channel) => toggleChannelFavorite(channel.id)),
+			);
+			clearSubscriptionSelection();
+			toast.success(
+				isFavorite
+					? `Added ${channelsToUpdate.length} channel${channelsToUpdate.length === 1 ? "" : "s"} to Favourites`
+					: `Removed ${channelsToUpdate.length} channel${channelsToUpdate.length === 1 ? "" : "s"} from Favourites`,
+			);
+		} catch {
+			toast.error("Could not update selected channels in Favourites");
+		}
+	};
+
+	const addSelectedSubscriptionsToFavorites = () =>
+		updateSelectedSubscriptionFavoriteState(true);
+
+	const removeSelectedSubscriptionsFromFavorites = () =>
+		updateSelectedSubscriptionFavoriteState(false);
+
+	const updateSelectedSubscriptionMuteState = async (isMuted: boolean) => {
+		const channelsToUpdate = selectedSubscriptionChannels.filter(
+			(channel) => Boolean(channel.isMuted) !== isMuted,
+		);
+		if (channelsToUpdate.length === 0) return;
+
+		try {
+			await Promise.all(
+				channelsToUpdate.map((channel) => toggleChannelMute(channel.id)),
+			);
+			clearSubscriptionSelection();
+			toast.success(
+				isMuted
+					? `Muted ${channelsToUpdate.length} channel${channelsToUpdate.length === 1 ? "" : "s"}`
+					: `Unmuted ${channelsToUpdate.length} channel${channelsToUpdate.length === 1 ? "" : "s"}`,
+			);
+		} catch {
+			toast.error("Could not update selected channel mute state");
+		}
+	};
+
+	const muteSelectedSubscriptions = () =>
+		updateSelectedSubscriptionMuteState(true);
+
+	const unmuteSelectedSubscriptions = () =>
+		updateSelectedSubscriptionMuteState(false);
+
+	const requestBulkUnsubscribe = () => {
+		if (selectedSubscriptionChannels.length === 0) return;
+		setIsBulkUnsubscribeConfirmOpen(true);
+	};
+
+	const confirmBulkUnsubscribe = async () => {
+		const subscriptionsToRemove = selectedSubscriptionChannels.map((channel) =>
+			rawSubscriptions.find((subscription) => subscription.id === channel.id) ?? {
+				id: channel.id,
+				title: channel.title,
+				description: channel.description,
+				thumbnail: channel.thumbnail,
+				customUrl: channel.customUrl,
+				addedAt: channel.addedAt ?? Date.now(),
+				isFavorite: channel.isFavorite,
+				isMuted: channel.isMuted,
+				group: channel.group,
+			},
+		);
+		if (subscriptionsToRemove.length === 0) return;
+
+		const removedSubscriptions: typeof subscriptionsToRemove = [];
+		setIsBulkUnsubscribing(true);
+		setIsBulkUnsubscribeConfirmOpen(false);
+
+		try {
+			for (const subscription of subscriptionsToRemove) {
+				await removeSubscription(subscription.id);
+				removedSubscriptions.push(subscription);
+			}
+			clearSubscriptionSelection();
+			toast.success(
+				`Unsubscribed ${removedSubscriptions.length} channel${removedSubscriptions.length === 1 ? "" : "s"}`,
+				{
+					description: "Channels removed from subscriptions",
+					action: {
+						label: "Undo",
+						onClick: async () => {
+							try {
+								await restoreSubscriptions(removedSubscriptions);
+								toast.success(
+									`Restored ${removedSubscriptions.length} channel${removedSubscriptions.length === 1 ? "" : "s"}`,
+								);
+							} catch (error) {
+								toast.error("Could not restore removed channels", {
+									description: getErrorDescription(error),
+								});
+							}
+						},
+					},
+				},
+			);
+		} catch (error) {
+			let rollbackFailed = false;
+			if (removedSubscriptions.length > 0) {
+				try {
+					await restoreSubscriptions(removedSubscriptions);
+				} catch {
+					rollbackFailed = true;
+				}
+			}
+			toast.error("Could not unsubscribe selected channels", {
+				description: rollbackFailed
+					? "Some channels may need review."
+					: getErrorDescription(error),
+			});
+		} finally {
+			setIsBulkUnsubscribing(false);
+		}
+	};
+
+	const assignChannelsToGroup = async (
+		selectedChannels: YouTubeChannel[],
+		group: string,
+		clearSelection: () => void,
+	) => {
+		const previousGroups = new Map(
+			selectedChannels.map((channel) => [channel.id, channel.group?.trim() || ""]),
+		);
+		const updatedChannelIds: string[] = [];
+
+		try {
+			for (const channel of selectedChannels) {
+				await setSubscriptionGroup(channel.id, group);
+				updatedChannelIds.push(channel.id);
+			}
+			clearSelection();
+			toast.success(
+				group
+					? `Assigned ${selectedChannels.length} channel${selectedChannels.length === 1 ? "" : "s"} to ${group}`
+					: `Removed group from ${selectedChannels.length} channel${selectedChannels.length === 1 ? "" : "s"}`,
+			);
+		} catch (error) {
+			let rollbackFailed = false;
+			for (const channelId of updatedChannelIds) {
+				try {
+					await setSubscriptionGroup(
+						channelId,
+						previousGroups.get(channelId) || "",
+					);
+				} catch {
+					rollbackFailed = true;
+				}
+			}
+			toast.error("Could not update selected channels", {
+				description: rollbackFailed
+					? "Some channel assignments may need review."
+					: getErrorDescription(error),
+			});
+		}
+	};
+
+	const assignSelectedFavoriteChannelsToGroup = (group: string) =>
+		assignChannelsToGroup(
+			[...selectedFavoriteChannels],
+			group,
+			clearFavoriteSelection,
 		);
 
-		for (const video of videos) {
-			if (queuedVideoIds.has(video.id) && !queuedById.has(video.id)) {
-				queuedById.set(video.id, video);
-			}
-		}
-
-		return Array.from(queuedById.values());
-	}, [videos, queuedVideoIds, savedQueuedVideos]);
-
-	// Continue watching: videos the user has started but not finished.
-	// Sorted by oldest-paused first so forgotten pauses bubble to the top.
-	// Reads the progress store once (not per-video) to keep it cheap on big feeds.
-	// 5s absolute floor ignores accidental 1-2s taps without losing real watches.
-	// Videos the user explicitly removed from this section are skipped until
-	// either they re-engage in Latest (saveVideoProgress drops the flag) or
-	// the grace window expires — so a remove gesture sticks even if the user
-	// happens to watch another few seconds later.
-	const REMOVED_GRACE_DAYS = 30;
-	const inProgressVideos = useMemo(() => {
-		if (videos.length === 0) return [];
-
-		const progressStore = getAllVideoProgress();
-		const now = Date.now();
-		const graceCutoff = now - REMOVED_GRACE_DAYS * 86_400_000;
-		const withProgress: { video: YouTubeVideo; updatedAt: number }[] = [];
-
-		for (const video of videos) {
-			const progress = progressStore[video.id];
-			if (!progress) continue;
-			if (
-				typeof progress.currentTime !== "number" ||
-				typeof progress.duration !== "number" ||
-				progress.duration <= 0
-			) {
-				continue;
-			}
-			// 5s floor — captures anything you actually watched, ignores
-			// accidental taps. Videos are only marked watched when playback
-			// reaches the end (or via manual mark), so partial progress stays
-			// visible here until then.
-			if (progress.currentTime < 5) continue;
-			// Honor explicit user removal. saveVideoProgress will clear the
-			// flag the next time the user resumes the video in Latest, so
-			// re-engagement is intentional, not accidental.
-			if (progress.removedAt && progress.removedAt > graceCutoff) continue;
-			withProgress.push({ video, updatedAt: progress.updatedAt ?? 0 });
-		}
-
-		withProgress.sort((a, b) => a.updatedAt - b.updatedAt);
-		return withProgress.map((entry) => entry.video);
-		// videoProgressVersion is the trigger for re-reading the progress store
-		// eslint-disable-next-line react-hooks/exhaustive-deps
-	}, [videos, videoProgressVersion]);
-
-	// Watch later: queued videos that aren't in Continue watching. Already
-	// in queue-add order (oldest first) from useQueuedVideos.
-	const watchLaterVideos = useMemo(() => {
-		if (queuedVideos.length === 0) return [];
-		if (inProgressVideos.length === 0) return queuedVideos;
-		const inProgressIds = new Set(inProgressVideos.map((video) => video.id));
-		return queuedVideos.filter((video) => !inProgressIds.has(video.id));
-	}, [queuedVideos, inProgressVideos]);
+	const assignSelectedSubscriptionChannelsToGroup = (group: string) =>
+		assignChannelsToGroup(
+			[...selectedSubscriptionChannels],
+			group,
+			clearSubscriptionSelection,
+		);
 
 	const changeTab = (tab: Tab) => {
 		const isTabChange = tab !== activeTab;
@@ -575,15 +937,20 @@ export const Dashboard = () => {
 		}
 
 		setActiveTab(tab);
+		if (isTabChange && searchQuery.trim()) {
+			setSearchQuery("");
+		}
+		if (isTabChange) {
+			clearFavoriteSelection();
+			clearLatestSelection();
+			clearSubscriptionSelection();
+		}
 		writeDashboardTabToUrl(tab);
 
 		if (tab === "favorites") {
 			sessionStorage.removeItem("favorite-videos-scroll");
 		}
 
-		if (tab === "queue") {
-			sessionStorage.removeItem("queued-videos-scroll");
-		}
 	};
 
 	const handleLatestTabClick = () => {
@@ -614,14 +981,147 @@ export const Dashboard = () => {
 		const group = newSubscriptionGroupName.trim();
 		if (!group) return;
 
-		setCustomSubscriptionGroups((groups) =>
-			Array.from(new Set([...groups, group])).sort((a, b) =>
-				a.localeCompare(b),
-			),
-		);
+		const updatedGroups = Array.from(
+			new Set([...customSubscriptionGroups, group]),
+		).sort((a, b) => a.localeCompare(b));
+		try {
+			writeSubscriptionGroups(updatedGroups);
+			setCustomSubscriptionGroups(updatedGroups);
+		} catch (error) {
+			toast.error("Could not save group", {
+				description: getErrorDescription(error),
+			});
+			return;
+		}
 		setNewSubscriptionGroupName("");
 		setIsNewGroupModalOpen(false);
 		toast.success(`Created ${group} group`);
+	};
+
+	const openGroupManager = () => {
+		setGroupManagerMode("list");
+		setGroupManagerTarget(null);
+		setRenamedGroupName("");
+		setIsGroupManagerOpen(true);
+	};
+
+	const openRenameGroup = (group: string) => {
+		setGroupManagerTarget(group);
+		setRenamedGroupName(group);
+		setGroupManagerMode("rename");
+	};
+
+	const openDeleteGroup = (group: string) => {
+		setGroupManagerTarget(group);
+		setGroupManagerMode("delete");
+	};
+
+	const getAssignedSubscriptions = (group: string) =>
+		rawSubscriptions.filter((subscription) => subscription.group?.trim() === group);
+
+	const rollbackGroupAssignments = async (
+		channelIds: string[],
+		group: string,
+	): Promise<boolean> => {
+		let rollbackFailed = false;
+		for (const channelId of channelIds) {
+			try {
+				await setSubscriptionGroup(channelId, group);
+			} catch {
+				rollbackFailed = true;
+			}
+		}
+		return rollbackFailed;
+	};
+
+	const renameSubscriptionGroup = async () => {
+		const currentGroup = groupManagerTarget;
+		const nextGroup = renamedGroupName.trim();
+		if (!currentGroup || !nextGroup) {
+			toast.error("Enter a group name");
+			return;
+		}
+		if (nextGroup === currentGroup) {
+			closeGroupManager();
+			return;
+		}
+		if (subscriptionGroups.includes(nextGroup)) {
+			toast.error("That group name is already in use");
+			return;
+		}
+
+		const assignedSubscriptions = getAssignedSubscriptions(currentGroup);
+		const updatedChannelIds: string[] = [];
+		setIsManagingGroup(true);
+		try {
+			for (const subscription of assignedSubscriptions) {
+				await setSubscriptionGroup(subscription.id, nextGroup);
+				updatedChannelIds.push(subscription.id);
+			}
+			const updatedGroups = writeSubscriptionGroups(
+				customSubscriptionGroups.map((group) =>
+					group === currentGroup ? nextGroup : group,
+				),
+			);
+			setCustomSubscriptionGroups(updatedGroups);
+			if (selectedSubscriptionGroup === currentGroup) {
+				setSelectedSubscriptionGroup(nextGroup);
+			}
+			closeGroupManager();
+			toast.success(`Renamed ${currentGroup} to ${nextGroup}`);
+		} catch (error) {
+			const rollbackFailed = await rollbackGroupAssignments(
+				updatedChannelIds,
+				currentGroup,
+			);
+			toast.error("Could not rename group", {
+				description: rollbackFailed
+					? "Some channel assignments may need review."
+					: getErrorDescription(error),
+			});
+		} finally {
+			setIsManagingGroup(false);
+		}
+	};
+
+	const deleteSubscriptionGroup = async () => {
+		const groupToDelete = groupManagerTarget;
+		if (!groupToDelete) return;
+
+		const assignedSubscriptions = getAssignedSubscriptions(groupToDelete);
+		const updatedChannelIds: string[] = [];
+		setIsManagingGroup(true);
+		try {
+			for (const subscription of assignedSubscriptions) {
+				await setSubscriptionGroup(subscription.id, "");
+				updatedChannelIds.push(subscription.id);
+			}
+			const updatedGroups = writeSubscriptionGroups(
+				customSubscriptionGroups.filter((group) => group !== groupToDelete),
+			);
+			setCustomSubscriptionGroups(updatedGroups);
+			if (selectedSubscriptionGroup === groupToDelete) {
+				setSelectedSubscriptionGroup("all");
+			}
+			closeGroupManager();
+			toast.success(
+				assignedSubscriptions.length > 0
+					? `Deleted ${groupToDelete} and ungrouped ${assignedSubscriptions.length} channel${assignedSubscriptions.length === 1 ? "" : "s"}`
+					: `Deleted ${groupToDelete} group`,
+			);
+		} catch (error) {
+			const rollbackFailed = await rollbackGroupAssignments(
+				updatedChannelIds,
+				groupToDelete,
+			);
+			toast.error("Could not delete group", {
+				description: rollbackFailed
+					? "Some channel assignments may need review."
+					: getErrorDescription(error),
+			});
+		} finally {
+			setIsManagingGroup(false);
+		}
 	};
 
 	const handleRepairChannelIcons = async () => {
@@ -651,6 +1151,9 @@ export const Dashboard = () => {
 		// Only log significant state changes for debugging
 		// Uncomment for development debugging:
 		// console.log('🎬 Dashboard mounted with', videos.length, 'videos');
+		if (new URLSearchParams(window.location.search).get("tab") === "queue") {
+			writeDashboardTabToUrl(TAB_LATEST);
+		}
 	}, []); // Only run once on mount
 
 	useEffect(() => {
@@ -717,6 +1220,28 @@ export const Dashboard = () => {
 			);
 	}, []);
 
+	useEffect(() => {
+		const syncSubscriptionGroups = () => {
+			setCustomSubscriptionGroups(readSubscriptionGroups());
+		};
+
+		window.addEventListener(
+			SUBSCRIPTION_GROUPS_CHANGED_EVENT,
+			syncSubscriptionGroups,
+		);
+		return () =>
+			window.removeEventListener(
+				SUBSCRIPTION_GROUPS_CHANGED_EVENT,
+				syncSubscriptionGroups,
+			);
+	}, []);
+
+	useEffect(() => {
+		if (isGroupManagerOpen && groupManagerMode === "rename") {
+			groupManagerInputRef.current?.focus();
+		}
+	}, [isGroupManagerOpen, groupManagerMode]);
+
 	const getCurrentFeedViewFilters = (): FeedViewFilters => ({
 		showShorts,
 		hideWatched,
@@ -738,6 +1263,21 @@ export const Dashboard = () => {
 		setMutedKeywordText(preset.filters.mutedKeywordText);
 		setBoostedKeywordText(preset.filters.boostedKeywordText);
 		toast.success(`Applied ${preset.name}`);
+	};
+
+	const clearAdvancedFilters = () => {
+		setDurationFilter("any");
+		setHideLiveReplays(false);
+		setHidePremieres(false);
+		setHideDuplicateTitles(false);
+		setMutedKeywordText("");
+		setBoostedKeywordText("");
+	};
+
+	const clearFeedFilters = () => {
+		setShowShorts(false);
+		setHideWatched(false);
+		clearAdvancedFilters();
 	};
 
 	const saveCurrentFeedViewPreset = (name: string) => {
@@ -810,6 +1350,7 @@ export const Dashboard = () => {
 		: null;
 
 	const handleAddChannel = async (channel: YouTubeChannel) => {
+		const isFirstChannel = hasNoSubscriptions;
 		try {
 			await addSubscriptions([
 				{
@@ -824,6 +1365,10 @@ export const Dashboard = () => {
 			toast.success(`Added ${channel.title}`, {
 				description: "Channel added to your subscriptions",
 			});
+			if (isFirstChannel) {
+				setIsAddChannelModalOpen(false);
+				setFirstRefreshState("pending");
+			}
 		} catch (error) {
 			console.error("Error adding channel:", error);
 			toast.error("Failed to add channel", {
@@ -837,19 +1382,15 @@ export const Dashboard = () => {
 	return (
 		<div className="app-shell min-h-screen">
 			<Header
-				showMobileSearch={
-					activeTab === "subscriptions" ||
-					activeTab === TAB_LATEST ||
-					activeTab === "queue"
-				}
-				searchPlaceholder={
-					activeTab === TAB_LATEST || activeTab === "queue"
-						? "Search videos..."
-						: "Search channels..."
-				}
+				showMobileSearch={!(needsServerAuth || hasNoSubscriptions)}
+				searchPlaceholder="Search videos, channels, and favourites..."
+				searchScope={searchScope}
+				onSearchScopeChange={setSearchScope}
 				syncStatus={syncStatus}
 				cacheStatus={cacheStatus}
 				onRetryFailed={() => void refetchVideos()}
+				onRetryChannel={retryChannel}
+				retryingChannelId={retryingChannelId}
 				onRefresh={() => refetchVideos()}
 				isRefreshing={isRefreshing}
 				refreshProgress={refreshProgress}
@@ -903,28 +1444,10 @@ export const Dashboard = () => {
 			)}
 
 			{needsServerAuth ? (
-				<main
-					data-testid="auth-required"
-					className="mx-auto flex h-[calc(100dvh-var(--app-header-height))] max-w-md flex-col items-center justify-center px-4 py-2"
-				>
-					<div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-red-50 dark:bg-red-900/20">
-						<ShieldAlert className="h-6 w-6 text-red-600 dark:text-red-400" />
-					</div>
-					<h2 className="mt-4 text-xl font-bold text-gray-900 dark:text-ios-50">
-						Server authentication required
-					</h2>
-					<p className="mt-2 text-center text-sm text-gray-500 dark:text-ios-400">
-						Enter your server API token in Settings to sync subscriptions and
-						video feeds.
-					</p>
-					<button
-						type={BTN}
-						onClick={() => setIsAuthSettingsOpen(true)}
-						className="mt-5 rounded-lg bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-700"
-					>
-						Open Settings
-					</button>
-				</main>
+				<ServerAuthSetup
+					onAuthenticated={clearServerAuth}
+					onOpenSettings={() => setIsAuthSettingsOpen(true)}
+				/>
 			) : subscriptionsLoading ||
 				(subscriptionsInitialSyncing && hasNoSubscriptions) ? (
 				<div
@@ -963,7 +1486,7 @@ export const Dashboard = () => {
 					/>
 					{/* Toolbars */}
 					<div className="px-4 pt-[var(--app-sticky-gap)] pb-[var(--app-sticky-gap)]">
-						{activeTab === "subscriptions" && (
+						{!searchQuery.trim() && activeTab === "subscriptions" && (
 							<div
 								data-testid="subscription-groups-toolbar"
 								className="flex items-start gap-2 border-b border-gray-200/70 pb-[var(--app-sticky-gap)] dark:border-ios-800/80 sm:items-center"
@@ -978,10 +1501,11 @@ export const Dashboard = () => {
 									<select
 										id="subscription-group-filter"
 										aria-label="Filter group"
-										value={selectedSubscriptionGroup}
-										onChange={(e) =>
-											setSelectedSubscriptionGroup(e.target.value)
-										}
+									value={selectedSubscriptionGroup}
+											onChange={(e) => {
+												clearSubscriptionSelection();
+												setSelectedSubscriptionGroup(e.target.value);
+											}}
 										className="h-10 max-w-[11rem] rounded-lg border border-gray-200 bg-white px-3 text-sm font-medium text-gray-700 outline-none focus:border-red-500 dark:border-ios-800 dark:bg-ios-900 dark:text-ios-200"
 									>
 										<option value="all">All groups</option>
@@ -990,16 +1514,45 @@ export const Dashboard = () => {
 												{group}
 											</option>
 										))}
-									</select>
+					</select>
+					<button
+						type={BTN}
+						aria-pressed={allVisibleSubscriptionChannelsSelected}
+						aria-label={
+							allVisibleSubscriptionChannelsSelected
+								? "Deselect all visible channels"
+								: "Select all visible channels"
+						}
+						onClick={() =>
+							toggleAllSelectionIds(
+								setSelectedSubscriptionChannelIds,
+								visibleSubscriptionChannels.map((channel) => channel.id),
+							)
+						}
+						className="h-10 rounded-lg border border-gray-300 bg-white px-3 text-sm font-medium text-gray-700 hover:bg-gray-50 dark:border-ios-700 dark:bg-ios-900 dark:text-ios-200 dark:hover:bg-ios-800"
+					>
+						{allVisibleSubscriptionChannelsSelected
+							? "Deselect visible"
+							: "Select all visible"}
+					</button>
 
-									<button
-										type={BTN}
-										onClick={() => setIsNewGroupModalOpen(true)}
-										className="h-10 rounded-lg bg-gray-800 px-3 text-sm font-medium text-white hover:bg-gray-700 dark:bg-ios-700 dark:hover:bg-ios-600"
-									>
-										Add group
-									</button>
-								</div>
+					<button
+						type={BTN}
+						onClick={() => setIsNewGroupModalOpen(true)}
+						className="h-10 rounded-lg bg-gray-800 px-3 text-sm font-medium text-white hover:bg-gray-700 dark:bg-ios-700 dark:hover:bg-ios-600"
+					>
+						Add group
+					</button>
+					{customSubscriptionGroups.length > 0 && (
+						<button
+							type={BTN}
+							onClick={openGroupManager}
+							className="h-10 rounded-lg border border-gray-300 bg-white px-3 text-sm font-medium text-gray-700 hover:bg-gray-50 dark:border-ios-700 dark:bg-ios-900 dark:text-ios-200 dark:hover:bg-ios-800"
+						>
+							Manage groups
+						</button>
+					)}
+				</div>
 								<button
 									disabled={isRepairingIcons}
 									onClick={handleRepairChannelIcons}
@@ -1018,110 +1571,285 @@ export const Dashboard = () => {
 							</div>
 						)}
 
-						{activeTab === TAB_LATEST && (
-							<div
-								data-testid="latest-toolbar"
-								className="flex flex-nowrap items-center justify-between gap-1 sm:gap-2"
-							>
-								<div className="flex min-w-0 flex-nowrap items-center gap-2 sm:gap-3">
-									<div className="hidden items-center gap-2 text-xs font-medium text-gray-500 dark:text-ios-400 sm:flex">
-										<span>
-											Last refreshed {formatRefreshAge(syncStatus.lastUpdated)}
-										</span>
-										{scheduledRefreshIntervalMinutes && (
-											<span className="rounded-full bg-gray-100 px-2 py-1 text-gray-600 dark:bg-ios-800 dark:text-ios-300">
-												Auto {scheduledRefreshIntervalMinutes}m
-											</span>
-										)}
-									</div>
-								</div>
-
+						{!searchQuery.trim() && activeTab === TAB_LATEST && (
+							<>
 								<div
-									data-testid="latest-toolbar-actions"
-									className="ml-auto flex shrink-0 flex-nowrap items-center gap-1 sm:gap-2"
+									data-testid="latest-toolbar"
+									className="flex flex-nowrap items-center justify-between gap-1 sm:gap-2"
 								>
-									<div className="hidden xl:flex">
-										<SavedFeedViews
-											presets={feedViewPresets}
-											onApply={applyFeedViewPreset}
-											onSave={saveCurrentFeedViewPreset}
-											onDelete={deleteSavedFeedViewPreset}
-										/>
-									</div>
-									{visibleLatestVideos.length > 0 && (
-										<>
-											<label htmlFor="bulk-watched-action" className="sr-only">
-												Bulk watched action
-											</label>
-											<select
-												id="bulk-watched-action"
-												aria-label="Bulk watched action"
-												defaultValue=""
-												onChange={(event) => {
-													handleBulkWatchedAction(event.target.value);
-													event.target.value = "";
-												}}
-												className="hidden h-10 rounded-lg border border-gray-200 bg-white px-3 text-sm font-medium text-gray-700 outline-none focus:border-red-500 dark:border-ios-800 dark:bg-ios-900 dark:text-ios-200 sm:block"
+									<div className="flex min-w-0 flex-nowrap items-center gap-2 sm:gap-3">
+											<div className="hidden items-center gap-2 text-xs font-medium text-gray-500 dark:text-ios-400 sm:flex">
+												<span>
+													Last refreshed {formatRefreshAge(syncStatus.lastUpdated)}
+												</span>
+												{scheduledRefreshIntervalMinutes && (
+													<span className="rounded-full bg-gray-100 px-2 py-1 text-gray-600 dark:bg-ios-800 dark:text-ios-300">
+														Auto {scheduledRefreshIntervalMinutes}m
+													</span>
+												)}
+											</div>
+										</div>
+
+									<div
+											data-testid="latest-toolbar-actions"
+											className="ml-auto flex shrink-0 flex-nowrap items-center gap-1 sm:gap-2"
+										>
+											<button
+												type={BTN}
+												aria-expanded={isFeedFiltersOpen}
+												aria-controls="feed-filters-panel"
+												aria-label={
+													activeAdvancedFilterCount > 0
+														? `Filters, ${activeAdvancedFilterCount} active`
+														: "Filters"
+												}
+												onClick={() => setIsFeedFiltersOpen((open) => !open)}
+												className={`inline-flex h-10 items-center justify-center gap-1.5 rounded-lg border px-3 text-sm font-medium transition-colors ${
+													isFeedFiltersOpen || activeAdvancedFilterCount > 0
+														? "border-red-200 bg-red-50 text-red-700 dark:border-red-900/60 dark:bg-red-950/30 dark:text-red-300"
+														: "border-gray-200 bg-white text-gray-700 hover:bg-gray-50 dark:border-ios-800 dark:bg-ios-900 dark:text-ios-200 dark:hover:bg-ios-800"
+												}`}
 											>
-												<option value="" disabled>
-													Mark watched
-												</option>
-												<option value="shown">Shown videos</option>
-												<option value="older-7">Older than 7 days</option>
-												<option value="older-30">Older than 30 days</option>
-											</select>
-										</>
-									)}
+												<Filter className="h-4 w-4" aria-hidden="true" />
+												<span className="hidden sm:inline">Filters</span>
+												{activeAdvancedFilterCount > 0 && (
+													<span className="min-w-4 rounded-full bg-red-600 px-1 text-center text-[10px] leading-4 text-white dark:bg-red-500">
+														{activeAdvancedFilterCount}
+													</span>
+												)}
+																									</button>
+																				{visibleLatestVideos.length > 0 && (
+																					<button
+																						type={BTN}
+																						aria-pressed={allVisibleLatestVideosSelected}
+																						aria-label={
+																								allVisibleLatestVideosSelected
+																									? "Deselect all visible videos"
+																									: "Select all visible videos"
+																							}
+																							onClick={() =>
+																								toggleAllSelectionIds(
+																									setSelectedLatestVideoIds,
+																									visibleLatestVideos.map((video) => video.id),
+																									),
+																								}
+																							className="inline-flex h-10 items-center rounded-lg border border-gray-200 bg-white px-2 text-sm font-medium text-gray-700 hover:bg-gray-50 dark:border-ios-800 dark:bg-ios-900 dark:text-ios-200 dark:hover:bg-ios-800 sm:px-3"
+																					>
+																							<span className="sm:hidden">
+																								{allVisibleLatestVideosSelected ? "Deselect" : "Select"}
+																							</span>
+																							<span className="hidden sm:inline">
+																								{allVisibleLatestVideosSelected
+																									? "Deselect visible"
+																									: "Select all visible"}
+																							</span>
+																							</button>
+																					)}
+																					<div className="hidden xl:flex">
+												<SavedFeedViews
+													presets={feedViewPresets}
+													onApply={applyFeedViewPreset}
+													onSave={saveCurrentFeedViewPreset}
+													onDelete={deleteSavedFeedViewPreset}
+												/>
+											</div>
+											{visibleLatestVideos.length > 0 && (
+												<>
+													<label htmlFor="bulk-watched-action" className="sr-only">
+														Bulk watched action
+													</label>
+													<select
+														id="bulk-watched-action"
+														aria-label="Bulk watched action"
+														defaultValue=""
+														onChange={(event) => {
+															handleBulkWatchedAction(event.target.value);
+															event.target.value = "";
+														}}
+														className="hidden h-10 rounded-lg border border-gray-200 bg-white px-3 text-sm font-medium text-gray-700 outline-none focus:border-red-500 dark:border-ios-800 dark:bg-ios-900 dark:text-ios-200 sm:block"
+													>
+														<option value="" disabled>
+															Mark watched
+														</option>
+														<option value="shown">Shown videos</option>
+														<option value="older-7">Older than 7 days</option>
+														<option value="older-30">Older than 30 days</option>
+													</select>
+												</>
+											)}
+									</div>
 								</div>
-							</div>
+								{isFeedFiltersOpen && (
+									<FeedFiltersPanel
+										durationFilter={durationFilter}
+										onDurationFilterChange={setDurationFilter}
+										hideLiveReplays={hideLiveReplays}
+										onToggleLiveReplays={() =>
+										setHideLiveReplays((value) => !value)
+										}
+										hidePremieres={hidePremieres}
+										onTogglePremieres={() =>
+										setHidePremieres((value) => !value)
+										}
+										hideDuplicateTitles={hideDuplicateTitles}
+										onToggleDuplicateTitles={() =>
+										setHideDuplicateTitles((value) => !value)
+										}
+										mutedKeywordText={mutedKeywordText}
+										onMutedKeywordTextChange={setMutedKeywordText}
+										boostedKeywordText={boostedKeywordText}
+										onBoostedKeywordTextChange={setBoostedKeywordText}
+										activeFilterCount={activeAdvancedFilterCount}
+										onClear={clearAdvancedFilters}
+										onClose={() => setIsFeedFiltersOpen(false)}
+									/>
+								)}
+							</>
 						)}
 					</div>
 
 					{/* Content */}
 					<>
-						{activeTab === "subscriptions" ? (
-							<div>
-								<DashboardContentBoundary
+						{searchQuery.trim() ? (
+							<UnifiedSearchResults
+								key={searchQuery.trim()}
+								query={searchQuery.trim()}
+								scope={searchScope}
+							results={unifiedSearchResults}
+							onScopeChange={setSearchScope}
+							onToggleChannelFavorite={toggleChannelFavorite}
+							channelThumbnails={channelThumbnails}
+							/>
+						) : activeTab === "subscriptions" ? (
+											<div>
+												<div className="mb-4 px-4">
+													<BulkSelectionToolbar
+														selectedVideoCount={0}
+															selectedChannelCount={selectedSubscriptionChannels.length}
+															groupOptions={subscriptionGroups}
+															showVideoActions={false}
+															addToFavoritesCount={selectedSubscriptionChannels.filter((channel) => !channel.isFavorite).length}
+															removeFromFavoritesCount={selectedSubscriptionChannels.filter((channel) => channel.isFavorite).length}
+															showMuteActions
+															showUnsubscribeAction
+															muteChannelsCount={selectedSubscriptionChannels.filter((channel) => !channel.isMuted).length}
+															unmuteChannelsCount={selectedSubscriptionChannels.filter((channel) => channel.isMuted).length}
+															onMarkWatched={() => undefined}
+															onMarkUnwatched={() => undefined}
+															onAddToFavorites={addSelectedSubscriptionsToFavorites}
+															onRemoveFromFavorites={removeSelectedSubscriptionsFromFavorites}
+															onMuteChannels={muteSelectedSubscriptions}
+															onUnmuteChannels={unmuteSelectedSubscriptions}
+															onUnsubscribeChannels={requestBulkUnsubscribe}
+															onAssignChannelsToGroup={assignSelectedSubscriptionChannelsToGroup}
+															onClear={clearSubscriptionSelection}
+													/>
+												</div>
+												<DashboardContentBoundary
 									onReturnToLatest={() => changeTab(TAB_LATEST)}
 								>
 									<SubscriptionsList
-										selectedGroup={selectedSubscriptionGroup}
-										groups={subscriptionGroups}
+															selectedGroup={selectedSubscriptionGroup}
+															groups={subscriptionGroups}
+															selectable
+															selectedChannelIds={selectedSubscriptionChannelIds}
+															onToggleSelect={(channelId) =>
+																toggleSelectionId(
+																	setSelectedSubscriptionChannelIds,
+																	channelId,
+																)
+															}
+															onClearGroup={() => setSelectedSubscriptionGroup("all")}
 									/>
 								</DashboardContentBoundary>
 							</div>
-						) : activeTab === TAB_LATEST ? (
-							<div className="px-4">
-								{videos.length === 0 ? (
-									hasTemporaryChannels ? (
-										<div className="text-center py-12">
-											<p className="text-gray-600 dark:text-ios-400 text-lg mb-2">
-												Some channels need channel IDs to fetch videos
-											</p>
-											<p className="text-sm text-gray-500">
-												Channels added with handles or custom names will be
-												updated automatically when videos are discovered
-											</p>
-										</div>
-									) : (
-										<EmptyState
-											icon={TrendingUp}
-											iconName={TAB_LATEST}
-											title="No videos found"
-											detail="New uploads from your subscriptions will appear here."
+							) : activeTab === TAB_LATEST ? (
+								<div className="px-4">
+									{firstRefreshState ? (
+										<FirstRefreshGuide
+											state={firstRefreshState}
+											isRefreshing={isRefreshing}
+											onRefresh={() => void refetchVideos()}
+											guideRef={firstRefreshGuideRef}
 										/>
-									)
-								) : (
-									<div>
-										<p className="hidden sm:block text-sm text-gray-500 dark:text-ios-400 mb-4">
+									) : videos.length === 0 ? (
+										hasTemporaryChannels ? (
+											<div className="text-center py-12">
+												<p className="text-gray-600 dark:text-ios-400 text-lg mb-2">
+													Some channels need channel IDs to fetch videos
+													</p>
+													<p className="text-sm text-gray-500">
+														Channels added with handles or custom names will be
+																updated automatically when videos are discovered
+															</p>
+														<EmptyStateAction
+															onClick={() => void refetchVideos()}
+															disabled={isRefreshing}
+														>
+															{isRefreshing ? "Refreshing feeds..." : "Refresh feeds"}
+														</EmptyStateAction>
+													</div>
+											) : (
+												<EmptyState
+													icon={TrendingUp}
+													iconName={TAB_LATEST}
+													title="No videos found"
+													detail="New uploads from your subscriptions will appear here."
+													action={
+														<EmptyStateAction
+															onClick={() => void refetchVideos()}
+															disabled={isRefreshing}
+														>
+																	{isRefreshing ? "Refreshing feeds..." : "Refresh feeds"}
+																</EmptyStateAction>
+																}
+															/>
+												)
+										) : filteredVideos.length === 0 ? (
+											<EmptyState
+												icon={Filter}
+												iconName="filtered-latest"
+												title="No videos match your filters"
+												detail="Clear the active filters to see more videos in Latest."
+												action={
+													<EmptyStateAction onClick={clearFeedFilters}>
+														Clear filters
+													</EmptyStateAction>
+												}
+											/>
+																) : (
+																	<div>
+																		<div className="mb-4">
+																			<BulkSelectionToolbar
+																				selectedVideoCount={selectedLatestVideos.length}
+																				selectedChannelCount={0}
+																				showFavoriteActions={false}
+																				addToFavoritesCount={0}
+																				removeFromFavoritesCount={0}
+																				onMarkWatched={markSelectedLatestWatched}
+																				onMarkUnwatched={markSelectedLatestUnwatched}
+																				onAddToFavorites={() => undefined}
+																				onRemoveFromFavorites={() => undefined}
+																				onClear={clearLatestSelection}
+																			/>
+																		</div>
+																		<p className="hidden sm:block text-sm text-gray-500 dark:text-ios-400 mb-4">
 											Showing {filteredVideos.length} recent videos
 										</p>
 										<VirtualizedVideoGrid
 											videos={visibleLatestVideos}
-											columns={4}
-											scrollStorageKey="latest-videos-scroll"
-											channelThumbnails={channelThumbnails}
-										/>
+																					columns={4}
+																				scrollStorageKey="latest-videos-scroll"
+																				channelThumbnails={channelThumbnails}
+																			selectable
+																			selectedVideoIds={selectedLatestVideoIds}
+																			onToggleSelect={(videoId) =>
+																					toggleSelectionId(
+																						setSelectedLatestVideoIds,
+																						videoId,
+																					)
+																				}
+																			/>
 										{visibleLatestVideos.length < filteredVideos.length && (
 											<div className="mt-4 flex justify-center pb-8 sm:hidden">
 												<button
@@ -1140,72 +1868,39 @@ export const Dashboard = () => {
 									</div>
 								)}
 							</div>
-						) : activeTab === "queue" ? (
-							<div className="px-4">
-								{inProgressVideos.length === 0 &&
-								watchLaterVideos.length === 0 ? (
-									<EmptyState
-										icon={ListVideo}
-										iconName="queue"
-										title="Your queue is empty"
-										detail="Swipe a video right to save it for later. Videos you start watching show up at the top."
-									/>
-								) : (
-									<div className="space-y-6">
-										{inProgressVideos.length > 0 && (
-											<section data-testid="queue-continue-watching">
-												<div className="mb-2 flex items-baseline justify-between">
-													<h3 className="text-[0.7rem] font-semibold uppercase tracking-[0.08em] text-gray-500 dark:text-ios-400">
-														Continue watching
-													</h3>
-													<span className="text-[11px] text-gray-500 dark:text-ios-500">
-														{inProgressVideos.length} paused
-													</span>
-												</div>
-												<VirtualizedVideoGrid
-													videos={inProgressVideos}
-													columns={4}
-													scrollStorageKey="queue-continue-watching-scroll"
-													channelThumbnails={channelThumbnails}
-													context="queue"
-												/>
-											</section>
-										)}
-
-										{watchLaterVideos.length > 0 && (
-											<section data-testid="queue-watch-later">
-												<div className="mb-2 flex items-baseline justify-between">
-													<h3 className="text-[0.7rem] font-semibold uppercase tracking-[0.08em] text-gray-500 dark:text-ios-400">
-														Watch later
-													</h3>
-													<span className="text-[11px] text-gray-500 dark:text-ios-500">
-														{watchLaterVideos.length} saved
-													</span>
-												</div>
-												<VirtualizedVideoGrid
-													videos={watchLaterVideos}
-													columns={4}
-													scrollStorageKey="queue-watch-later-scroll"
-													channelThumbnails={channelThumbnails}
-													context="queue"
-												/>
-											</section>
-										)}
-									</div>
-								)}
-							</div>
-						) : activeTab === "favorites" ? (
+							) : activeTab === "favorites" ? (
 							<div className="px-4">
 								{favoriteChannels.length === 0 &&
 								favoriteVideos.length === 0 ? (
-									<EmptyState
-										icon={Heart}
-										iconName="favorites"
-										title="No favorites yet"
-										detail="Favorite channels or videos to find them here."
-									/>
+																	<EmptyState
+																		icon={Heart}
+																		iconName="favorites"
+																		title="No favorites yet"
+																		detail="Favorite channels or videos to find them here."
+																		action={
+																			<EmptyStateAction onClick={() => changeTab(TAB_LATEST)}>
+																			Browse Latest
+																		</EmptyStateAction>
+																	}
+																	/>
 								) : (
 									<div className="space-y-8">
+						<BulkSelectionToolbar
+							selectedVideoCount={selectedFavoriteVideos.length}
+							selectedChannelCount={selectedFavoriteChannels.length}
+											groupOptions={subscriptionGroups}
+							addToFavoritesCount={0}
+											removeFromFavoritesCount={
+													selectedFavoriteVideos.length +
+													selectedFavoriteChannels.length
+											}
+											onMarkWatched={markSelectedFavoritesWatched}
+											onMarkUnwatched={markSelectedFavoritesUnwatched}
+							onAddToFavorites={() => undefined}
+							onRemoveFromFavorites={removeSelectedFavorites}
+											onAssignChannelsToGroup={assignSelectedFavoriteChannelsToGroup}
+							onClear={clearFavoriteSelection}
+										/>
 										{(favoriteChannels.length > 0 ||
 											favoriteVideos.length > 0) && (
 											<div
@@ -1244,12 +1939,34 @@ export const Dashboard = () => {
 											className={`${visibleFavoriteSection === "channels" ? "block" : "hidden sm:block"} ${favoriteChannels.length === 0 ? "sm:hidden" : ""}`}
 										>
 											<div className="mb-4 flex items-center justify-between gap-3">
-												<h2 className="text-lg font-semibold text-gray-900 dark:text-ios-100">
-													Channels
-												</h2>
-												<span className="text-sm text-gray-500 dark:text-ios-400">
-													{favoriteChannels.length}
-												</span>
+													<h2 className="text-lg font-semibold text-gray-900 dark:text-ios-100">
+														Channels
+													</h2>
+													<div className="flex items-center gap-2">
+														<span className="text-sm text-gray-500 dark:text-ios-400">
+															{favoriteChannels.length}
+														</span>
+														<button
+															type={BTN}
+															aria-pressed={allFavoriteChannelsSelected}
+															aria-label={
+																allFavoriteChannelsSelected
+																	? "Deselect all visible channels"
+																	: "Select all visible channels"
+															}
+															onClick={() =>
+																toggleAllSelectionIds(
+																	setSelectedFavoriteChannelIds,
+																	favoriteChannels.map((channel) => channel.id),
+																)
+															}
+															className="rounded-lg border border-gray-200 px-2 py-1 text-xs font-medium text-gray-600 hover:bg-gray-100 dark:border-ios-700 dark:text-ios-300 dark:hover:bg-ios-800"
+														>
+															{allFavoriteChannelsSelected
+																? "Deselect"
+																: "Select all"}
+														</button>
+													</div>
 											</div>
 											{favoriteChannels.length === 0 ? (
 												<div className="rounded-xl border border-dashed border-gray-200 p-6 text-center text-sm text-gray-500 dark:border-ios-800 dark:text-ios-400">
@@ -1260,10 +1977,18 @@ export const Dashboard = () => {
 													{favoriteChannels.map((channel, index) => (
 														<SubscriptionCard
 															key={channel.id}
-															channel={channel}
-															index={index}
-															groups={subscriptionGroups}
-															onToggleFavorite={async (channelId) => {
+																channel={channel}
+																index={index}
+																groups={subscriptionGroups}
+																selectable
+																selected={selectedFavoriteChannelIds.has(channel.id)}
+																onToggleSelect={(channelId) =>
+														toggleSelectionId(
+																		setSelectedFavoriteChannelIds,
+																		channelId,
+																	)
+																}
+																onToggleFavorite={async (channelId) => {
 																const channel = allSubscriptions.find(
 																	(s) => s.id === channelId,
 																);
@@ -1285,12 +2010,34 @@ export const Dashboard = () => {
 											className={`${visibleFavoriteSection === "videos" ? "block" : "hidden sm:block"} ${favoriteVideos.length === 0 ? "sm:hidden" : ""}`}
 										>
 											<div className="mb-4 flex items-center justify-between gap-3">
-												<h2 className="text-lg font-semibold text-gray-900 dark:text-ios-100">
-													Videos
-												</h2>
-												<span className="text-sm text-gray-500 dark:text-ios-400">
-													{favoriteVideos.length}
-												</span>
+													<h2 className="text-lg font-semibold text-gray-900 dark:text-ios-100">
+														Videos
+													</h2>
+													<div className="flex items-center gap-2">
+														<span className="text-sm text-gray-500 dark:text-ios-400">
+															{favoriteVideos.length}
+														</span>
+														<button
+															type={BTN}
+															aria-pressed={allFavoriteVideosSelected}
+															aria-label={
+																allFavoriteVideosSelected
+																	? "Deselect all visible videos"
+																	: "Select all visible videos"
+															}
+															onClick={() =>
+																toggleAllSelectionIds(
+																	setSelectedFavoriteVideoIds,
+																	favoriteVideos.map((video) => video.id),
+																)
+															}
+															className="rounded-lg border border-gray-200 px-2 py-1 text-xs font-medium text-gray-600 hover:bg-gray-100 dark:border-ios-700 dark:text-ios-300 dark:hover:bg-ios-800"
+														>
+															{allFavoriteVideosSelected
+																? "Deselect"
+																: "Select all"}
+														</button>
+													</div>
 											</div>
 											{favoriteVideos.length === 0 ? (
 												<div className="rounded-xl border border-dashed border-gray-200 p-6 text-center text-sm text-gray-500 dark:border-ios-800 dark:text-ios-400">
@@ -1298,11 +2045,19 @@ export const Dashboard = () => {
 												</div>
 											) : (
 												<VirtualizedVideoGrid
-													videos={favoriteVideos}
-													columns={4}
-													scrollStorageKey="favorite-videos-scroll"
-													channelThumbnails={channelThumbnails}
-												/>
+																	videos={favoriteVideos}
+																	columns={4}
+																	scrollStorageKey="favorite-videos-scroll"
+																	channelThumbnails={channelThumbnails}
+																	selectable
+																	selectedVideoIds={selectedFavoriteVideoIds}
+																	onToggleSelect={(videoId) =>
+														toggleSelectionId(
+																			setSelectedFavoriteVideoIds,
+																			videoId,
+																	)
+																	}
+																/>
 											)}
 										</section>
 									</div>
@@ -1311,27 +2066,35 @@ export const Dashboard = () => {
 						) : (
 							<div className="px-4">
 								{activeChannels.length === 0 ? (
-									<EmptyState
-										icon={Activity}
-										iconName="activity"
-										title="No activity yet"
-										detail="Recent uploads from your channels will appear here."
-									/>
+																<EmptyState
+																	icon={Activity}
+																	iconName="activity"
+																	title="No activity yet"
+																	detail="Recent uploads from your channels will appear here."
+																	action={
+																		<EmptyStateAction onClick={() => changeTab(TAB_LATEST)}>
+																			View Latest
+																		</EmptyStateAction>
+																	}
+																/>
 								) : (
 									<>
 										<div className="mb-4">
 											<h2 className="text-2xl font-bold text-gray-900 dark:text-ios-100 mb-2">
-												Most Active Channels
+												Recent Channel Activity
 											</h2>
 											<p className="text-sm text-gray-500 dark:text-ios-400">
-												Top {activeChannels.length} channels by uploads in the
-												past 7 days
+												{activeChannels.length} channel
+												{activeChannels.length === 1 ? "" : "s"} with uploads in the
+												past 7 days, ordered by volume and recency
 											</p>
 										</div>
 										<div className="space-y-3">
 											{activeChannels.map((item, index) => (
 												<div
 													key={item.channel.id}
+													data-testid="activity-channel-item"
+													data-channel-id={item.channel.id}
 													onClick={() => openChannel(item.channel.id)}
 													className="flex items-center gap-4 p-4 bg-white dark:bg-ios-800 rounded-xl shadow-sm hover:shadow-md transition-all cursor-pointer border border-gray-200 dark:border-ios-700"
 												>
@@ -1380,7 +2143,6 @@ export const Dashboard = () => {
 						}}
 						onAddChannel={() => setIsAddChannelModalOpen(true)}
 						subscriptionCount={allSubscriptions.length}
-						activeChannelCount={activeChannels.length}
 						favoriteCount={favoriteChannels.length + favoriteVideos.length}
 					/>
 				</div>
@@ -1391,8 +2153,232 @@ export const Dashboard = () => {
 				isOpen={isAddChannelModalOpen}
 				onClose={() => setIsAddChannelModalOpen(false)}
 				onAdd={handleAddChannel}
-				existingSubscriptions={allSubscriptions}
+					existingSubscriptions={allSubscriptions}
 			/>
+
+			{isBulkUnsubscribeConfirmOpen && (
+				<div className="fixed inset-0 z-[120]">
+					<button
+						type={BTN}
+						aria-label="Close unsubscribe confirmation"
+						disabled={isBulkUnsubscribing}
+						className="absolute inset-0 bg-gray-950/60 disabled:cursor-wait"
+						onClick={closeBulkUnsubscribeConfirm}
+					/>
+					<div
+						ref={bulkUnsubscribeConfirmFocus.modalRef}
+						role="dialog"
+						aria-modal="true"
+						aria-labelledby="bulk-unsubscribe-title"
+						tabIndex={-1}
+						onKeyDown={bulkUnsubscribeConfirmFocus.onKeyDown}
+						className="absolute bottom-0 left-0 right-0 rounded-t-2xl border-t border-gray-200 bg-white p-4 shadow-2xl dark:border-ios-800 dark:bg-ios-900 sm:bottom-auto sm:left-1/2 sm:right-auto sm:top-28 sm:w-[30rem] sm:max-w-[calc(100vw-2rem)] sm:-translate-x-1/2 sm:rounded-xl sm:border"
+					>
+						<div className="mb-4 flex items-center justify-between gap-3">
+							<h2
+								id="bulk-unsubscribe-title"
+								className="text-lg font-semibold text-gray-900 dark:text-ios-100"
+							>
+								Unsubscribe selected channels?
+							</h2>
+							<button
+								type={BTN}
+								aria-label="Close unsubscribe confirmation"
+								disabled={isBulkUnsubscribing}
+								onClick={closeBulkUnsubscribeConfirm}
+								className="inline-flex h-10 w-10 items-center justify-center rounded-lg bg-gray-100 text-gray-700 hover:bg-gray-200 disabled:cursor-wait disabled:opacity-60 dark:bg-ios-800 dark:text-ios-200 dark:hover:bg-ios-700"
+							>
+								<X className="h-5 w-5" />
+							</button>
+						</div>
+						<p className="text-sm leading-5 text-gray-700 dark:text-ios-200">
+							This will remove {selectedSubscriptionChannels.length} selected channel
+							{selectedSubscriptionChannels.length === 1 ? "" : "s"} from your
+							subscriptions. You can undo immediately from the confirmation toast.
+						</p>
+						<div className="mt-5 flex gap-2">
+							<button
+								type={BTN}
+								onClick={closeBulkUnsubscribeConfirm}
+								disabled={isBulkUnsubscribing}
+								className="h-10 flex-1 rounded-lg bg-gray-100 px-3 text-sm font-medium text-gray-800 hover:bg-gray-200 disabled:cursor-wait disabled:opacity-60 dark:bg-ios-800 dark:text-ios-100 dark:hover:bg-ios-700"
+							>
+								Cancel
+							</button>
+							<button
+								type={BTN}
+								onClick={() => void confirmBulkUnsubscribe()}
+								disabled={isBulkUnsubscribing}
+								className="h-10 flex-1 rounded-lg bg-red-600 px-3 text-sm font-medium text-white hover:bg-red-700 disabled:cursor-wait disabled:opacity-60"
+							>
+								{isBulkUnsubscribing ? "Unsubscribing..." : "Unsubscribe channels"}
+							</button>
+						</div>
+					</div>
+				</div>
+			)}
+
+			{isGroupManagerOpen && (
+				<div className="fixed inset-0 z-[120]">
+					<button
+						type={BTN}
+						aria-label="Close group manager"
+						disabled={isManagingGroup}
+						className="absolute inset-0 bg-gray-950/60 disabled:cursor-wait"
+						onClick={closeGroupManager}
+					/>
+					<div
+						ref={groupManagerFocus.modalRef}
+						role="dialog"
+						aria-modal="true"
+						aria-labelledby="group-manager-title"
+						tabIndex={-1}
+						onKeyDown={groupManagerFocus.onKeyDown}
+						className="absolute bottom-0 left-0 right-0 max-h-[85vh] overflow-y-auto rounded-t-2xl border-t border-gray-200 bg-white p-4 shadow-2xl dark:border-ios-800 dark:bg-ios-900 sm:bottom-auto sm:left-1/2 sm:right-auto sm:top-28 sm:w-[30rem] sm:max-w-[calc(100vw-2rem)] sm:-translate-x-1/2 sm:rounded-xl sm:border"
+					>
+						<div className="mb-4 flex items-center justify-between gap-3">
+							<h2
+								id="group-manager-title"
+								className="text-lg font-semibold text-gray-900 dark:text-ios-100"
+							>
+								Manage groups
+							</h2>
+							<button
+								type={BTN}
+								aria-label="Close group manager"
+								disabled={isManagingGroup}
+								onClick={closeGroupManager}
+								className="inline-flex h-10 w-10 items-center justify-center rounded-lg bg-gray-100 text-gray-700 hover:bg-gray-200 disabled:cursor-wait disabled:opacity-60 dark:bg-ios-800 dark:text-ios-200 dark:hover:bg-ios-700"
+							>
+								<X className="h-5 w-5" />
+							</button>
+						</div>
+
+						{groupManagerMode === "list" && (
+							<div className="space-y-3">
+								<p className="text-sm leading-5 text-gray-600 dark:text-ios-300">
+									Renaming keeps channels in the group. Deleting a group only removes its label and un-groups its channels.
+								</p>
+								<div className="space-y-2">
+									{customSubscriptionGroups.map((group) => {
+										const assignedCount = getAssignedSubscriptions(group).length;
+										return (
+											<div
+												key={group}
+												className="flex items-center gap-3 rounded-lg border border-gray-200 p-3 dark:border-ios-800"
+											>
+												<div className="min-w-0 flex-1">
+													<p className="truncate text-sm font-medium text-gray-900 dark:text-ios-100">
+														{group}
+													</p>
+													<p className="text-xs text-gray-500 dark:text-ios-400">
+														{assignedCount} assigned channel{assignedCount === 1 ? "" : "s"}
+													</p>
+												</div>
+												<div className="flex shrink-0 gap-2">
+													<button
+														type={BTN}
+														aria-label={`Rename ${group}`}
+														onClick={() => openRenameGroup(group)}
+														className="rounded-lg px-2.5 py-2 text-xs font-medium text-gray-700 hover:bg-gray-100 dark:text-ios-200 dark:hover:bg-ios-800"
+													>
+														Rename
+													</button>
+													<button
+														type={BTN}
+														aria-label={`Delete ${group}`}
+														onClick={() => openDeleteGroup(group)}
+														className="rounded-lg px-2.5 py-2 text-xs font-medium text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-950/30"
+													>
+														Delete
+													</button>
+												</div>
+											</div>
+										);
+									})}
+								</div>
+							</div>
+						)}
+
+						{groupManagerMode === "rename" && groupManagerTarget && (
+							<form
+								className="space-y-4"
+								onSubmit={(event) => {
+									event.preventDefault();
+									void renameSubscriptionGroup();
+								}}
+							>
+								<p className="text-sm leading-5 text-gray-600 dark:text-ios-300">
+									Channels assigned to <span className="font-medium">{groupManagerTarget}</span> will stay assigned under the new name.
+								</p>
+								<label
+									htmlFor="rename-subscription-group"
+									className="block text-sm font-medium text-gray-700 dark:text-ios-300"
+								>
+									New group name
+								</label>
+								<input
+									id="rename-subscription-group"
+									ref={groupManagerInputRef}
+									value={renamedGroupName}
+									onChange={(event) => setRenamedGroupName(event.target.value)}
+									className="h-11 w-full rounded-lg border border-gray-200 bg-white px-3 text-base text-gray-900 outline-none focus:border-red-500 dark:border-ios-800 dark:bg-ios-950 dark:text-ios-100"
+								/>
+								<div className="flex gap-2">
+									<button
+										type={BTN}
+										onClick={returnToGroupList}
+										disabled={isManagingGroup}
+										className="h-10 flex-1 rounded-lg bg-gray-100 px-3 text-sm font-medium text-gray-800 hover:bg-gray-200 disabled:opacity-60 dark:bg-ios-800 dark:text-ios-100 dark:hover:bg-ios-700"
+									>
+										Back
+									</button>
+									<button
+										type="submit"
+										disabled={isManagingGroup}
+										className="h-10 flex-1 rounded-lg bg-red-600 px-3 text-sm font-medium text-white hover:bg-red-700 disabled:cursor-wait disabled:opacity-60"
+									>
+										{isManagingGroup ? "Renaming..." : "Rename group"}
+									</button>
+								</div>
+							</form>
+						)}
+
+						{groupManagerMode === "delete" && groupManagerTarget && (
+							<div className="space-y-4">
+								{(() => {
+									const assignedCount = getAssignedSubscriptions(groupManagerTarget).length;
+									return (
+										<>
+											<p className="text-sm leading-5 text-gray-700 dark:text-ios-200">
+												Delete <span className="font-semibold">{groupManagerTarget}</span>? This will remove the group label and un-group {assignedCount} channel{assignedCount === 1 ? "" : "s"}. Your subscriptions will not be deleted.
+											</p>
+											<div className="flex gap-2">
+												<button
+													type={BTN}
+													onClick={returnToGroupList}
+													disabled={isManagingGroup}
+													className="h-10 flex-1 rounded-lg bg-gray-100 px-3 text-sm font-medium text-gray-800 hover:bg-gray-200 disabled:opacity-60 dark:bg-ios-800 dark:text-ios-100 dark:hover:bg-ios-700"
+												>
+													Back
+												</button>
+												<button
+													type={BTN}
+													onClick={() => void deleteSubscriptionGroup()}
+													disabled={isManagingGroup}
+													className="h-10 flex-1 rounded-lg bg-red-600 px-3 text-sm font-medium text-white hover:bg-red-700 disabled:cursor-wait disabled:opacity-60"
+												>
+													{isManagingGroup ? "Deleting..." : "Delete group"}
+												</button>
+											</div>
+										</>
+									);
+								})()}
+							</div>
+						)}
+					</div>
+				</div>
+			)}
 
 			{isNewGroupModalOpen && (
 				<div className="fixed inset-0 z-[120]">
@@ -1400,15 +2386,15 @@ export const Dashboard = () => {
 						type={BTN}
 						aria-label="Close new group dialog"
 						className="absolute inset-0 bg-gray-950/60"
-						onClick={() => {
-							setIsNewGroupModalOpen(false);
-							setNewSubscriptionGroupName("");
-						}}
+						onClick={closeNewGroupModal}
 					/>
 					<form
+						ref={newGroupModalFocus.modalRef}
 						role="dialog"
 						aria-modal="true"
 						aria-labelledby="new-group-title"
+						tabIndex={-1}
+						onKeyDown={newGroupModalFocus.onKeyDown}
 						className="absolute bottom-0 left-0 right-0 rounded-t-2xl border-t border-gray-200 bg-white p-4 shadow-2xl dark:border-ios-800 dark:bg-ios-900 sm:bottom-auto sm:left-1/2 sm:right-auto sm:top-28 sm:w-96 sm:-translate-x-1/2 sm:rounded-xl sm:border"
 						onSubmit={(event) => {
 							event.preventDefault();
@@ -1425,10 +2411,7 @@ export const Dashboard = () => {
 							<button
 								type={BTN}
 								aria-label="Close new group dialog"
-								onClick={() => {
-									setIsNewGroupModalOpen(false);
-									setNewSubscriptionGroupName("");
-								}}
+								onClick={closeNewGroupModal}
 								className="inline-flex h-10 w-10 items-center justify-center rounded-lg bg-gray-100 text-gray-700 hover:bg-gray-200 dark:bg-ios-800 dark:text-ios-200 dark:hover:bg-ios-700"
 							>
 								<X className="h-5 w-5" />
@@ -1443,7 +2426,7 @@ export const Dashboard = () => {
 						</label>
 						<input
 							id="new-subscription-group"
-							autoFocus
+							ref={newSubscriptionGroupInputRef}
 							value={newSubscriptionGroupName}
 							onChange={(e) => setNewSubscriptionGroupName(e.target.value)}
 							placeholder="Linux, News, Apple..."
@@ -1453,10 +2436,7 @@ export const Dashboard = () => {
 						<div className="mt-5 flex gap-2">
 							<button
 								type={BTN}
-								onClick={() => {
-									setIsNewGroupModalOpen(false);
-									setNewSubscriptionGroupName("");
-								}}
+								onClick={closeNewGroupModal}
 								className="h-10 flex-1 rounded-lg bg-gray-100 px-3 text-sm font-medium text-gray-800 hover:bg-gray-200 dark:bg-ios-800 dark:text-ios-100 dark:hover:bg-ios-700"
 							>
 								Cancel
@@ -1482,7 +2462,10 @@ export const Dashboard = () => {
 			{needsServerAuth && (
 				<SettingsModal
 					isOpen={isAuthSettingsOpen}
-					onClose={() => setIsAuthSettingsOpen(false)}
+					onClose={() => {
+						setIsAuthSettingsOpen(false);
+						if (getServerApiToken()) void clearServerAuth();
+					}}
 				/>
 			)}
 		</div>

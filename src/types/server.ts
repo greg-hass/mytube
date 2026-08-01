@@ -15,8 +15,16 @@ export type ServerVersion = {
 	appVersion?: string;
 };
 
+export type RefreshFailureKind =
+	| "transient"
+	| "unavailable"
+	| "restricted"
+	| "permanent";
+
 export type FailedChannel = {
 	id: string;
 	title: string;
 	reason: string;
+	lastSuccessfulFetchAt?: string | null;
+	failureKind?: RefreshFailureKind;
 };

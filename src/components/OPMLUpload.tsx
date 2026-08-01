@@ -2,7 +2,8 @@ import { useState, useCallback, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Upload, FileText, CheckCircle, XCircle, Loader2, ExternalLink } from 'lucide-react';
 import { useSubscriptionStorage } from '../hooks/useSubscriptionStorage';
-import { getSubscriptionImportStats, isValidSubscriptionImportContent } from '../lib/opml-parser';
+import { parseSubscriptionImportPreview, type ImportFormat } from '../lib/opml-parser';
+import type { StoredSubscription } from '../lib/indexeddb';
 
 interface OPMLUploadProps {
   onSuccess?: () => void;
@@ -10,17 +11,87 @@ interface OPMLUploadProps {
   showLabelOnMobile?: boolean;
 }
 
+type PendingImport = {
+  fileName: string;
+  format: ImportFormat;
+  newSubscriptions: StoredSubscription[];
+  existingCount: number;
+  duplicateCount: number;
+  skippedCount: number;
+};
+
+function formatImportType(format: ImportFormat): string {
+  return format === 'csv' ? 'Google Takeout CSV' : 'OPML';
+}
+
+function ImportReview({
+  pendingImport,
+  onConfirm,
+  onCancel,
+  isImporting,
+}: {
+  pendingImport: PendingImport;
+  onConfirm: () => void;
+  onCancel: () => void;
+  isImporting: boolean;
+}) {
+  const newCount = pendingImport.newSubscriptions.length;
+
+  return (
+    <div
+      role="alertdialog"
+      aria-labelledby="subscription-import-review-title"
+      data-testid="subscription-import-review"
+      className="mt-4 rounded-xl border border-blue-200 bg-blue-50 p-4 text-left dark:border-blue-800 dark:bg-blue-950/30"
+    >
+      <h2 id="subscription-import-review-title" className="font-semibold text-blue-950 dark:text-blue-100">
+        Review subscription import
+      </h2>
+      <p className="mt-1 text-sm text-blue-900 dark:text-blue-200">
+        {pendingImport.fileName} · {formatImportType(pendingImport.format)}
+      </p>
+      <div className="mt-3 grid grid-cols-2 gap-2 text-sm text-blue-950 dark:text-blue-100">
+        <p><strong>{newCount}</strong> new channel{newCount === 1 ? '' : 's'}</p>
+        <p><strong>{pendingImport.existingCount}</strong> already subscribed</p>
+        <p><strong>{pendingImport.duplicateCount}</strong> duplicate entr{pendingImport.duplicateCount === 1 ? 'y' : 'ies'} skipped</p>
+        <p><strong>{pendingImport.skippedCount}</strong> invalid entr{pendingImport.skippedCount === 1 ? 'y' : 'ies'} skipped</p>
+      </div>
+      <p className="mt-3 text-sm text-blue-900 dark:text-blue-200">
+        Existing subscriptions and their favourites, mute settings, and groups will remain unchanged. Nothing is added until you confirm.
+      </p>
+      <div className="mt-4 flex flex-wrap gap-2">
+        <button
+          type="button"
+          onClick={onConfirm}
+          disabled={isImporting}
+          className="rounded-lg bg-blue-600 px-3 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:cursor-wait disabled:opacity-60"
+        >
+          Confirm import
+        </button>
+        <button
+          type="button"
+          onClick={onCancel}
+          disabled={isImporting}
+          className="rounded-lg border border-blue-300 px-3 py-2 text-sm font-medium text-blue-900 hover:bg-blue-100 disabled:opacity-60 dark:border-blue-700 dark:text-blue-100 dark:hover:bg-blue-900/40"
+        >
+          Cancel
+        </button>
+      </div>
+    </div>
+  );
+}
+
 export const OPMLUpload = ({ onSuccess, minimal = false, showLabelOnMobile = false }: OPMLUploadProps) => {
   const [isDragging, setIsDragging] = useState(false);
-  const [uploadStatus, setUploadStatus] = useState<'idle' | 'processing' | 'success' | 'error'>('idle');
+  const [uploadStatus, setUploadStatus] = useState<'idle' | 'processing' | 'review' | 'success' | 'error'>('idle');
   const [errorMessage, setErrorMessage] = useState<string>('');
   const [importedCount, setImportedCount] = useState(0);
+  const [pendingImport, setPendingImport] = useState<PendingImport | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const { importOPML, isImporting } = useSubscriptionStorage();
+  const { rawSubscriptions, importSubscriptions, isImporting } = useSubscriptionStorage();
 
   const handleFile = useCallback(async (file: File) => {
-    // Validate file type
-    if (!file.name.endsWith('.csv') && !file.name.endsWith('.opml') && !file.name.endsWith('.xml')) {
+    if (!file.name.toLowerCase().endsWith('.csv') && !file.name.toLowerCase().endsWith('.opml') && !file.name.toLowerCase().endsWith('.xml')) {
       setUploadStatus('error');
       setErrorMessage('Please upload subscriptions.csv from Google Takeout, or an OPML/XML file.');
       return;
@@ -33,28 +104,45 @@ export const OPMLUpload = ({ onSuccess, minimal = false, showLabelOnMobile = fal
       // Read file content
       const content = await file.text();
 
-      // Validate import content
-      if (!isValidSubscriptionImportContent(content)) {
-        throw new Error('Invalid import format. Please upload Google Takeout subscriptions.csv or a valid OPML file.');
-      }
-
-      // Get stats before importing
-      const stats = getSubscriptionImportStats(content);
-      if (!stats.isValid) {
-        throw new Error(stats.error || 'Invalid import file');
-      }
-
-      if (stats.channelCount === 0) {
+      const preview = parseSubscriptionImportPreview(content);
+      if (preview.channelCount === 0) {
         throw new Error('No subscriptions found in this file');
       }
 
-      // Import subscriptions
-      const subscriptions = await importOPML(content);
+      const existingIds = new Set(rawSubscriptions.map((subscription) => subscription.id));
+      const newSubscriptions = preview.subscriptions.filter(
+        (subscription) => !existingIds.has(subscription.id),
+      );
 
-      setImportedCount(subscriptions.length);
+      setPendingImport({
+        fileName: file.name,
+        format: preview.format,
+        newSubscriptions,
+        existingCount: preview.channelCount - newSubscriptions.length,
+        duplicateCount: preview.duplicateCount,
+        skippedCount: preview.skippedCount,
+      });
+      setUploadStatus('review');
+    } catch (error) {
+      setUploadStatus('error');
+      setErrorMessage(error instanceof Error ? error.message : 'Failed to import subscriptions file');
+      console.error('Subscription import error:', error);
+    }
+  }, [rawSubscriptions]);
+
+  const handleConfirmImport = useCallback(async () => {
+    if (!pendingImport) return;
+
+    try {
+      setUploadStatus('processing');
+      setErrorMessage('');
+
+      if (pendingImport.newSubscriptions.length > 0) {
+        await importSubscriptions(pendingImport.newSubscriptions);
+      }
+
+      setImportedCount(pendingImport.newSubscriptions.length);
       setUploadStatus('success');
-
-      // Call success callback after a short delay
       setTimeout(() => {
         onSuccess?.();
       }, 1500);
@@ -63,7 +151,7 @@ export const OPMLUpload = ({ onSuccess, minimal = false, showLabelOnMobile = fal
       setErrorMessage(error instanceof Error ? error.message : 'Failed to import subscriptions file');
       console.error('Subscription import error:', error);
     }
-  }, [importOPML, onSuccess]);
+  }, [importSubscriptions, onSuccess, pendingImport]);
 
   const handleDrop = useCallback((e: React.DragEvent) => {
     e.preventDefault();
@@ -100,10 +188,15 @@ export const OPMLUpload = ({ onSuccess, minimal = false, showLabelOnMobile = fal
     setUploadStatus('idle');
     setErrorMessage('');
     setImportedCount(0);
+    setPendingImport(null);
     if (fileInputRef.current) {
       fileInputRef.current.value = '';
     }
   }, []);
+
+  const cancelImport = useCallback(() => {
+    resetUpload();
+  }, [resetUpload]);
 
   // Minimal button version for header
   if (minimal) {
@@ -113,6 +206,7 @@ export const OPMLUpload = ({ onSuccess, minimal = false, showLabelOnMobile = fal
           ref={fileInputRef}
           type="file"
           accept=".csv,.opml,.xml"
+          aria-label="Import subscriptions file"
           onChange={handleFileInput}
           className="hidden"
         />
@@ -130,6 +224,30 @@ export const OPMLUpload = ({ onSuccess, minimal = false, showLabelOnMobile = fal
           )}
           <span className={showLabelOnMobile ? '' : 'hidden sm:inline'}>Import</span>
         </motion.button>
+        {uploadStatus === 'review' && pendingImport && (
+          <ImportReview
+            pendingImport={pendingImport}
+            onConfirm={handleConfirmImport}
+            onCancel={cancelImport}
+            isImporting={isImporting}
+          />
+        )}
+        {uploadStatus === 'processing' && (
+          <p role="status" className="mt-2 text-sm text-gray-600 dark:text-ios-300">
+            {pendingImport ? 'Importing subscriptions…' : 'Reading subscriptions file…'}
+          </p>
+        )}
+        {uploadStatus === 'success' && (
+          <p role="status" className="mt-2 text-sm text-green-700 dark:text-green-300">
+            {importedCount > 0 ? `${importedCount} new channel${importedCount === 1 ? '' : 's'} imported.` : 'No new channels were needed.'}
+          </p>
+        )}
+        {uploadStatus === 'error' && (
+          <div role="alert" className="mt-2 text-sm text-red-700 dark:text-red-300">
+            <p>{errorMessage}</p>
+            <button type="button" onClick={resetUpload} className="mt-1 underline">Try again</button>
+          </div>
+        )}
       </>
     );
   }
@@ -166,6 +284,7 @@ export const OPMLUpload = ({ onSuccess, minimal = false, showLabelOnMobile = fal
                 ref={fileInputRef}
                 type="file"
                 accept=".csv,.opml,.xml"
+                aria-label="Import subscriptions file"
                 onChange={handleFileInput}
                 className="hidden"
               />
@@ -208,6 +327,22 @@ export const OPMLUpload = ({ onSuccess, minimal = false, showLabelOnMobile = fal
             </motion.div>
           )}
 
+          {uploadStatus === 'review' && pendingImport && (
+            <motion.div
+              key="review"
+              initial={{ opacity: 0, y: 8 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0 }}
+            >
+              <ImportReview
+                pendingImport={pendingImport}
+                onConfirm={handleConfirmImport}
+                onCancel={cancelImport}
+                isImporting={isImporting}
+              />
+            </motion.div>
+          )}
+
           {uploadStatus === 'processing' && (
             <motion.div
               key="processing"
@@ -235,7 +370,9 @@ export const OPMLUpload = ({ onSuccess, minimal = false, showLabelOnMobile = fal
               <CheckCircle className="w-16 h-16 text-green-500 mx-auto mb-4" />
               <h3 className="text-xl font-semibold mb-2">Successfully imported!</h3>
               <p className="text-gray-600 dark:text-ios-400 mb-6">
-                {importedCount} channel{importedCount !== 1 ? 's' : ''} added to your subscriptions
+                {importedCount > 0
+                  ? `${importedCount} new channel${importedCount !== 1 ? 's' : ''} added to your subscriptions`
+                  : 'All channels in this file were already subscribed'}
               </p>
               <button
                 onClick={resetUpload}

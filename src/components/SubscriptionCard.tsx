@@ -9,13 +9,16 @@ interface Props {
   channel: YouTubeChannel;
   index: number;
   groups?: string[];
+  selectable?: boolean;
+  selected?: boolean;
+  onToggleSelect?: (channelId: string) => void;
   onRemove?: (channelId: string) => void;
   onToggleFavorite?: (channelId: string) => void;
   onToggleMute?: (channelId: string) => void;
   onSetGroup?: (channelId: string, group: string) => void;
 }
 
-export const SubscriptionCard = memo(({ channel, groups = [], onRemove, onToggleFavorite, onToggleMute, onSetGroup }: Props) => {
+export const SubscriptionCard = memo(({ channel, groups = [], selectable = false, selected = false, onToggleSelect, onRemove, onToggleFavorite, onToggleMute, onSetGroup }: Props) => {
   const [imageLoaded, setImageLoaded] = useState(false);
   const navigate = useNavigate();
 
@@ -61,17 +64,32 @@ export const SubscriptionCard = memo(({ channel, groups = [], onRemove, onToggle
           </div>
         )}
 
-        {/* Action buttons (top-left, hover only) */}
+        {/* Action buttons (always visible on touch screens; hover/focus on desktop) */}
         <div className="absolute top-2 left-2 flex gap-2 z-10">
+          {selectable && onToggleSelect && (
+            <label
+              className="flex h-8 w-8 cursor-pointer items-center justify-center rounded-full bg-black/60 backdrop-blur-sm"
+              onClick={(event) => event.stopPropagation()}
+            >
+              <input
+                type="checkbox"
+                checked={selected}
+                onChange={() => onToggleSelect(channel.id)}
+                aria-label={`Select ${channel.title}`}
+                className="h-4 w-4 accent-red-600"
+              />
+            </label>
+          )}
           {onToggleFavorite && (
             <button
               type="button"
+              aria-pressed={Boolean(channel.isFavorite)}
               aria-label={channel.isFavorite ? `Remove ${channel.title} from favorite channels` : `Add ${channel.title} to favorite channels`}
               onClick={(e) => {
                 e.stopPropagation();
                 onToggleFavorite(channel.id);
               }}
-              className={`p-2 rounded-full bg-black/50 hover:bg-black/70 backdrop-blur-sm transition-all group-hover:opacity-100 ${channel.isFavorite ? 'opacity-100' : 'opacity-100 sm:opacity-0'
+              className={`flex h-11 w-11 items-center justify-center rounded-full bg-black/50 hover:bg-black/70 backdrop-blur-sm transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white ${channel.isFavorite ? 'opacity-100' : 'opacity-100 sm:opacity-0 sm:group-hover:opacity-100 sm:group-focus-within:opacity-100'
                 }`}
               title={channel.isFavorite ? 'Remove from favorites' : 'Add to favorites'}
             >
@@ -86,11 +104,13 @@ export const SubscriptionCard = memo(({ channel, groups = [], onRemove, onToggle
           {onToggleMute && (
             <button
               type="button"
+              aria-pressed={Boolean(channel.isMuted)}
+              aria-label={channel.isMuted ? `Unmute ${channel.title}` : `Mute ${channel.title}`}
               onClick={(e) => {
                 e.stopPropagation();
                 onToggleMute(channel.id);
               }}
-              className={`p-2 rounded-full backdrop-blur-sm transition-all ${channel.isMuted ? 'opacity-100 bg-red-600/90 text-white' : 'opacity-0 group-hover:opacity-100 bg-black/50 hover:bg-black/70 text-white'
+              className={`flex h-11 w-11 items-center justify-center rounded-full backdrop-blur-sm transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white ${channel.isMuted ? 'opacity-100 bg-red-600/90 text-white' : 'opacity-100 sm:opacity-0 sm:group-hover:opacity-100 sm:group-focus-within:opacity-100 bg-black/50 hover:bg-black/70 text-white'
                 }`}
               title={channel.isMuted ? 'Unmute channel' : 'Mute channel'}
             >
@@ -123,7 +143,7 @@ export const SubscriptionCard = memo(({ channel, groups = [], onRemove, onToggle
               e.stopPropagation();
               onRemove(channel.id);
             }}
-            className="absolute top-2 right-2 p-1.5 rounded-full bg-red-600 text-white shadow-lg hover:bg-red-700 transition-all opacity-100 sm:opacity-0 sm:group-hover:opacity-100 translate-y-0 sm:translate-y-1 sm:group-hover:translate-y-0"
+            className="absolute right-2 top-2 flex h-11 w-11 items-center justify-center rounded-full bg-red-600 text-white shadow-lg transition-all hover:bg-red-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white opacity-100 sm:opacity-0 sm:group-hover:opacity-100 sm:group-focus-within:opacity-100 translate-y-0 sm:translate-y-1 sm:group-hover:translate-y-0 sm:group-focus-within:translate-y-0"
             title={`Unsubscribe from ${channel.title}`}
             aria-label={`Unsubscribe from ${channel.title}`}
           >

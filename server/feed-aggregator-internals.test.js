@@ -1,13 +1,18 @@
 import { describe, expect, it, vi, beforeEach } from "vitest";
 import feedAggregator from "./feed-aggregator";
 
-vi.mock("./feed-fetcher", () => ({
-	buildVideoFromFeedItem: vi.fn(),
+const feedFetcherMocks = vi.hoisted(() => ({
 	fetchChannelFeed: vi.fn().mockResolvedValue({
 		videos: [],
 		channelMetadata: null,
 	}),
 	fetchChannelThumbnail: vi.fn().mockResolvedValue(null),
+}));
+
+vi.mock("./feed-fetcher", () => ({
+	buildVideoFromFeedItem: vi.fn(),
+	fetchChannelFeed: feedFetcherMocks.fetchChannelFeed,
+	fetchChannelThumbnail: feedFetcherMocks.fetchChannelThumbnail,
 	fetchYouTubeApiVideos: vi.fn(),
 }));
 
@@ -186,6 +191,46 @@ describe("feed aggregator — runAggregation (characterization)", () => {
 		expect(mockStore.writeVideoCache).toHaveBeenCalled();
 		const lastWriteCache = mockStore.writeVideoCache.mock.calls.at(-1)[0];
 		expect(lastWriteCache.totalChannels).toBe(2);
+	});
+
+	it("can refresh only the requested channel", async () => {
+		const subscriptions = [
+			{ id: "UC_A", title: "Channel A" },
+			{ id: "UC_B", title: "Channel B" },
+		];
+		mockStore.reset({
+			data: { subscriptions, settings: {}, redirects: {} },
+			videoCache: {
+				videos: [],
+				lastUpdated: null,
+				totalChannels: 2,
+				totalVideos: 0,
+				channelRefreshes: {},
+				shortsStatusById: {},
+			},
+		});
+
+		const fetchChannelFeed = vi.fn().mockResolvedValue({
+			videos: [],
+			channelMetadata: null,
+		});
+		const fetchChannelThumbnail = vi.fn().mockResolvedValue(null);
+		await aggregator.runAggregation({
+			channelId: "UC_A",
+			fetchChannelFeed,
+			fetchChannelThumbnail,
+		});
+
+		expect(fetchChannelFeed).toHaveBeenCalledTimes(1);
+		expect(fetchChannelFeed).toHaveBeenCalledWith(
+			"UC_A",
+			undefined,
+			expect.any(Object),
+		);
+		expect(aggregator.getAggregationStatus()).toMatchObject({
+			current: 1,
+			total: 1,
+		});
 	});
 
 	it("preserves redirects in the written data", async () => {

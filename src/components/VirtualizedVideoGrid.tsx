@@ -10,6 +10,9 @@ interface Props {
     scrollStorageKey?: string;
     channelThumbnails?: Map<string, string>;
     context?: 'latest' | 'queue';
+    selectable?: boolean;
+    selectedVideoIds?: ReadonlySet<string>;
+    onToggleSelect?: (videoId: string) => void;
 }
 
 const ROW_GAP = 12;
@@ -28,7 +31,7 @@ const getInitialContainerWidth = () => {
     return Math.max(MIN_CARD_WIDTH, Math.min(window.innerWidth, 1280) - 32);
 };
 
-export const VirtualizedVideoGrid = ({ videos, columns = 4, scrollStorageKey, channelThumbnails, context = 'latest' }: Props) => {
+export const VirtualizedVideoGrid = ({ videos, columns = 4, scrollStorageKey, channelThumbnails, context = 'latest', selectable = false, selectedVideoIds, onToggleSelect }: Props) => {
     const parentRef = useRef<HTMLDivElement>(null);
     const [inlinePlaybackVideos, setInlinePlaybackVideos] = useState<YouTubeVideo[] | null>(null);
     const [inlinePlaybackVideoId, setInlinePlaybackVideoId] = useState<string | null>(null);
@@ -192,6 +195,9 @@ export const VirtualizedVideoGrid = ({ videos, columns = 4, scrollStorageKey, ch
                                         onInlinePlaybackChange={handleInlinePlaybackChange}
                                         onUnavailable={handleVideoUnavailable}
                                         context={context}
+                                        selectable={selectable}
+                                        selected={selectedVideoIds?.has(video.id) ?? false}
+                                        onToggleSelect={onToggleSelect}
                                     />
                                 ))}
                             </div>

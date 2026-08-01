@@ -2,6 +2,7 @@ import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { Dashboard } from './Dashboard';
 import { FEED_VIEW_PRESETS_CHANGED_EVENT } from '../lib/feed-view-presets';
+import { SUBSCRIPTION_GROUPS_STORAGE_KEY } from '../lib/subscription-groups';
 
 type MockRSSVideosState = {
   videos: Array<{
@@ -71,10 +72,21 @@ let mockWatchedVideos = new Set<string>();
 const mockMarkAsWatched = vi.fn((videoId: string) => {
   mockWatchedVideos = new Set([...mockWatchedVideos, videoId]);
 });
+const mockMarkAsUnwatched = vi.fn((videoId: string) => {
+  mockWatchedVideos = new Set([...mockWatchedVideos].filter((id) => id !== videoId));
+});
 const mockSetSearchQuery = vi.fn((query: string) => {
   mockSearchQuery = query;
 });
-let mockAllSubscriptions = [
+let mockAllSubscriptions: Array<{
+	id: string;
+	title: string;
+	description: string;
+	thumbnail: string;
+	group: string;
+	isFavorite: boolean;
+	isMuted?: boolean;
+}> = [
   {
     id: 'UC123',
     title: 'Test Channel',
@@ -88,8 +100,43 @@ let mockSubscriptionsInitialSyncing = false;
 let mockSubscriptionsLoading = false;
 let mockNeedsServerAuth = false;
 const mockToggleChannelFavorite = vi.fn();
+const mockToggleChannelMute = vi.fn();
+const mockRemoveSubscription = vi.fn(async (_channelId: string) => {});
+const mockSetSubscriptionGroup = vi.fn(async (_channelId: string, _group: string) => {});
 let throwSubscriptionsListError = false;
-let latestSubscriptionsListProps: { selectedGroup?: string; groups?: string[] } | undefined;
+let mockRawSubscriptions: Array<{
+  id: string;
+  title: string;
+  addedAt: number;
+  group?: string;
+}> = [
+  {
+    id: 'UC123',
+    title: 'Test Channel',
+    addedAt: 0,
+  },
+];
+const mockAddSubscriptions = vi.fn(async (newSubscriptions: Array<{ id: string; title: string }>) => {
+  mockAllSubscriptions = [
+    ...mockAllSubscriptions,
+    ...newSubscriptions.map((subscription) => ({
+      ...subscription,
+      description: '',
+      thumbnail: '',
+      group: '',
+      isFavorite: false,
+    })),
+  ];
+});
+const mockRestoreSubscriptions = vi.fn(async (_subscriptions: unknown[]) => {});
+let latestSubscriptionsListProps: {
+  selectedGroup?: string;
+  groups?: string[];
+  onClearGroup?: () => void;
+  selectable?: boolean;
+  selectedChannelIds?: ReadonlySet<string>;
+  onToggleSelect?: (channelId: string) => void;
+} | undefined;
 type HeaderMockProps = {
   syncStatus?: MockRSSVideosState['syncStatus'];
   showShorts?: boolean;
@@ -143,20 +190,58 @@ vi.mock('./Header', () => ({
 }));
 
 vi.mock('./SubscriptionsList', () => ({
-  SubscriptionsList: (props: { selectedGroup?: string; groups?: string[] }) => {
+  SubscriptionsList: (props: {
+    selectedGroup?: string;
+    groups?: string[];
+    onClearGroup?: () => void;
+    selectable?: boolean;
+    selectedChannelIds?: ReadonlySet<string>;
+    onToggleSelect?: (channelId: string) => void;
+  }) => {
     if (throwSubscriptionsListError) {
       throw new Error('Subscriptions list failed to render');
     }
     latestSubscriptionsListProps = props;
-    return <section>Subscriptions list content</section>;
+    return (
+      <section>
+        {props.selectable && props.onToggleSelect && mockAllSubscriptions.map((channel) => (
+          <input
+            key={channel.id}
+            type="checkbox"
+            checked={props.selectedChannelIds?.has(channel.id) ?? false}
+            onChange={() => props.onToggleSelect?.(channel.id)}
+            aria-label={`Select ${channel.title}`}
+          />
+        ))}
+        Subscriptions list content
+      </section>
+    );
   },
 }));
 
 vi.mock('./VirtualizedVideoGrid', () => ({
-  VirtualizedVideoGrid: ({ videos }: { videos: Array<{ id: string; title: string }> }) => (
+  VirtualizedVideoGrid: ({
+    videos,
+    selectable,
+    selectedVideoIds,
+    onToggleSelect,
+  }: {
+    videos: Array<{ id: string; title: string }>;
+    selectable?: boolean;
+    selectedVideoIds?: ReadonlySet<string>;
+    onToggleSelect?: (videoId: string) => void;
+  }) => (
     <section>
       {videos.length === 0 ? 'Video grid content' : videos.map(video => (
         <article key={video.id}>
+          {selectable && onToggleSelect && (
+            <input
+              type="checkbox"
+              checked={selectedVideoIds?.has(video.id) ?? false}
+              onChange={() => onToggleSelect(video.id)}
+              aria-label={`Select ${video.title}`}
+            />
+          )}
           <span>{video.title}</span>
           <button
             type="button"
@@ -181,11 +266,49 @@ vi.mock('./VideoCard', () => ({
 }));
 
 vi.mock('./SubscriptionCard', () => ({
-  SubscriptionCard: ({ channel }: { channel: { title: string } }) => <article>{channel.title}</article>,
+  SubscriptionCard: ({
+    channel,
+    selectable,
+    selected,
+    onToggleSelect,
+  }: {
+    channel: { id: string; title: string };
+    selectable?: boolean;
+    selected?: boolean;
+    onToggleSelect?: (channelId: string) => void;
+  }) => (
+    <article>
+      {selectable && onToggleSelect && (
+        <input
+          type="checkbox"
+          checked={selected}
+          onChange={() => onToggleSelect(channel.id)}
+          aria-label={`Select ${channel.title}`}
+        />
+      )}
+      {channel.title}
+    </article>
+  ),
 }));
 
 vi.mock('./AddChannelModal', () => ({
-  AddChannelModal: () => null,
+  AddChannelModal: ({ isOpen, onAdd }: { isOpen: boolean; onAdd: (channel: unknown) => void | Promise<void> }) => (
+    isOpen ? (
+      <div role="dialog" aria-label="Mock add channel dialog">
+        <button
+          type="button"
+          onClick={() => void onAdd({
+            id: 'UC_FIRST_CHANNEL',
+            title: 'First Channel',
+            description: '',
+            thumbnail: '',
+          })}
+        >
+          Mock add channel
+        </button>
+      </div>
+    ) : null
+  ),
 }));
 
 vi.mock('./SettingsModal', () => ({
@@ -211,19 +334,18 @@ vi.mock('../hooks/useRSSVideos', () => ({
 vi.mock('../hooks/useSubscriptionStorage', () => ({
   useSubscriptionStorage: () => ({
     allSubscriptions: mockAllSubscriptions,
-    rawSubscriptions: [
-      {
-        id: 'UC123',
-        title: 'Test Channel',
-        addedAt: 0,
-      },
-    ],
-    addSubscriptions: vi.fn(),
+    rawSubscriptions: mockRawSubscriptions,
+    addSubscriptions: mockAddSubscriptions,
+    restoreSubscriptions: mockRestoreSubscriptions,
+    removeSubscription: mockRemoveSubscription,
     toggleFavorite: mockToggleChannelFavorite,
+    toggleMute: mockToggleChannelMute,
+    setSubscriptionGroup: mockSetSubscriptionGroup,
     repairChannelIcons: vi.fn(),
     isInitialSyncing: mockSubscriptionsInitialSyncing,
     isLoading: mockSubscriptionsLoading,
     needsServerAuth: mockNeedsServerAuth,
+    clearServerAuth: vi.fn(),
   }),
 }));
 
@@ -232,6 +354,7 @@ vi.mock('../store/useStore', () => ({
     searchQuery: mockSearchQuery,
     watchedVideos: mockWatchedVideos,
     markAsWatched: mockMarkAsWatched,
+    markAsUnwatched: mockMarkAsUnwatched,
     setSearchQuery: mockSetSearchQuery,
   }),
 }));
@@ -250,8 +373,14 @@ describe('Dashboard', () => {
     toastMockState.message.mockClear();
     mockWatchedVideos = new Set<string>();
     mockMarkAsWatched.mockClear();
+    mockMarkAsUnwatched.mockClear();
     mockSetSearchQuery.mockClear();
     mockToggleChannelFavorite.mockClear();
+    mockToggleChannelMute.mockClear();
+    mockRemoveSubscription.mockReset().mockResolvedValue(undefined);
+    mockSetSubscriptionGroup.mockClear();
+    mockAddSubscriptions.mockClear();
+    mockRestoreSubscriptions.mockClear();
     mockSubscriptionsInitialSyncing = false;
     mockSubscriptionsLoading = false;
     mockNeedsServerAuth = false;
@@ -264,6 +393,13 @@ describe('Dashboard', () => {
         thumbnail: '',
         group: 'Tech',
         isFavorite: false,
+      },
+    ];
+    mockRawSubscriptions = [
+      {
+        id: 'UC123',
+        title: 'Test Channel',
+        addedAt: 0,
       },
     ];
     window.history.replaceState(null, '', '/');
@@ -321,17 +457,80 @@ describe('Dashboard', () => {
   });
 
   it('shows first-run onboarding when no subscriptions have been added', async () => {
+		mockAllSubscriptions = [];
+
+		render(<Dashboard />);
+
+		expect(screen.getByText('MyTube')).toBeInTheDocument();
+		expect(await screen.findByText('Import subscriptions')).toBeInTheDocument();
+		expect(screen.getAllByRole('button', { name: /add a channel/i })).toHaveLength(1);
+		expect(screen.getByRole('heading', { name: 'How MyTube works' })).toBeInTheDocument();
+	expect(screen.getByText('Strictly chronological — no algorithmic ranking.')).toBeInTheDocument();
+		expect(screen.getByText('See which channels have posted recently.')).toBeInTheDocument();
+		expect(screen.getByText('Keep saved channels and videos in one place.')).toBeInTheDocument();
+		expect(screen.queryByTestId('dashboard-tabs')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('floating-tab-bar')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('latest-toolbar')).not.toBeInTheDocument();
+  });
+
+	it('closes the add modal and focuses the first-refresh guide after the first channel', async () => {
     mockAllSubscriptions = [];
 
     render(<Dashboard />);
 
-    expect(screen.getByText('MyTube')).toBeInTheDocument();
-    expect(await screen.findByText('Import subscriptions')).toBeInTheDocument();
-    expect(screen.getByText('Add a channel')).toBeInTheDocument();
-    expect(screen.queryByTestId('dashboard-tabs')).not.toBeInTheDocument();
-    expect(screen.queryByTestId('floating-tab-bar')).not.toBeInTheDocument();
-    expect(screen.queryByTestId('latest-toolbar')).not.toBeInTheDocument();
-  });
+    fireEvent.click(screen.getByRole('button', { name: /add a channel/i }));
+    fireEvent.click(screen.getByRole('button', { name: 'Mock add channel' }));
+
+    await waitFor(() => {
+      expect(screen.getByTestId('first-refresh-guide')).toHaveFocus();
+    });
+    expect(screen.getByText('Preparing your first refresh')).toBeInTheDocument();
+		expect(screen.queryByRole('dialog', { name: 'Mock add channel dialog' })).not.toBeInTheDocument();
+	});
+
+	it('keeps the first-refresh guide focused when the initial refresh needs attention', async () => {
+		mockAllSubscriptions = [];
+		const view = render(<Dashboard />);
+
+		fireEvent.click(screen.getByRole('button', { name: /add a channel/i }));
+		fireEvent.click(screen.getByRole('button', { name: 'Mock add channel' }));
+		await waitFor(() => {
+			expect(screen.getByTestId('first-refresh-guide')).toHaveFocus();
+		});
+
+		mockRSSVideosState = {
+			...mockRSSVideosState,
+			syncStatus: {
+				...mockRSSVideosState.syncStatus,
+				total: 1,
+				current: 1,
+				errors: 1,
+				state: 'error',
+			},
+		};
+		view.rerender(<Dashboard />);
+
+		await waitFor(() => {
+			expect(
+				screen.getByRole('heading', { name: 'First refresh needs attention' }),
+			).toBeInTheDocument();
+			expect(screen.getByTestId('first-refresh-guide')).toHaveFocus();
+		});
+	});
+
+	it('keeps the add modal open for subsequent channel additions', async () => {
+		render(<Dashboard />);
+
+		fireEvent.click(screen.getByRole('button', { name: /^Add$/ }));
+		fireEvent.click(screen.getByRole('button', { name: 'Mock add channel' }));
+
+		await waitFor(() => {
+			expect(
+				screen.getByRole('dialog', { name: 'Mock add channel dialog' }),
+			).toBeInTheDocument();
+		});
+		expect(screen.queryByTestId('first-refresh-guide')).not.toBeInTheDocument();
+	});
 
   it('does not show onboarding while the initial server subscription sync is still running', () => {
     mockAllSubscriptions = [];
@@ -351,7 +550,8 @@ describe('Dashboard', () => {
     render(<Dashboard />);
 
     expect(screen.getByTestId('auth-required')).toBeInTheDocument();
-    expect(screen.getByText('Server authentication required')).toBeInTheDocument();
+    expect(screen.getByText('Connect to your MyTube server')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Connect to server' })).toBeInTheDocument();
     expect(screen.queryByTestId('dashboard-loading')).not.toBeInTheDocument();
   });
 
@@ -372,6 +572,100 @@ describe('Dashboard', () => {
       expect(screen.getByTestId('dashboard-empty-state')).toHaveAttribute('data-empty-icon', 'favorites');
       expect(screen.getByText('No favorites yet')).toBeInTheDocument();
     });
+  });
+
+  it('provides useful actions from empty timeline states', async () => {
+    render(<Dashboard />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Refresh feeds' }));
+    expect(mockRSSVideosState.refresh).toHaveBeenCalledTimes(1);
+
+    fireEvent.click(screen.getByRole('button', { name: /activity/i }));
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: 'View Latest' })).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: 'View Latest' }));
+    await waitFor(() => {
+      expect(screen.getByText('No videos found')).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: /faves/i }));
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: 'Browse Latest' })).toBeInTheDocument();
+    });
+  });
+
+  it('explains when filters hide the entire Latest feed and can clear them', () => {
+    mockRSSVideosState = {
+      ...mockRSSVideosState,
+      videos: [{
+        id: 'short-video',
+        title: 'Short upload',
+        description: '',
+        thumbnail: '',
+        channelId: 'UC123',
+        channelTitle: 'Test Channel',
+        publishedAt: new Date().toISOString(),
+        duration: 5 * 60,
+      }],
+    };
+
+    render(<Dashboard />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Filters' }));
+    fireEvent.change(screen.getByLabelText('Video duration'), {
+      target: { value: '30-plus' },
+    });
+
+    expect(screen.getByText('No videos match your filters')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Clear filters' }));
+
+    expect(screen.getByText('Short upload')).toBeInTheDocument();
+  });
+
+  it('shows deterministic recent channel activity without an unread badge', async () => {
+    const now = Date.parse('2026-08-01T12:00:00.000Z');
+    vi.spyOn(Date, 'now').mockReturnValue(now);
+    mockAllSubscriptions = [
+      { id: 'UC_A', title: 'Alpha', description: '', thumbnail: '', group: '', isFavorite: false },
+      { id: 'UC_B', title: 'Beta', description: '', thumbnail: '', group: '', isFavorite: false },
+      { id: 'UC_C', title: 'Charlie', description: '', thumbnail: '', group: '', isFavorite: false },
+    ];
+    mockRSSVideosState = {
+      ...mockRSSVideosState,
+      videos: [
+        {
+          id: 'alpha-1', title: 'Alpha 1', description: '', thumbnail: '', channelId: 'UC_A',
+          channelTitle: 'Alpha', publishedAt: '2026-08-01T02:00:00.000Z',
+        },
+        {
+          id: 'alpha-2', title: 'Alpha 2', description: '', thumbnail: '', channelId: 'UC_A',
+          channelTitle: 'Alpha', publishedAt: '2026-07-31T12:00:00.000Z',
+        },
+        {
+          id: 'beta-1', title: 'Beta 1', description: '', thumbnail: '', channelId: 'UC_B',
+          channelTitle: 'Beta', publishedAt: '2026-08-01T10:00:00.000Z',
+        },
+        {
+          id: 'charlie-1', title: 'Charlie 1', description: '', thumbnail: '', channelId: 'UC_C',
+          channelTitle: 'Charlie', publishedAt: '2026-08-01T08:00:00.000Z',
+        },
+      ],
+    };
+
+    render(<Dashboard />);
+    fireEvent.click(screen.getByRole('button', { name: /activity/i }));
+
+    await waitFor(() => {
+      expect(screen.getByText('Recent Channel Activity')).toBeInTheDocument();
+    });
+
+    expect(screen.getByText('3 channels with uploads in the past 7 days, ordered by volume and recency')).toBeInTheDocument();
+    expect(screen.getAllByTestId('activity-channel-item').map((item) => item.getAttribute('data-channel-id'))).toEqual([
+      'UC_A', 'UC_B', 'UC_C',
+    ]);
+    expect(screen.getByRole('button', { name: 'Activity' }).querySelector('.bg-red-500')).not.toBeInTheDocument();
   });
 
   it('opens the subscriptions tab from the dashboard tab URL', () => {
@@ -573,7 +867,7 @@ describe('Dashboard', () => {
     expect(latestActions.className).toContain('shrink-0');
   });
 
-  it('shows subscription group controls in the toolbar', async () => {
+	it('shows subscription group controls in the toolbar', async () => {
     render(<Dashboard />);
 
     fireEvent.click(screen.getByRole('button', { name: /subs/i }));
@@ -583,15 +877,15 @@ describe('Dashboard', () => {
     expect(groupToolbar.className).toContain('border-b');
     expect(screen.getByLabelText('Filter group')).toBeInTheDocument();
     await waitFor(() => {
-      expect(latestSubscriptionsListProps).toEqual({
-        selectedGroup: 'all',
-        groups: ['Tech'],
-      });
+    expect(latestSubscriptionsListProps).toEqual(expect.objectContaining({
+      selectedGroup: 'all',
+      groups: ['Tech'],
+    }));
     });
   });
 
-  it('creates subscription groups from a single toolbar dialog', async () => {
-    render(<Dashboard />);
+	it('creates subscription groups from a single toolbar dialog', async () => {
+		const { unmount } = render(<Dashboard />);
 
     fireEvent.click(screen.getByRole('button', { name: /subs/i }));
 
@@ -605,13 +899,513 @@ describe('Dashboard', () => {
     });
     fireEvent.click(screen.getByRole('button', { name: 'Create group' }));
 
-    await waitFor(() => {
-      expect(screen.queryByRole('dialog', { name: 'New group' })).not.toBeInTheDocument();
-      expect(latestSubscriptionsListProps).toEqual({
-        selectedGroup: 'all',
-        groups: ['Linux', 'Tech'],
-      });
-    });
+		await waitFor(() => {
+			expect(screen.queryByRole('dialog', { name: 'New group' })).not.toBeInTheDocument();
+			expect(latestSubscriptionsListProps).toEqual(expect.objectContaining({
+				selectedGroup: 'all',
+				groups: ['Linux', 'Tech'],
+			}));
+		});
+		expect(JSON.parse(localStorage.getItem(SUBSCRIPTION_GROUPS_STORAGE_KEY) || '[]')).toEqual([
+			'Linux',
+		]);
+
+		unmount();
+		render(<Dashboard />);
+		fireEvent.click(screen.getByRole('button', { name: /subs/i }));
+		await waitFor(() => {
+			expect(latestSubscriptionsListProps).toEqual(expect.objectContaining({
+				selectedGroup: 'all',
+				groups: ['Linux', 'Tech'],
+			}));
+		});
+	});
+
+	it('selects only channels visible in the active subscription group', async () => {
+		mockAllSubscriptions = [
+			{
+				id: 'UC123',
+				title: 'Tech Channel',
+				description: '',
+				thumbnail: '',
+				group: 'Tech',
+				isFavorite: false,
+			},
+			{
+				id: 'UC456',
+				title: 'Science Channel',
+				description: '',
+				thumbnail: '',
+				group: 'Science',
+				isFavorite: false,
+			},
+		];
+		render(<Dashboard />);
+
+		fireEvent.click(screen.getByRole('button', { name: /subs/i }));
+		fireEvent.change(screen.getByLabelText('Filter group'), {
+			target: { value: 'Tech' },
+		});
+		fireEvent.click(
+			screen.getByRole('button', { name: 'Select all visible channels' }),
+		);
+
+		await waitFor(() => {
+			expect(latestSubscriptionsListProps?.selectedChannelIds).toEqual(
+				new Set(['UC123']),
+			);
+			expect(screen.getByText('1 selected')).toBeInTheDocument();
+		});
+		expect(
+			screen.getByRole('button', { name: 'Deselect all visible channels' }),
+		).toHaveAttribute('aria-pressed', 'true');
+
+		fireEvent.click(
+			screen.getByRole('button', { name: 'Deselect all visible channels' }),
+		);
+		await waitFor(() => {
+			expect(screen.queryByTestId('bulk-selection-toolbar')).not.toBeInTheDocument();
+		});
+	});
+
+	it('renames a custom group and keeps assigned channels in the new group', async () => {
+		mockRawSubscriptions = [
+			{
+				id: 'UC123',
+				title: 'Test Channel',
+				group: 'Linux',
+				addedAt: 0,
+			},
+		];
+		render(<Dashboard />);
+
+		fireEvent.click(screen.getByRole('button', { name: /subs/i }));
+		fireEvent.click(screen.getByRole('button', { name: 'Add group' }));
+		fireEvent.change(screen.getByLabelText('Group name'), {
+			target: { value: 'Linux' },
+		});
+		fireEvent.click(screen.getByRole('button', { name: 'Create group' }));
+		fireEvent.click(screen.getByRole('button', { name: 'Manage groups' }));
+		fireEvent.click(screen.getByRole('button', { name: 'Rename Linux' }));
+
+		expect(screen.getByLabelText('New group name')).toHaveFocus();
+		fireEvent.change(screen.getByLabelText('New group name'), {
+			target: { value: 'Engineering' },
+		});
+		fireEvent.click(screen.getByRole('button', { name: 'Rename group' }));
+
+		await waitFor(() => {
+			expect(mockSetSubscriptionGroup).toHaveBeenCalledWith(
+				'UC123',
+				'Engineering',
+			);
+			expect(
+				JSON.parse(localStorage.getItem(SUBSCRIPTION_GROUPS_STORAGE_KEY) || '[]'),
+			).toEqual(['Engineering']);
+		});
+	});
+
+	it('confirms custom group deletion before ungrouping assigned channels', async () => {
+		mockRawSubscriptions = [
+			{
+				id: 'UC123',
+				title: 'Test Channel',
+				group: 'Linux',
+				addedAt: 0,
+			},
+		];
+		render(<Dashboard />);
+
+		fireEvent.click(screen.getByRole('button', { name: /subs/i }));
+		fireEvent.click(screen.getByRole('button', { name: 'Add group' }));
+		fireEvent.change(screen.getByLabelText('Group name'), {
+			target: { value: 'Linux' },
+		});
+		fireEvent.click(screen.getByRole('button', { name: 'Create group' }));
+		fireEvent.click(screen.getByRole('button', { name: 'Manage groups' }));
+		fireEvent.click(screen.getByRole('button', { name: 'Delete Linux' }));
+
+		expect(screen.getByText(/Your subscriptions will not be deleted/)).toBeInTheDocument();
+		expect(mockSetSubscriptionGroup).not.toHaveBeenCalled();
+
+		fireEvent.click(screen.getByRole('button', { name: 'Delete group' }));
+
+		await waitFor(() => {
+			expect(mockSetSubscriptionGroup).toHaveBeenCalledWith('UC123', '');
+			expect(localStorage.getItem(SUBSCRIPTION_GROUPS_STORAGE_KEY)).toBe('[]');
+		});
+	});
+
+	it('bulk assigns selected favourite channels to a group', async () => {
+		localStorage.setItem(SUBSCRIPTION_GROUPS_STORAGE_KEY, JSON.stringify(['AI']));
+		mockAllSubscriptions = [
+			{
+				id: 'UC123',
+				title: 'Test Channel',
+				description: '',
+				thumbnail: '',
+				group: 'Tech',
+				isFavorite: true,
+			},
+		];
+		render(<Dashboard />);
+
+		fireEvent.click(screen.getByRole('button', { name: /faves/i }));
+		fireEvent.click(screen.getByLabelText('Select Test Channel'));
+		fireEvent.change(
+			screen.getByRole('combobox', {
+				name: 'Assign selected channels to group',
+			}),
+			{ target: { value: 'AI' } },
+		);
+
+		await waitFor(() => {
+			expect(mockSetSubscriptionGroup).toHaveBeenCalledWith('UC123', 'AI');
+			expect(screen.queryByTestId('bulk-selection-toolbar')).not.toBeInTheDocument();
+		});
+	});
+
+	it('bulk assigns selected subscription channels to a group from Subs', async () => {
+		localStorage.setItem(SUBSCRIPTION_GROUPS_STORAGE_KEY, JSON.stringify(['AI']));
+		mockAllSubscriptions = [
+			{
+				id: 'UC123',
+				title: 'Test Channel',
+				description: '',
+				thumbnail: '',
+				group: 'Tech',
+				isFavorite: false,
+			},
+		];
+		render(<Dashboard />);
+
+		fireEvent.click(screen.getByRole('button', { name: /subs/i }));
+		fireEvent.click(screen.getByLabelText('Select Test Channel'));
+		fireEvent.change(
+			screen.getByRole('combobox', {
+				name: 'Assign selected channels to group',
+			}),
+			{ target: { value: 'AI' } },
+		);
+
+		await waitFor(() => {
+			expect(mockSetSubscriptionGroup).toHaveBeenCalledWith('UC123', 'AI');
+			expect(screen.queryByTestId('bulk-selection-toolbar')).not.toBeInTheDocument();
+		});
+	});
+
+	it('bulk adds only unfavourited selected Subs channels to Favourites', async () => {
+		mockAllSubscriptions = [
+			{
+				id: 'UC123',
+				title: 'New Favourite',
+				description: '',
+				thumbnail: '',
+				group: 'Tech',
+				isFavorite: false,
+			},
+			{
+				id: 'UC456',
+				title: 'Already Favourite',
+				description: '',
+				thumbnail: '',
+				group: 'Tech',
+				isFavorite: true,
+			},
+		];
+		render(<Dashboard />);
+
+		fireEvent.click(screen.getByRole('button', { name: /subs/i }));
+		fireEvent.click(
+			screen.getByRole('button', { name: 'Select all visible channels' }),
+		);
+		fireEvent.click(screen.getByRole('button', { name: 'Add to Favourites' }));
+
+		await waitFor(() => {
+			expect(mockToggleChannelFavorite).toHaveBeenCalledWith('UC123');
+			expect(mockToggleChannelFavorite).not.toHaveBeenCalledWith('UC456');
+			expect(screen.queryByTestId('bulk-selection-toolbar')).not.toBeInTheDocument();
+		});
+	});
+
+	it('bulk mutes only unmuted selected Subs channels', async () => {
+		mockAllSubscriptions = [
+			{
+				id: 'UC123',
+				title: 'Needs Muting',
+				description: '',
+				thumbnail: '',
+				group: 'Tech',
+				isFavorite: false,
+				isMuted: false,
+			},
+			{
+				id: 'UC456',
+				title: 'Already Muted',
+				description: '',
+				thumbnail: '',
+				group: 'Tech',
+				isFavorite: false,
+				isMuted: true,
+			},
+		];
+		render(<Dashboard />);
+
+		fireEvent.click(screen.getByRole('button', { name: /subs/i }));
+		fireEvent.click(
+			screen.getByRole('button', { name: 'Select all visible channels' }),
+		);
+		fireEvent.click(screen.getByRole('button', { name: 'Mute selected' }));
+
+		await waitFor(() => {
+			expect(mockToggleChannelMute).toHaveBeenCalledWith('UC123');
+			expect(mockToggleChannelMute).not.toHaveBeenCalledWith('UC456');
+			expect(screen.queryByTestId('bulk-selection-toolbar')).not.toBeInTheDocument();
+		});
+	});
+
+	it('bulk unmutes only muted selected Subs channels', async () => {
+		mockAllSubscriptions = [
+			{
+				id: 'UC123',
+				title: 'Muted Channel',
+				description: '',
+				thumbnail: '',
+				group: 'Tech',
+				isFavorite: false,
+				isMuted: true,
+			},
+			{
+				id: 'UC456',
+				title: 'Already Audible',
+				description: '',
+				thumbnail: '',
+				group: 'Tech',
+				isFavorite: false,
+				isMuted: false,
+			},
+		];
+		render(<Dashboard />);
+
+		fireEvent.click(screen.getByRole('button', { name: /subs/i }));
+		fireEvent.click(
+			screen.getByRole('button', { name: 'Select all visible channels' }),
+		);
+		fireEvent.click(screen.getByRole('button', { name: 'Unmute selected' }));
+
+		await waitFor(() => {
+			expect(mockToggleChannelMute).toHaveBeenCalledWith('UC123');
+			expect(mockToggleChannelMute).not.toHaveBeenCalledWith('UC456');
+			expect(screen.queryByTestId('bulk-selection-toolbar')).not.toBeInTheDocument();
+		});
+	});
+
+	it('requires confirmation before bulk unsubscribe and offers undo', async () => {
+		mockAllSubscriptions = [
+			{
+				id: 'UC123',
+				title: 'First Channel',
+				description: '',
+				thumbnail: '',
+				group: 'Tech',
+				isFavorite: false,
+			},
+			{
+				id: 'UC456',
+				title: 'Second Channel',
+				description: '',
+				thumbnail: '',
+				group: 'Tech',
+				isFavorite: true,
+			},
+		];
+		mockRawSubscriptions = [
+			{ id: 'UC123', title: 'First Channel', addedAt: 1 },
+			{ id: 'UC456', title: 'Second Channel', addedAt: 2, group: 'Tech' },
+		];
+		mockRemoveSubscription.mockImplementation(async (channelId: string) => {
+			mockAllSubscriptions = mockAllSubscriptions.filter(
+				(channel) => channel.id !== channelId,
+			);
+		});
+		render(<Dashboard />);
+
+		fireEvent.click(screen.getByRole('button', { name: /subs/i }));
+		fireEvent.click(
+			screen.getByRole('button', { name: 'Select all visible channels' }),
+		);
+		fireEvent.click(
+			screen.getByRole('button', { name: 'Unsubscribe selected' }),
+		);
+
+		expect(
+			screen.getByRole('dialog', { name: 'Unsubscribe selected channels?' }),
+		).toBeInTheDocument();
+		expect(mockRemoveSubscription).not.toHaveBeenCalled();
+
+		fireEvent.click(screen.getByRole('button', { name: 'Unsubscribe channels' }));
+		await waitFor(() => {
+			expect(mockRemoveSubscription).toHaveBeenNthCalledWith(1, 'UC123');
+			expect(mockRemoveSubscription).toHaveBeenNthCalledWith(2, 'UC456');
+			expect(toastMockState.success).toHaveBeenCalledWith(
+				'Unsubscribed 2 channels',
+				expect.objectContaining({
+					action: expect.objectContaining({ label: 'Undo' }),
+				}),
+			);
+		});
+
+		const unsubscribeToast = toastMockState.success.mock.calls.find(
+			([message]) => message === 'Unsubscribed 2 channels',
+		);
+		const undoAction = (
+			unsubscribeToast?.[1] as {
+				action?: { onClick?: () => Promise<void> };
+			}
+		)?.action?.onClick;
+		expect(undoAction).toBeTypeOf('function');
+		await act(async () => {
+			await undoAction?.();
+		});
+		expect(mockRestoreSubscriptions).toHaveBeenCalledWith([
+			expect.objectContaining({ id: 'UC123', addedAt: 1 }),
+			expect.objectContaining({ id: 'UC456', addedAt: 2, group: 'Tech' }),
+		]);
+	});
+
+	it('rolls back channels already removed when bulk unsubscribe fails', async () => {
+		mockAllSubscriptions = [
+			{
+				id: 'UC123',
+				title: 'First Channel',
+				description: '',
+				thumbnail: '',
+				group: 'Tech',
+				isFavorite: false,
+			},
+			{
+				id: 'UC456',
+				title: 'Second Channel',
+				description: '',
+				thumbnail: '',
+				group: 'Tech',
+				isFavorite: false,
+			},
+		];
+		mockRawSubscriptions = [
+			{ id: 'UC123', title: 'First Channel', addedAt: 1 },
+			{ id: 'UC456', title: 'Second Channel', addedAt: 2 },
+		];
+		mockRemoveSubscription
+			.mockImplementationOnce(async () => {
+				mockAllSubscriptions = mockAllSubscriptions.filter(
+					(channel) => channel.id !== 'UC123',
+				);
+			})
+			.mockImplementationOnce(async () => {
+				throw new Error('simulated unsubscribe failure');
+			});
+		render(<Dashboard />);
+
+		fireEvent.click(screen.getByRole('button', { name: /subs/i }));
+		fireEvent.click(
+			screen.getByRole('button', { name: 'Select all visible channels' }),
+		);
+		fireEvent.click(
+			screen.getByRole('button', { name: 'Unsubscribe selected' }),
+		);
+		fireEvent.click(screen.getByRole('button', { name: 'Unsubscribe channels' }));
+
+		await waitFor(() => {
+			expect(mockRestoreSubscriptions).toHaveBeenCalledWith([
+				expect.objectContaining({ id: 'UC123', addedAt: 1 }),
+			]);
+			expect(toastMockState.error).toHaveBeenCalledWith(
+				'Could not unsubscribe selected channels',
+				expect.objectContaining({ description: 'simulated unsubscribe failure' }),
+			);
+		});
+	});
+
+	it('rolls back completed channel assignments when a bulk group update fails', async () => {
+		localStorage.setItem(SUBSCRIPTION_GROUPS_STORAGE_KEY, JSON.stringify(['AI']));
+		mockAllSubscriptions = [
+			{
+				id: 'UC123',
+				title: 'First Channel',
+				description: '',
+				thumbnail: '',
+				group: 'Tech',
+				isFavorite: true,
+			},
+			{
+				id: 'UC456',
+				title: 'Second Channel',
+				description: '',
+				thumbnail: '',
+				group: 'Science',
+				isFavorite: true,
+			},
+		];
+		mockSetSubscriptionGroup
+			.mockImplementationOnce(async () => {})
+			.mockImplementationOnce(async () => {
+				throw new Error('simulated group update failure');
+			})
+			.mockImplementationOnce(async () => {});
+		render(<Dashboard />);
+
+		fireEvent.click(screen.getByRole('button', { name: /faves/i }));
+		fireEvent.click(screen.getByLabelText('Select First Channel'));
+		fireEvent.click(screen.getByLabelText('Select Second Channel'));
+		fireEvent.change(
+			screen.getByRole('combobox', {
+				name: 'Assign selected channels to group',
+			}),
+			{ target: { value: 'AI' } },
+		);
+
+		await waitFor(() => {
+			expect(mockSetSubscriptionGroup).toHaveBeenNthCalledWith(1, 'UC123', 'AI');
+			expect(mockSetSubscriptionGroup).toHaveBeenNthCalledWith(2, 'UC456', 'AI');
+			expect(mockSetSubscriptionGroup).toHaveBeenNthCalledWith(3, 'UC123', 'Tech');
+			expect(toastMockState.error).toHaveBeenCalledWith(
+				'Could not update selected channels',
+				expect.objectContaining({ description: 'simulated group update failure' }),
+			);
+		});
+	});
+
+  it('contains focus in the new group dialog and restores the add-group trigger', () => {
+    render(<Dashboard />);
+
+    fireEvent.click(screen.getByRole('button', { name: /subs/i }));
+    const addGroupButton = screen.getByRole('button', { name: 'Add group' });
+    addGroupButton.focus();
+    fireEvent.click(addGroupButton);
+
+    const dialog = screen.getByRole('dialog', { name: 'New group' });
+    const groupNameInput = screen.getByLabelText('Group name');
+    const focusableElements = Array.from(
+      dialog.querySelectorAll<HTMLElement>(
+        'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])',
+      ),
+    );
+    const firstElement = focusableElements[0];
+    const lastElement = focusableElements[focusableElements.length - 1];
+
+    expect(groupNameInput).toHaveFocus();
+
+    lastElement.focus();
+    fireEvent.keyDown(lastElement, { key: 'Tab' });
+    expect(firstElement).toHaveFocus();
+
+    fireEvent.keyDown(firstElement, { key: 'Tab', shiftKey: true });
+    expect(lastElement).toHaveFocus();
+
+    fireEvent.keyDown(groupNameInput, { key: 'Escape' });
+    expect(screen.queryByRole('dialog', { name: 'New group' })).not.toBeInTheDocument();
+    expect(addGroupButton).toHaveFocus();
   });
 
   it('does not render pull-to-refresh controls', () => {
@@ -648,7 +1442,7 @@ describe('Dashboard', () => {
     });
   });
 
-  it('splits Faves into favorite channels and favorite videos', async () => {
+	it('splits Faves into favorite channels and favorite videos', async () => {
     mockAllSubscriptions = [
       {
         id: 'UC123',
@@ -679,9 +1473,9 @@ describe('Dashboard', () => {
     await waitFor(() => {
       expect(screen.getByText('Favorite Channel')).toBeInTheDocument();
       expect(screen.getByText('Favorite Video')).toBeInTheDocument();
-    });
+	});
 
-    expect(screen.getByTestId('favorite-section-switcher')).toHaveClass('sm:hidden');
+	    expect(screen.getByTestId('favorite-section-switcher')).toHaveClass('sm:hidden');
     expect(screen.getByRole('button', { name: 'Channels (1)' })).toHaveAttribute('aria-pressed', 'true');
     expect(screen.getByTestId('favorite-channels-section')).toHaveClass('block');
     expect(screen.getByTestId('favorite-videos-section')).toHaveClass('hidden');
@@ -690,8 +1484,47 @@ describe('Dashboard', () => {
 
     expect(screen.getByRole('button', { name: 'Videos (1)' })).toHaveAttribute('aria-pressed', 'true');
     expect(screen.getByTestId('favorite-channels-section')).toHaveClass('hidden');
-    expect(screen.getByTestId('favorite-videos-section')).toHaveClass('block');
-  });
+	    expect(screen.getByTestId('favorite-videos-section')).toHaveClass('block');
+	  });
+
+	it('selects all visible favourite channels from the Faves section header', async () => {
+		mockAllSubscriptions = [
+			{
+				id: 'UC123',
+				title: 'First Favorite Channel',
+				description: '',
+				thumbnail: '',
+				group: 'Tech',
+				isFavorite: true,
+			},
+			{
+				id: 'UC456',
+				title: 'Second Favorite Channel',
+				description: '',
+				thumbnail: '',
+				group: 'Science',
+				isFavorite: true,
+			},
+		];
+		render(<Dashboard />);
+
+		fireEvent.click(screen.getByRole('button', { name: /faves/i }));
+		await waitFor(() => {
+			expect(
+				screen.getByRole('button', { name: 'Select all visible channels' }),
+			).toBeInTheDocument();
+		});
+
+		fireEvent.click(
+			screen.getByRole('button', { name: 'Select all visible channels' }),
+		);
+
+		await waitFor(() => {
+			expect(screen.getByRole('checkbox', { name: 'Select First Favorite Channel' })).toBeChecked();
+			expect(screen.getByRole('checkbox', { name: 'Select Second Favorite Channel' })).toBeChecked();
+			expect(screen.getByText('2 selected')).toBeInTheDocument();
+		});
+	});
 
   it('shows the mobile Faves splitter even when only channels are favorited', async () => {
     mockAllSubscriptions = [
@@ -724,283 +1557,61 @@ describe('Dashboard', () => {
     expect(screen.getByText('No favorite videos yet')).toBeInTheDocument();
   });
 
-  it('shows queued videos in Queue separately from Faves', async () => {
-    localStorage.setItem('queued-video-ids', JSON.stringify(['video-1']));
-    localStorage.setItem('queued-videos', JSON.stringify([
+  it('applies bulk removal to selected Fave channels and videos', async () => {
+    mockAllSubscriptions = [
+      {
+        id: 'UC123',
+        title: 'Favorite Channel',
+        description: '',
+        thumbnail: '',
+        group: 'Tech',
+        isFavorite: true,
+      },
+    ];
+    localStorage.setItem('favorite-video-ids', JSON.stringify(['video-1']));
+    localStorage.setItem('favorite-videos', JSON.stringify([
       {
         id: 'video-1',
-        title: 'Queued watch later video',
+        title: 'Favorite Video',
         description: '',
         thumbnail: 'https://example.com/video.jpg',
         channelId: 'UC123',
-        channelTitle: 'Test Channel',
+        channelTitle: 'Favorite Channel',
         publishedAt: new Date().toISOString(),
       },
     ]));
 
-    window.history.replaceState(null, '', '/?tab=queue');
     render(<Dashboard />);
+    fireEvent.click(screen.getByRole('button', { name: /faves/i }));
 
     await waitFor(() => {
-      expect(screen.getByText('Queued watch later video')).toBeInTheDocument();
+      expect(screen.getByRole('checkbox', { name: 'Select Favorite Channel' })).toBeInTheDocument();
+      expect(screen.getByRole('checkbox', { name: 'Select Favorite Video' })).toBeInTheDocument();
     });
-    expect(screen.queryByText('No favorite videos yet')).not.toBeInTheDocument();
-  });
 
-  it('keeps queued videos even when they are watched', async () => {
-    mockWatchedVideos = new Set(['video-1']);
-    localStorage.setItem('queued-video-ids', JSON.stringify(['video-1']));
-    localStorage.setItem('queued-videos', JSON.stringify([
-      {
-        id: 'video-1',
-        title: 'Watched queued video',
-        description: '',
-        thumbnail: 'https://example.com/video.jpg',
-        channelId: 'UC123',
-        channelTitle: 'Test Channel',
-        publishedAt: new Date().toISOString(),
-      },
-    ]));
-
-    window.history.replaceState(null, '', '/?tab=queue');
-    render(<Dashboard />);
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Select Favorite Channel' }));
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Select Favorite Video' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Remove from Favourites' }));
 
     await waitFor(() => {
-      expect(screen.getByText('Watched queued video')).toBeInTheDocument();
+      expect(screen.queryByTestId('bulk-selection-toolbar')).not.toBeInTheDocument();
     });
-    expect(JSON.parse(localStorage.getItem('queued-video-ids') || '[]')).toEqual(['video-1']);
+    expect(mockToggleChannelFavorite).toHaveBeenCalledWith('UC123');
+    expect(JSON.parse(localStorage.getItem('favorite-video-ids') || '[]')).toEqual([]);
   });
 
-  it('splits the queue tab into Continue watching + Watch later', async () => {
-    // 5h ago: user started video-1 (paused mid-watch — in Continue watching)
-    // 3d ago: user queued video-2 (no progress — in Watch later)
-    const fiveHoursAgo = Date.now() - 5 * 60 * 60 * 1000;
-    const threeDaysAgo = Date.now() - 3 * 24 * 60 * 60 * 1000;
-
-    mockRSSVideosState = {
-      ...mockRSSVideosState,
-      videos: [
-        {
-          id: 'video-1',
-          title: 'Apple keynote paused mid-watch',
-          description: '',
-          thumbnail: 'https://example.com/v1.jpg',
-          channelId: 'UC123',
-          channelTitle: 'Apple',
-          publishedAt: new Date(threeDaysAgo).toISOString(),
-          duration: 600,
-        },
-        {
-          id: 'video-2',
-          title: 'Queued but not started',
-          description: '',
-          thumbnail: 'https://example.com/v2.jpg',
-          channelId: 'UC456',
-          channelTitle: 'Bloomberg',
-          publishedAt: new Date(threeDaysAgo).toISOString(),
-          duration: 900,
-        },
-      ],
-    };
-
-    localStorage.setItem('video-playback-progress', JSON.stringify({
-      'video-1': { currentTime: 300, duration: 600, updatedAt: fiveHoursAgo },
-    }));
-    localStorage.setItem('queued-video-ids', JSON.stringify(['video-1', 'video-2']));
-    localStorage.setItem('queued-videos', JSON.stringify([
-      {
-        id: 'video-1',
-        title: 'Apple keynote paused mid-watch',
-        description: '',
-        thumbnail: 'https://example.com/v1.jpg',
-        channelId: 'UC123',
-        channelTitle: 'Apple',
-        publishedAt: new Date(threeDaysAgo).toISOString(),
-      },
-      {
-        id: 'video-2',
-        title: 'Queued but not started',
-        description: '',
-        thumbnail: 'https://example.com/v2.jpg',
-        channelId: 'UC456',
-        channelTitle: 'Bloomberg',
-        publishedAt: new Date(threeDaysAgo).toISOString(),
-      },
-    ]));
-
+  it('removes Queue as a destination and normalizes legacy Queue links to Latest', async () => {
     window.history.replaceState(null, '', '/?tab=queue');
+
     render(<Dashboard />);
 
-    const continueSection = await screen.findByTestId('queue-continue-watching');
-    const watchLaterSection = await screen.findByTestId('queue-watch-later');
+    expect(screen.getByRole('button', { name: 'Latest' })).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.queryByRole('button', { name: 'Queue' })).not.toBeInTheDocument();
+    expect(screen.queryByText('Your queue is empty')).not.toBeInTheDocument();
 
-    expect(continueSection).toHaveTextContent('Continue watching');
-    expect(continueSection).toHaveTextContent('1 paused');
-    expect(continueSection).toHaveTextContent('Apple keynote paused mid-watch');
-
-    expect(watchLaterSection).toHaveTextContent('Watch later');
-    expect(watchLaterSection).toHaveTextContent('1 saved');
-    expect(watchLaterSection).toHaveTextContent('Queued but not started');
-  });
-
-  it('surfaces a 25s pause on a long video as Continue watching (not gated by 5% percent)', async () => {
-    // Repro for the user-reported case: 25s of a 30-minute video is 1.4%,
-    // which is well under any percent threshold but should still surface.
-    const oneHourAgo = Date.now() - 60 * 60 * 1000;
-
-    mockRSSVideosState = {
-      ...mockRSSVideosState,
-      videos: [
-        {
-          id: 'video-long',
-          title: '30-minute video paused at 25s',
-          description: '',
-          thumbnail: 'https://example.com/long.jpg',
-          channelId: 'UC123',
-          channelTitle: 'Test Channel',
-          publishedAt: new Date(oneHourAgo).toISOString(),
-          duration: 1800,
-        },
-      ],
-    };
-
-    localStorage.setItem('video-playback-progress', JSON.stringify({
-      'video-long': { currentTime: 25, duration: 1800, updatedAt: oneHourAgo },
-    }));
-
-    window.history.replaceState(null, '', '/?tab=queue');
-    render(<Dashboard />);
-
-    const continueSection = await screen.findByTestId('queue-continue-watching');
-    expect(continueSection).toHaveTextContent('Continue watching');
-    expect(continueSection).toHaveTextContent('1 paused');
-    expect(continueSection).toHaveTextContent('30-minute video paused at 25s');
-  });
-
-  it('hides a video from Continue watching once the user removes it', async () => {
-    // Repro for the user's follow-up: clicking trash in Continue watching
-    // must mark the video as removed so it stays gone even if they watch
-    // more of it later in Latest.
-    const oneHourAgo = Date.now() - 60 * 60 * 1000;
-
-    mockRSSVideosState = {
-      ...mockRSSVideosState,
-      videos: [
-        {
-          id: 'video-removed',
-          title: 'Video marked removed',
-          description: '',
-          thumbnail: 'https://example.com/removed.jpg',
-          channelId: 'UC123',
-          channelTitle: 'Test Channel',
-          publishedAt: new Date(oneHourAgo).toISOString(),
-          duration: 600,
-        },
-        {
-          id: 'video-fresh',
-          title: 'Unrelated fresh video',
-          description: '',
-          thumbnail: 'https://example.com/fresh.jpg',
-          channelId: 'UC123',
-          channelTitle: 'Test Channel',
-          publishedAt: new Date(oneHourAgo).toISOString(),
-          duration: 600,
-        },
-      ],
-    };
-
-    // The removed video has both progress AND a fresh removedAt timestamp.
-    // The other video has no progress at all, so it won't appear in
-    // Continue watching regardless — keeps the section rendering.
-    localStorage.setItem('video-playback-progress', JSON.stringify({
-      'video-removed': {
-        currentTime: 60,
-        duration: 600,
-        updatedAt: oneHourAgo,
-        removedAt: Date.now(),
-      },
-    }));
-
-    window.history.replaceState(null, '', '/?tab=queue');
-    render(<Dashboard />);
-
-    // Wait for Queue tab to mount. With no in-progress videos, neither
-    // section renders — we get the empty state instead.
-    await screen.findByText('Your queue is empty');
-    expect(screen.queryByText('Video marked removed')).not.toBeInTheDocument();
-    expect(screen.queryByTestId('queue-continue-watching')).not.toBeInTheDocument();
-  });
-
-  it('forgets a removed video once the grace window expires', async () => {
-    // Edge case: user removed a video, then 6 months later comes back. We
-    // don't want a stale flag to hide a video forever — the 30-day grace
-    // window exists so storage cleanups don't permanently lose content.
-    const oneHourAgo = Date.now() - 60 * 60 * 1000;
-    const ancient = Date.now() - 60 * 86_400_000; // 60 days ago
-
-    mockRSSVideosState = {
-      ...mockRSSVideosState,
-      videos: [
-        {
-          id: 'video-ancient-removed',
-          title: 'Removed ages ago',
-          description: '',
-          thumbnail: 'https://example.com/ancient.jpg',
-          channelId: 'UC123',
-          channelTitle: 'Test Channel',
-          publishedAt: new Date(oneHourAgo).toISOString(),
-          duration: 600,
-        },
-      ],
-    };
-
-    localStorage.setItem('video-playback-progress', JSON.stringify({
-      'video-ancient-removed': {
-        currentTime: 60,
-        duration: 600,
-        updatedAt: oneHourAgo,
-        removedAt: ancient,
-      },
-    }));
-
-    window.history.replaceState(null, '', '/?tab=queue');
-    render(<Dashboard />);
-
-    const continueSection = await screen.findByTestId('queue-continue-watching');
-    expect(continueSection).toHaveTextContent('Removed ages ago');
-  });
-
-  it('does not surface sub-5s accidental taps as Continue watching', async () => {
-    const oneHourAgo = Date.now() - 60 * 60 * 1000;
-
-    mockRSSVideosState = {
-      ...mockRSSVideosState,
-      videos: [
-        {
-          id: 'video-tap',
-          title: 'I just tapped play for 2 seconds',
-          description: '',
-          thumbnail: 'https://example.com/tap.jpg',
-          channelId: 'UC123',
-          channelTitle: 'Test Channel',
-          publishedAt: new Date(oneHourAgo).toISOString(),
-          duration: 1800,
-        },
-      ],
-    };
-
-    localStorage.setItem('video-playback-progress', JSON.stringify({
-      'video-tap': { currentTime: 2, duration: 1800, updatedAt: oneHourAgo },
-    }));
-
-    window.history.replaceState(null, '', '/?tab=queue');
-    render(<Dashboard />);
-
-    // No videos, no sections, empty state shows.
     await waitFor(() => {
-      expect(screen.getByText('Your queue is empty')).toBeInTheDocument();
+      expect(window.location.search).toBe('?tab=latest');
     });
-    expect(screen.queryByTestId('queue-continue-watching')).not.toBeInTheDocument();
   });
 
   it('shows the saved favorite video records even before the feed has rebuilt', async () => {
@@ -1287,6 +1898,73 @@ describe('Dashboard', () => {
     expect(screen.queryByText('Football highlights')).not.toBeInTheDocument();
   });
 
+  it('opens advanced filters without changing Latest chronological order', () => {
+    mockRSSVideosState = {
+      ...mockRSSVideosState,
+      videos: [
+        {
+          id: 'newest-video',
+          title: 'Newest long upload',
+          description: '',
+          thumbnail: '',
+          channelId: 'UC123',
+          channelTitle: 'Test Channel',
+          publishedAt: '2026-05-16T10:00:00.000Z',
+          duration: 40 * 60,
+        },
+        {
+          id: 'middle-video',
+          title: 'Middle length upload',
+          description: '',
+          thumbnail: '',
+          channelId: 'UC123',
+          channelTitle: 'Test Channel',
+          publishedAt: '2026-05-16T09:00:00.000Z',
+          duration: 20 * 60,
+        },
+        {
+          id: 'oldest-video',
+          title: 'Oldest long upload',
+          description: '',
+          thumbnail: '',
+          channelId: 'UC123',
+          channelTitle: 'Test Channel',
+          publishedAt: '2026-05-16T08:00:00.000Z',
+          duration: 50 * 60,
+        },
+      ],
+    };
+
+    render(<Dashboard />);
+
+    expect(screen.getAllByRole('article').map((article) => article.querySelector('span')?.textContent)).toEqual([
+      'Newest long upload',
+      'Middle length upload',
+      'Oldest long upload',
+    ]);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Filters' }));
+
+    expect(screen.getByRole('region', { name: 'Feed filters' })).toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText('Video duration'), {
+      target: { value: '30-plus' },
+    });
+
+    expect(screen.getByText('Newest long upload')).toBeInTheDocument();
+    expect(screen.queryByText('Middle length upload')).not.toBeInTheDocument();
+    expect(screen.getByText('Oldest long upload')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Filters, 1 active' })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Clear advanced filters' }));
+
+    expect(screen.getByText('Middle length upload')).toBeInTheDocument();
+    expect(screen.getAllByRole('article').map((article) => article.querySelector('span')?.textContent)).toEqual([
+      'Newest long upload',
+      'Middle length upload',
+      'Oldest long upload',
+    ]);
+  });
+
   it('does not add saved views when preset storage writes fail', async () => {
     const storageError = new Error('Storage quota exceeded');
     vi.spyOn(localStorage, 'setItem').mockImplementation((key: string, _value: string) => {
@@ -1382,6 +2060,83 @@ describe('Dashboard', () => {
 
     expect(mockMarkAsWatched).toHaveBeenCalledWith('old-video');
     expect(mockMarkAsWatched).not.toHaveBeenCalledWith('new-video');
+  });
+
+  it('selects all visible Latest videos and marks only unwatched videos watched', async () => {
+    mockWatchedVideos = new Set(['watched-video']);
+    mockRSSVideosState = {
+      ...mockRSSVideosState,
+      videos: [
+        {
+          id: 'watched-video',
+          title: 'Already watched',
+          description: '',
+          thumbnail: '',
+          channelId: 'UC123',
+          channelTitle: 'Test Channel',
+          publishedAt: '2026-05-15T00:00:00.000Z',
+        },
+        {
+          id: 'unwatched-video',
+          title: 'Needs watching',
+          description: '',
+          thumbnail: '',
+          channelId: 'UC123',
+          channelTitle: 'Test Channel',
+          publishedAt: '2026-05-14T00:00:00.000Z',
+        },
+      ],
+    };
+
+    render(<Dashboard />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Select all visible videos' }));
+    expect(screen.getByText('2 selected')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Mark watched' }));
+
+    await waitFor(() => {
+      expect(mockMarkAsWatched).toHaveBeenCalledWith('unwatched-video');
+      expect(mockMarkAsWatched).not.toHaveBeenCalledWith('watched-video');
+      expect(screen.queryByTestId('bulk-selection-toolbar')).not.toBeInTheDocument();
+    });
+  });
+
+  it('selects visible Latest videos and marks only watched videos unwatched', async () => {
+    mockWatchedVideos = new Set(['watched-video']);
+    mockRSSVideosState = {
+      ...mockRSSVideosState,
+      videos: [
+        {
+          id: 'watched-video',
+          title: 'Already watched',
+          description: '',
+          thumbnail: '',
+          channelId: 'UC123',
+          channelTitle: 'Test Channel',
+          publishedAt: '2026-05-15T00:00:00.000Z',
+        },
+        {
+          id: 'unwatched-video',
+          title: 'Still unread',
+          description: '',
+          thumbnail: '',
+          channelId: 'UC123',
+          channelTitle: 'Test Channel',
+          publishedAt: '2026-05-14T00:00:00.000Z',
+        },
+      ],
+    };
+
+    render(<Dashboard />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Select all visible videos' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Mark unwatched' }));
+
+    await waitFor(() => {
+      expect(mockMarkAsUnwatched).toHaveBeenCalledWith('watched-video');
+      expect(mockMarkAsUnwatched).not.toHaveBeenCalledWith('unwatched-video');
+      expect(screen.queryByTestId('bulk-selection-toolbar')).not.toBeInTheDocument();
+    });
   });
 
   it('does not mark videos watched when older-than bulk action has no matches', async () => {

@@ -13,6 +13,8 @@ import { readBackupLocalData } from "../lib/app-backup";
 import { useServerStatus } from "../hooks/useServerStatus";
 import { useBackupActions } from "../hooks/useBackupActions";
 import { useSettingsFormState } from "../hooks/useSettingsFormState";
+import { inspectSubscriptionHealth } from "../lib/subscription-health";
+import type { StoredSubscription } from "../lib/indexeddb";
 
 const SAVED_BANNER_DURATION_MS = 1000;
 
@@ -39,10 +41,23 @@ function deriveStorageHealthLabel(
 export function useSettingsState(onClose: () => void) {
 	const queryClient = useQueryClient();
 	const form = useSettingsFormState();
-	const { watchedVideos } = useStore();
-	const { rawSubscriptions, syncWithBackend } = useSubscriptionStorage();
+	const { watchedVideos, apiKey } = useStore();
+	const {
+		rawSubscriptions,
+		syncWithBackend,
+		resolveChannelIds,
+		repairChannelIcons,
+		removeSubscription,
+	} = useSubscriptionStorage();
 
 	const [isSaved, setIsSaved] = useState(false);
+	const [subscriptionRepairAction, setSubscriptionRepairAction] = useState<
+		"ids" | "artwork" | null
+	>(null);
+	const [subscriptionRepairStatus, setSubscriptionRepairStatus] = useState("");
+	const [isRemovingDuplicateId, setIsRemovingDuplicateId] = useState<
+		string | null
+	>(null);
 
 	const server = useServerStatus();
 	const backup = useBackupActions({
@@ -52,8 +67,78 @@ export function useSettingsState(onClose: () => void) {
 	const localBackupData = readBackupLocalData();
 	const activeFeedFilterCount = countActiveFeedFilters();
 	const storageHealthLabel = deriveStorageHealthLabel(server.serverHealth);
-	const queuedCount = localBackupData.queuedVideoIds?.length || 0;
 	const favoriteCount = localBackupData.favoriteVideoIds?.length || 0;
+	const subscriptionHealth = inspectSubscriptionHealth(rawSubscriptions);
+
+	const handleResolveChannelIds = useCallback(async () => {
+		if (!apiKey.trim()) {
+			setSubscriptionRepairStatus(
+				"Save a YouTube Data API key before resolving channel IDs.",
+			);
+			return;
+		}
+
+		setSubscriptionRepairAction("ids");
+		setSubscriptionRepairStatus("");
+		try {
+			await resolveChannelIds();
+			setSubscriptionRepairStatus("Channel ID resolution finished.");
+		} catch (error) {
+			setSubscriptionRepairStatus(
+				error instanceof Error
+					? error.message
+					: "Channel ID resolution failed.",
+			);
+		} finally {
+			setSubscriptionRepairAction(null);
+		}
+	}, [apiKey, resolveChannelIds]);
+
+	const handleRepairSubscriptionArtwork = useCallback(async () => {
+		setSubscriptionRepairAction("artwork");
+		setSubscriptionRepairStatus("");
+		try {
+			const repairedCount = await repairChannelIcons();
+			setSubscriptionRepairStatus(
+				repairedCount > 0
+					? `Repaired artwork for ${repairedCount} channel${repairedCount === 1 ? "" : "s"}.`
+					: "No channel artwork was repaired.",
+			);
+		} catch (error) {
+			setSubscriptionRepairStatus(
+				error instanceof Error
+					? error.message
+					: "Channel artwork repair failed.",
+			);
+		} finally {
+			setSubscriptionRepairAction(null);
+		}
+	}, [repairChannelIcons]);
+
+	const handleRemoveDuplicateSubscription = useCallback(
+		async (subscription: StoredSubscription) => {
+			const title =
+				typeof subscription.title === "string" && subscription.title.trim()
+					? subscription.title.trim()
+					: subscription.id;
+			setIsRemovingDuplicateId(subscription.id);
+			setSubscriptionRepairStatus("");
+			try {
+				await removeSubscription(subscription.id);
+				setSubscriptionRepairStatus(`Removed subscription ${title}.`);
+			} catch (error) {
+				setSubscriptionRepairStatus(
+					error instanceof Error
+						? error.message
+						: "Subscription removal failed.",
+				);
+				throw error;
+			} finally {
+				setIsRemovingDuplicateId(null);
+			}
+		},
+		[removeSubscription],
+	);
 
 	const handleSave = useCallback(() => {
 		form.setApiKey(form.inputKey);
@@ -97,6 +182,10 @@ export function useSettingsState(onClose: () => void) {
 		// Backup state
 		backupStatus: backup.backupStatus,
 		restoreInputRef: backup.restoreInputRef,
+		restorePreview: backup.restorePreview,
+		isRestoring: backup.isRestoring,
+		isResetConfirmationOpen: backup.isResetConfirmationOpen,
+		isResetting: backup.isResetting,
 		// Server state
 		serverHealth: server.serverHealth,
 		serverVersion: server.serverVersion,
@@ -106,14 +195,27 @@ export function useSettingsState(onClose: () => void) {
 		rawSubscriptions,
 		watchedVideos,
 		activeFeedFilterCount,
-		queuedCount,
 		favoriteCount,
 		storageHealthLabel,
+		subscriptionHealth,
+		hasYouTubeApiKey: Boolean(apiKey.trim()),
+		subscriptionRepairAction,
+		subscriptionRepairStatus,
+		isRemovingDuplicateId,
 		// Handlers
 		handleSave,
 		handleDownloadBackup: backup.handleDownloadBackup,
 		handleRestoreBackup: backup.handleRestoreBackup,
+		handleConfirmRestore: backup.handleConfirmRestore,
+		handleCancelRestore: backup.handleCancelRestore,
 		handleResetFeedCache: backup.handleResetFeedCache,
+		handleConfirmResetFeedCache: backup.handleConfirmResetFeedCache,
+		handleCancelResetFeedCache: backup.handleCancelResetFeedCache,
 		handleRetryFailedChannels: backup.handleRetryFailedChannels,
+		handleRetryChannel: backup.handleRetryChannel,
+		retryingChannelId: backup.retryingChannelId,
+		handleResolveChannelIds,
+		handleRepairSubscriptionArtwork,
+		handleRemoveDuplicateSubscription,
 	};
 }

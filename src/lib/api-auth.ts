@@ -12,6 +12,7 @@ export function isAuthError(error: unknown): boolean {
 }
 
 export const SERVER_API_TOKEN_STORAGE_KEY = "mytube.serverApiToken";
+export const SERVER_AUTH_REQUIRED_EVENT = "mytube:server-auth-required";
 const LEGACY_SERVER_API_TOKEN_STORAGE_KEY =
 	"youtube-subscriptions.serverApiToken";
 
@@ -66,6 +67,21 @@ export function setServerApiToken(
 	}
 }
 
+/** Verify that the currently stored token can access the authenticated API. */
+export async function verifyServerApiToken(
+	fetchImpl: typeof fetch = globalThis.fetch,
+): Promise<void> {
+	const response = await fetchImpl(`/api/sync?t=${Date.now()}`, {
+		cache: "no-store",
+		credentials: "same-origin",
+	});
+
+	if (response.status === 401) throw new AuthError();
+	if (!response.ok) {
+		throw new Error(`Server connection failed (${response.status})`);
+	}
+}
+
 function isSameOriginApiRequest(input: RequestInfo | URL): boolean {
 	if (typeof input === "string") {
 		if (input.startsWith("/api/")) return true;
@@ -116,11 +132,22 @@ export function installAuthenticatedFetch(): void {
 	originalFetch = activeFetch;
 	globalThis.fetch = ((input: RequestInfo | URL, init?: RequestInit) => {
 		const token = getServerApiToken();
-		if (!token || !isSameOriginApiRequest(input)) {
-			return activeFetch(input, init);
-		}
+		const isApiRequest = isSameOriginApiRequest(input);
+		const request =
+			token && isApiRequest
+				? activeFetch(input, withAuthorizationHeader(init, token))
+				: activeFetch(input, init);
 
-		return activeFetch(input, withAuthorizationHeader(init, token));
+		if (!isApiRequest) return request;
+
+		return request.then(
+			(response) => {
+				if (response.status === 401) {
+					window.dispatchEvent(new Event(SERVER_AUTH_REQUIRED_EVENT));
+				}
+				return response;
+			},
+		);
 	}) as typeof fetch;
 
 	installed = true;

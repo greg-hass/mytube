@@ -13,10 +13,13 @@ import {
 } from "../hooks/useSubscriptionStorage";
 import { useHeaderHeight } from "../hooks/useHeaderHeight";
 import type { SyncStatus } from "../hooks/useRSSVideos";
+import type { SearchScope } from "../lib/unified-search";
 
 interface HeaderProps {
 	showMobileSearch?: boolean;
 	searchPlaceholder?: string;
+	searchScope?: SearchScope;
+	onSearchScopeChange?: (scope: SearchScope) => void;
 	syncStatus?: SyncStatus;
 	cacheStatus?: {
 		hasCache: boolean;
@@ -25,6 +28,8 @@ interface HeaderProps {
 		videoCount: number;
 	};
 	onRetryFailed?: () => void;
+	onRetryChannel?: (channelId: string) => void;
+	retryingChannelId?: string | null;
 	onRefresh?: () => void;
 	isRefreshing?: boolean;
 	refreshProgress?: number;
@@ -40,9 +45,13 @@ interface HeaderProps {
 export const Header = ({
 	showMobileSearch = true,
 	searchPlaceholder = "Search channels...",
+	searchScope = "all",
+	onSearchScopeChange,
 	syncStatus,
 	cacheStatus,
 	onRetryFailed,
+	onRetryChannel,
+	retryingChannelId,
 	onRefresh,
 	isRefreshing = false,
 	refreshProgress = 0,
@@ -90,7 +99,7 @@ export const Header = ({
 	};
 
 	const handleSearchKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
-		if (e.key === "Enter") {
+		if (e.key === "Escape") {
 			clearSearch();
 		}
 	};
@@ -134,6 +143,8 @@ export const Header = ({
 							<HeaderSearchDesktop
 								searchPlaceholder={searchPlaceholder}
 								searchQuery={searchQuery}
+								searchScope={searchScope}
+								onSearchScopeChange={onSearchScopeChange}
 								onSearchChange={setSearchQuery}
 								onClear={clearSearch}
 								onKeyDown={handleSearchKeyDown}
@@ -180,6 +191,8 @@ export const Header = ({
 					<HeaderSearchMobile
 						searchPlaceholder={searchPlaceholder}
 						searchQuery={searchQuery}
+						searchScope={searchScope}
+						onSearchScopeChange={onSearchScopeChange}
 						visible={showMobileSearch && showMobileSearchPanel}
 						onSearchChange={setSearchQuery}
 						onClear={() => {
@@ -209,6 +222,8 @@ export const Header = ({
 				syncStatus={syncStatus}
 				cacheStatus={cacheStatus}
 				onRetryFailed={onRetryFailed}
+				onRetryChannel={onRetryChannel}
+				retryingChannelId={retryingChannelId}
 				onRefresh={onRefresh}
 				isRefreshing={isRefreshing}
 				refreshProgress={refreshProgress}

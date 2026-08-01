@@ -143,3 +143,41 @@ export async function refreshAllChannels(
 		queryClient.invalidateQueries({ queryKey: SUBSCRIPTIONS_QUERY_KEY });
 	}
 }
+
+/**
+ * Resolve only temporary handle/custom-URL subscriptions. This keeps the
+ * repair action focused and avoids spending API quota refreshing channels
+ * that already have canonical IDs.
+ */
+export async function resolveTemporaryChannels(
+	subscriptions: StoredSubscription[] | undefined,
+	apiKey: string,
+	queryClient: QueryClient,
+): Promise<number> {
+	if (!subscriptions || subscriptions.length === 0 || !apiKey) return 0;
+
+	const tempSubs = subscriptions.filter(
+		(sub) => sub.id.startsWith("handle_") || sub.id.startsWith("custom_"),
+	);
+	if (tempSubs.length === 0) return 0;
+
+	const { updates, removals } = await resolveTempChannels(
+		subscriptions,
+		tempSubs,
+		apiKey,
+	);
+
+	for (const id of removals) {
+		await removeSubscription(id);
+	}
+
+	if (updates.length > 0) {
+		await addSubscriptions(updates);
+	}
+
+	if (removals.length > 0 || updates.length > 0) {
+		queryClient.invalidateQueries({ queryKey: SUBSCRIPTIONS_QUERY_KEY });
+	}
+
+	return removals.length;
+}

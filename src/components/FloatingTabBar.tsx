@@ -1,13 +1,16 @@
 import { motion } from "framer-motion";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Grid3x3, TrendingUp, Activity, Heart, Plus } from "lucide-react";
+import {
+	getCurrentViewportSize,
+	isCompactMobileViewport,
+} from "../lib/mobile-viewport";
 
 const TAB_BAR_MOUNT_KEY = "tab-bar-mounted";
 
 export type Tab =
 	| "subscriptions"
 	| "latest"
-	| "queue"
 	| "activity"
 	| "favorites";
 
@@ -19,13 +22,12 @@ interface FloatingTabBarProps {
 	onTabChange: (tab: Tab) => void;
 	onAddChannel: () => void;
 	subscriptionCount: number;
-	activeChannelCount: number;
 	favoriteCount: number;
 }
 
 type FloatingTabBarCounts = Pick<
 	FloatingTabBarProps,
-	"subscriptionCount" | "activeChannelCount" | "favoriteCount"
+	"subscriptionCount" | "favoriteCount"
 >;
 
 interface TabConfig {
@@ -42,7 +44,6 @@ const TABS: TabConfig[] = [
 		id: "activity",
 		label: "Activity",
 		icon: Activity,
-		getBadge: (p) => p.activeChannelCount,
 	},
 	{
 		id: "favorites",
@@ -127,12 +128,10 @@ export const FloatingTabBar = ({
 	onTabChange,
 	onAddChannel,
 	subscriptionCount,
-	activeChannelCount,
 	favoriteCount,
 }: FloatingTabBarProps) => {
 	const counts: FloatingTabBarCounts = {
 		subscriptionCount,
-		activeChannelCount,
 		favoriteCount,
 	};
 
@@ -157,18 +156,74 @@ export const FloatingTabBar = ({
 		}
 	}, [isFirstMount]);
 
+	const [isMobileViewport, setIsMobileViewport] = useState(() =>
+		typeof window !== "undefined" &&
+		isCompactMobileViewport(getCurrentViewportSize()),
+	);
+	const [isHidden, setIsHidden] = useState(false);
+	const previousScrollYRef = useRef(0);
+
+	useEffect(() => {
+		const updateViewport = () => {
+			const nextIsMobile = isCompactMobileViewport(getCurrentViewportSize());
+			setIsMobileViewport(nextIsMobile);
+			if (!nextIsMobile) setIsHidden(false);
+		};
+
+		updateViewport();
+		window.addEventListener("resize", updateViewport);
+		return () => window.removeEventListener("resize", updateViewport);
+	}, []);
+
+	useEffect(() => {
+		if (!isMobileViewport) return;
+
+		const getScrollTop = () =>
+			Math.max(
+				0,
+				window.scrollY ||
+					document.scrollingElement?.scrollTop ||
+					document.documentElement.scrollTop ||
+					document.body.scrollTop ||
+					0,
+			);
+
+		previousScrollYRef.current = getScrollTop();
+		const handleScroll = () => {
+			const currentScrollY = getScrollTop();
+			const delta = currentScrollY - previousScrollYRef.current;
+			previousScrollYRef.current = currentScrollY;
+
+			if (currentScrollY <= 16) {
+				setIsHidden(false);
+				return;
+			}
+			if (Math.abs(delta) < 8) return;
+			setIsHidden(delta > 0);
+		};
+
+		window.addEventListener("scroll", handleScroll, { passive: true });
+		return () => window.removeEventListener("scroll", handleScroll);
+	}, [isMobileViewport]);
+
 	return (
 		<nav
 			data-testid="floating-tab-bar"
+			data-hidden={isMobileViewport && isHidden ? "true" : "false"}
+			aria-hidden={isMobileViewport && isHidden}
+			inert={isMobileViewport && isHidden}
 			className="fixed bottom-0 left-0 right-0 z-50 pb-[var(--app-tab-bar-bottom-offset)] pointer-events-none"
 		>
 			<motion.div
 				initial={isFirstMount ? { y: 100, opacity: 0 } : false}
-				animate={{ y: 0, opacity: 1 }}
+				animate={{
+					y: isMobileViewport && isHidden ? 120 : 0,
+					opacity: isMobileViewport && isHidden ? 0 : 1,
+				}}
 				transition={
 					isFirstMount
 						? { type: "spring", stiffness: 300, damping: 30, delay: 0.2 }
-						: { duration: 0 }
+						: { duration: 0.2, ease: "easeOut" }
 				}
 				data-testid="floating-tab-bar-inner"
 				className="mx-auto flex w-full max-w-7xl items-center px-4 pb-0 pt-2"

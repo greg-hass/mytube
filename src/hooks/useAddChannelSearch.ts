@@ -19,12 +19,18 @@ import {
 	scoreSearchResult,
 	subscriberCountForSort,
 } from "../components/channelSearch";
+import {
+	buildChannelIdentitySet,
+	getChannelIdentityKeys,
+	hasChannelIdentity,
+} from "../lib/channel-identity";
 import type { YouTubeChannel } from "../types/youtube";
 import { useAddChannelHandlers } from "./useAddChannelHandlers";
 
 const SEARCH_DEBOUNCE_MS = 150;
 const NETWORK_ERROR = "network" as const;
 const AUTH_ERROR = "auth" as const;
+type ChannelIdentityInput = Pick<YouTubeChannel, "id" | "customUrl">;
 
 function buildSearchHeaders(): HeadersInit {
 	const apiKey = useStore.getState().apiKey.trim();
@@ -145,18 +151,24 @@ function useKeywordChannelSearch() {
  * double-adds of the same channel.
  */
 function useAddChannelAction(
-	existingIds: Set<string>,
+	existingIdentityKeys: Set<string>,
 	onAdd: (channel: YouTubeChannel) => void | Promise<void>,
 ) {
 	const [isLoading, setIsLoading] = useState(false);
 	const [addedChannelIds, setAddedChannelIds] = useState<Set<string>>(
 		new Set(),
 	);
+	const [addedIdentityKeys, setAddedIdentityKeys] = useState<Set<string>>(
+		new Set(),
+	);
 	const [validationError, setValidationError] = useState<string>("");
 
 	const addChannel = useCallback(
 		async (channel: YouTubeChannel) => {
-			if (existingIds.has(channel.id) || addedChannelIds.has(channel.id))
+			if (
+				hasChannelIdentity(channel, existingIdentityKeys) ||
+				hasChannelIdentity(channel, addedIdentityKeys)
+			)
 				return;
 
 			setValidationError("");
@@ -164,6 +176,9 @@ function useAddChannelAction(
 			try {
 				await onAdd(channel);
 				setAddedChannelIds((ids) => new Set(ids).add(channel.id));
+				setAddedIdentityKeys(
+					(keys) => new Set([...keys, ...getChannelIdentityKeys(channel)]),
+				);
 				setValidationError("");
 			} catch (error) {
 				console.error("Failed to add channel:", error);
@@ -173,7 +188,7 @@ function useAddChannelAction(
 				setIsLoading(false);
 			}
 		},
-		[existingIds, addedChannelIds, onAdd],
+		[existingIdentityKeys, addedIdentityKeys, onAdd],
 	);
 
 	const setError = useCallback((message: string) => {
@@ -191,6 +206,7 @@ function useAddChannelAction(
 	return {
 		isLoading,
 		addedChannelIds,
+		addedIdentityKeys,
 		validationError,
 		addChannel,
 		setError,
@@ -280,13 +296,15 @@ function createKeywordSearchController(
 function rankSearchResults(
 	results: YouTubeChannel[],
 	query: string,
-	existingIds: Set<string>,
-	addedIds: Set<string>,
+	existingIdentityKeys: Set<string>,
+	addedIdentityKeys: Set<string>,
 ): YouTubeChannel[] {
 	const trimmed = query.trim();
 	return results
 		.filter(
-			(channel) => !existingIds.has(channel.id) || addedIds.has(channel.id),
+			(channel) =>
+				!hasChannelIdentity(channel, existingIdentityKeys) ||
+				hasChannelIdentity(channel, addedIdentityKeys),
 		)
 		.map((channel) => ({
 			channel,
@@ -350,6 +368,8 @@ export interface UseAddChannelSearchResult {
 	validationError: string;
 	searchError: "auth" | "network" | null;
 	addedChannelIds: Set<string>;
+	isChannelKnown: (channel: ChannelIdentityInput) => boolean;
+	isParsedInputKnown: boolean;
 	inputRef: React.RefObject<HTMLInputElement | null>;
 	canAddParsedInput: boolean;
 	hasResults: boolean;
@@ -379,14 +399,14 @@ export function useAddChannelSearch(
 		[trimmedInput],
 	);
 
-	const existingIds = useMemo(
-		() => new Set(existingSubscriptions.map((sub) => sub.id)),
+	const existingIdentityKeys = useMemo(
+		() => buildChannelIdentitySet(existingSubscriptions),
 		[existingSubscriptions],
 	);
 
 	const direct = useDirectChannelResolution();
 	const keyword = useKeywordChannelSearch();
-	const action = useAddChannelAction(existingIds, onAdd);
+	const action = useAddChannelAction(existingIdentityKeys, onAdd);
 
 	// Latest-value refs for sub-hook wrapper objects. The effects below
 	// read functions (reset, performSearch, clearError, etc.) through
@@ -440,10 +460,42 @@ export function useAddChannelSearch(
 			rankSearchResults(
 				keyword.searchResults,
 				input,
-				existingIds,
-				action.addedChannelIds,
+				existingIdentityKeys,
+				action.addedIdentityKeys,
 			),
-		[keyword.searchResults, input, existingIds, action.addedChannelIds],
+		[
+			keyword.searchResults,
+			input,
+			existingIdentityKeys,
+			action.addedIdentityKeys,
+		],
+	);
+
+	const isChannelKnown = useCallback(
+		(channel: ChannelIdentityInput) =>
+			hasChannelIdentity(channel, existingIdentityKeys) ||
+			hasChannelIdentity(channel, action.addedIdentityKeys),
+		[existingIdentityKeys, action.addedIdentityKeys],
+	);
+
+	const parsedIdentitySource = useMemo(() => {
+		if (!parsedInput || parsedInput.type === "invalid") return null;
+		return {
+			id:
+				parsedInput.type === "channel_id"
+					? parsedInput.value
+					: `${parsedInput.type === "handle" ? "handle_" : "custom_"}${parsedInput.value}`,
+			customUrl:
+				parsedInput.type === "handle"
+					? `/@${parsedInput.value.replace(/^@/, "")}`
+					: parsedInput.type === "custom_url"
+						? parsedInput.value
+						: undefined,
+		};
+	}, [parsedInput]);
+
+	const isParsedInputKnown = Boolean(
+		parsedIdentitySource && isChannelKnown(parsedIdentitySource),
 	);
 
 	const handlers = useAddChannelHandlers({
@@ -481,6 +533,8 @@ export function useAddChannelSearch(
 		validationError: action.validationError,
 		searchError: keyword.searchError,
 		addedChannelIds: action.addedChannelIds,
+		isChannelKnown,
+		isParsedInputKnown,
 		inputRef,
 		canAddParsedInput: canAddParsedInputCore(
 			parsedInput,

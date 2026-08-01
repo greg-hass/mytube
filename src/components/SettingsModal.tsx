@@ -1,12 +1,15 @@
 import { motion, AnimatePresence } from "framer-motion";
 import { X } from "lucide-react";
+import { useEffect } from "react";
 import { useSettingsState } from "../hooks/useSettingsState";
+import { useModalFocus } from "../hooks/useModalFocus";
 import {
 	ApiConfigSection,
 	BackupSection,
 	DataHealthSection,
 	RefreshIssuesSection,
 	ServerSection,
+	SubscriptionHealthSection,
 } from "./SettingsModalSections";
 
 interface SettingsModalProps {
@@ -16,13 +19,15 @@ interface SettingsModalProps {
 
 export const SettingsModal = ({ isOpen, onClose }: SettingsModalProps) => {
 	const state = useSettingsState(onClose);
+	useBodyScrollLock(isOpen);
+	const modalFocus = useModalFocus<HTMLDivElement>({ isOpen, onClose });
 
 	return (
 		<AnimatePresence>
 			{isOpen && (
 				<>
 					<SettingsBackdrop onClose={onClose} />
-					<SettingsModalContainer>
+					<SettingsModalContainer {...modalFocus}>
 						<SettingsHeader onClose={onClose} />
 						<SettingsBody state={state} />
 					</SettingsModalContainer>
@@ -46,9 +51,62 @@ function SettingsBackdrop({ onClose }: { onClose: () => void }) {
 	);
 }
 
-function SettingsModalContainer({ children }: { children: React.ReactNode }) {
+function useBodyScrollLock(isLocked: boolean) {
+	useEffect(() => {
+		if (!isLocked) return;
+
+		const body = document.body;
+		const html = document.documentElement;
+		const scrollY = window.scrollY;
+		const previousStyles = {
+			bodyOverflow: body.style.overflow,
+			bodyPosition: body.style.position,
+			bodyTop: body.style.top,
+			bodyLeft: body.style.left,
+			bodyRight: body.style.right,
+			bodyWidth: body.style.width,
+			htmlOverflow: html.style.overflow,
+		};
+
+		html.style.overflow = "hidden";
+		body.style.position = "fixed";
+		body.style.top = `-${scrollY}px`;
+		body.style.left = "0";
+		body.style.right = "0";
+		body.style.width = "100%";
+		body.style.overflow = "hidden";
+
+		return () => {
+			html.style.overflow = previousStyles.htmlOverflow;
+			body.style.overflow = previousStyles.bodyOverflow;
+			body.style.position = previousStyles.bodyPosition;
+			body.style.top = previousStyles.bodyTop;
+			body.style.left = previousStyles.bodyLeft;
+			body.style.right = previousStyles.bodyRight;
+			body.style.width = previousStyles.bodyWidth;
+			window.scrollTo({ top: scrollY, behavior: "auto" });
+		};
+	}, [isLocked]);
+}
+
+function SettingsModalContainer({
+	children,
+	modalRef,
+	onKeyDown,
+}: {
+	children: React.ReactNode;
+	modalRef: React.RefObject<HTMLDivElement | null>;
+	onKeyDown: React.KeyboardEventHandler<HTMLDivElement>;
+}) {
 	return (
 		<motion.div
+			ref={modalRef}
+			role="dialog"
+			aria-modal="true"
+			aria-labelledby="settings-modal-label"
+			tabIndex={-1}
+			onKeyDown={onKeyDown}
+			data-testid="settings-modal-container"
 			initial={{ opacity: 0, scale: 0.95, y: 20 }}
 			animate={{ opacity: 1, scale: 1, y: 0 }}
 			exit={{ opacity: 0, scale: 0.95, y: 20 }}
@@ -69,14 +127,17 @@ function SettingsHeader({ onClose }: { onClose: () => void }) {
 					className="h-9 w-9 rounded-xl shadow-lg flex-none"
 				/>
 				<div className="min-w-0">
-					<h2 className="text-lg font-bold tracking-tight">
+					<h2 id="settings-modal-title" className="text-lg font-bold tracking-tight">
 						<span className="text-gray-900 dark:text-ios-50">My</span>
 						<span className="text-red-600 dark:text-red-500">Tube</span>
 					</h2>
-					<p className="text-xs text-gray-500 dark:text-ios-400">Settings</p>
+			<p id="settings-modal-label" className="text-xs text-gray-500 dark:text-ios-400">
+				Settings
+			</p>
 				</div>
 			</div>
 			<button
+				aria-label="Close Settings"
 				onClick={onClose}
 				className="rounded-lg p-2 text-gray-500 transition-colors hover:bg-gray-100 hover:text-gray-900 dark:text-ios-400 dark:hover:bg-ios-800 dark:hover:text-white"
 			>
@@ -92,7 +153,10 @@ function SettingsBody({
 	state: ReturnType<typeof useSettingsState>;
 }) {
 	return (
-		<div className="flex-1 overflow-y-auto p-5 space-y-6 custom-scrollbar">
+		<div
+			data-testid="settings-modal-body"
+			className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-5 pb-[calc(1.25rem+env(safe-area-inset-bottom))] space-y-6 custom-scrollbar"
+		>
 			<ApiConfigSection
 				inputKey={state.inputKey}
 				setInputKey={state.setInputKey}
@@ -104,17 +168,35 @@ function SettingsBody({
 			<BackupSection
 				backupStatus={state.backupStatus}
 				restoreInputRef={state.restoreInputRef}
+				restorePreview={state.restorePreview}
+				isRestoring={state.isRestoring}
+				isResetConfirmationOpen={state.isResetConfirmationOpen}
+				isResetting={state.isResetting}
+				cachedVideoCount={state.serverHealth?.videos ?? null}
 				onDownload={state.handleDownloadBackup}
 				onRestoreFile={state.handleRestoreBackup}
+				onConfirmRestore={state.handleConfirmRestore}
+				onCancelRestore={state.handleCancelRestore}
 				onResetCache={state.handleResetFeedCache}
+				onConfirmResetCache={state.handleConfirmResetFeedCache}
+				onCancelResetCache={state.handleCancelResetFeedCache}
 			/>
 			<DataHealthSection
 				rawSubscriptionCount={state.rawSubscriptions.length}
 				watchedCount={state.watchedVideos.size}
-				queuedCount={state.queuedCount}
 				favoriteCount={state.favoriteCount}
 				activeFeedFilterCount={state.activeFeedFilterCount}
 				storageHealthLabel={state.storageHealthLabel}
+			/>
+			<SubscriptionHealthSection
+				health={state.subscriptionHealth}
+				hasYouTubeApiKey={state.hasYouTubeApiKey}
+				isRepairing={state.subscriptionRepairAction}
+				repairStatus={state.subscriptionRepairStatus}
+				onResolveChannelIds={state.handleResolveChannelIds}
+				onRepairArtwork={state.handleRepairSubscriptionArtwork}
+				isRemovingDuplicateId={state.isRemovingDuplicateId}
+				onRemoveSubscription={state.handleRemoveDuplicateSubscription}
 			/>
 			<ServerSection
 				serverStatus={state.serverStatus}
@@ -125,6 +207,8 @@ function SettingsBody({
 				<RefreshIssuesSection
 					failedChannels={state.failedChannels}
 					onRetry={state.handleRetryFailedChannels}
+					onRetryChannel={state.handleRetryChannel}
+					retryingChannelId={state.retryingChannelId}
 				/>
 			)}
 		</div>

@@ -6,7 +6,10 @@ import {
 	getSubscriptionCount,
 	type StoredSubscription,
 } from "../lib/indexeddb";
-import { isAuthError } from "../lib/api-auth";
+import {
+	isAuthError,
+	SERVER_AUTH_REQUIRED_EVENT,
+} from "../lib/api-auth";
 import {
 	downloadJSON,
 	downloadOPML,
@@ -14,7 +17,10 @@ import {
 	parseJSONImport,
 	toYouTubeChannels,
 } from "../lib/subscriptions-io";
-import { refreshAllChannels } from "../lib/channel-refresh";
+import {
+	refreshAllChannels,
+	resolveTemporaryChannels,
+} from "../lib/channel-refresh";
 import {
 	hydrateThumbnails,
 	repairChannelIcons as runIconRepair,
@@ -95,6 +101,23 @@ async function deleteSubscriptionOnServer(channelId: string): Promise<void> {
 	if (response.ok || response.status === 404) return;
 	throw new Error(
 		`Failed to delete subscription on server (${response.status})`,
+	);
+}
+
+async function restoreSubscriptionsOnServer(
+	subscriptions: StoredSubscription[],
+): Promise<void> {
+	const response = await fetch("/api/subscriptions/restore", {
+		method: "POST",
+		headers: { "Content-Type": "application/json" },
+		body: JSON.stringify({ subscriptions }),
+	});
+	if (response.ok) return;
+
+	const body = await response.json().catch(() => ({}));
+	throw new Error(
+		body?.error ||
+			`Failed to restore subscriptions on server (${response.status})`,
 	);
 }
 
@@ -204,6 +227,17 @@ type MutationDeps = {
 function useSubscriptionMutations(deps: MutationDeps) {
 	const { queryClient, syncWithBackend, invalidateQueries } = deps;
 
+	const onImportSuccess = async () => {
+		// Push imported subscriptions to the server so the server-side
+		// aggregator can fetch videos. forcePush because the import is the
+		// authoritative source for the newly added channels.
+		await syncWithBackend({ forcePush: true });
+		invalidateQueries();
+		queryClient.invalidateQueries({ queryKey: RSS_VIDEOS_KEY });
+		queryClient.invalidateQueries({ queryKey: SERVER_VIDEOS_KEY });
+		queryClient.invalidateQueries({ queryKey: SERVER_VIDEOS_STATUS_KEY });
+	};
+
 	const importOPML = useMutation({
 		mutationFn: async (importContent: string) => {
 			const newSubscriptions =
@@ -212,17 +246,16 @@ function useSubscriptionMutations(deps: MutationDeps) {
 			await addSubscriptions(newSubscriptions);
 			return newSubscriptions;
 		},
-		onSuccess: async () => {
-			// Push imported subscriptions to the server so the server-side
-			// aggregator can fetch videos. forcePush because the OPML/CSV is
-			// the authoritative source — local IndexedDB must win over any
-			// stale server snapshot. Mirrors clearAllMutation.
-			await syncWithBackend({ forcePush: true });
-			invalidateQueries();
-			queryClient.invalidateQueries({ queryKey: RSS_VIDEOS_KEY });
-			queryClient.invalidateQueries({ queryKey: SERVER_VIDEOS_KEY });
-			queryClient.invalidateQueries({ queryKey: SERVER_VIDEOS_STATUS_KEY });
+		onSuccess: onImportSuccess,
+	});
+
+	const importSubscriptionsMutation = useMutation({
+		mutationFn: async (newSubscriptions: StoredSubscription[]) => {
+			const { addSubscriptions } = await import("../lib/indexeddb");
+			await addSubscriptions(newSubscriptions);
+			return newSubscriptions;
 		},
+		onSuccess: onImportSuccess,
 	});
 
 	const addSubscriptionsMutation = useMutation({
@@ -233,6 +266,19 @@ function useSubscriptionMutations(deps: MutationDeps) {
 		},
 		onSuccess: () => {
 			invalidateQueries();
+		},
+	});
+
+	const restoreSubscriptionsMutation = useMutation({
+		mutationFn: async (subscriptions: StoredSubscription[]) => {
+			await restoreSubscriptionsOnServer(subscriptions);
+			const { addSubscriptions } = await import("../lib/indexeddb");
+			await addSubscriptions(subscriptions);
+			return subscriptions;
+		},
+		onSuccess: () => {
+			invalidateQueries();
+			queryClient.invalidateQueries({ queryKey: RSS_VIDEOS_KEY });
 		},
 	});
 
@@ -264,7 +310,9 @@ function useSubscriptionMutations(deps: MutationDeps) {
 
 	return {
 		importOPML,
+		importSubscriptionsMutation,
 		addSubscriptionsMutation,
+		restoreSubscriptionsMutation,
 		removeSubscriptionMutation,
 		clearAllMutation,
 	};
@@ -315,7 +363,17 @@ function useSubscriptionIO(deps: IODeps) {
 		await refreshAllChannels(subscriptions, apiKey, queryClient);
 	}, [subscriptions, apiKey, queryClient]);
 
-	return { exportOPML, exportJSON, importJSON, refreshChannels };
+	const resolveChannelIds = useCallback(async () => {
+		return resolveTemporaryChannels(subscriptions, apiKey, queryClient);
+	}, [subscriptions, apiKey, queryClient]);
+
+	return {
+		exportOPML,
+		exportJSON,
+		importJSON,
+		refreshChannels,
+		resolveChannelIds,
+	};
 }
 
 type EffectDeps = {
@@ -440,6 +498,8 @@ export const useSubscriptionStorage = () => {
 	} = useQuery({
 		queryKey: SUBSCRIPTIONS_QUERY_KEY,
 		queryFn: () => fetchAndMergeSubscriptions(recordServerRevision),
+		retry: (failureCount, queryError) =>
+			!isAuthError(queryError) && failureCount < 1,
 		staleTime: 1000 * 60 * 5,
 		gcTime: 1000 * 60 * 30,
 	});
@@ -464,6 +524,19 @@ export const useSubscriptionStorage = () => {
 	});
 
 	const io = useSubscriptionIO({ subscriptions, apiKey, queryClient });
+	const authRequired = needsServerAuth || isAuthError(error);
+
+	const clearServerAuth = useCallback(async () => {
+		setNeedsServerAuth(false);
+		await refetch();
+	}, [refetch]);
+
+	useEffect(() => {
+		const handleAuthRequired = () => setNeedsServerAuth(true);
+		window.addEventListener(SERVER_AUTH_REQUIRED_EVENT, handleAuthRequired);
+		return () =>
+			window.removeEventListener(SERVER_AUTH_REQUIRED_EVENT, handleAuthRequired);
+	}, []);
 
 	const repairChannelIcons = useCallback(
 		async ({ useApi = false }: { useApi?: boolean } = {}) => {
@@ -517,12 +590,16 @@ export const useSubscriptionStorage = () => {
 		// Loading states
 		isLoading,
 		isInitialSyncing,
-		needsServerAuth,
+		needsServerAuth: authRequired,
+		clearServerAuth,
 		error,
 
 		// Mutations
 		importOPML: mutations.importOPML.mutateAsync,
+		importSubscriptions: mutations.importSubscriptionsMutation.mutateAsync,
 		addSubscriptions: mutations.addSubscriptionsMutation.mutateAsync,
+		restoreSubscriptions:
+			mutations.restoreSubscriptionsMutation.mutateAsync,
 		removeSubscription: mutations.removeSubscriptionMutation.mutateAsync,
 		clearAll: mutations.clearAllMutation.mutateAsync,
 		toggleFavorite: cacheHandlers.toggleFavorite,
@@ -532,11 +609,14 @@ export const useSubscriptionStorage = () => {
 		exportJSON: io.exportJSON,
 		importJSON: io.importJSON,
 		refreshAllChannels: io.refreshChannels,
+		resolveChannelIds: io.resolveChannelIds,
 		repairChannelIcons,
 		syncWithBackend,
 
 		// Mutation states
-		isImporting: mutations.importOPML.isPending,
+		isImporting:
+			mutations.importOPML.isPending ||
+			mutations.importSubscriptionsMutation.isPending,
 		isRemoving: mutations.removeSubscriptionMutation.isPending,
 		isClearing: mutations.clearAllMutation.isPending,
 

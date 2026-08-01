@@ -217,13 +217,20 @@ function createFeedAggregator(storeOverride) {
 		return { batchRefreshResults, batchVideos };
 	}
 
-	async function runAggregation() {
+	async function runAggregation({
+		channelId,
+		fetchChannelFeed: fetchChannelFeedOverride,
+		fetchChannelThumbnail: fetchChannelThumbnailOverride,
+	} = {}) {
 		logger.info("🔄 Starting feed aggregation...");
 
 		try {
 			// Read data to get subscriptions and settings
 			const parsedData = await store.readData(DEFAULT_DATA);
 			const subscriptions = parsedData.subscriptions || [];
+			if (channelId && !subscriptions.some((subscription) => subscription.id === channelId)) {
+				throw new Error(`Subscription not found: ${channelId}`);
+			}
 			const existingVideoCache = await store.readVideoCache({ videos: [] });
 			let existingVideos = existingVideoCache.videos || [];
 			const shortsStatusById = existingVideoCache.shortsStatusById || {};
@@ -274,7 +281,7 @@ function createFeedAggregator(storeOverride) {
 				subscriptions.push(...redirectResult.subscriptions);
 			}
 
-			if (useResolverApi) {
+			if (useResolverApi && !channelId) {
 				if (!parsedData.redirects) parsedData.redirects = {};
 				const resolveResult = await resolveTemporarySubscriptions(
 					subscriptions,
@@ -297,12 +304,14 @@ function createFeedAggregator(storeOverride) {
 				}
 			}
 
-			const subscriptionsToRefresh = subscriptions;
+			const subscriptionsToRefresh = channelId
+				? subscriptions.filter((subscription) => subscription.id === channelId)
+				: subscriptions;
 			const aggregationStartedAt = new Date().toISOString();
 			aggregationStatus = {
 				state: "running",
 				current: 0,
-				total: subscriptions.length,
+				total: subscriptionsToRefresh.length,
 				videos: existingVideos.length,
 				errors: 0,
 				failedChannels: [],
@@ -331,7 +340,15 @@ function createFeedAggregator(storeOverride) {
 						batch,
 						subscriptions,
 						fetchedChannelResults,
-						{ channelRefreshes },
+						{
+							channelRefreshes,
+							...(fetchChannelFeedOverride
+								? { fetchChannelFeed: fetchChannelFeedOverride }
+								: {}),
+							...(fetchChannelThumbnailOverride
+								? { fetchChannelThumbnail: fetchChannelThumbnailOverride }
+								: {}),
+						},
 					);
 
 					await enrichVideosWithShortsStatus(batchVideos, shortsStatusById);
@@ -464,8 +481,8 @@ function createFeedAggregator(storeOverride) {
 
 			aggregationStatus = {
 				state: "idle",
-				current: subscriptions.length,
-				total: subscriptions.length,
+				current: subscriptionsToRefresh.length,
+				total: subscriptionsToRefresh.length,
 				videos: archivedVideosWithShortsStatus.length,
 				errors: failedChannels.length,
 				failedChannels,
@@ -495,7 +512,7 @@ function createFeedAggregator(storeOverride) {
 		}
 	}
 
-	async function aggregateFeeds() {
+	async function aggregateFeeds(options = {}) {
 		if (aggregationPromise) {
 			aggregationStatus = {
 				...aggregationStatus,
@@ -509,7 +526,7 @@ function createFeedAggregator(storeOverride) {
 
 		aggregationPromise = (async () => {
 			try {
-				await runAggregation();
+				await runAggregation(options);
 			} finally {
 				aggregationPromise = null;
 			}

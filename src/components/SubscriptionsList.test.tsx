@@ -7,6 +7,7 @@ let mockSubscriptions = [
   { id: 'UC2', title: 'Two', description: '', thumbnail: 'https://example.com/2.jpg', group: 'News' },
 ];
 const mockSetSubscriptionGroup = vi.fn();
+const mockClearGroup = vi.fn();
 
 vi.mock('framer-motion', () => ({
   motion: {
@@ -38,9 +39,17 @@ vi.mock('../store/useStore', () => ({
 }));
 
 vi.mock('./SubscriptionCard', () => ({
-  SubscriptionCard: ({ channel, onSetGroup }: any) => (
+  SubscriptionCard: ({ channel, onSetGroup, selectable, selected, onToggleSelect }: any) => (
     <article>
       <span>{channel.title}</span>
+      {selectable && onToggleSelect && (
+        <input
+          type="checkbox"
+          checked={selected}
+          onChange={() => onToggleSelect(channel.id)}
+          aria-label={`Select ${channel.title}`}
+        />
+      )}
       <button onClick={() => onSetGroup(channel.id, 'Tech')}>Move {channel.title} to Tech</button>
     </article>
   ),
@@ -49,6 +58,7 @@ vi.mock('./SubscriptionCard', () => ({
 describe('SubscriptionsList', () => {
   beforeEach(() => {
     mockSetSubscriptionGroup.mockClear();
+    mockClearGroup.mockClear();
     mockSubscriptions = [
       { id: 'UC1', title: 'One', description: '', thumbnail: 'https://example.com/1.jpg', group: 'Tech' },
       { id: 'UC2', title: 'Two', description: '', thumbnail: 'https://example.com/2.jpg', group: 'News' },
@@ -88,6 +98,23 @@ describe('SubscriptionsList', () => {
     expect(mockSetSubscriptionGroup).toHaveBeenCalledWith('UC2', 'Tech');
   });
 
+  it('passes selection controls to subscription cards', () => {
+    const onToggleSelect = vi.fn();
+
+    render(
+      <SubscriptionsList
+        selectable
+        selectedChannelIds={new Set(['UC1'])}
+        onToggleSelect={onToggleSelect}
+      />,
+    );
+
+    expect(screen.getByLabelText('Select One')).toBeChecked();
+    fireEvent.click(screen.getByLabelText('Select Two'));
+
+    expect(onToggleSelect).toHaveBeenCalledWith('UC2');
+  });
+
   it('uses the dashboard empty-state design and navigation icon when no subscriptions exist', () => {
     mockSubscriptions = [];
 
@@ -99,9 +126,17 @@ describe('SubscriptionsList', () => {
   });
 
   it('keeps the shared empty-state design when a selected group has no channels', () => {
-    render(<SubscriptionsList selectedGroup="Empty group" groups={['Empty group']} />);
+    render(
+      <SubscriptionsList
+        selectedGroup="Empty group"
+        groups={['Empty group']}
+        onClearGroup={mockClearGroup}
+      />,
+    );
 
     expect(screen.getByTestId('dashboard-empty-state')).toHaveAttribute('data-empty-icon', 'subscriptions');
-    expect(screen.getByText('No subscriptions found')).toBeInTheDocument();
+    expect(screen.getByText('No subscriptions in Empty group')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Show all subscriptions' }));
+    expect(mockClearGroup).toHaveBeenCalledOnce();
   });
 });

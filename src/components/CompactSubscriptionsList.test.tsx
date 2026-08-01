@@ -24,6 +24,7 @@ describe("compact subscriptions", () => {
 		const onRemove = vi.fn();
 		const onToggleFavorite = vi.fn();
 		const onToggleMute = vi.fn();
+		const onToggleSelect = vi.fn();
 		render(
 			<MemoryRouter>
 				<CompactSubscriptionsList
@@ -34,10 +35,13 @@ describe("compact subscriptions", () => {
 							description: "",
 							thumbnail: "",
 							isFavorite: true,
-							isMuted: false,
-						},
-					]}
-					onRemove={onRemove}
+										isMuted: false,
+										},
+									]}
+									selectable
+									selectedChannelIds={new Set<string>()}
+									onToggleSelect={onToggleSelect}
+									onRemove={onRemove}
 					onToggleFavorite={onToggleFavorite}
 					onToggleMute={onToggleMute}
 				/>
@@ -50,6 +54,7 @@ describe("compact subscriptions", () => {
 		expect(favorite).toHaveAttribute("aria-pressed", "true");
 		fireEvent.click(favorite);
 		fireEvent.click(screen.getByRole("button", { name: "Mute Alpha" }));
+		fireEvent.click(screen.getByLabelText("Select Alpha"));
 
 		// Unsubscribe requires a confirm step before onRemove fires
 		fireEvent.click(
@@ -62,6 +67,7 @@ describe("compact subscriptions", () => {
 
 		expect(onToggleFavorite).toHaveBeenCalledWith("UC_TEST");
 		expect(onToggleMute).toHaveBeenCalledWith("UC_TEST");
+		expect(onToggleSelect).toHaveBeenCalledWith("UC_TEST");
 		expect(onRemove).toHaveBeenCalledWith("UC_TEST");
 	});
 

@@ -3,6 +3,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import type { YouTubeVideo } from "../types/youtube.js";
+import type { RefreshFailureKind } from "../types/server";
 
 export interface SyncStatus {
 	total: number;
@@ -20,7 +21,8 @@ export interface FailedChannelRefresh {
 	id: string;
 	title: string;
 	reason: string;
-	lastSuccessfulFetchAt?: string;
+	lastSuccessfulFetchAt?: string | null;
+	failureKind?: RefreshFailureKind;
 }
 
 export interface ScheduledRefreshStatus {
@@ -47,6 +49,10 @@ interface ServerData {
 	totalChannels?: number;
 	videos?: YouTubeVideo[];
 	lastUpdated?: string;
+}
+
+export interface UseRSSVideosOptions {
+	enabled?: boolean;
 }
 
 // ── Pure helpers ──────────────────────────────────────────────
@@ -108,9 +114,10 @@ function statusRefetchInterval(query: {
 
 // ── Sub-hooks ─────────────────────────────────────────────────
 
-function useAggregationStatus(refreshTriggered: boolean) {
+function useAggregationStatus(refreshTriggered: boolean, enabled: boolean) {
 	return useQuery<AggregationStatus>({
 		queryKey: ["server-videos-status"],
+		enabled,
 		queryFn: async () => {
 			const response = await fetch(`/api/videos/status?t=${Date.now()}`, {
 				cache: "no-store",
@@ -122,13 +129,18 @@ function useAggregationStatus(refreshTriggered: boolean) {
 			return response.json();
 		},
 		staleTime: 0,
-		refetchInterval: refreshTriggered ? 1500 : statusRefetchInterval,
+		refetchInterval: enabled
+			? refreshTriggered
+				? 1500
+				: statusRefetchInterval
+			: false,
 	});
 }
 
-function useServerVideos(isAggregating: boolean) {
+function useServerVideos(isAggregating: boolean, enabled: boolean) {
 	return useQuery({
 		queryKey: ["server-videos"],
+		enabled,
 		queryFn: async () => {
 			const response = await fetch("/api/videos", {
 				cache: "no-store",
@@ -142,6 +154,7 @@ function useServerVideos(isAggregating: boolean) {
 		placeholderData: (previousData: ServerData | undefined) => previousData,
 		staleTime: 1000 * 60, // 1 minute
 		refetchInterval: () => {
+			if (!enabled) return false;
 			if (
 				typeof document !== "undefined" &&
 				document.visibilityState === "hidden"
@@ -155,6 +168,22 @@ function useServerVideos(isAggregating: boolean) {
 
 function useRefreshMutation(queryClient: ReturnType<typeof useQueryClient>) {
 	const [refreshTriggered, setRefreshTriggered] = useState(false);
+	const [retryingChannelId, setRetryingChannelId] = useState<string | null>(
+		null,
+	);
+
+	const refetchFeedQueries = async () => {
+		await Promise.all([
+			queryClient.refetchQueries({
+				queryKey: ["server-videos-status"],
+				type: "active",
+			}),
+			queryClient.refetchQueries({
+				queryKey: ["server-videos"],
+				type: "active",
+			}),
+		]);
+	};
 
 	const mutation = useMutation({
 		mutationFn: async () => {
@@ -171,16 +200,7 @@ function useRefreshMutation(queryClient: ReturnType<typeof useQueryClient>) {
 		},
 		onSuccess: async () => {
 			setRefreshTriggered(true);
-			await Promise.all([
-				queryClient.refetchQueries({
-					queryKey: ["server-videos-status"],
-					type: "active",
-				}),
-				queryClient.refetchQueries({
-					queryKey: ["server-videos"],
-					type: "active",
-				}),
-			]);
+			await refetchFeedQueries();
 			toast.success("Feed refresh started — pulling new videos...");
 		},
 		onError: (error: unknown) => {
@@ -190,7 +210,46 @@ function useRefreshMutation(queryClient: ReturnType<typeof useQueryClient>) {
 		},
 	});
 
-	return { mutation, refreshTriggered, setRefreshTriggered };
+	const channelMutation = useMutation({
+		mutationFn: async (channelId: string) => {
+			const response = await fetch(
+				`/api/videos/refresh/channel/${encodeURIComponent(channelId)}`,
+				{
+					method: "POST",
+					cache: "no-store",
+					credentials: "same-origin",
+				},
+			);
+			if (!response.ok) {
+				const errorText = await response.text().catch(() => "Unknown error");
+				throw new Error(`Server returned ${response.status}: ${errorText}`);
+			}
+			return response.json();
+		},
+		onMutate: (channelId) => {
+			setRetryingChannelId(channelId);
+		},
+		onSuccess: async (_response, channelId) => {
+			await refetchFeedQueries();
+			toast.success(`Refresh queued for ${channelId}`);
+		},
+		onError: (error: unknown) => {
+			toast.error(
+				`Channel refresh failed: ${error instanceof Error ? error.message : "Unknown error"}`,
+			);
+		},
+		onSettled: () => {
+			setRetryingChannelId(null);
+		},
+	});
+
+	return {
+		mutation,
+		channelMutation,
+		refreshTriggered,
+		setRefreshTriggered,
+		retryingChannelId,
+	};
 }
 
 function useRefreshLifecycle(
@@ -272,13 +331,22 @@ function getRefreshProgress(
  * Hook for fetching videos from the server-side aggregator.
  * Provides automatic caching and refresh.
  */
-export const useRSSVideos = () => {
+export const useRSSVideos = ({ enabled = true }: UseRSSVideosOptions = {}) => {
 	const queryClient = useQueryClient();
 
-	const { mutation, refreshTriggered, setRefreshTriggered } =
+	const {
+		mutation,
+		channelMutation,
+		refreshTriggered,
+		setRefreshTriggered,
+		retryingChannelId,
+	} =
 		useRefreshMutation(queryClient);
 
-	const { data: aggregationStatus } = useAggregationStatus(refreshTriggered);
+	const { data: aggregationStatus } = useAggregationStatus(
+		refreshTriggered,
+		enabled,
+	);
 
 	const isAggregating = aggregationStatus?.state === "running";
 
@@ -287,7 +355,7 @@ export const useRSSVideos = () => {
 		dataUpdatedAt: serverDataUpdatedAt,
 		isLoading,
 		error,
-	} = useServerVideos(isAggregating);
+	} = useServerVideos(isAggregating, enabled);
 
 	// Invalidate video cache when status indicates newer data
 	useEffect(() => {
@@ -313,10 +381,12 @@ export const useRSSVideos = () => {
 	);
 
 	const isRefreshing =
-		mutation.isPending || aggregationStatus?.state === "running";
+		mutation.isPending ||
+		channelMutation.isPending ||
+		aggregationStatus?.state === "running";
 
 	const refreshPhase = getRefreshPhase(
-		mutation.isPending,
+		mutation.isPending || channelMutation.isPending,
 		isRefreshing,
 		refreshTriggered,
 		aggregationStatus?.state,
@@ -329,8 +399,13 @@ export const useRSSVideos = () => {
 	}, [serverData]);
 
 	const syncStatus = useMemo<SyncStatus>(
-		() => computeSyncStatus(aggregationStatus, serverData, mutation.isPending),
-		[aggregationStatus, serverData, mutation.isPending],
+		() =>
+			computeSyncStatus(
+				aggregationStatus,
+				serverData,
+				mutation.isPending || channelMutation.isPending,
+			),
+		[aggregationStatus, serverData, mutation.isPending, channelMutation.isPending],
 	);
 
 	const cacheStatus = useMemo(
@@ -342,7 +417,7 @@ export const useRSSVideos = () => {
 		videos,
 		cachedVideos: videos,
 		isLoading,
-		isFetching: mutation.isPending,
+		isFetching: mutation.isPending || channelMutation.isPending,
 		isRefreshing,
 		refreshPhase,
 		refreshProgress,
@@ -353,7 +428,15 @@ export const useRSSVideos = () => {
 		cacheError: error,
 		cacheStatus,
 		isCacheStale: cacheStatus.isStale,
-		refresh: () => mutation.mutate(),
+		refresh: () => {
+			if (enabled && !channelMutation.isPending) mutation.mutate();
+		},
+		retryChannel: (channelId: string) => {
+			if (enabled && !mutation.isPending && !channelMutation.isPending) {
+				channelMutation.mutate(channelId);
+			}
+		},
+		retryingChannelId,
 		clearCache: async () => {
 			queryClient.invalidateQueries({ queryKey: ["server-videos"] });
 		},
