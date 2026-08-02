@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, within } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { FloatingTabBar } from './FloatingTabBar';
 
@@ -10,7 +10,7 @@ describe('FloatingTabBar', () => {
     Object.defineProperty(window, 'scrollY', { configurable: true, value: 0 });
   });
 
-  it('renders the add action as a tab with a red icon', () => {
+  it('renders Add as the prominent middle action', () => {
     render(
       <FloatingTabBar
         activeTab="latest"
@@ -23,10 +23,17 @@ describe('FloatingTabBar', () => {
 
     const addTab = screen.getByRole('button', { name: 'Add' });
     expect(addTab).toBeInTheDocument();
+    expect(addTab.className).toContain('bg-red-600');
+    expect(addTab.className).toContain('rounded-full');
     const icon = addTab.querySelector('svg');
     expect(icon?.className.baseVal ?? icon?.getAttribute('class')).toMatch(
-      /text-red-500|text-red-400/,
+      /text-white/,
     );
+
+    const tabLabels = within(screen.getByRole('navigation'))
+      .getAllByRole('button')
+      .map((button) => button.getAttribute('aria-label'));
+    expect(tabLabels).toEqual(['Latest', 'Subs', 'Add', 'Activity', 'Faves']);
   });
 
   it('invokes onAddChannel when the Add tab is tapped', () => {
@@ -81,7 +88,7 @@ describe('FloatingTabBar', () => {
     expect(screen.queryByRole('button', { name: 'Queue' })).not.toBeInTheDocument();
   });
 
-  it('hides on downward mobile scroll and returns on upward scroll or near the top', () => {
+  it('stays visible while scrolling on mobile', () => {
     render(
       <FloatingTabBar
         activeTab="latest"
@@ -97,7 +104,7 @@ describe('FloatingTabBar', () => {
 
     Object.defineProperty(window, 'scrollY', { configurable: true, value: 120 });
     fireEvent.scroll(window);
-    expect(tabBar).toHaveAttribute('data-hidden', 'true');
+    expect(tabBar).toHaveAttribute('data-hidden', 'false');
 
     Object.defineProperty(window, 'scrollY', { configurable: true, value: 64 });
     fireEvent.scroll(window);

@@ -848,10 +848,12 @@ describe('Dashboard', () => {
     expect(tabBar.className).toContain('z-50');
     expect(tabBar.className).toContain('pb-[var(--app-tab-bar-bottom-offset)]');
     expect(tabBarInner.className).toContain('max-w-7xl');
-    // The Add action is rendered as a regular tab with a red icon
+    // The Add action is rendered as the prominent middle action.
+    expect(addTab.className).toContain('bg-red-600');
+    expect(addTab.className).toContain('rounded-full');
     const addIcon = addTab.querySelector('svg');
     const addIconClass = addIcon?.getAttribute('class') ?? '';
-    expect(addIconClass).toMatch(/text-red-500|text-red-400/);
+    expect(addIconClass).toContain('text-white');
   });
 
   it('keeps the iPhone latest controls in one compact row', () => {

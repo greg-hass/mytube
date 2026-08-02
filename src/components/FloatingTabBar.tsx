@@ -1,10 +1,6 @@
 import { motion } from "framer-motion";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { Grid3x3, TrendingUp, Activity, Heart, Plus } from "lucide-react";
-import {
-	getCurrentViewportSize,
-	isCompactMobileViewport,
-} from "../lib/mobile-viewport";
 
 const TAB_BAR_MOUNT_KEY = "tab-bar-mounted";
 
@@ -40,6 +36,7 @@ interface TabConfig {
 const TABS: TabConfig[] = [
 	{ id: "latest", label: "Latest", icon: TrendingUp },
 	{ id: "subscriptions", label: "Subs", icon: Grid3x3 },
+	{ id: "add", label: "Add", icon: Plus },
 	{
 		id: "activity",
 		label: "Activity",
@@ -51,7 +48,6 @@ const TABS: TabConfig[] = [
 		icon: Heart,
 		getBadge: (p) => p.favoriteCount,
 	},
-	{ id: "add", label: "Add", icon: Plus },
 ];
 
 function isActionTab(id: TabId): id is ActionTabId {
@@ -60,7 +56,7 @@ function isActionTab(id: TabId): id is ActionTabId {
 
 /** Colour class shared by the icon and the label span. */
 function getTabColorClass(isAction: boolean, isActive: boolean): string {
-	if (isAction) return "text-red-500 dark:text-red-400";
+	if (isAction) return "text-white";
 	if (isActive) return "text-gray-900 dark:text-ios-100";
 	return "text-gray-400 dark:text-ios-500";
 }
@@ -96,9 +92,13 @@ const TabButton = ({
 		<button
 			key={tab.id}
 			onClick={handleClick}
-			className="relative flex flex-1 flex-col items-center justify-center min-w-[3rem] rounded-full px-1.5 py-1 transition-all duration-200 sm:min-w-[4rem]"
+			className={
+				isAction
+					? "relative z-10 flex h-12 w-12 flex-none flex-col items-center justify-center rounded-full bg-red-600 text-white shadow-lg shadow-red-600/30 transition-transform duration-200 hover:scale-105 hover:bg-red-700 active:scale-95 dark:bg-red-500 dark:shadow-red-500/30 dark:hover:bg-red-400"
+					: "relative flex flex-1 flex-col items-center justify-center min-w-[3rem] rounded-full px-1.5 py-1 transition-all duration-200 sm:min-w-[4rem]"
+			}
 			aria-label={tab.label}
-			aria-pressed={isActive}
+			aria-pressed={isAction ? undefined : isActive}
 		>
 			{isActive && (
 				<div className="absolute inset-0 rounded-full bg-gray-100 shadow-sm dark:bg-ios-800/80" />
@@ -156,70 +156,15 @@ export const FloatingTabBar = ({
 		}
 	}, [isFirstMount]);
 
-	const [isMobileViewport, setIsMobileViewport] = useState(() =>
-		typeof window !== "undefined" &&
-		isCompactMobileViewport(getCurrentViewportSize()),
-	);
-	const [isHidden, setIsHidden] = useState(false);
-	const previousScrollYRef = useRef(0);
-
-	useEffect(() => {
-		const updateViewport = () => {
-			const nextIsMobile = isCompactMobileViewport(getCurrentViewportSize());
-			setIsMobileViewport(nextIsMobile);
-			if (!nextIsMobile) setIsHidden(false);
-		};
-
-		updateViewport();
-		window.addEventListener("resize", updateViewport);
-		return () => window.removeEventListener("resize", updateViewport);
-	}, []);
-
-	useEffect(() => {
-		if (!isMobileViewport) return;
-
-		const getScrollTop = () =>
-			Math.max(
-				0,
-				window.scrollY ||
-					document.scrollingElement?.scrollTop ||
-					document.documentElement.scrollTop ||
-					document.body.scrollTop ||
-					0,
-			);
-
-		previousScrollYRef.current = getScrollTop();
-		const handleScroll = () => {
-			const currentScrollY = getScrollTop();
-			const delta = currentScrollY - previousScrollYRef.current;
-			previousScrollYRef.current = currentScrollY;
-
-			if (currentScrollY <= 16) {
-				setIsHidden(false);
-				return;
-			}
-			if (Math.abs(delta) < 8) return;
-			setIsHidden(delta > 0);
-		};
-
-		window.addEventListener("scroll", handleScroll, { passive: true });
-		return () => window.removeEventListener("scroll", handleScroll);
-	}, [isMobileViewport]);
-
 	return (
 		<nav
 			data-testid="floating-tab-bar"
-			data-hidden={isMobileViewport && isHidden ? "true" : "false"}
-			aria-hidden={isMobileViewport && isHidden}
-			inert={isMobileViewport && isHidden}
+			data-hidden="false"
 			className="fixed bottom-0 left-0 right-0 z-50 pb-[var(--app-tab-bar-bottom-offset)] pointer-events-none"
 		>
 			<motion.div
 				initial={isFirstMount ? { y: 100, opacity: 0 } : false}
-				animate={{
-					y: isMobileViewport && isHidden ? 120 : 0,
-					opacity: isMobileViewport && isHidden ? 0 : 1,
-				}}
+				animate={{ y: 0, opacity: 1 }}
 				transition={
 					isFirstMount
 						? { type: "spring", stiffness: 300, damping: 30, delay: 0.2 }
