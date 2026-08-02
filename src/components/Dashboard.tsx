@@ -1631,7 +1631,7 @@ export const Dashboard = () => {
 																								toggleAllSelectionIds(
 																									setSelectedLatestVideoIds,
 																									visibleLatestVideos.map((video) => video.id),
-																									),
+																									)
 																								}
 																							className="inline-flex h-10 items-center rounded-lg border border-gray-200 bg-white px-2 text-sm font-medium text-gray-700 hover:bg-gray-50 dark:border-ios-800 dark:bg-ios-900 dark:text-ios-200 dark:hover:bg-ios-800 sm:px-3"
 																					>
