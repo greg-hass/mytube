@@ -106,7 +106,7 @@ test("an invalid stored token shows recovery instead of an endless loader", asyn
 
 	await expect(page.getByTestId("auth-required")).toBeVisible();
 	await expect(
-		page.getByRole("heading", { name: "Server authentication required" }),
+		page.getByRole("heading", { name: "Connect to your MyTube server" }),
 	).toBeVisible();
 	await expect(page.getByTestId("dashboard-loading")).toHaveCount(0);
 });
