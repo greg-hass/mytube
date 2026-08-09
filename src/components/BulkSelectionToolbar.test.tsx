@@ -6,12 +6,9 @@ describe("BulkSelectionToolbar", () => {
 	it("shows the selected count and only enables relevant actions", () => {
 		render(
 			<BulkSelectionToolbar
-				selectedVideoCount={0}
 				selectedChannelCount={2}
 				addToFavoritesCount={1}
 				removeFromFavoritesCount={0}
-				onMarkWatched={vi.fn()}
-				onMarkUnwatched={vi.fn()}
 				onAddToFavorites={vi.fn()}
 				onRemoveFromFavorites={vi.fn()}
 				onClear={vi.fn()}
@@ -19,7 +16,7 @@ describe("BulkSelectionToolbar", () => {
 		);
 
 		expect(screen.getByText("2 selected")).toBeInTheDocument();
-		expect(screen.getByRole("button", { name: "Mark watched" })).toBeDisabled();
+		expect(screen.queryByRole("button", { name: "Mark watched" })).not.toBeInTheDocument();
 		expect(screen.getByRole("button", { name: "Add to Favourites" })).toBeEnabled();
 		expect(
 			screen.getByRole("button", { name: "Remove from Favourites" }),
@@ -27,27 +24,24 @@ describe("BulkSelectionToolbar", () => {
 	});
 
 	it("calls the selected bulk action and clear handlers", () => {
-		const onMarkWatched = vi.fn();
+		const onRemoveFromFavorites = vi.fn();
 		const onClear = vi.fn();
 
 		render(
 			<BulkSelectionToolbar
-				selectedVideoCount={1}
-				selectedChannelCount={0}
+				selectedChannelCount={1}
 				addToFavoritesCount={0}
 				removeFromFavoritesCount={1}
-				onMarkWatched={onMarkWatched}
-				onMarkUnwatched={vi.fn()}
 				onAddToFavorites={vi.fn()}
-				onRemoveFromFavorites={vi.fn()}
+				onRemoveFromFavorites={onRemoveFromFavorites}
 				onClear={onClear}
 			/>,
 		);
 
-		fireEvent.click(screen.getByRole("button", { name: "Mark watched" }));
+		fireEvent.click(screen.getByRole("button", { name: "Remove from Favourites" }));
 		fireEvent.click(screen.getByRole("button", { name: "Clear selection" }));
 
-		expect(onMarkWatched).toHaveBeenCalledOnce();
+		expect(onRemoveFromFavorites).toHaveBeenCalledOnce();
 		expect(onClear).toHaveBeenCalledOnce();
 	});
 
@@ -56,13 +50,10 @@ describe("BulkSelectionToolbar", () => {
 
 		render(
 			<BulkSelectionToolbar
-				selectedVideoCount={0}
 				selectedChannelCount={2}
 				groupOptions={["Tech"]}
 				addToFavoritesCount={0}
 				removeFromFavoritesCount={0}
-				onMarkWatched={vi.fn()}
-				onMarkUnwatched={vi.fn()}
 				onAddToFavorites={vi.fn()}
 				onRemoveFromFavorites={vi.fn()}
 				onAssignChannelsToGroup={onAssignChannelsToGroup}

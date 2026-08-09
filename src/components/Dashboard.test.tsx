@@ -222,26 +222,12 @@ vi.mock('./SubscriptionsList', () => ({
 vi.mock('./VirtualizedVideoGrid', () => ({
   VirtualizedVideoGrid: ({
     videos,
-    selectable,
-    selectedVideoIds,
-    onToggleSelect,
   }: {
     videos: Array<{ id: string; title: string }>;
-    selectable?: boolean;
-    selectedVideoIds?: ReadonlySet<string>;
-    onToggleSelect?: (videoId: string) => void;
   }) => (
     <section>
       {videos.length === 0 ? 'Video grid content' : videos.map(video => (
         <article key={video.id}>
-          {selectable && onToggleSelect && (
-            <input
-              type="checkbox"
-              checked={selectedVideoIds?.has(video.id) ?? false}
-              onChange={() => onToggleSelect(video.id)}
-              aria-label={`Select ${video.title}`}
-            />
-          )}
           <span>{video.title}</span>
           <button
             type="button"
@@ -443,6 +429,19 @@ describe('Dashboard', () => {
 
     expect(screen.getByText('No videos found')).toBeInTheDocument();
     expect(screen.queryByText('Subscriptions list content')).not.toBeInTheDocument();
+  });
+
+  it('shows video loading progress instead of a false empty feed on startup', () => {
+    mockRSSVideosState = {
+      ...mockRSSVideosState,
+      isLoading: true,
+    };
+
+    render(<Dashboard />);
+
+    expect(screen.getByTestId('latest-videos-loading')).toHaveTextContent('Loading videos…');
+    expect(screen.queryByText('No videos found')).not.toBeInTheDocument();
+    expect(screen.getByTestId('floating-tab-bar')).toBeInTheDocument();
   });
 
   it('hides Shorts by default and remembers the choice after remounting', () => {
@@ -1559,7 +1558,7 @@ describe('Dashboard', () => {
     expect(screen.getByText('No favorite videos yet')).toBeInTheDocument();
   });
 
-  it('applies bulk removal to selected Fave channels and videos', async () => {
+  it('keeps bulk removal for Fave channels without selecting video thumbnails', async () => {
     mockAllSubscriptions = [
       {
         id: 'UC123',
@@ -1588,18 +1587,17 @@ describe('Dashboard', () => {
 
     await waitFor(() => {
       expect(screen.getByRole('checkbox', { name: 'Select Favorite Channel' })).toBeInTheDocument();
-      expect(screen.getByRole('checkbox', { name: 'Select Favorite Video' })).toBeInTheDocument();
+      expect(screen.queryByRole('checkbox', { name: 'Select Favorite Video' })).not.toBeInTheDocument();
     });
 
     fireEvent.click(screen.getByRole('checkbox', { name: 'Select Favorite Channel' }));
-    fireEvent.click(screen.getByRole('checkbox', { name: 'Select Favorite Video' }));
     fireEvent.click(screen.getByRole('button', { name: 'Remove from Favourites' }));
 
     await waitFor(() => {
       expect(screen.queryByTestId('bulk-selection-toolbar')).not.toBeInTheDocument();
     });
     expect(mockToggleChannelFavorite).toHaveBeenCalledWith('UC123');
-    expect(JSON.parse(localStorage.getItem('favorite-video-ids') || '[]')).toEqual([]);
+    expect(JSON.parse(localStorage.getItem('favorite-video-ids') || '[]')).toEqual(['video-1']);
   });
 
   it('removes Queue as a destination and normalizes legacy Queue links to Latest', async () => {
@@ -2064,81 +2062,26 @@ describe('Dashboard', () => {
     expect(mockMarkAsWatched).not.toHaveBeenCalledWith('new-video');
   });
 
-  it('selects all visible Latest videos and marks only unwatched videos watched', async () => {
-    mockWatchedVideos = new Set(['watched-video']);
+  it('does not expose bulk selection controls on video thumbnails', () => {
     mockRSSVideosState = {
       ...mockRSSVideosState,
       videos: [
         {
-          id: 'watched-video',
-          title: 'Already watched',
+          id: 'video-one',
+          title: 'Unobstructed thumbnail',
           description: '',
           thumbnail: '',
           channelId: 'UC123',
           channelTitle: 'Test Channel',
           publishedAt: '2026-05-15T00:00:00.000Z',
         },
-        {
-          id: 'unwatched-video',
-          title: 'Needs watching',
-          description: '',
-          thumbnail: '',
-          channelId: 'UC123',
-          channelTitle: 'Test Channel',
-          publishedAt: '2026-05-14T00:00:00.000Z',
-        },
       ],
     };
 
     render(<Dashboard />);
 
-    fireEvent.click(screen.getByRole('button', { name: 'Select all visible videos' }));
-    expect(screen.getByText('2 selected')).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: 'Mark watched' }));
-
-    await waitFor(() => {
-      expect(mockMarkAsWatched).toHaveBeenCalledWith('unwatched-video');
-      expect(mockMarkAsWatched).not.toHaveBeenCalledWith('watched-video');
-      expect(screen.queryByTestId('bulk-selection-toolbar')).not.toBeInTheDocument();
-    });
-  });
-
-  it('selects visible Latest videos and marks only watched videos unwatched', async () => {
-    mockWatchedVideos = new Set(['watched-video']);
-    mockRSSVideosState = {
-      ...mockRSSVideosState,
-      videos: [
-        {
-          id: 'watched-video',
-          title: 'Already watched',
-          description: '',
-          thumbnail: '',
-          channelId: 'UC123',
-          channelTitle: 'Test Channel',
-          publishedAt: '2026-05-15T00:00:00.000Z',
-        },
-        {
-          id: 'unwatched-video',
-          title: 'Still unread',
-          description: '',
-          thumbnail: '',
-          channelId: 'UC123',
-          channelTitle: 'Test Channel',
-          publishedAt: '2026-05-14T00:00:00.000Z',
-        },
-      ],
-    };
-
-    render(<Dashboard />);
-
-    fireEvent.click(screen.getByRole('button', { name: 'Select all visible videos' }));
-    fireEvent.click(screen.getByRole('button', { name: 'Mark unwatched' }));
-
-    await waitFor(() => {
-      expect(mockMarkAsUnwatched).toHaveBeenCalledWith('watched-video');
-      expect(mockMarkAsUnwatched).not.toHaveBeenCalledWith('unwatched-video');
-      expect(screen.queryByTestId('bulk-selection-toolbar')).not.toBeInTheDocument();
-    });
+    expect(screen.queryByRole('button', { name: 'Select all visible videos' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('checkbox', { name: 'Select Unobstructed thumbnail' })).not.toBeInTheDocument();
   });
 
   it('does not mark videos watched when older-than bulk action has no matches', async () => {

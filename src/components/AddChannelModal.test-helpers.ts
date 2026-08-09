@@ -68,6 +68,13 @@ function build401FetchMock() {
 	return vi.fn(() => Promise.resolve({ ok: false, status: 401 }));
 }
 
+function install429FetchMock() {
+	vi.stubGlobal(
+		"fetch",
+		vi.fn(() => Promise.resolve({ ok: false, status: 429 })),
+	);
+}
+
 // ── Workflow helpers ──────────────────────────────────────────────────────
 
 export function assertInitialState(container: HTMLElement) {
@@ -176,6 +183,7 @@ export function registerAddChannelModalTests() {
 	registerDirectDuplicateTest();
 	registerNaturalLanguageSearchTest();
 	registerAuthErrorTest();
+	registerRateLimitErrorTest();
 	registerFormatsDisclosureTest();
 	registerModalFocusTest();
 }
@@ -318,6 +326,19 @@ function registerAuthErrorTest() {
 		install401FetchMock();
 		renderModal();
 		await assertAuthErrorWorkflow("the best woodworking channels", consoleError);
+	});
+}
+
+function registerRateLimitErrorTest() {
+	it("explains channel-search throttling without blaming the connection", async () => {
+		install429FetchMock();
+		renderModal();
+		await searchFor("Northern Ireland traveller");
+
+		expect(await screen.findByText("Too many searches")).toBeInTheDocument();
+		expect(screen.getByText("Wait a minute, then try again.")).toBeInTheDocument();
+		expect(screen.queryByText(/check your connection/i)).not.toBeInTheDocument();
+		expect(screen.queryByText(/no channels found/i)).not.toBeInTheDocument();
 	});
 }
 

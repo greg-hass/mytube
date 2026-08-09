@@ -1,13 +1,11 @@
-import { CheckCircle2, Heart, Trash2, X } from "lucide-react";
+import { Heart, Trash2, X } from "lucide-react";
 import { useState } from "react";
 
 type MaybePromise = void | Promise<void>;
 
 type Props = {
-	selectedVideoCount: number;
 	selectedChannelCount: number;
 	groupOptions?: string[];
-	showVideoActions?: boolean;
 	showFavoriteActions?: boolean;
 	showMuteActions?: boolean;
 	showUnsubscribeAction?: boolean;
@@ -15,8 +13,6 @@ type Props = {
 	removeFromFavoritesCount: number;
 	muteChannelsCount?: number;
 	unmuteChannelsCount?: number;
-	onMarkWatched: () => MaybePromise;
-	onMarkUnwatched: () => MaybePromise;
 	onAddToFavorites: () => MaybePromise;
 	onRemoveFromFavorites: () => MaybePromise;
 	onMuteChannels?: () => MaybePromise;
@@ -29,10 +25,8 @@ type Props = {
 const UNGROUPED_VALUE = "__ungrouped__";
 
 export function BulkSelectionToolbar({
-	selectedVideoCount,
 	selectedChannelCount,
 	groupOptions = [],
-	showVideoActions = true,
 	showFavoriteActions = true,
 	showMuteActions = false,
 	showUnsubscribeAction = false,
@@ -40,8 +34,6 @@ export function BulkSelectionToolbar({
 	removeFromFavoritesCount,
 	muteChannelsCount = 0,
 	unmuteChannelsCount = 0,
-	onMarkWatched,
-	onMarkUnwatched,
 	onAddToFavorites,
 	onRemoveFromFavorites,
 	onMuteChannels,
@@ -52,7 +44,7 @@ export function BulkSelectionToolbar({
 }: Props) {
 	const [groupAssignmentValue, setGroupAssignmentValue] = useState("");
 	const [isAssigningGroup, setIsAssigningGroup] = useState(false);
-	const selectedCount = selectedVideoCount + selectedChannelCount;
+	const selectedCount = selectedChannelCount;
 	if (selectedCount === 0) return null;
 
 	return (
@@ -77,25 +69,6 @@ export function BulkSelectionToolbar({
 				</button>
 			</div>
 			<div className="flex flex-wrap gap-2">
-				{showVideoActions && <>
-				<button
-					type="button"
-					disabled={selectedVideoCount === 0}
-					onClick={() => void onMarkWatched()}
-					className="inline-flex h-9 items-center gap-1.5 rounded-lg bg-white px-3 text-xs font-semibold text-gray-700 shadow-sm ring-1 ring-gray-200 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-40 dark:bg-ios-900 dark:text-ios-100 dark:ring-ios-700 dark:hover:bg-ios-800"
-				>
-					<CheckCircle2 className="h-4 w-4" aria-hidden="true" />
-					Mark watched
-				</button>
-				<button
-					type="button"
-					disabled={selectedVideoCount === 0}
-					onClick={() => void onMarkUnwatched()}
-					className="inline-flex h-9 items-center rounded-lg bg-white px-3 text-xs font-semibold text-gray-700 shadow-sm ring-1 ring-gray-200 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-40 dark:bg-ios-900 dark:text-ios-100 dark:ring-ios-700 dark:hover:bg-ios-800"
-				>
-					Mark unwatched
-				</button>
-				</>}
 				{showFavoriteActions && <>
 				<button
 					type="button"

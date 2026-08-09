@@ -2,7 +2,6 @@ import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { UnifiedSearchResults } from "./UnifiedSearchResults";
 import type { UnifiedSearchResults as SearchResults } from "../lib/unified-search";
-import { useStore } from "../store/useStore";
 
 vi.mock("./SubscriptionCard", () => ({
 	SubscriptionCard: ({
@@ -33,24 +32,12 @@ vi.mock("./SubscriptionCard", () => ({
 vi.mock("./VirtualizedVideoGrid", () => ({
 	VirtualizedVideoGrid: ({
 		videos,
-		selectedVideoIds,
-		onToggleSelect,
 	}: {
 		videos: Array<{ id: string; title: string }>;
-		selectedVideoIds?: ReadonlySet<string>;
-		onToggleSelect?: (videoId: string) => void;
 	}) => (
 		<section data-testid="search-video-grid">
 			{videos.map((video) => (
 				<article key={video.title}>
-					{onToggleSelect && (
-						<input
-							type="checkbox"
-							checked={selectedVideoIds?.has(video.id) ?? false}
-							onChange={() => onToggleSelect(video.id)}
-							aria-label={`Select ${video.title}`}
-						/>
-					)}
 					{video.title}
 				</article>
 			))}
@@ -60,7 +47,6 @@ vi.mock("./VirtualizedVideoGrid", () => ({
 
 beforeEach(() => {
 	localStorage.clear();
-	useStore.setState({ watchedVideos: new Set() });
 });
 
 const results: SearchResults = {
@@ -180,7 +166,7 @@ describe("UnifiedSearchResults", () => {
 		).toBeInTheDocument();
 	});
 
-	it("applies watched and favourite actions to selected search results", async () => {
+	it("keeps channel bulk actions while video results have no selection controls", async () => {
 		const onToggleChannelFavorite = vi.fn().mockResolvedValue(undefined);
 		render(
 			<UnifiedSearchResults
@@ -194,21 +180,18 @@ describe("UnifiedSearchResults", () => {
 		);
 
 		fireEvent.click(screen.getByRole("checkbox", { name: "Select Tech Channel" }));
-		fireEvent.click(screen.getByRole("checkbox", { name: "Select Tech upload" }));
-		expect(screen.getByText("2 selected")).toBeInTheDocument();
+		expect(screen.getByText("1 selected")).toBeInTheDocument();
+		expect(
+			screen.queryByRole("checkbox", { name: "Select Tech upload" }),
+		).not.toBeInTheDocument();
+		expect(screen.queryByRole("button", { name: "Mark watched" })).not.toBeInTheDocument();
 
 		fireEvent.click(screen.getByRole("button", { name: "Add to Favourites" }));
 
 		expect(onToggleChannelFavorite).toHaveBeenCalledWith("UC_CHANNEL");
-		expect(JSON.parse(localStorage.getItem("favorite-video-ids") || "[]")).toEqual([
-			"video-1",
-		]);
 
 		await waitFor(() => {
-			expect(screen.queryByText("2 selected")).not.toBeInTheDocument();
+			expect(screen.queryByText("1 selected")).not.toBeInTheDocument();
 		});
-		fireEvent.click(screen.getByRole("checkbox", { name: "Select Tech upload" }));
-		fireEvent.click(screen.getByRole("button", { name: "Mark watched" }));
-		expect(useStore.getState().watchedVideos.has("video-1")).toBe(true);
 	});
 });

@@ -271,13 +271,7 @@ export const Dashboard = () => {
 	);
 	const [activeFavoriteSection, setActiveFavoriteSection] =
 		useState<FavoriteSection>("channels");
-	const [selectedFavoriteVideoIds, setSelectedFavoriteVideoIds] = useState<
-		Set<string>
-	>(() => new Set());
 	const [selectedFavoriteChannelIds, setSelectedFavoriteChannelIds] = useState<
-		Set<string>
-	>(() => new Set());
-	const [selectedLatestVideoIds, setSelectedLatestVideoIds] = useState<
 		Set<string>
 	>(() => new Set());
 	const [selectedSubscriptionChannelIds, setSelectedSubscriptionChannelIds] =
@@ -364,14 +358,12 @@ export const Dashboard = () => {
 	const {
 		favoriteVideoIds,
 		favoriteVideos: savedFavoriteVideos,
-		toggleFavoriteVideo,
 	} =
 		useFavoriteVideos();
 	const {
 		searchQuery,
 		watchedVideos,
 		markAsWatched,
-		markAsUnwatched,
 		setSearchQuery,
 	} = useStore();
 
@@ -382,6 +374,7 @@ export const Dashboard = () => {
 
 	const {
 		videos,
+		isLoading: videosLoading,
 		refresh: refetchVideos,
 		isRefreshing,
 		refreshPhase,
@@ -584,47 +577,24 @@ export const Dashboard = () => {
 			}),
 		[searchQuery, videos, allSubscriptions, favoriteVideos, favoriteChannels],
 	);
-	const selectedFavoriteVideos = favoriteVideos.filter((video) =>
-		selectedFavoriteVideoIds.has(video.id),
-	);
 	const selectedFavoriteChannels = favoriteChannels.filter((channel) =>
 		selectedFavoriteChannelIds.has(channel.id),
-	);
-	const selectedLatestVideos = visibleLatestVideos.filter((video) =>
-		selectedLatestVideoIds.has(video.id),
 	);
 	const selectedSubscriptionChannels = allSubscriptions.filter((channel) =>
 		selectedSubscriptionChannelIds.has(channel.id),
 	);
 
 	useEffect(() => {
-		const favoriteVideoIdSet = new Set(favoriteVideos.map((video) => video.id));
 		const favoriteChannelIdSet = new Set(
 			favoriteChannels.map((channel) => channel.id),
 		);
-		setSelectedFavoriteVideoIds((current) => {
-			const next = new Set(
-				Array.from(current).filter((id) => favoriteVideoIdSet.has(id)),
-			);
-			return next.size === current.size ? current : next;
-		});
 		setSelectedFavoriteChannelIds((current) => {
 			const next = new Set(
 				Array.from(current).filter((id) => favoriteChannelIdSet.has(id)),
 			);
 			return next.size === current.size ? current : next;
 		});
-	}, [favoriteChannels, favoriteVideos]);
-
-	useEffect(() => {
-		const latestVideoIdSet = new Set(visibleLatestVideos.map((video) => video.id));
-		setSelectedLatestVideoIds((current) => {
-			const next = new Set(
-				Array.from(current).filter((id) => latestVideoIdSet.has(id)),
-			);
-			return next.size === current.size ? current : next;
-		});
-	}, [visibleLatestVideos]);
+	}, [favoriteChannels]);
 
 	useEffect(() => {
 		const subscriptionIdSet = new Set(allSubscriptions.map((channel) => channel.id));
@@ -637,12 +607,7 @@ export const Dashboard = () => {
 	}, [allSubscriptions]);
 
 	const clearFavoriteSelection = () => {
-		setSelectedFavoriteVideoIds(new Set());
 		setSelectedFavoriteChannelIds(new Set());
-	};
-
-	const clearLatestSelection = () => {
-		setSelectedLatestVideoIds(new Set());
 	};
 
 	const clearSubscriptionSelection = () => {
@@ -684,54 +649,13 @@ export const Dashboard = () => {
 	const allFavoriteChannelsSelected =
 		favoriteChannels.length > 0 &&
 		favoriteChannels.every((channel) => selectedFavoriteChannelIds.has(channel.id));
-	const allFavoriteVideosSelected =
-		favoriteVideos.length > 0 &&
-		favoriteVideos.every((video) => selectedFavoriteVideoIds.has(video.id));
-	const allVisibleLatestVideosSelected =
-		visibleLatestVideos.length > 0 &&
-		visibleLatestVideos.every((video) => selectedLatestVideoIds.has(video.id));
-
-	const markSelectedFavoritesWatched = () => {
-		selectedFavoriteVideos.forEach((video) => markAsWatched(video.id));
-		clearFavoriteSelection();
-		toast.success("Marked selected videos as watched");
-	};
-
-	const markSelectedFavoritesUnwatched = () => {
-		selectedFavoriteVideos.forEach((video) => markAsUnwatched(video.id));
-		clearFavoriteSelection();
-		toast.success("Marked selected videos as unwatched");
-	};
-
-	const updateSelectedLatestWatchedState = (isWatched: boolean) => {
-		const videosToUpdate = selectedLatestVideos.filter(
-			(video) => watchedVideos.has(video.id) !== isWatched,
-		);
-		if (videosToUpdate.length === 0) return;
-
-		videosToUpdate.forEach((video) =>
-			(isWatched ? markAsWatched : markAsUnwatched)(video.id),
-		);
-		clearLatestSelection();
-		toast.success(
-			`Marked ${videosToUpdate.length} video${videosToUpdate.length === 1 ? "" : "s"} as ${isWatched ? "watched" : "unwatched"}`,
-		);
-	};
-
-	const markSelectedLatestWatched = () =>
-		updateSelectedLatestWatchedState(true);
-
-	const markSelectedLatestUnwatched = () =>
-		updateSelectedLatestWatchedState(false);
-
 	const removeSelectedFavorites = async () => {
 		try {
-			await Promise.all([
-				...selectedFavoriteChannels.map((channel) =>
+			await Promise.all(
+				selectedFavoriteChannels.map((channel) =>
 					toggleChannelFavorite(channel.id),
 				),
-				...selectedFavoriteVideos.map((video) => toggleFavoriteVideo(video)),
-			]);
+			);
 			clearFavoriteSelection();
 			toast.success("Removed selected items from Favourites");
 		} catch {
@@ -942,7 +866,6 @@ export const Dashboard = () => {
 		}
 		if (isTabChange) {
 			clearFavoriteSelection();
-			clearLatestSelection();
 			clearSubscriptionSelection();
 		}
 		writeDashboardTabToUrl(tab);
@@ -1618,33 +1541,6 @@ export const Dashboard = () => {
 													</span>
 												)}
 																									</button>
-																				{visibleLatestVideos.length > 0 && (
-																					<button
-																						type={BTN}
-																						aria-pressed={allVisibleLatestVideosSelected}
-																						aria-label={
-																								allVisibleLatestVideosSelected
-																									? "Deselect all visible videos"
-																									: "Select all visible videos"
-																							}
-																							onClick={() =>
-																								toggleAllSelectionIds(
-																									setSelectedLatestVideoIds,
-																									visibleLatestVideos.map((video) => video.id),
-																									)
-																								}
-																							className="inline-flex h-10 items-center rounded-lg border border-gray-200 bg-white px-2 text-sm font-medium text-gray-700 hover:bg-gray-50 dark:border-ios-800 dark:bg-ios-900 dark:text-ios-200 dark:hover:bg-ios-800 sm:px-3"
-																					>
-																							<span className="sm:hidden">
-																								{allVisibleLatestVideosSelected ? "Deselect" : "Select"}
-																							</span>
-																							<span className="hidden sm:inline">
-																								{allVisibleLatestVideosSelected
-																									? "Deselect visible"
-																									: "Select all visible"}
-																							</span>
-																							</button>
-																					)}
 																					<div className="hidden xl:flex">
 												<SavedFeedViews
 													presets={feedViewPresets}
@@ -1723,19 +1619,15 @@ export const Dashboard = () => {
 						) : activeTab === "subscriptions" ? (
 											<div>
 												<div className="mb-4 px-4">
-													<BulkSelectionToolbar
-														selectedVideoCount={0}
-															selectedChannelCount={selectedSubscriptionChannels.length}
-															groupOptions={subscriptionGroups}
-															showVideoActions={false}
+												<BulkSelectionToolbar
+														selectedChannelCount={selectedSubscriptionChannels.length}
+														groupOptions={subscriptionGroups}
 															addToFavoritesCount={selectedSubscriptionChannels.filter((channel) => !channel.isFavorite).length}
 															removeFromFavoritesCount={selectedSubscriptionChannels.filter((channel) => channel.isFavorite).length}
 															showMuteActions
 															showUnsubscribeAction
 															muteChannelsCount={selectedSubscriptionChannels.filter((channel) => !channel.isMuted).length}
 															unmuteChannelsCount={selectedSubscriptionChannels.filter((channel) => channel.isMuted).length}
-															onMarkWatched={() => undefined}
-															onMarkUnwatched={() => undefined}
 															onAddToFavorites={addSelectedSubscriptionsToFavorites}
 															onRemoveFromFavorites={removeSelectedSubscriptionsFromFavorites}
 															onMuteChannels={muteSelectedSubscriptions}
@@ -1772,6 +1664,16 @@ export const Dashboard = () => {
 											onRefresh={() => void refetchVideos()}
 											guideRef={firstRefreshGuideRef}
 										/>
+									) : videosLoading ? (
+										<div
+											className="flex min-h-[45vh] flex-col items-center justify-center gap-3 text-gray-500 dark:text-ios-400"
+											data-testid="latest-videos-loading"
+											role="status"
+											aria-live="polite"
+										>
+											<Loader2 className="h-8 w-8 animate-spin" aria-hidden="true" />
+											<span>Loading videos…</span>
+										</div>
 									) : videos.length === 0 ? (
 										hasTemporaryChannels ? (
 											<div className="text-center py-12">
@@ -1819,21 +1721,7 @@ export const Dashboard = () => {
 											/>
 																) : (
 																	<div>
-																		<div className="mb-4">
-																			<BulkSelectionToolbar
-																				selectedVideoCount={selectedLatestVideos.length}
-																				selectedChannelCount={0}
-																				showFavoriteActions={false}
-																				addToFavoritesCount={0}
-																				removeFromFavoritesCount={0}
-																				onMarkWatched={markSelectedLatestWatched}
-																				onMarkUnwatched={markSelectedLatestUnwatched}
-																				onAddToFavorites={() => undefined}
-																				onRemoveFromFavorites={() => undefined}
-																				onClear={clearLatestSelection}
-																			/>
-																		</div>
-																		<p className="hidden sm:block text-sm text-gray-500 dark:text-ios-400 mb-4">
+															<p className="hidden sm:block text-sm text-gray-500 dark:text-ios-400 mb-4">
 											Showing {filteredVideos.length} recent videos
 										</p>
 										<VirtualizedVideoGrid
@@ -1841,15 +1729,7 @@ export const Dashboard = () => {
 																					columns={4}
 																				scrollStorageKey="latest-videos-scroll"
 																				channelThumbnails={channelThumbnails}
-																			selectable
-																			selectedVideoIds={selectedLatestVideoIds}
-																			onToggleSelect={(videoId) =>
-																					toggleSelectionId(
-																						setSelectedLatestVideoIds,
-																						videoId,
-																					)
-																				}
-																			/>
+																				/>
 										{visibleLatestVideos.length < filteredVideos.length && (
 											<div className="mt-4 flex justify-center pb-8 sm:hidden">
 												<button
@@ -1886,16 +1766,10 @@ export const Dashboard = () => {
 								) : (
 									<div className="space-y-8">
 						<BulkSelectionToolbar
-							selectedVideoCount={selectedFavoriteVideos.length}
 							selectedChannelCount={selectedFavoriteChannels.length}
 											groupOptions={subscriptionGroups}
 							addToFavoritesCount={0}
-											removeFromFavoritesCount={
-													selectedFavoriteVideos.length +
-													selectedFavoriteChannels.length
-											}
-											onMarkWatched={markSelectedFavoritesWatched}
-											onMarkUnwatched={markSelectedFavoritesUnwatched}
+										removeFromFavoritesCount={selectedFavoriteChannels.length}
 							onAddToFavorites={() => undefined}
 							onRemoveFromFavorites={removeSelectedFavorites}
 											onAssignChannelsToGroup={assignSelectedFavoriteChannelsToGroup}
@@ -2017,26 +1891,6 @@ export const Dashboard = () => {
 														<span className="text-sm text-gray-500 dark:text-ios-400">
 															{favoriteVideos.length}
 														</span>
-														<button
-															type={BTN}
-															aria-pressed={allFavoriteVideosSelected}
-															aria-label={
-																allFavoriteVideosSelected
-																	? "Deselect all visible videos"
-																	: "Select all visible videos"
-															}
-															onClick={() =>
-																toggleAllSelectionIds(
-																	setSelectedFavoriteVideoIds,
-																	favoriteVideos.map((video) => video.id),
-																)
-															}
-															className="rounded-lg border border-gray-200 px-2 py-1 text-xs font-medium text-gray-600 hover:bg-gray-100 dark:border-ios-700 dark:text-ios-300 dark:hover:bg-ios-800"
-														>
-															{allFavoriteVideosSelected
-																? "Deselect"
-																: "Select all"}
-														</button>
 													</div>
 											</div>
 											{favoriteVideos.length === 0 ? (
@@ -2049,15 +1903,7 @@ export const Dashboard = () => {
 																	columns={4}
 																	scrollStorageKey="favorite-videos-scroll"
 																	channelThumbnails={channelThumbnails}
-																	selectable
-																	selectedVideoIds={selectedFavoriteVideoIds}
-																	onToggleSelect={(videoId) =>
-														toggleSelectionId(
-																			setSelectedFavoriteVideoIds,
-																			videoId,
-																	)
-																	}
-																/>
+																				/>
 											)}
 										</section>
 									</div>

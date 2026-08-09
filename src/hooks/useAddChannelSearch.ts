@@ -27,9 +27,16 @@ import {
 import type { YouTubeChannel } from "../types/youtube";
 import { useAddChannelHandlers } from "./useAddChannelHandlers";
 
-const SEARCH_DEBOUNCE_MS = 150;
+const SEARCH_DEBOUNCE_MS = 500;
 const NETWORK_ERROR = "network" as const;
 const AUTH_ERROR = "auth" as const;
+const RATE_LIMIT_ERROR = "rate_limit" as const;
+const SERVER_ERROR = "server" as const;
+export type ChannelSearchError =
+	| typeof AUTH_ERROR
+	| typeof NETWORK_ERROR
+	| typeof RATE_LIMIT_ERROR
+	| typeof SERVER_ERROR;
 type ChannelIdentityInput = Pick<YouTubeChannel, "id" | "customUrl">;
 
 function buildSearchHeaders(): HeadersInit {
@@ -100,9 +107,7 @@ function useDirectChannelResolution() {
 function useKeywordChannelSearch() {
 	const [searchResults, setSearchResults] = useState<YouTubeChannel[]>([]);
 	const [isSearching, setIsSearching] = useState(false);
-	const [searchError, setSearchError] = useState<"auth" | "network" | null>(
-		null,
-	);
+	const [searchError, setSearchError] = useState<ChannelSearchError | null>(null);
 
 	const performSearch = useCallback(
 		async (query: string, signal: AbortSignal) => {
@@ -115,7 +120,13 @@ function useKeywordChannelSearch() {
 				);
 				if (!response.ok) {
 					setSearchResults([]);
-					setSearchError(response.status === 401 ? AUTH_ERROR : NETWORK_ERROR);
+					setSearchError(
+						response.status === 401
+							? AUTH_ERROR
+							: response.status === 429
+								? RATE_LIMIT_ERROR
+								: SERVER_ERROR,
+					);
 					return;
 				}
 				const data = await response.json();
@@ -366,7 +377,7 @@ export interface UseAddChannelSearchResult {
 	isValidating: boolean;
 	isSearching: boolean;
 	validationError: string;
-	searchError: "auth" | "network" | null;
+	searchError: ChannelSearchError | null;
 	addedChannelIds: Set<string>;
 	isChannelKnown: (channel: ChannelIdentityInput) => boolean;
 	isParsedInputKnown: boolean;

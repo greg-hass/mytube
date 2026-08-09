@@ -7,8 +7,6 @@ import {
 	type SearchScope,
 	type UnifiedSearchResults as SearchResults,
 } from "../lib/unified-search";
-import { useFavoriteVideos } from "../hooks/useFavoriteVideos";
-import { useStore } from "../store/useStore";
 import { BulkSelectionToolbar } from "./BulkSelectionToolbar";
 import { SubscriptionCard } from "./SubscriptionCard";
 import { VirtualizedVideoGrid } from "./VirtualizedVideoGrid";
@@ -72,13 +70,9 @@ function ChannelResults({
 function VideoResults({
 	videos,
 	channelThumbnails,
-	selectedVideoIds,
-	onToggleSelect,
 }: {
 	videos: YouTubeVideo[];
 	channelThumbnails: Map<string, string>;
-	selectedVideoIds: ReadonlySet<string>;
-	onToggleSelect: (videoId: string) => void;
 }) {
 	if (videos.length === 0) return null;
 
@@ -97,9 +91,6 @@ function VideoResults({
 				videos={videos}
 				columns={4}
 				channelThumbnails={channelThumbnails}
-				selectable
-				selectedVideoIds={selectedVideoIds}
-				onToggleSelect={onToggleSelect}
 			/>
 		</section>
 	);
@@ -113,14 +104,9 @@ export function UnifiedSearchResults({
 	onToggleChannelFavorite,
 	channelThumbnails,
 }: Props) {
-	const [selectedVideoIds, setSelectedVideoIds] = useState<Set<string>>(
-		() => new Set(),
-	);
 	const [selectedChannelIds, setSelectedChannelIds] = useState<Set<string>>(
 		() => new Set(),
 	);
-	const { favoriteVideoIds, toggleFavoriteVideo } = useFavoriteVideos();
-	const { markAsWatched, markAsUnwatched } = useStore();
 	const isFavoritesScope = scope === "favorites";
 	const channels = isFavoritesScope ? results.favoriteChannels : results.allChannels;
 	const videos = isFavoritesScope ? results.favoriteVideos : results.allVideos;
@@ -131,17 +117,15 @@ export function UnifiedSearchResults({
 	const selectedChannels = channels.filter((channel) =>
 		selectedChannelIds.has(channel.id),
 	);
-	const selectedVideos = videos.filter((video) => selectedVideoIds.has(video.id));
-	const addToFavoritesCount =
-		selectedChannels.filter((channel) => !channel.isFavorite).length +
-		selectedVideos.filter((video) => !favoriteVideoIds.has(video.id)).length;
-	const removeFromFavoritesCount =
-		selectedChannels.filter((channel) => channel.isFavorite).length +
-		selectedVideos.filter((video) => favoriteVideoIds.has(video.id)).length;
+	const addToFavoritesCount = selectedChannels.filter(
+		(channel) => !channel.isFavorite,
+	).length;
+	const removeFromFavoritesCount = selectedChannels.filter(
+		(channel) => channel.isFavorite,
+	).length;
 
 	const clearSelection = () => {
 		setSelectedChannelIds(new Set());
-		setSelectedVideoIds(new Set());
 	};
 
 	const toggleSelectedId = (
@@ -172,9 +156,6 @@ export function UnifiedSearchResults({
 				...selectedChannels
 					.filter((channel) => !channel.isFavorite)
 					.map((channel) => onToggleChannelFavorite?.(channel.id)),
-				...selectedVideos
-					.filter((video) => !favoriteVideoIds.has(video.id))
-					.map((video) => toggleFavoriteVideo(video)),
 			]);
 		});
 
@@ -184,23 +165,8 @@ export function UnifiedSearchResults({
 				...selectedChannels
 					.filter((channel) => channel.isFavorite)
 					.map((channel) => onToggleChannelFavorite?.(channel.id)),
-				...selectedVideos
-					.filter((video) => favoriteVideoIds.has(video.id))
-					.map((video) => toggleFavoriteVideo(video)),
 			]);
 		});
-
-	const handleMarkWatched = () => {
-		selectedVideos.forEach((video) => markAsWatched(video.id));
-		clearSelection();
-		toast.success("Marked selected videos as watched");
-	};
-
-	const handleMarkUnwatched = () => {
-		selectedVideos.forEach((video) => markAsUnwatched(video.id));
-		clearSelection();
-		toast.success("Marked selected videos as unwatched");
-	};
 
 	const handleScopeChange = (nextScope: SearchScope) => {
 		clearSelection();
@@ -269,12 +235,9 @@ export function UnifiedSearchResults({
 			) : (
 			<div className="space-y-10">
 				<BulkSelectionToolbar
-					selectedVideoCount={selectedVideos.length}
 					selectedChannelCount={selectedChannels.length}
 					addToFavoritesCount={addToFavoritesCount}
 					removeFromFavoritesCount={removeFromFavoritesCount}
-					onMarkWatched={handleMarkWatched}
-					onMarkUnwatched={handleMarkUnwatched}
 					onAddToFavorites={handleAddToFavorites}
 					onRemoveFromFavorites={handleRemoveFromFavorites}
 					onClear={clearSelection}
@@ -292,10 +255,6 @@ export function UnifiedSearchResults({
 						<VideoResults
 							videos={videos}
 							channelThumbnails={channelThumbnails}
-							selectedVideoIds={selectedVideoIds}
-							onToggleSelect={(videoId) =>
-								toggleSelectedId(setSelectedVideoIds, videoId)
-							}
 						/>
 					)}
 				</div>

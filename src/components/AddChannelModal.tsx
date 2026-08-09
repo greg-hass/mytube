@@ -14,7 +14,10 @@ import {
 	Loader2,
 } from "lucide-react";
 import { getDisplayText } from "../lib/youtube-parser";
-import { useAddChannelSearch } from "../hooks/useAddChannelSearch";
+import {
+	useAddChannelSearch,
+	type ChannelSearchError,
+} from "../hooks/useAddChannelSearch";
 import { useChannelSuggestions } from "../hooks/useChannelSuggestions";
 import { useModalFocus } from "../hooks/useModalFocus";
 import { formatSubscriberCount, formatVideoCount } from "./channelSearch";
@@ -160,7 +163,7 @@ function SearchStatusDisplay({
 	previewChannel: YouTubeChannel | null;
 	isChannelKnown: (channel: YouTubeChannel) => boolean;
 	channelInfo: YouTubeChannel | null;
-	searchError: "auth" | "network" | null;
+	searchError: ChannelSearchError | null;
 	input: string;
 	isLoading: boolean;
 	onSelectPreview: (channel: YouTubeChannel) => void;
@@ -290,7 +293,7 @@ function NoResultsBlock({
 	input: string;
 	hasResults: boolean;
 	channelInfo: YouTubeChannel | null;
-	searchError: "auth" | "network" | null;
+	searchError: ChannelSearchError | null;
 }) {
 	const showNoResults =
 		!isSearching &&
@@ -581,7 +584,7 @@ function SearchErrorStates({
 	searchError,
 	isSearching,
 }: {
-	searchError: "auth" | "network" | null;
+	searchError: ChannelSearchError | null;
 	isSearching: boolean;
 }) {
 	return (
@@ -614,6 +617,40 @@ function SearchErrorStates({
 					<CloudOff className="w-12 h-12 text-gray-300 dark:text-ios-700 mx-auto mb-3" />
 					<p className="text-sm text-gray-500 dark:text-ios-400">
 						Search unavailable — check your connection and try again.
+					</p>
+				</motion.div>
+			)}
+			{!isSearching && searchError === "rate_limit" && (
+				<motion.div
+					initial={{ opacity: 0 }}
+					animate={{ opacity: 1 }}
+					exit={{ opacity: 0 }}
+					className="text-center py-8"
+					data-testid="channel-search-rate-limit-error"
+				>
+					<RotateCw className="w-12 h-12 text-amber-400 dark:text-amber-500 mx-auto mb-3" />
+					<p className="text-sm font-medium text-gray-700 dark:text-ios-300">
+						Too many searches
+					</p>
+					<p className="text-xs text-gray-500 dark:text-ios-400 mt-1">
+						Wait a minute, then try again.
+					</p>
+				</motion.div>
+			)}
+			{!isSearching && searchError === "server" && (
+				<motion.div
+					initial={{ opacity: 0 }}
+					animate={{ opacity: 1 }}
+					exit={{ opacity: 0 }}
+					className="text-center py-8"
+					data-testid="channel-search-server-error"
+				>
+					<AlertCircle className="w-12 h-12 text-red-400 dark:text-red-500 mx-auto mb-3" />
+					<p className="text-sm font-medium text-gray-700 dark:text-ios-300">
+						Search temporarily unavailable
+					</p>
+					<p className="text-xs text-gray-500 dark:text-ios-400 mt-1">
+						The server could not complete the search. Try again shortly.
 					</p>
 				</motion.div>
 			)}

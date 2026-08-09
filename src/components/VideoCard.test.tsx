@@ -71,23 +71,14 @@ describe("VideoCard", () => {
 		).toBeTruthy();
 	});
 
-	it("supports selecting a video for bulk actions", () => {
-		const onToggleSelect = vi.fn();
-
+	it("does not cover the thumbnail with a selection control", () => {
 		render(
 			<MemoryRouter>
-				<VideoCard
-					video={video}
-					index={0}
-					selectable
-					onToggleSelect={onToggleSelect}
-				/>
+				<VideoCard video={video} index={0} />
 			</MemoryRouter>,
 		);
 
-		fireEvent.click(screen.getByRole("checkbox", { name: "Select A useful video" }));
-
-		expect(onToggleSelect).toHaveBeenCalledWith("video-1");
+		expect(screen.queryByRole("checkbox")).not.toBeInTheDocument();
 	});
 
 	it("uses max resolution YouTube thumbnails with fallback", () => {
@@ -630,9 +621,10 @@ describe("VideoCard", () => {
 				"video-1": { currentTime: 72, duration: 120 },
 			});
 		});
-		expect(
-			screen.getByTestId("video-progress-indicator").getAttribute("style"),
-		).toContain("60%");
+		expect(screen.getByTestId("video-progress-ring")).toHaveAttribute(
+			"stroke-dashoffset",
+			"40",
+		);
 		expect(screen.getByTestId("location")).toHaveTextContent("/");
 	});
 
@@ -791,7 +783,46 @@ describe("VideoCard", () => {
 		expect(mockStore.markAsWatched).toHaveBeenCalledWith("video-1");
 	});
 
-	it("shows a watched badge when the video is watched", () => {
+	it("turns partial orange progress into a green tick when marked watched", () => {
+		localStorage.setItem(
+			"video-playback-progress",
+			JSON.stringify({
+				"video-1": {
+					currentTime: 30,
+					duration: 120,
+					updatedAt: Date.now(),
+				},
+			}),
+		);
+
+		const view = render(
+			<MemoryRouter>
+				<VideoCard video={video} index={0} />
+			</MemoryRouter>,
+		);
+		expect(screen.getByTestId("video-progress-ring")).toHaveAttribute(
+			"stroke-dashoffset",
+			"75",
+		);
+
+		fireEvent.click(
+			screen.getByRole("button", { name: "Mark video as watched" }),
+		);
+		mockStore.watchedVideos = new Set(["video-1"]);
+		view.rerender(
+			<MemoryRouter>
+				<VideoCard video={video} index={0} />
+			</MemoryRouter>,
+		);
+
+		expect(localStorage.getItem("video-playback-progress")).toBe("{}");
+		expect(screen.queryByTestId("video-progress-indicator")).not.toBeInTheDocument();
+		expect(screen.getByTestId("video-watched-indicator")).toHaveClass(
+			"bg-emerald-600",
+		);
+	});
+
+	it("shows a green tick control without covering the thumbnail when watched", () => {
 		mockStore.watchedVideos = new Set(["video-1"]);
 
 		render(
@@ -800,7 +831,10 @@ describe("VideoCard", () => {
 			</MemoryRouter>,
 		);
 
-		expect(screen.getByText("Watched")).toBeInTheDocument();
+		expect(screen.queryByText("Watched")).not.toBeInTheDocument();
+		expect(screen.getByTestId("video-watched-indicator")).toHaveClass(
+			"bg-emerald-600",
+		);
 		expect(
 			screen.getByRole("button", { name: "Mark video as unwatched" }),
 		).toBeInTheDocument();
@@ -1085,9 +1119,14 @@ describe("VideoCard", () => {
 		);
 
 		expect(screen.queryByText("Watched")).not.toBeInTheDocument();
-		expect(screen.getByTestId("video-progress-indicator")).toHaveStyle({
-			background: "linear-gradient(to top, currentColor 25%, transparent 25%)",
-		});
+		expect(screen.getByTestId("video-progress-indicator")).toHaveClass(
+			"text-orange-500",
+			"-rotate-90",
+		);
+		expect(screen.getByTestId("video-progress-ring")).toHaveAttribute(
+			"stroke-dashoffset",
+			"75",
+		);
 		expect(screen.getByTestId("video-progress-badge")).toHaveTextContent("25%");
 	});
 

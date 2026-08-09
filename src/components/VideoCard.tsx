@@ -1,4 +1,4 @@
-import { Play, Clock, Heart, CheckCircle2, Trash2 } from "lucide-react";
+import { Play, Clock, Heart, Check, CheckCircle2, Trash2 } from "lucide-react";
 import type { YouTubeVideo } from "../types/youtube";
 import { useEffect, useRef, useState } from "react";
 import type { MouseEvent, PointerEvent } from "react";
@@ -33,9 +33,6 @@ interface Props {
 	onInlinePlaybackChange?: (videoId: string, isPlaying: boolean) => void;
 	onUnavailable?: (videoId: string) => void;
 	context?: "latest" | "queue";
-	selectable?: boolean;
-	selected?: boolean;
-	onToggleSelect?: (videoId: string) => void;
 }
 
 const SWIPE_TO_WATCHED_THRESHOLD = 80;
@@ -49,9 +46,6 @@ const StatefulVideoCard = ({
 	onInlinePlaybackChange,
 	onUnavailable,
 	context = "latest",
-	selectable = false,
-	selected = false,
-	onToggleSelect,
 }: Props) => {
 	const isLikelyShort =
 		video.isShort === true || isShortVideo({ ...video, isShort: undefined });
@@ -274,6 +268,8 @@ const StatefulVideoCard = ({
 
 		if (shouldMarkWatched) {
 			if (!isWatched) {
+				clearVideoProgress(video.id);
+				setProgressPercent(0);
 				markAsWatched(video.id);
 			}
 		} else if (shouldRemoveFromQueue) {
@@ -301,6 +297,8 @@ const StatefulVideoCard = ({
 		if (isWatched) {
 			markAsUnwatched(video.id);
 		} else {
+			clearVideoProgress(video.id);
+			setProgressPercent(0);
 			markAsWatched(video.id);
 		}
 	};
@@ -391,20 +389,6 @@ const StatefulVideoCard = ({
 			)}
 			{/* Thumbnail */}
 			<div className="relative aspect-video overflow-hidden bg-black">
-				{selectable && onToggleSelect && (
-					<label
-						className="absolute left-2 top-2 z-20 flex h-8 w-8 cursor-pointer items-center justify-center rounded-full bg-black/60 backdrop-blur-sm"
-						onClick={(event) => event.stopPropagation()}
-					>
-						<input
-							type="checkbox"
-							checked={selected}
-							onChange={() => onToggleSelect(video.id)}
-							aria-label={`Select ${video.title}`}
-							className="h-4 w-4 accent-red-600"
-						/>
-					</label>
-				)}
 				{isPlayingInline ? (
 					<div
 						ref={inlinePlayerContainerRef}
@@ -477,15 +461,6 @@ const StatefulVideoCard = ({
 					</div>
 				)}
 
-				{!isPlayingInline && showWatchedState && (
-					<div
-						className={`absolute left-2 ${isLive ? "top-10" : "top-2"} z-10 flex items-center gap-1.5 rounded bg-emerald-600 px-2 py-1 text-[11px] font-bold uppercase tracking-wide text-white shadow-sm`}
-					>
-						<CheckCircle2 className="h-3.5 w-3.5 fill-current" />
-						<span>Watched</span>
-					</div>
-				)}
-
 				{!isPlayingInline && video.duration != null && video.duration > 0 && (
 					<div className="absolute bottom-2 right-2 rounded-md bg-black/80 px-1.5 py-0.5 text-xs font-medium tabular-nums text-white shadow-sm">
 						{formatDuration(video.duration)}
@@ -546,16 +521,43 @@ const StatefulVideoCard = ({
 						}`}
 					>
 						{hasPlaybackProgress ? (
-							<span
+							<svg
 								data-testid="video-progress-indicator"
 								aria-hidden="true"
-								className="h-5 w-5 rounded-full border-2 border-current"
-								style={{
-									background: `linear-gradient(to top, currentColor ${progressPercent}%, transparent ${progressPercent}%)`,
-								}}
-							/>
+								viewBox="0 0 24 24"
+								className="h-5 w-5 -rotate-90 text-orange-500"
+							>
+								<circle
+									cx="12"
+									cy="12"
+									r="9"
+									fill="none"
+									stroke="currentColor"
+									strokeWidth="2.5"
+									className="opacity-20"
+								/>
+								<circle
+									data-testid="video-progress-ring"
+									cx="12"
+									cy="12"
+									r="9"
+									pathLength="100"
+									fill="none"
+									stroke="currentColor"
+									strokeWidth="2.5"
+									strokeLinecap="round"
+									strokeDasharray="100"
+									strokeDashoffset={100 - progressPercent}
+									className="transition-[stroke-dashoffset] duration-300"
+								/>
+							</svg>
 						) : showWatchedState ? (
-							<CheckCircle2 className="h-5 w-5 fill-current" />
+							<span
+								data-testid="video-watched-indicator"
+								className="flex h-5 w-5 items-center justify-center rounded-full bg-emerald-600 text-white"
+							>
+								<Check className="h-3.5 w-3.5" strokeWidth={3} />
+							</span>
 						) : (
 							<CheckCircle2 className="h-5 w-5" />
 						)}

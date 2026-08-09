@@ -89,6 +89,105 @@ test("mobile Add remains clickable and production omits query devtools", async (
 	await expect(page.getByText("Add Channel", { exact: true })).toBeVisible();
 });
 
+test("mobile Latest stays in a loading state until videos arrive", async ({
+	page,
+}) => {
+	await page.setViewportSize({ width: 390, height: 844 });
+	await page.route("**/api/**", async (route) => {
+		const path = new URL(route.request().url()).pathname;
+
+		if (path === "/api/sync") {
+			await route.fulfill({
+				status: 200,
+				contentType: "application/json",
+				headers: { etag: '"1"' },
+				body: JSON.stringify(syncSnapshot),
+			});
+			return;
+		}
+		if (path === "/api/videos/status") {
+			await route.fulfill({ json: statusSnapshot });
+			return;
+		}
+		if (path === "/api/videos") {
+			await new Promise((resolve) => setTimeout(resolve, 750));
+			await route.fulfill({ json: videosSnapshot });
+			return;
+		}
+
+		await route.fulfill({ status: 200, json: { success: true } });
+	});
+
+	await page.goto("/");
+
+	await expect(page.getByTestId("latest-videos-loading")).toBeVisible();
+	await expect(page.getByText("No videos found")).toHaveCount(0);
+	await expect(page.getByText("Browser regression video")).toBeVisible();
+});
+
+test("mobile channel search explains rate limiting without blaming connectivity", async ({
+	page,
+}) => {
+	await page.setViewportSize({ width: 390, height: 844 });
+	await mockHealthyApi(page);
+	await page.route("**/api/channel-search?*", async (route) => {
+		await route.fulfill({
+			status: 429,
+			contentType: "application/json",
+			body: JSON.stringify({ error: "Too many requests" }),
+		});
+	});
+	await page.goto("/");
+
+	await page
+		.getByTestId("floating-tab-bar")
+		.getByRole("button", { name: "Add", exact: true })
+		.click();
+	await page
+		.getByLabel("YouTube Channel")
+		.fill("Northern Ireland traveller");
+
+	await expect(page.getByText("Too many searches")).toBeVisible();
+	await expect(page.getByText("Wait a minute, then try again.")).toBeVisible();
+	await expect(page.getByText(/check your connection/i)).toHaveCount(0);
+});
+
+test("mobile video cards keep thumbnails clear and show clockwise watch progress", async ({
+	page,
+}) => {
+	await page.setViewportSize({ width: 390, height: 844 });
+	await page.addInitScript(() => {
+		localStorage.setItem(
+			"video-playback-progress",
+			JSON.stringify({
+				video123456: {
+					currentTime: 30,
+					duration: 120,
+					updatedAt: Date.now(),
+				},
+			}),
+		);
+	});
+	await mockHealthyApi(page);
+	await page.goto("/");
+
+	await expect(page.getByText("Browser regression video")).toBeVisible();
+	await expect(
+		page.getByRole("checkbox", { name: "Select Browser regression video" }),
+	).toHaveCount(0);
+	await expect(page.getByTestId("video-progress-indicator")).toHaveClass(
+		/orange/,
+	);
+	await expect(page.getByTestId("video-progress-ring")).toHaveAttribute(
+		"stroke-dashoffset",
+		"75",
+	);
+
+	await page.getByRole("button", { name: "Mark video as watched" }).click();
+	await expect(page.getByTestId("video-watched-indicator")).toBeVisible();
+	await expect(page.getByTestId("video-progress-indicator")).toHaveCount(0);
+});
+
 test("an invalid stored token shows recovery instead of an endless loader", async ({
 	page,
 }) => {
