@@ -78,6 +78,10 @@ export const Header = ({
 	const [showExportMenu, setShowExportMenu] = useState(false);
 	const [showMobileMenu, setShowMobileMenu] = useState(false);
 	const [showMobileSearchPanel, setShowMobileSearchPanel] = useState(false);
+	const handleOpenMobileSettings = () => {
+		setShowMobileMenu(false);
+		setIsSettingsOpen(true);
+	};
 	const handleExport = (format: "opml" | "json") => {
 		try {
 			if (format === "opml") {
@@ -216,7 +220,7 @@ export const Header = ({
 				viewMode={viewMode}
 				onViewModeChange={setViewMode}
 				onExport={handleExport}
-				onOpenSettings={() => setIsSettingsOpen(true)}
+				onOpenSettings={handleOpenMobileSettings}
 				onToggleTheme={toggleTheme}
 				theme={theme}
 				syncStatus={syncStatus}

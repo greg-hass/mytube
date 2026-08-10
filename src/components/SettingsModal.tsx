@@ -1,4 +1,3 @@
-import { motion, AnimatePresence } from "framer-motion";
 import { X } from "lucide-react";
 import { useEffect } from "react";
 import { useSettingsState } from "../hooks/useSettingsState";
@@ -23,17 +22,15 @@ export const SettingsModal = ({ isOpen, onClose }: SettingsModalProps) => {
 	const modalFocus = useModalFocus<HTMLDivElement>({ isOpen, onClose });
 
 	return (
-		<AnimatePresence>
-			{isOpen && (
-				<>
-					<SettingsBackdrop onClose={onClose} />
-					<SettingsModalContainer {...modalFocus}>
-						<SettingsHeader onClose={onClose} />
-						<SettingsBody state={state} />
-					</SettingsModalContainer>
-				</>
-			)}
-		</AnimatePresence>
+		isOpen && (
+			<>
+				<SettingsBackdrop onClose={onClose} />
+				<SettingsModalContainer {...modalFocus}>
+					<SettingsHeader onClose={onClose} />
+					<SettingsBody state={state} />
+				</SettingsModalContainer>
+			</>
+		)
 	);
 };
 
@@ -41,10 +38,8 @@ export const SettingsModal = ({ isOpen, onClose }: SettingsModalProps) => {
 
 function SettingsBackdrop({ onClose }: { onClose: () => void }) {
 	return (
-		<motion.div
-			initial={{ opacity: 0 }}
-			animate={{ opacity: 1 }}
-			exit={{ opacity: 0 }}
+		<div
+			data-testid="settings-backdrop"
 			onClick={onClose}
 			className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50"
 		/>
@@ -99,7 +94,7 @@ function SettingsModalContainer({
 	onKeyDown: React.KeyboardEventHandler<HTMLDivElement>;
 }) {
 	return (
-		<motion.div
+		<div
 			ref={modalRef}
 			role="dialog"
 			aria-modal="true"
@@ -107,13 +102,10 @@ function SettingsModalContainer({
 			tabIndex={-1}
 			onKeyDown={onKeyDown}
 			data-testid="settings-modal-container"
-			initial={{ opacity: 0, scale: 0.95, y: 20 }}
-			animate={{ opacity: 1, scale: 1, y: 0 }}
-			exit={{ opacity: 0, scale: 0.95, y: 20 }}
 			className="fixed inset-0 z-[100] md:inset-auto md:left-1/2 md:top-1/2 md:-translate-x-1/2 md:-translate-y-1/2 md:w-full md:max-w-xl bg-gray-50 dark:bg-ios-950 md:rounded-2xl shadow-2xl flex flex-col h-[100dvh] md:h-auto md:max-h-[85vh] overflow-hidden border border-gray-200 dark:border-ios-800 "
 		>
 			{children}
-		</motion.div>
+		</div>
 	);
 }
 
@@ -131,9 +123,12 @@ function SettingsHeader({ onClose }: { onClose: () => void }) {
 						<span className="text-gray-900 dark:text-ios-50">My</span>
 						<span className="text-red-600 dark:text-red-500">Tube</span>
 					</h2>
-			<p id="settings-modal-label" className="text-xs text-gray-500 dark:text-ios-400">
-				Settings
-			</p>
+					<p
+						id="settings-modal-label"
+						className="text-xs text-gray-500 dark:text-ios-400"
+					>
+						Settings
+					</p>
 				</div>
 			</div>
 			<button

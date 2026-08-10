@@ -50,7 +50,8 @@ vi.mock("../hooks/useSubscriptionStorage", () => ({
 }));
 
 vi.mock("./SettingsModal", () => ({
-	SettingsModal: () => null,
+	SettingsModal: ({ isOpen }: { isOpen: boolean }) =>
+		isOpen ? <div data-testid="settings-modal-mock" /> : null,
 }));
 
 vi.mock("./OPMLUpload", () => ({
@@ -247,6 +248,22 @@ describe("Header", () => {
 		expect(menuPanel.querySelector("aside")?.className).not.toContain(
 			"dark:bg-gradient",
 		);
+	});
+
+	it("closes the mobile menu before opening Settings", () => {
+		render(<Header />);
+
+		fireEvent.click(screen.getByTestId("mobile-menu-button"));
+		expect(screen.getByTestId("mobile-menu-panel")).toBeInTheDocument();
+
+		fireEvent.click(
+			within(screen.getByTestId("mobile-menu-panel")).getByRole("button", {
+				name: "Settings",
+			}),
+		);
+
+		expect(screen.queryByTestId("mobile-menu-panel")).not.toBeInTheDocument();
+		expect(screen.getByTestId("settings-modal-mock")).toBeInTheDocument();
 	});
 
 	it("shows feed health summary in the mobile menu when sync props are provided", () => {

@@ -101,7 +101,10 @@ const TabButton = ({
 			aria-pressed={isAction ? undefined : isActive}
 		>
 			{isActive && (
-				<div className="absolute inset-0 rounded-full bg-gray-100 shadow-sm dark:bg-ios-800/80" />
+				<div
+					data-testid="active-tab-pill"
+					className="absolute inset-x-2 inset-y-1 rounded-full bg-gray-100 shadow-sm dark:bg-ios-800/80"
+				/>
 			)}
 			<div className="relative flex items-center justify-center">
 				<Icon

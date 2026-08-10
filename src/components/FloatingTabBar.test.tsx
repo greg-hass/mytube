@@ -53,6 +53,26 @@ describe('FloatingTabBar', () => {
     expect(onAddChannel).toHaveBeenCalledTimes(1);
   });
 
+  it('keeps the selected pill inside the full tab touch target', () => {
+    render(
+      <FloatingTabBar
+        activeTab="subscriptions"
+        onTabChange={vi.fn()}
+        onAddChannel={vi.fn()}
+        subscriptionCount={4}
+        favoriteCount={3}
+      />,
+    );
+
+    const subsTab = screen.getByRole('button', { name: 'Subs' });
+    const activePill = screen.getByTestId('active-tab-pill');
+
+    expect(subsTab).toContainElement(activePill);
+    expect(activePill.className).toContain('inset-x-2');
+    expect(activePill.className).toContain('inset-y-1');
+    expect(subsTab.className).toContain('flex-1');
+  });
+
   it('does not show a badge on the Subs tab', () => {
     render(
       <FloatingTabBar

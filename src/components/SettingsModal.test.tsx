@@ -44,20 +44,6 @@ vi.mock("../lib/indexeddb", () => ({
 	clearAllCachedVideos: () => clearAllCachedVideos(),
 }));
 
-vi.mock("framer-motion", () => ({
-	AnimatePresence: ({ children }: { children: React.ReactNode }) => (
-		<>{children}</>
-	),
-	motion: {
-		div: ({ children, initial, animate, exit, ...props }: any) => {
-			void initial;
-			void animate;
-			void exit;
-			return <div {...props}>{children}</div>;
-		},
-	},
-}));
-
 vi.mock("../store/useStore", () => {
 	const state = {
 		apiKey: "key",
@@ -140,6 +126,20 @@ describe("SettingsModal", () => {
 		const headerLabel = screen.getByText("Settings");
 		const header = headerLabel.closest(".glass");
 		expect(header?.className).toContain("safe-top");
+	});
+
+	it("opens and closes without animating the full-screen layer", async () => {
+		const { rerender } = await renderModal();
+		const dialog = screen.getByTestId("settings-modal-container");
+		const backdrop = screen.getByTestId("settings-backdrop");
+
+		expect(dialog).not.toHaveAttribute("style");
+		expect(backdrop).not.toHaveAttribute("style");
+
+		rerender(<SettingsModal isOpen={false} onClose={onClose} />);
+
+		expect(screen.queryByTestId("settings-modal-container")).not.toBeInTheDocument();
+		expect(screen.queryByTestId("settings-backdrop")).not.toBeInTheDocument();
 	});
 
 	it("locks background scrolling and restores the previous position on close", async () => {
