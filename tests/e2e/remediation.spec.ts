@@ -146,6 +146,7 @@ test("mobile channel search explains rate limiting without blaming connectivity"
 	await page
 		.getByLabel("YouTube Channel")
 		.fill("Northern Ireland traveller");
+	await page.getByRole("button", { name: "Search channels" }).click();
 
 	await expect(page.getByText("Too many searches")).toBeVisible();
 	await expect(page.getByText("Wait a minute, then try again.")).toBeVisible();

@@ -86,6 +86,8 @@ function ModalBody({
 					input={search.input}
 					onChange={search.handleInputChange}
 					onKeyDown={search.handleInputKeyDown}
+					onSearch={search.handleSearchSubmit}
+					canSubmitSearch={search.canSubmitSearch}
 					inputRef={search.inputRef}
 					validationError={search.validationError}
 					channelInfo={search.channelInfo}
@@ -121,12 +123,14 @@ function SearchResultsBody({
 		<>
 			<SearchStatusDisplay
 				isSearching={search.isSearching}
+				isValidating={search.isValidating}
 				hasResults={search.hasResults}
 				visibleSearchResults={search.visibleSearchResults}
 				previewChannel={search.previewChannel}
 				isChannelKnown={search.isChannelKnown}
 				channelInfo={search.channelInfo}
 				searchError={search.searchError}
+				hasSubmittedSearch={search.hasSubmittedSearch}
 				input={search.input}
 				isLoading={search.isLoading}
 				onSelectPreview={search.handleSelectPreviewChannel}
@@ -145,12 +149,14 @@ function SearchResultsBody({
 
 function SearchStatusDisplay({
 	isSearching,
+	isValidating,
 	hasResults,
 	visibleSearchResults,
 	previewChannel,
 	isChannelKnown,
 	channelInfo,
 	searchError,
+	hasSubmittedSearch,
 	input,
 	isLoading,
 	onSelectPreview,
@@ -158,12 +164,14 @@ function SearchStatusDisplay({
 	onDismiss,
 }: {
 	isSearching: boolean;
+	isValidating: boolean;
 	hasResults: boolean;
 	visibleSearchResults: YouTubeChannel[];
 	previewChannel: YouTubeChannel | null;
 	isChannelKnown: (channel: YouTubeChannel) => boolean;
 	channelInfo: YouTubeChannel | null;
 	searchError: ChannelSearchError | null;
+	hasSubmittedSearch: boolean;
 	input: string;
 	isLoading: boolean;
 	onSelectPreview: (channel: YouTubeChannel) => void;
@@ -197,11 +205,12 @@ function SearchStatusDisplay({
 			</AnimatePresence>
 
 			<NoResultsBlock
-				isSearching={isSearching}
+				isSearching={isSearching || isValidating}
 				input={input}
 				hasResults={hasResults}
 				channelInfo={channelInfo}
 				searchError={searchError}
+				hasSubmittedSearch={hasSubmittedSearch}
 			/>
 
 			<SearchErrorStates searchError={searchError} isSearching={isSearching} />
@@ -288,19 +297,22 @@ function NoResultsBlock({
 	hasResults,
 	channelInfo,
 	searchError,
+	hasSubmittedSearch,
 }: {
 	isSearching: boolean;
 	input: string;
 	hasResults: boolean;
 	channelInfo: YouTubeChannel | null;
 	searchError: ChannelSearchError | null;
+	hasSubmittedSearch: boolean;
 }) {
 	const showNoResults =
 		!isSearching &&
 		input.trim().length >= 2 &&
 		!hasResults &&
 		!channelInfo &&
-		!searchError;
+		!searchError &&
+		hasSubmittedSearch;
 
 	return (
 		<AnimatePresence initial={false}>
@@ -351,6 +363,8 @@ function AddChannelSearchInput({
 	input,
 	onChange,
 	onKeyDown,
+	onSearch,
+	canSubmitSearch,
 	inputRef,
 	validationError,
 	channelInfo,
@@ -361,6 +375,8 @@ function AddChannelSearchInput({
 	input: string;
 	onChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
 	onKeyDown: (e: React.KeyboardEvent<HTMLInputElement>) => void;
+	onSearch: () => void;
+	canSubmitSearch: boolean;
 	inputRef: React.RefObject<HTMLInputElement | null>;
 	validationError: string;
 	channelInfo: YouTubeChannel | null;
@@ -376,36 +392,51 @@ function AddChannelSearchInput({
 			>
 				YouTube Channel
 			</label>
-			<div className="relative">
-				<input
-					ref={inputRef}
-					type="text"
-					id="channelInput"
-					value={input}
-					onChange={onChange}
-					onKeyDown={onKeyDown}
-					placeholder="Search keywords, @handle, channel ID, or URL"
-					className={`w-full pl-4 pr-10 py-2.5 rounded-lg bg-gray-50 dark:bg-ios-800/50 border transition-all outline-none text-sm ${
-						validationError
-							? "border-red-300 focus:border-red-500 focus:ring-2 focus:ring-red-500/20 dark:border-red-800"
-							: channelInfo
-								? "border-green-300 focus:border-green-500 focus:ring-2 focus:ring-green-500/20 dark:border-green-800"
-								: "border-gray-200 dark:border-ios-700 focus:border-red-500 focus:ring-2 focus:ring-red-500/20"
-					}`}
-					required
-				/>
-				<div className="absolute right-3 top-1/2 -translate-y-1/2">
-					{isValidating || isSearching ? (
-						<div className="w-4 h-4 border-2 border-red-600 border-t-transparent rounded-full animate-spin" />
-					) : channelInfo ? (
-						<Check className="w-5 h-5 text-green-500" />
-					) : validationError ? (
-						<AlertCircle className="w-5 h-5 text-red-500" />
-					) : (
-						<Search className="w-5 h-5 text-gray-400" />
-					)}
+			<div className="flex items-stretch gap-2">
+				<div className="relative min-w-0 flex-1">
+					<input
+						ref={inputRef}
+						type="text"
+						id="channelInput"
+						value={input}
+						onChange={onChange}
+						onKeyDown={onKeyDown}
+						placeholder="Search keywords, @handle, channel ID, or URL"
+						className={`w-full pl-4 pr-10 py-2.5 rounded-lg bg-gray-50 dark:bg-ios-800/50 border transition-all outline-none text-sm ${
+							validationError
+								? "border-red-300 focus:border-red-500 focus:ring-2 focus:ring-red-500/20 dark:border-red-800"
+								: channelInfo
+									? "border-green-300 focus:border-green-500 focus:ring-2 focus:ring-green-500/20 dark:border-green-800"
+									: "border-gray-200 dark:border-ios-700 focus:border-red-500 focus:ring-2 focus:ring-red-500/20"
+						}`}
+						required
+					/>
+					<div className="absolute right-3 top-1/2 -translate-y-1/2">
+						{isValidating || isSearching ? (
+							<div className="w-4 h-4 border-2 border-red-600 border-t-transparent rounded-full animate-spin" />
+						) : channelInfo ? (
+							<Check className="w-5 h-5 text-green-500" />
+						) : validationError ? (
+							<AlertCircle className="w-5 h-5 text-red-500" />
+						) : (
+							<Search className="w-5 h-5 text-gray-400" />
+						)}
+					</div>
 				</div>
+				<button
+					type="button"
+					aria-label="Search channels"
+					onClick={onSearch}
+					disabled={!canSubmitSearch}
+					className="inline-flex shrink-0 items-center justify-center gap-2 rounded-lg bg-red-600 px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-50"
+				>
+					<Search className="h-4 w-4" />
+					Search
+				</button>
 			</div>
+			<p className="text-xs text-gray-500 dark:text-ios-400">
+				Type your search, then press Enter or Search.
+			</p>
 
 			{validationError && (
 				<p className="text-sm text-red-600 dark:text-red-400">

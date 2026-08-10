@@ -27,7 +27,6 @@ import {
 import type { YouTubeChannel } from "../types/youtube";
 import { useAddChannelHandlers } from "./useAddChannelHandlers";
 
-const SEARCH_DEBOUNCE_MS = 500;
 const NETWORK_ERROR = "network" as const;
 const AUTH_ERROR = "auth" as const;
 const RATE_LIMIT_ERROR = "rate_limit" as const;
@@ -66,15 +65,20 @@ function useDirectChannelResolution() {
 	const [isValidating, setIsValidating] = useState(false);
 
 	const resolveDirect = useCallback(
-		async (parsed: ParsedChannelInput, value: string) => {
+		async (
+			parsed: ParsedChannelInput,
+			value: string,
+			signal: AbortSignal,
+		) => {
 			if (parsed.type === "invalid") return;
 
 			setIsValidating(true);
 			try {
 				const response = await fetch(
 					`/api/channel-search?q=${encodeURIComponent(value)}`,
-					{ headers: buildSearchHeaders() },
+					{ signal, headers: buildSearchHeaders() },
 				);
+				if (signal.aborted) return;
 				if (!response.ok) {
 					setChannelInfo(null);
 					return;
@@ -83,19 +87,27 @@ function useDirectChannelResolution() {
 				const results: YouTubeChannel[] = Array.isArray(data.results)
 					? data.results
 					: [];
-				setChannelInfo(results[0] ?? null);
+				if (!signal.aborted) {
+					setChannelInfo(results[0] ?? null);
+				}
 			} catch (error) {
-				console.error("Channel resolution failed:", error);
-				setChannelInfo(null);
-				throw error;
+				if ((error as Error).name !== "AbortError") {
+					console.error("Channel resolution failed:", error);
+					setChannelInfo(null);
+				}
 			} finally {
-				setIsValidating(false);
+				if (!signal.aborted) {
+					setIsValidating(false);
+				}
 			}
 		},
 		[],
 	);
 
-	const reset = useCallback(() => setChannelInfo(null), []);
+	const reset = useCallback(() => {
+		setChannelInfo(null);
+		setIsValidating(false);
+	}, []);
 
 	return { channelInfo, isValidating, resolveDirect, reset };
 }
@@ -228,77 +240,6 @@ function useAddChannelAction(
 
 // ─── Module-level helpers (pure composition) ──────────────────────────────
 
-type DirectResolver = ReturnType<typeof useDirectChannelResolution>;
-type KeywordSearcher = ReturnType<typeof useKeywordChannelSearch>;
-type ChannelAction = ReturnType<typeof useAddChannelAction>;
-
-/**
- * Apply validation rules for the current trimmed input: resolve direct
- * identifiers, set/clear errors, and reset stale sub-hook state. Preview
- * is also cleared on every keystroke by `handleInputChange`, so the
- * `setPreviewChannel(null)` call here is belt-and-braces for the
- * programmatic reset path.
- */
-function applyInputValidation(
-	trimmedInput: string,
-	keyword: KeywordSearcher,
-	direct: DirectResolver,
-	action: ChannelAction,
-	setPreviewChannel: (channel: YouTubeChannel | null) => void,
-): void {
-	if (!trimmedInput) {
-		direct.reset();
-		keyword.reset();
-		setPreviewChannel(null);
-		action.clearError();
-		return;
-	}
-
-	const parsed = parseChannelInput(trimmedInput);
-
-	if (parsed.type === "invalid") {
-		action.setError("Invalid YouTube channel format");
-		direct.reset();
-		setPreviewChannel(null);
-	} else if (isDirectIdentifier(parsed, trimmedInput)) {
-		action.clearError();
-		void direct.resolveDirect(parsed, trimmedInput);
-	} else {
-		action.clearError();
-		direct.reset();
-	}
-}
-
-/**
- * Returns true when the trimmed query should skip the debounced keyword
- * search — either too short or a direct identifier (handled by the
- * validation path).
- */
-function shouldSkipKeywordSearch(query: string): boolean {
-	if (query.length < 2) return true;
-	const parsed = parseChannelInput(query);
-	return isDirectIdentifier(parsed, query);
-}
-
-/**
- * Creates a debounced search controller. Returns a cleanup function
- * suitable for use as a useEffect return value — aborts the in-flight
- * fetch and clears the pending timer.
- */
-function createKeywordSearchController(
-	query: string,
-	keyword: KeywordSearcher,
-): () => void {
-	const controller = new AbortController();
-	const timeout = window.setTimeout(() => {
-		void keyword.performSearch(query, controller.signal);
-	}, SEARCH_DEBOUNCE_MS);
-	return () => {
-		controller.abort();
-		window.clearTimeout(timeout);
-	};
-}
-
 /**
  * Ranks and filters keyword search results: excludes already-subscribed
  * channels (unless just added in this session), scores by relevance,
@@ -385,8 +326,11 @@ export interface UseAddChannelSearchResult {
 	canAddParsedInput: boolean;
 	hasResults: boolean;
 	showFormats: boolean;
+	hasSubmittedSearch: boolean;
+	canSubmitSearch: boolean;
 	handleInputChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
 	handleInputKeyDown: (e: React.KeyboardEvent<HTMLInputElement>) => void;
+	handleSearchSubmit: () => void;
 	handleSelectPreviewChannel: (channel: YouTubeChannel) => void;
 	handleDismissPreview: () => void;
 	handleAddPreviewChannel: () => Promise<void>;
@@ -402,7 +346,9 @@ export function useAddChannelSearch(
 	const [previewChannel, setPreviewChannel] = useState<YouTubeChannel | null>(
 		null,
 	);
+	const [hasSubmittedSearch, setHasSubmittedSearch] = useState(false);
 	const inputRef = useRef<HTMLInputElement>(null);
+	const activeSearchControllerRef = useRef<AbortController | null>(null);
 
 	const trimmedInput = input.trim();
 	const parsedInput = useMemo<ParsedChannelInput | null>(
@@ -419,52 +365,43 @@ export function useAddChannelSearch(
 	const keyword = useKeywordChannelSearch();
 	const action = useAddChannelAction(existingIdentityKeys, onAdd);
 
-	// Latest-value refs for sub-hook wrapper objects. The effects below
-	// read functions (reset, performSearch, clearError, etc.) through
-	// these refs so they only re-run on primitive-value changes — not on
-	// every render where direct/keyword/action happen to be fresh wrapper
-	// objects around stable useCallbacks. (Wrapper objects are returned
-	// by sub-hooks as new references every render; depending on them
-	// directly causes an infinite re-render loop — see AddChannelModal
-	// test commit for detailed analysis.)
-	const directRef = useRef(direct);
-	useEffect(() => {
-		directRef.current = direct;
-	});
-	const actionRef = useRef(action);
-	useEffect(() => {
-		actionRef.current = action;
-	});
-	const keywordRef = useRef(keyword);
-	useEffect(() => {
-		keywordRef.current = keyword;
-	});
+	useEffect(
+		() => () => {
+			activeSearchControllerRef.current?.abort();
+		},
+		[],
+	);
 
-	// Side-effects driven by input changes (resolution + resets).
-	// parsedInput is derived via useMemo above — no setState needed here.
-	// Only the trimmed input matters as a dep; the hook objects are
-	// accessed via stable refs (their functions are useCallbacks with
-	// empty dep arrays).
-
-	useEffect(() => {
-		applyInputValidation(
-			trimmedInput,
-			keywordRef.current,
-			directRef.current,
-			actionRef.current,
-			setPreviewChannel,
-		);
-	}, [trimmedInput]);
-
-	// Debounced keyword search — only re-runs when input changes.
-	useEffect(() => {
+	const handleSearchSubmit = () => {
 		const query = input.trim();
-		if (shouldSkipKeywordSearch(query)) {
-			keywordRef.current.reset();
+		activeSearchControllerRef.current?.abort();
+		keyword.reset();
+		direct.reset();
+		setPreviewChannel(null);
+
+		if (query.length < 2) {
+			setHasSubmittedSearch(false);
+			action.setError("Enter at least 2 characters to search");
 			return;
 		}
-		return createKeywordSearchController(query, keywordRef.current);
-	}, [input]);
+
+		const parsed = parseChannelInput(query);
+		if (parsed.type === "invalid") {
+			setHasSubmittedSearch(false);
+			action.setError("Invalid YouTube channel format");
+			return;
+		}
+
+		action.clearError();
+		setHasSubmittedSearch(true);
+		const controller = new AbortController();
+		activeSearchControllerRef.current = controller;
+		if (isDirectIdentifier(parsed, query)) {
+			void direct.resolveDirect(parsed, query, controller.signal);
+			return;
+		}
+		void keyword.performSearch(query, controller.signal);
+	};
 
 	const visibleSearchResults = useMemo(
 		() =>
@@ -521,7 +458,18 @@ export function useAddChannelSearch(
 		actionSetError: action.setError,
 		actionMarkLoading: action.markLoading,
 		actionAddChannel: action.addChannel,
+		onSubmitSearch: handleSearchSubmit,
 	});
+
+	const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+		activeSearchControllerRef.current?.abort();
+		activeSearchControllerRef.current = null;
+		keyword.reset();
+		direct.reset();
+		action.clearError();
+		setHasSubmittedSearch(false);
+		handlers.handleInputChange(e);
+	};
 
 	const { hasResults, showFormats } = buildDisplayFlags(
 		visibleSearchResults.length,
@@ -554,8 +502,12 @@ export function useAddChannelSearch(
 		),
 		hasResults,
 		showFormats,
-		handleInputChange: handlers.handleInputChange,
+		hasSubmittedSearch,
+		canSubmitSearch:
+			trimmedInput.length >= 2 && !keyword.isSearching && !direct.isValidating,
+		handleInputChange,
 		handleInputKeyDown: handlers.handleInputKeyDown,
+		handleSearchSubmit,
 		handleSelectPreviewChannel: handlers.handleSelectPreviewChannel,
 		handleDismissPreview: handlers.handleDismissPreview,
 		handleAddPreviewChannel: handlers.handleAddPreviewChannel,

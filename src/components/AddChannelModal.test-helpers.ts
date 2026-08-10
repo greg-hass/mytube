@@ -89,6 +89,7 @@ export async function searchFor(query: string) {
 	fireEvent.change(screen.getByLabelText("YouTube Channel"), {
 		target: { value: query },
 	});
+	fireEvent.click(screen.getByRole("button", { name: "Search channels" }));
 	await waitFor(() => {
 		expect(fetch).toHaveBeenCalledWith(
 			`/api/channel-search?q=${encodeURIComponent(query)}`,
@@ -181,6 +182,7 @@ export function registerAddChannelModalTests() {
 	registerExistingSubscriptionFilterTest();
 	registerEquivalentSubscriptionFilterTest();
 	registerDirectDuplicateTest();
+	registerExplicitSearchSubmissionTest();
 	registerNaturalLanguageSearchTest();
 	registerAuthErrorTest();
 	registerRateLimitErrorTest();
@@ -291,11 +293,35 @@ function registerDirectDuplicateTest() {
 		fireEvent.change(screen.getByLabelText("YouTube Channel"), {
 			target: { value: "@linux_tech" },
 		});
+		fireEvent.click(screen.getByRole("button", { name: "Search channels" }));
 
 		const duplicateButton = await screen.findByRole("button", {
 			name: "Added",
 		});
 		expect(duplicateButton).toBeDisabled();
+	});
+}
+
+function registerExplicitSearchSubmissionTest() {
+	it("waits for Enter or Search instead of requesting while the user types", async () => {
+		renderModal();
+		const input = screen.getByLabelText("YouTube Channel");
+
+		for (const value of ["yo", "you", "yout", "youtu", "youtube"]) {
+			fireEvent.change(input, { target: { value } });
+		}
+
+		expect(fetch).not.toHaveBeenCalled();
+		expect(screen.queryByText(/no channels found/i)).not.toBeInTheDocument();
+
+		fireEvent.keyDown(input, { key: "Enter" });
+		await waitFor(() => {
+			expect(fetch).toHaveBeenCalledTimes(1);
+			expect(fetch).toHaveBeenCalledWith(
+				"/api/channel-search?q=youtube",
+				expect.objectContaining({ signal: expect.any(AbortSignal) }),
+			);
+		});
 	});
 }
 

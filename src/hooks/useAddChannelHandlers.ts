@@ -21,6 +21,7 @@ export interface UseAddChannelHandlersOptions {
 	actionSetError: (message: string) => void;
 	actionMarkLoading: (value: { loading: boolean }) => void;
 	actionAddChannel: (channel: YouTubeChannel) => Promise<void>;
+	onSubmitSearch: () => void;
 }
 
 export interface UseAddChannelHandlersResult {
@@ -47,6 +48,7 @@ export function useAddChannelHandlers(
 		actionSetError,
 		actionMarkLoading,
 		actionAddChannel,
+		onSubmitSearch,
 	} = options;
 
 	const createChannelFromParsedInput = useCallback(
@@ -112,10 +114,12 @@ export function useAddChannelHandlers(
 	const handleInputKeyDown = useCallback(
 		(e: React.KeyboardEvent<HTMLInputElement>) => {
 			if (e.key === "Enter") {
+				e.preventDefault();
+				onSubmitSearch();
 				inputRef.current?.blur();
 			}
 		},
-		[inputRef],
+		[inputRef, onSubmitSearch],
 	);
 
 	return {
