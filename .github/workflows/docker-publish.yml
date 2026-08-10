@@ -19,7 +19,7 @@ jobs:
 
     steps:
       - name: Checkout full history
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
           fetch-depth: 0
 
@@ -28,30 +28,41 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-  build:
+  quality:
     runs-on: ubuntu-latest
     permissions:
       contents: read
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Reject tracked environment files
         run: bash scripts/check-no-tracked-env.sh
 
       - name: Set up Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v7
         with:
           node-version: 20
           cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            server/package-lock.json
 
       - name: Install frontend dependencies
-        run: npm ci
+        run: npm ci --prefer-offline
+
+      - name: Restore server dependencies
+        id: server-dependencies
+        uses: actions/cache@v6
+        with:
+          path: server/node_modules
+          key: server-node-modules-${{ runner.os }}-${{ runner.arch }}-node20-${{ hashFiles('server/package.json', 'server/package-lock.json') }}
 
       - name: Install server dependencies
+        if: steps.server-dependencies.outputs.cache-hit != 'true'
         working-directory: server
-        run: npm ci
+        run: npm ci --prefer-offline
 
       - name: Type-check frontend
         run: npm run type-check
@@ -69,8 +80,33 @@ jobs:
         working-directory: server
         run: npm audit --omit=dev
 
+  browser:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: package-lock.json
+
+      - name: Install frontend dependencies
+        run: npm ci --prefer-offline
+
       - name: Build frontend
         run: npm run build
+
+      - name: Restore Playwright browser
+        uses: actions/cache@v6
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('package-lock.json') }}
 
       - name: Install Playwright browser
         run: npx playwright install --with-deps chromium
@@ -79,7 +115,7 @@ jobs:
         run: npm run test:e2e
 
   publish:
-    needs: [build, secrets]
+    needs: [browser, quality, secrets]
     runs-on: ubuntu-latest
     if: github.event_name != 'pull_request'
     permissions:
@@ -88,20 +124,20 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
+        uses: docker/setup-buildx-action@v4
 
       - name: Log in to the Container registry
-        uses: docker/login-action@v3
+        uses: docker/login-action@v4
         with:
           registry: ${{ env.REGISTRY }}
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Build and push image
-        uses: docker/build-push-action@v5
+        uses: docker/build-push-action@v7
         with:
           context: .
           platforms: linux/amd64
