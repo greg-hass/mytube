@@ -45,6 +45,23 @@ const statusSnapshot = {
 	lastUpdated: "2026-07-17T09:05:00.000Z",
 };
 
+const liveSnapshot = {
+	videos: [
+		{
+			...videosSnapshot.videos[0],
+			id: "live123456",
+			title: "Live browser regression stream",
+			isLive: true,
+			liveBroadcastContent: "live",
+		},
+	],
+	checkedAt: "2026-07-17T09:06:00.000Z",
+	totalChannels: 1,
+	checkedChannels: 1,
+	invalidChannels: 0,
+	failedChannels: [],
+};
+
 async function mockHealthyApi(page: Page) {
 	await page.route("**/api/**", async (route) => {
 		const request = route.request();
@@ -67,6 +84,10 @@ async function mockHealthyApi(page: Page) {
 			await route.fulfill({ json: videosSnapshot });
 			return;
 		}
+		if (path === "/api/videos/live") {
+			await route.fulfill({ json: liveSnapshot });
+			return;
+		}
 
 		await route.fulfill({ status: 200, json: { success: true } });
 	});
@@ -87,6 +108,37 @@ test("mobile Add remains clickable and production omits query devtools", async (
 
 	await tabBar.getByRole("button", { name: "Add", exact: true }).click();
 	await expect(page.getByText("Add Channel", { exact: true })).toBeVisible();
+});
+
+test("mobile Live view verifies streams without crowding the primary tab bar", async ({
+	page,
+}) => {
+	await page.setViewportSize({ width: 390, height: 844 });
+	await mockHealthyApi(page);
+	await page.goto("/");
+
+	await page.getByRole("button", { name: "Live", exact: true }).click();
+	await expect(page).toHaveURL(/\?tab=live$/);
+	await expect(
+		page.getByRole("heading", { name: "Live now", exact: true }),
+	).toBeVisible();
+	await expect(page.getByText("Live browser regression stream")).toBeVisible();
+	await expect(page.getByText("LIVE", { exact: true })).toBeVisible();
+
+	const tabBar = page.getByTestId("floating-tab-bar");
+	await expect(tabBar.getByRole("button")).toHaveCount(5);
+	await expect(
+		tabBar.getByRole("button", { name: "Add", exact: true }),
+	).toBeVisible();
+
+	const closeToast = page.getByRole("button", { name: "Close toast" });
+	if (await closeToast.count()) await closeToast.click();
+	const forcedRefresh = page.waitForRequest("**/api/videos/live?refresh=1");
+	await page.getByRole("button", { name: "Refresh", exact: true }).click();
+	await forcedRefresh;
+
+	await tabBar.getByRole("button", { name: "Latest", exact: true }).click();
+	await expect(page).toHaveURL(/\?tab=latest$/);
 });
 
 test("mobile Latest stays in a loading state until videos arrive", async ({

@@ -551,4 +551,56 @@ describe("createApp integration", () => {
 			.set("If-None-Match", first.headers.etag);
 		expect(cached.status).toBe(304);
 	});
+
+	it("GET /api/videos/live scans stored subscriptions and forwards explicit refreshes", async () => {
+		const scanSubscriptions = vi.fn().mockResolvedValue({
+			videos: [{ id: "live-1", isLive: true }],
+			checkedAt: "2026-08-11T10:00:00.000Z",
+			totalChannels: 1,
+			checkedChannels: 1,
+			invalidChannels: 0,
+			failedChannels: [],
+		});
+		const { app, appStore, databaseFile } = buildApp({
+			databaseFile: createTempDatabaseFile(),
+			config: { liveStreamService: { scanSubscriptions } },
+		});
+		await appStore.init({
+			defaultData: appStore.DEFAULT_DATA,
+			defaultVideoCache: appStore.DEFAULT_VIDEO_CACHE,
+		});
+		const subscriptions = [
+			{ id: "UCaaaaaaaaaaaaaaaaaaaaaa", title: "Live Channel" },
+			{
+				id: "UCbbbbbbbbbbbbbbbbbbbbbb",
+				title: "Muted Channel",
+				isMuted: true,
+			},
+		];
+		await appStore.writeData({
+			subscriptions,
+			settings: {},
+			watchedVideos: [],
+			redirects: {},
+		});
+
+		try {
+			const response = await authedRequest(app).get(
+				"/api/videos/live?refresh=1",
+			);
+			expect(response.status).toBe(200);
+			expect(response.headers["cache-control"]).toBe("private, no-store");
+			expect(response.body.videos).toEqual([{ id: "live-1", isLive: true }]);
+			expect(scanSubscriptions).toHaveBeenCalledWith(
+				[subscriptions[0]],
+				{ force: true },
+			);
+		} finally {
+			appStore.close();
+			await fs.promises.rm(path.dirname(databaseFile), {
+				recursive: true,
+				force: true,
+			});
+		}
+	});
 });

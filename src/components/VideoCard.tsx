@@ -1,4 +1,12 @@
-import { Play, Clock, Heart, Check, CheckCircle2, Trash2 } from "lucide-react";
+import {
+	Play,
+	Clock,
+	Heart,
+	Check,
+	CheckCircle2,
+	Trash2,
+	Radio,
+} from "lucide-react";
 import type { YouTubeVideo } from "../types/youtube";
 import { useEffect, useRef, useState } from "react";
 import type { MouseEvent, PointerEvent } from "react";
@@ -503,8 +511,19 @@ const StatefulVideoCard = ({
 
 				<div className="mt-auto flex items-center gap-2 pr-24 text-xs text-gray-500">
 					<div className="flex items-center gap-2">
-						<Clock className="w-3 h-3" />
-						<span>{formatDate(video.publishedAt)}</span>
+						{isLive ? (
+							<>
+								<Radio className="h-3 w-3 text-red-500" />
+								<span className="font-medium text-red-600 dark:text-red-400">
+									Live now
+								</span>
+							</>
+						) : (
+							<>
+								<Clock className="h-3 w-3" />
+								<span>{formatDate(video.publishedAt)}</span>
+							</>
+						)}
 					</div>
 					<button
 						type="button"

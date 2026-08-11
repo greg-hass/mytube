@@ -68,6 +68,8 @@ The frontend runs at `http://localhost:5173`.
 - Imports OPML and Google Takeout subscription exports
 - Finds channels by search without requiring the YouTube Data API
 - Refreshes feeds in the background and shows refresh health in the UI
+- Adds an on-demand Live now view that verifies active streams across your
+  unmuted subscriptions without spending YouTube Data API search quota
 - Tracks failed channels, retries manually, and backs off repeated RSS failures
 - Filters by duration, Shorts, live replays, premieres, muted keywords, and
   boosted keywords

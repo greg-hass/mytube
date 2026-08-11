@@ -67,6 +67,32 @@ let mockRSSVideosState: MockRSSVideosState = {
   },
 };
 
+let mockLiveVideosState = {
+  data: {
+    videos: [] as Array<{
+      id: string;
+      title: string;
+      description: string;
+      thumbnail: string;
+      channelId: string;
+      channelTitle: string;
+      publishedAt: string;
+      isLive: boolean;
+      liveBroadcastContent: 'live';
+    }>,
+    checkedAt: '2026-08-11T10:00:00.000Z',
+    totalChannels: 1,
+    checkedChannels: 1,
+    invalidChannels: 0,
+    failedChannels: [] as Array<{ id: string; title: string; reason: string }>,
+  },
+  isLoading: false,
+  isFetching: false,
+  isError: false,
+  error: null as Error | null,
+  forceRefresh: vi.fn(async () => undefined),
+};
+
 let mockSearchQuery = '';
 let mockWatchedVideos = new Set<string>();
 const mockMarkAsWatched = vi.fn((videoId: string) => {
@@ -317,6 +343,10 @@ vi.mock('../hooks/useRSSVideos', () => ({
   useRSSVideos: () => mockRSSVideosState,
 }));
 
+vi.mock('../hooks/useLiveVideos', () => ({
+  useLiveVideos: () => mockLiveVideosState,
+}));
+
 vi.mock('../hooks/useSubscriptionStorage', () => ({
   useSubscriptionStorage: () => ({
     allSubscriptions: mockAllSubscriptions,
@@ -367,6 +397,21 @@ describe('Dashboard', () => {
     mockSetSubscriptionGroup.mockClear();
     mockAddSubscriptions.mockClear();
     mockRestoreSubscriptions.mockClear();
+	mockLiveVideosState = {
+		data: {
+			videos: [],
+			checkedAt: '2026-08-11T10:00:00.000Z',
+			totalChannels: 1,
+			checkedChannels: 1,
+			invalidChannels: 0,
+			failedChannels: [],
+		},
+		isLoading: false,
+		isFetching: false,
+		isError: false,
+		error: null,
+		forceRefresh: vi.fn(async () => undefined),
+	};
     mockSubscriptionsInitialSyncing = false;
     mockSubscriptionsLoading = false;
     mockNeedsServerAuth = false;
@@ -593,6 +638,49 @@ describe('Dashboard', () => {
     await waitFor(() => {
       expect(screen.getByRole('button', { name: 'Browse Latest' })).toBeInTheDocument();
     });
+  });
+
+  it('opens a dedicated Live now view without changing the five-item tab bar', async () => {
+    mockLiveVideosState.data.videos = [{
+      id: 'live-video',
+      title: 'Live from Test Channel',
+      description: '',
+      thumbnail: '',
+      channelId: 'UC123',
+      channelTitle: 'Test Channel',
+      publishedAt: '2026-08-11T10:00:00.000Z',
+      isLive: true,
+      liveBroadcastContent: 'live',
+    }];
+
+    render(<Dashboard />);
+    fireEvent.click(screen.getByRole('button', { name: 'Live' }));
+
+    await waitFor(() => {
+      expect(screen.getByRole('heading', { name: 'Live now' })).toBeInTheDocument();
+      expect(screen.getByText('Live from Test Channel')).toBeInTheDocument();
+    });
+    expect(window.location.search).toBe('?tab=live');
+    expect(screen.getByRole('button', { name: 'Latest' })).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getAllByTestId('floating-tab-bar-inner')).toHaveLength(1);
+  });
+
+  it('reports incomplete live scans instead of presenting them as definitive', async () => {
+    mockLiveVideosState.data = {
+      ...mockLiveVideosState.data,
+      checkedChannels: 0,
+      failedChannels: [{
+        id: 'UC123',
+        title: 'Test Channel',
+        reason: 'Live-status lookup timed out',
+      }],
+    };
+
+    render(<Dashboard />);
+    fireEvent.click(screen.getByRole('button', { name: 'Live' }));
+
+    expect(await screen.findByText(/this result may be incomplete/i)).toBeInTheDocument();
+    expect(screen.getByText('No subscriptions are live')).toBeInTheDocument();
   });
 
   it('explains when filters hide the entire Latest feed and can clear them', () => {

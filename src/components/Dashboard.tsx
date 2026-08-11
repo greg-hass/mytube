@@ -17,6 +17,9 @@ import {
 	Image,
 	Filter,
 	X,
+	Radio,
+	RefreshCw,
+	AlertTriangle,
 } from "lucide-react";
 import { toast } from "sonner";
 import { FirstRunOnboarding } from "./FirstRunOnboarding";
@@ -42,6 +45,7 @@ import { useModalFocus } from "../hooks/useModalFocus";
 import { KeyboardShortcutsHelp } from "./KeyboardShortcutsHelp";
 import { PullToRefreshIndicator } from "./PullToRefreshIndicator";
 import { useRSSVideos } from "../hooks/useRSSVideos";
+import { useLiveVideos } from "../hooks/useLiveVideos";
 import { useSubscriptionStorage } from "../hooks/useSubscriptionStorage";
 import { useFavoriteVideos } from "../hooks/useFavoriteVideos";
 import { usePullToRefresh } from "../hooks/usePullToRefresh";
@@ -86,7 +90,7 @@ import {
 } from "../lib/unified-search";
 import type { YouTubeChannel } from "../types/youtube";
 
-type Tab = "subscriptions" | "latest" | "activity" | "favorites";
+type Tab = "subscriptions" | "latest" | "live" | "activity" | "favorites";
 type FavoriteSection = "channels" | "videos";
 type SubscriptionGroupManagerMode = "list" | "rename" | "delete";
 const TAB_LATEST: Tab = "latest";
@@ -94,6 +98,7 @@ const BTN = "button" as const;
 const DASHBOARD_TABS: Tab[] = [
 	"subscriptions",
 	TAB_LATEST,
+	"live",
 	"activity",
 	"favorites",
 ];
@@ -384,6 +389,14 @@ export const Dashboard = () => {
 		retryChannel,
 		retryingChannelId,
 	} = useRSSVideos({ enabled: !needsServerAuth });
+	const {
+		data: liveLookup,
+		isLoading: liveVideosLoading,
+		isFetching: liveVideosFetching,
+		isError: liveVideosFailed,
+		error: liveVideosError,
+		forceRefresh: refreshLiveVideos,
+	} = useLiveVideos(activeTab === "live" && !needsServerAuth);
 	const hasNoSubscriptions = allSubscriptions.length === 0;
 	const { pullDistance, isPullRefreshing } = usePullToRefresh({
 		isRefreshActive: isRefreshing,
@@ -1514,9 +1527,17 @@ export const Dashboard = () => {
 										</div>
 
 									<div
-											data-testid="latest-toolbar-actions"
+										data-testid="latest-toolbar-actions"
 											className="ml-auto flex shrink-0 flex-nowrap items-center gap-1 sm:gap-2"
 										>
+											<button
+												type={BTN}
+												onClick={() => changeTab("live")}
+												className="inline-flex h-10 items-center justify-center gap-1.5 rounded-lg border border-red-200 bg-red-50 px-3 text-sm font-semibold text-red-700 transition-colors hover:bg-red-100 dark:border-red-900/60 dark:bg-red-950/30 dark:text-red-300 dark:hover:bg-red-950/50"
+											>
+												<Radio className="h-4 w-4" aria-hidden="true" />
+												<span>Live</span>
+											</button>
 											<button
 												type={BTN}
 												aria-expanded={isFeedFiltersOpen}
@@ -1601,6 +1622,41 @@ export const Dashboard = () => {
 									/>
 								)}
 							</>
+						)}
+
+						{!searchQuery.trim() && activeTab === "live" && (
+							<div
+								data-testid="live-toolbar"
+								className="flex items-center justify-between gap-3"
+							>
+								<div className="min-w-0">
+									<h1 className="flex items-center gap-2 text-lg font-semibold text-gray-900 dark:text-ios-100">
+										<span className="h-2.5 w-2.5 rounded-full bg-red-600 shadow-[0_0_0_4px_rgba(220,38,38,0.12)]" />
+										Live now
+									</h1>
+									<p className="mt-0.5 truncate text-xs text-gray-500 dark:text-ios-400">
+										From your subscriptions
+									</p>
+								</div>
+								<button
+									type={BTN}
+									disabled={liveVideosFetching}
+									onClick={() => {
+										void refreshLiveVideos().catch((error: unknown) => {
+											toast.error("Could not refresh live status", {
+												description: getErrorDescription(error),
+											});
+										});
+									}}
+									className="inline-flex h-10 items-center justify-center gap-2 rounded-lg border border-gray-200 bg-white px-3 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-50 disabled:cursor-wait disabled:opacity-60 dark:border-ios-800 dark:bg-ios-900 dark:text-ios-200 dark:hover:bg-ios-800"
+								>
+									<RefreshCw
+										className={`h-4 w-4 ${liveVideosFetching ? "animate-spin" : ""}`}
+										aria-hidden="true"
+									/>
+									Refresh
+								</button>
+							</div>
 						)}
 					</div>
 
@@ -1748,6 +1804,82 @@ export const Dashboard = () => {
 									</div>
 								)}
 							</div>
+							) : activeTab === "live" ? (
+								<div className="px-4">
+									{liveVideosLoading ? (
+										<div
+											className="flex min-h-[45vh] flex-col items-center justify-center gap-3 text-center text-gray-500 dark:text-ios-400"
+											role="status"
+											aria-live="polite"
+										>
+											<Loader2 className="h-8 w-8 animate-spin text-red-600" aria-hidden="true" />
+											<span className="font-medium">Checking your subscriptions…</span>
+											<span className="max-w-sm text-xs">
+												The first scan can take a moment. Recent results are cached for one minute.
+											</span>
+										</div>
+									) : liveVideosFailed ? (
+										<EmptyState
+											icon={AlertTriangle}
+											iconName="live-error"
+											title="Could not check live streams"
+											detail={getErrorDescription(liveVideosError)}
+											action={
+												<EmptyStateAction onClick={() => void refreshLiveVideos()}>
+													Try again
+												</EmptyStateAction>
+											}
+										/>
+									) : liveLookup.videos.length === 0 ? (
+										<div>
+											{liveLookup.failedChannels.length > 0 && (
+												<div
+													className="mb-4 flex items-start gap-2 rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900 dark:border-amber-900/60 dark:bg-amber-950/30 dark:text-amber-200"
+													role="status"
+												>
+													<AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
+													<span>
+														{liveLookup.failedChannels.length} channel{liveLookup.failedChannels.length === 1 ? "" : "s"} could not be checked, so this result may be incomplete.
+													</span>
+												</div>
+											)}
+											<EmptyState
+												icon={Radio}
+												iconName="live"
+												title="No subscriptions are live"
+												detail={`Checked ${liveLookup.checkedChannels} of ${liveLookup.totalChannels} subscriptions${liveLookup.invalidChannels ? ` · ${liveLookup.invalidChannels} unresolved` : ""}.`}
+												action={
+													<EmptyStateAction onClick={() => changeTab(TAB_LATEST)}>
+														View Latest
+													</EmptyStateAction>
+												}
+											/>
+										</div>
+									) : (
+										<div>
+											{liveLookup.failedChannels.length > 0 && (
+												<div
+													className="mb-4 flex items-start gap-2 rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900 dark:border-amber-900/60 dark:bg-amber-950/30 dark:text-amber-200"
+													role="status"
+												>
+													<AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
+													<span>
+														Showing confirmed live streams. {liveLookup.failedChannels.length} channel{liveLookup.failedChannels.length === 1 ? " was" : "s were"} unavailable during this scan.
+													</span>
+												</div>
+											)}
+											<p className="mb-4 text-sm text-gray-500 dark:text-ios-400">
+												{liveLookup.videos.length} subscription{liveLookup.videos.length === 1 ? " is" : "s are"} live now
+											</p>
+											<VirtualizedVideoGrid
+												videos={liveLookup.videos}
+												columns={4}
+												scrollStorageKey="live-videos-scroll"
+												channelThumbnails={channelThumbnails}
+											/>
+										</div>
+									)}
+								</div>
 							) : activeTab === "favorites" ? (
 							<div className="px-4">
 								{favoriteChannels.length === 0 &&
@@ -1979,7 +2111,7 @@ export const Dashboard = () => {
 					</>
 
 					<FloatingTabBar
-						activeTab={activeTab}
+						activeTab={activeTab === "live" ? TAB_LATEST : activeTab}
 						onTabChange={(tab) => {
 							if (tab === TAB_LATEST) {
 								handleLatestTabClick();

@@ -1172,6 +1172,7 @@ describe("VideoCard", () => {
 		);
 
 		expect(screen.getByText("LIVE")).toBeInTheDocument();
+		expect(screen.getByText("Live now")).toBeInTheDocument();
 	});
 
 	it("does not show the LIVE overlay for livestream replays", () => {

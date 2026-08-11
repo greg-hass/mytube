@@ -15,6 +15,7 @@ const {
 const { getChannelSuggestions } = require("./channel-suggestions");
 const { normalizeVideoCacheThumbnails } = require("./video-thumbnails");
 const { extractYouTubeChannelMetadata } = require("./youtube-html-parser");
+const { createLiveStreamService } = require("./live-stream-service");
 const {
 	createApiKeyAuthMiddleware,
 	createBucketRateLimiter,
@@ -50,6 +51,8 @@ const ACTIVE_CHANNELS_DEFAULT_LIMIT = 5;
 const ACTIVE_CHANNELS_MAX_LIMIT = 50;
 const CHANNEL_SEARCH_RATE_WINDOW_MS = 60 * 1000;
 const CHANNEL_SEARCH_RATE_MAX = 20;
+const LIVE_LOOKUP_RATE_WINDOW_MS = 60 * 1000;
+const LIVE_LOOKUP_RATE_MAX = 15;
 
 function asyncHandler(handler, errorMessage) {
 	return async (req, res, next) => {
@@ -221,6 +224,13 @@ function createApp({
 		max: CHANNEL_SEARCH_RATE_MAX,
 		methods: ["GET"],
 	});
+	const liveLookupRateLimiter = createRateLimitMiddleware({
+		windowMs: LIVE_LOOKUP_RATE_WINDOW_MS,
+		max: LIVE_LOOKUP_RATE_MAX,
+		methods: ["GET"],
+	});
+	const liveStreamService =
+		config.liveStreamService || createLiveStreamService(config.liveStreamOptions);
 
 	app.use(cors(createCorsOptions({ allowedOrigins })));
 	app.use(createOriginGuardMiddleware({ allowedOrigins }));
@@ -508,6 +518,22 @@ function createApp({
 				searchBackends: getSearchBackendStatus(),
 			});
 		}, "Failed to read aggregation status"),
+	);
+
+	app.get(
+		"/api/videos/live",
+		liveLookupRateLimiter,
+		asyncHandler(async (req, res) => {
+			const data = await appStore.readData(defaultData);
+			const subscriptions = Array.isArray(data.subscriptions)
+				? data.subscriptions.filter((subscription) => !subscription.isMuted)
+				: [];
+			const result = await liveStreamService.scanSubscriptions(subscriptions, {
+				force: req.query.refresh === "1",
+			});
+			res.setHeader("Cache-Control", "private, no-store");
+			res.json(result);
+		}, "Failed to check live subscriptions"),
 	);
 
 	app.post(
