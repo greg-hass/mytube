@@ -38,6 +38,12 @@ export type ChannelSearchError =
 	| typeof SERVER_ERROR;
 type ChannelIdentityInput = Pick<YouTubeChannel, "id" | "customUrl">;
 
+function getSearchErrorForStatus(status: number): ChannelSearchError {
+	if (status === 401) return AUTH_ERROR;
+	if (status === 429) return RATE_LIMIT_ERROR;
+	return SERVER_ERROR;
+}
+
 function buildSearchHeaders(): HeadersInit {
 	const apiKey = useStore.getState().apiKey.trim();
 	return apiKey ? { "X-YouTube-Api-Key": apiKey } : {};
@@ -63,6 +69,7 @@ function isDirectIdentifier(
 function useDirectChannelResolution() {
 	const [channelInfo, setChannelInfo] = useState<YouTubeChannel | null>(null);
 	const [isValidating, setIsValidating] = useState(false);
+	const [searchError, setSearchError] = useState<ChannelSearchError | null>(null);
 
 	const resolveDirect = useCallback(
 		async (
@@ -72,6 +79,7 @@ function useDirectChannelResolution() {
 		) => {
 			if (parsed.type === "invalid") return;
 
+			setSearchError(null);
 			setIsValidating(true);
 			try {
 				const response = await fetch(
@@ -81,6 +89,7 @@ function useDirectChannelResolution() {
 				if (signal.aborted) return;
 				if (!response.ok) {
 					setChannelInfo(null);
+					setSearchError(getSearchErrorForStatus(response.status));
 					return;
 				}
 				const data = await response.json();
@@ -94,6 +103,7 @@ function useDirectChannelResolution() {
 				if ((error as Error).name !== "AbortError") {
 					console.error("Channel resolution failed:", error);
 					setChannelInfo(null);
+					setSearchError(NETWORK_ERROR);
 				}
 			} finally {
 				if (!signal.aborted) {
@@ -106,10 +116,11 @@ function useDirectChannelResolution() {
 
 	const reset = useCallback(() => {
 		setChannelInfo(null);
+		setSearchError(null);
 		setIsValidating(false);
 	}, []);
 
-	return { channelInfo, isValidating, resolveDirect, reset };
+	return { channelInfo, isValidating, searchError, resolveDirect, reset };
 }
 
 /**
@@ -130,18 +141,14 @@ function useKeywordChannelSearch() {
 					`/api/channel-search?q=${encodeURIComponent(query)}`,
 					{ signal, headers: buildSearchHeaders() },
 				);
+				if (signal.aborted) return;
 				if (!response.ok) {
 					setSearchResults([]);
-					setSearchError(
-						response.status === 401
-							? AUTH_ERROR
-							: response.status === 429
-								? RATE_LIMIT_ERROR
-								: SERVER_ERROR,
-					);
+					setSearchError(getSearchErrorForStatus(response.status));
 					return;
 				}
 				const data = await response.json();
+				if (signal.aborted) return;
 				const results = Array.isArray(data.results) ? data.results : [];
 				setSearchResults(dedupeChannels(results));
 			} catch (error) {
@@ -149,7 +156,6 @@ function useKeywordChannelSearch() {
 					console.error("Channel keyword search failed:", error);
 					setSearchResults([]);
 					setSearchError(NETWORK_ERROR);
-					throw error;
 				}
 			} finally {
 				if (!signal.aborted) {
@@ -192,7 +198,7 @@ function useAddChannelAction(
 				hasChannelIdentity(channel, existingIdentityKeys) ||
 				hasChannelIdentity(channel, addedIdentityKeys)
 			)
-				return;
+				return false;
 
 			setValidationError("");
 			setIsLoading(true);
@@ -203,10 +209,11 @@ function useAddChannelAction(
 					(keys) => new Set([...keys, ...getChannelIdentityKeys(channel)]),
 				);
 				setValidationError("");
+				return true;
 			} catch (error) {
 				console.error("Failed to add channel:", error);
 				setValidationError("Failed to add channel. Please try again.");
-				throw error;
+				return false;
 			} finally {
 				setIsLoading(false);
 			}
@@ -490,7 +497,7 @@ export function useAddChannelSearch(
 		isValidating: direct.isValidating,
 		isSearching: keyword.isSearching,
 		validationError: action.validationError,
-		searchError: keyword.searchError,
+		searchError: direct.searchError ?? keyword.searchError,
 		addedChannelIds: action.addedChannelIds,
 		isChannelKnown,
 		isParsedInputKnown,

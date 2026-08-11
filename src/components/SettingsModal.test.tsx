@@ -289,6 +289,24 @@ describe("SettingsModal", () => {
 		).toBeInTheDocument();
 	});
 
+	it("contains duplicate-removal failures and leaves the review available", async () => {
+		subscriptionMocks.removeSubscription.mockRejectedValueOnce(
+			new Error("Server unavailable"),
+		);
+		await renderModal();
+		fireEvent.click(
+			screen.getByRole("button", { name: "Review removal for One" }),
+		);
+		fireEvent.click(
+			screen.getByRole("button", { name: "Confirm remove One" }),
+		);
+
+		expect(await screen.findByText("Server unavailable")).toBeInTheDocument();
+		expect(
+			screen.getByRole("button", { name: "Confirm remove One" }),
+		).toBeEnabled();
+	});
+
 	it("explains that backups include all user-owned app data and shows storage health", async () => {
 		await renderModal();
 		expect(

@@ -75,6 +75,10 @@ function install429FetchMock() {
 	);
 }
 
+function installNetworkFailureFetchMock() {
+	vi.stubGlobal("fetch", vi.fn(() => Promise.reject(new TypeError("offline"))));
+}
+
 // ── Workflow helpers ──────────────────────────────────────────────────────
 
 export function assertInitialState(container: HTMLElement) {
@@ -186,6 +190,9 @@ export function registerAddChannelModalTests() {
 	registerNaturalLanguageSearchTest();
 	registerAuthErrorTest();
 	registerRateLimitErrorTest();
+	registerDirectRateLimitErrorTest();
+	registerNetworkErrorTest();
+	registerAddFailureTest();
 	registerFormatsDisclosureTest();
 	registerModalFocusTest();
 }
@@ -365,6 +372,52 @@ function registerRateLimitErrorTest() {
 		expect(screen.getByText("Wait a minute, then try again.")).toBeInTheDocument();
 		expect(screen.queryByText(/check your connection/i)).not.toBeInTheDocument();
 		expect(screen.queryByText(/no channels found/i)).not.toBeInTheDocument();
+	});
+}
+
+function registerDirectRateLimitErrorTest() {
+	it("surfaces throttling for direct handles instead of claiming there are no results", async () => {
+		install429FetchMock();
+		renderModal();
+		await searchFor("@northernirelandtraveller");
+
+		expect(await screen.findByText("Too many searches")).toBeInTheDocument();
+		expect(screen.queryByText(/no channels found/i)).not.toBeInTheDocument();
+	});
+}
+
+function registerNetworkErrorTest() {
+	it("keeps network failures contained and shows a retryable search error", async () => {
+		const consoleError = vi.spyOn(console, "error").mockImplementation(() => {});
+		installNetworkFailureFetchMock();
+		renderModal();
+		await searchFor("woodworking channels");
+
+		expect(
+			await screen.findByText(/search unavailable.*check your connection/i),
+		).toBeInTheDocument();
+		expect(screen.queryByText(/no channels found/i)).not.toBeInTheDocument();
+		expect(consoleError).toHaveBeenCalledOnce();
+		consoleError.mockRestore();
+	});
+}
+
+function registerAddFailureTest() {
+	it("keeps the preview open and reports an add failure without escaping the click handler", async () => {
+		const consoleError = vi.spyOn(console, "error").mockImplementation(() => {});
+		const onAdd = vi.fn(() => Promise.reject(new Error("Server unavailable")));
+		renderModal({ onAdd });
+		await searchFor("linux tech");
+		clickPreview("linux tech channel");
+
+		fireEvent.click(screen.getByRole("button", { name: "Add" }));
+
+		expect(
+			await screen.findByText("Failed to add channel. Please try again."),
+		).toBeInTheDocument();
+		expect(screen.getByText("Channel Preview")).toBeInTheDocument();
+		expect(consoleError).toHaveBeenCalledOnce();
+		consoleError.mockRestore();
 	});
 }
 

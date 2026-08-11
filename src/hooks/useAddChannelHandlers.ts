@@ -20,7 +20,7 @@ export interface UseAddChannelHandlersOptions {
 	actionClearError: () => void;
 	actionSetError: (message: string) => void;
 	actionMarkLoading: (value: { loading: boolean }) => void;
-	actionAddChannel: (channel: YouTubeChannel) => Promise<void>;
+	actionAddChannel: (channel: YouTubeChannel) => Promise<boolean>;
 	onSubmitSearch: () => void;
 }
 
@@ -75,7 +75,6 @@ export function useAddChannelHandlers(
 					: "Failed to add channel. Please try again.",
 			);
 			actionMarkLoading({ loading: false });
-			throw error;
 		}
 	}, [createChannelFromParsedInput, actionAddChannel, actionSetError, actionMarkLoading]);
 
@@ -107,8 +106,9 @@ export function useAddChannelHandlers(
 		const channelToAdd = previewChannel ?? directChannelInfo;
 		if (!channelToAdd) return;
 
-		await actionAddChannel(channelToAdd);
-		setPreviewChannel(null);
+		if (await actionAddChannel(channelToAdd)) {
+			setPreviewChannel(null);
+		}
 	}, [previewChannel, directChannelInfo, actionAddChannel, setPreviewChannel]);
 
 	const handleInputKeyDown = useCallback(
