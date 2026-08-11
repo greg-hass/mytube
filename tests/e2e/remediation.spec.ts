@@ -205,7 +205,7 @@ test("mobile channel search explains rate limiting without blaming connectivity"
 	await expect(page.getByText(/check your connection/i)).toHaveCount(0);
 });
 
-test("mobile video cards keep thumbnails clear and show clockwise watch progress", async ({
+test("mobile video cards keep thumbnails clear, expose PiP handoff, and show watch progress", async ({
 	page,
 }) => {
 	await page.setViewportSize({ width: 390, height: 844 });
@@ -234,6 +234,28 @@ test("mobile video cards keep thumbnails clear and show clockwise watch progress
 	await expect(page.getByTestId("video-progress-ring")).toHaveAttribute(
 		"stroke-dashoffset",
 		"75",
+	);
+	const pipHandoff = page.getByRole("link", {
+		name: "Open Browser regression video in YouTube for Picture in Picture",
+	});
+	await expect(pipHandoff).toBeVisible();
+	await expect(pipHandoff).toHaveAttribute(
+		"href",
+		"https://www.youtube.com/watch?v=video123456&t=30s",
+	);
+	const [pipBox, watchedBox, favoriteBox] = await Promise.all([
+		pipHandoff.boundingBox(),
+		page.getByRole("button", { name: "Mark video as watched" }).boundingBox(),
+		page.getByRole("button", { name: "Add video to favorites" }).boundingBox(),
+	]);
+	expect(pipBox).not.toBeNull();
+	expect(watchedBox).not.toBeNull();
+	expect(favoriteBox).not.toBeNull();
+	expect((pipBox?.x || 0) + (pipBox?.width || 0)).toBeLessThanOrEqual(
+		watchedBox?.x || 0,
+	);
+	expect((watchedBox?.x || 0) + (watchedBox?.width || 0)).toBeLessThanOrEqual(
+		favoriteBox?.x || 0,
 	);
 
 	await page.getByRole("button", { name: "Mark video as watched" }).click();

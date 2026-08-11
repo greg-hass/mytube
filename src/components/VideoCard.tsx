@@ -6,6 +6,7 @@ import {
 	CheckCircle2,
 	Trash2,
 	Radio,
+	PictureInPicture2,
 } from "lucide-react";
 import type { YouTubeVideo } from "../types/youtube";
 import { useEffect, useRef, useState } from "react";
@@ -33,6 +34,7 @@ import {
 import { useStore } from "../store/useStore";
 import { isLiveVideo } from "../lib/video-live";
 import { isShortVideo } from "../lib/video-feed-index";
+import { buildYouTubeWatchUrl } from "../lib/youtube-watch-url";
 
 interface Props {
 	video: YouTubeVideo;
@@ -90,6 +92,11 @@ const StatefulVideoCard = ({
 	const hasPlaybackProgress = progressPercent > 0;
 	const showWatchedState = isWatched && !hasPlaybackProgress;
 	const isLive = isLiveVideo(video);
+	const savedHandoffProgress = getVideoProgress(video.id);
+	const youtubeWatchUrl = buildYouTubeWatchUrl(
+		video.id,
+		isLive ? undefined : savedHandoffProgress?.currentTime,
+	);
 
 	useEffect(() => {
 		isWatchedRef.current = isWatched;
@@ -311,6 +318,36 @@ const StatefulVideoCard = ({
 		}
 	};
 
+	const handleYouTubeHandoff = (event: MouseEvent<HTMLAnchorElement>) => {
+		event.stopPropagation();
+		if (isLive) {
+			event.currentTarget.href = buildYouTubeWatchUrl(video.id);
+			return;
+		}
+
+		let startSeconds = getVideoProgress(video.id)?.currentTime;
+		const player = inlinePlayerRef.current;
+		if (player) {
+			const currentTime = player.getCurrentTime();
+			const duration = player.getDuration();
+			const startupFloor = Math.max(1, (startSeconds || 0) - 2);
+			if (
+				Number.isFinite(currentTime) &&
+				Number.isFinite(duration) &&
+				duration > 0 &&
+				(!startSeconds || currentTime >= startupFloor)
+			) {
+				saveVideoProgress(video.id, currentTime, duration);
+				setProgressPercent(
+					Math.min(100, Math.max(0, (currentTime / duration) * 100)),
+				);
+				startSeconds = currentTime;
+			}
+		}
+
+		event.currentTarget.href = buildYouTubeWatchUrl(video.id, startSeconds);
+	};
+
 	const applyNextThumbnailFallback = () => {
 		const fallback = getNextVideoThumbnailFallback(thumbnailSrc, {
 			isShort: isLikelyShort,
@@ -509,7 +546,7 @@ const StatefulVideoCard = ({
 					</p>
 				</div>
 
-				<div className="mt-auto flex items-center gap-2 pr-24 text-xs text-gray-500">
+				<div className="mt-auto flex items-center gap-2 pr-36 text-xs text-gray-500">
 					<div className="flex items-center gap-2">
 						{isLive ? (
 							<>
@@ -525,6 +562,15 @@ const StatefulVideoCard = ({
 							</>
 						)}
 					</div>
+					<a
+						href={youtubeWatchUrl}
+						onClick={handleYouTubeHandoff}
+						aria-label={`Open ${video.title} in YouTube for Picture in Picture`}
+						title="Open in YouTube for Picture in Picture"
+						className="absolute bottom-3 right-[6.5rem] flex h-10 w-10 flex-none items-center justify-center rounded-full text-gray-400 transition-colors hover:bg-gray-100 hover:text-red-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-500 dark:text-ios-500 dark:hover:bg-ios-800 dark:hover:text-red-400"
+					>
+						<PictureInPicture2 className="h-5 w-5" />
+					</a>
 					<button
 						type="button"
 						onClick={handleWatchedClick}

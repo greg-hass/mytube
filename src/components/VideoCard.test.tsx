@@ -499,6 +499,113 @@ describe("VideoCard", () => {
 		expect(screen.getByTestId("location")).toHaveTextContent("/");
 	});
 
+	it("opens YouTube at the saved playback position", () => {
+		localStorage.setItem(
+			"video-playback-progress",
+			JSON.stringify({
+				"video-1": {
+					currentTime: 45.8,
+					duration: 120,
+					updatedAt: Date.now(),
+				},
+			}),
+		);
+
+		render(
+			<MemoryRouter>
+				<VideoCard video={video} index={0} />
+			</MemoryRouter>,
+		);
+
+		expect(
+			screen.getByRole("link", {
+				name: "Open A useful video in YouTube for Picture in Picture",
+			}),
+		).toHaveAttribute(
+			"href",
+			"https://www.youtube.com/watch?v=video-1&t=45s",
+		);
+	});
+
+	it("captures the active iframe position before handing off to YouTube", async () => {
+		let currentTime = 0;
+		const playVideo = vi.fn();
+		window.YT = {
+			PlayerState: { ENDED: 0 },
+			Player: class {
+				constructor(_element: HTMLElement, options: any) {
+					window.setTimeout(() => options.events.onReady({ target: this }), 0);
+				}
+
+				getCurrentTime = () => currentTime;
+				getDuration = () => 120;
+				destroy = vi.fn();
+				seekTo = vi.fn();
+				playVideo = playVideo;
+			},
+		};
+
+		render(
+			<MemoryRouter>
+				<VideoCard video={video} index={0} />
+			</MemoryRouter>,
+		);
+		fireEvent.click(
+			screen.getByRole("button", { name: "Play A useful video inline" }),
+		);
+		await waitFor(() => {
+			expect(playVideo).toHaveBeenCalled();
+		});
+
+		currentTime = 73.9;
+		const handoffLink = screen.getByRole("link", {
+			name: "Open A useful video in YouTube for Picture in Picture",
+		});
+		handoffLink.addEventListener("click", (event) => event.preventDefault(), {
+			once: true,
+		});
+		fireEvent.click(handoffLink);
+
+		expect(handoffLink).toHaveAttribute(
+			"href",
+			"https://www.youtube.com/watch?v=video-1&t=73s",
+		);
+		expect(
+			JSON.parse(localStorage.getItem("video-playback-progress") || "{}"),
+		).toMatchObject({
+			"video-1": { currentTime: 73.9, duration: 120 },
+		});
+		expect(mockStore.markAsWatched).not.toHaveBeenCalled();
+	});
+
+	it("opens a live stream at the live edge without a stale timestamp", () => {
+		localStorage.setItem(
+			"video-playback-progress",
+			JSON.stringify({
+				"video-1": {
+					currentTime: 45,
+					duration: 120,
+					updatedAt: Date.now(),
+				},
+			}),
+		);
+
+		render(
+			<MemoryRouter>
+				<VideoCard video={{ ...video, isLive: true }} index={0} />
+			</MemoryRouter>,
+		);
+
+		expect(
+			screen.getByRole("link", {
+				name: "Open A useful video in YouTube for Picture in Picture",
+			}),
+		).toHaveAttribute(
+			"href",
+			"https://www.youtube.com/watch?v=video-1",
+		);
+	});
+
 	it("keeps the expanded inline player mounted and playing when the phone rotates to landscape", async () => {
 		Object.defineProperty(window, "innerWidth", {
 			configurable: true,
