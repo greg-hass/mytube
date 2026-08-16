@@ -112,7 +112,7 @@ export const Header = ({
 		<>
 			<header
 				ref={headerRef}
-				className="glass safe-top border-b border-gray-200 shadow-sm dark:border-ios-800/80"
+				className="safe-top border-b border-gray-200 bg-white shadow-sm dark:border-ios-800/80 dark:bg-ios-950"
 			>
 				<div className="max-w-7xl mx-auto px-4">
 					<div className="flex h-[var(--app-header-height)] items-center justify-between gap-3 xl:gap-4">
