@@ -17,5 +17,15 @@ describe('PWA runtime caching', () => {
     const manifest = JSON.parse(readFileSync(new URL('./public/manifest.webmanifest', import.meta.url), 'utf8'));
 
     expect(manifest.orientation).toBe('portrait');
+    expect(manifest.display).toBe('standalone');
+    expect(manifest.theme_color).toBe('#030712');
+    expect(manifest.background_color).toBe('#030712');
+  });
+
+  it('uses an opaque iOS status bar for the installed PWA', () => {
+    const indexHtml = readFileSync(new URL('./index.html', import.meta.url), 'utf8');
+
+    expect(indexHtml).toContain('apple-mobile-web-app-status-bar-style" content="black"');
+    expect(indexHtml).not.toContain('black-translucent');
   });
 });
