@@ -22,10 +22,9 @@ describe('PWA runtime caching', () => {
     expect(manifest.background_color).toBe('#030712');
   });
 
-  it('uses an opaque iOS status bar for the installed PWA', () => {
+  it('lets the app background continue behind the installed PWA status bar', () => {
     const indexHtml = readFileSync(new URL('./index.html', import.meta.url), 'utf8');
 
-    expect(indexHtml).toContain('apple-mobile-web-app-status-bar-style" content="black"');
-    expect(indexHtml).not.toContain('black-translucent');
+    expect(indexHtml).toContain('apple-mobile-web-app-status-bar-style" content="black-translucent"');
   });
 });
