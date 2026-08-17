@@ -31,4 +31,12 @@ describe('external service configuration', () => {
             expect(connectSources).toContain(origin);
         });
     });
+
+    it('preserves the referrer required by YouTube embedded playback', () => {
+        const nginxConfig = readFileSync('nginx.conf', 'utf8');
+
+        expect(nginxConfig).toMatch(
+            /add_header Referrer-Policy "strict-origin-when-cross-origin" always;/,
+        );
+    });
 });
