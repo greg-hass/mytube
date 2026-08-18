@@ -36,6 +36,26 @@ describe("RSS-first feed fetcher", () => {
 		).toMatchObject({ id: "short", isShort: true });
 	});
 
+	it("decodes HTML entities in RSS video metadata", () => {
+		expect(
+			buildVideoFromFeedItem(
+				{
+					id: "yt:video:encoded",
+					title: "Fox News Doesn&#39;t Support The Troops",
+					contentSnippet: "Rock &amp; roll",
+				},
+				{
+					channelId: "UC_TEST",
+					channelTitle: "The Majority Report &amp; More",
+				},
+			),
+		).toMatchObject({
+			title: "Fox News Doesn't Support The Troops",
+			description: "Rock & roll",
+			channelTitle: "The Majority Report & More",
+		});
+	});
+
 	it("creates deterministic hashes from ordered unique video IDs", () => {
 		expect(
 			createVideoItemHash([{ id: "a" }, { id: "b" }, { id: "a" }]),

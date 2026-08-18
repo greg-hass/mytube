@@ -531,7 +531,8 @@ describe("createApp integration", () => {
 					id: "vid-1",
 					channelId: "UC123",
 					publishedAt: "2026-06-22T10:00:00.000Z",
-					title: "Video",
+					title: "Fox News Doesn&#39;t Support The Troops",
+					channelTitle: "The Majority Report &amp; More",
 				},
 			],
 			lastUpdated: "2026-06-22T12:00:00.000Z",
@@ -544,6 +545,10 @@ describe("createApp integration", () => {
 			.set("Authorization", `Bearer ${TEST_TOKEN}`);
 		expect(first.status).toBe(200);
 		expect(first.headers.etag).toBe('"2026-06-22T12:00:00.000Z"');
+		expect(first.body.videos[0]).toMatchObject({
+			title: "Fox News Doesn't Support The Troops",
+			channelTitle: "The Majority Report & More",
+		});
 
 		const cached = await request(resources.app)
 			.get("/api/videos")

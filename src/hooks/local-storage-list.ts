@@ -1,4 +1,5 @@
 import type { YouTubeVideo } from '../types/youtube';
+import { decodeHtmlEntities } from '../lib/html-entities';
 
 export function readRawStorage(key: string) {
   if (typeof localStorage === 'undefined') return null;
@@ -36,7 +37,14 @@ export function isYouTubeVideo(value: unknown): value is YouTubeVideo {
 export function parseVideos(rawValue: string | null) {
   try {
     const parsedValue = rawValue ? JSON.parse(rawValue) : [];
-    return Array.isArray(parsedValue) ? parsedValue.filter(isYouTubeVideo) : [];
+    return Array.isArray(parsedValue)
+      ? parsedValue.filter(isYouTubeVideo).map((video) => ({
+          ...video,
+          title: decodeHtmlEntities(video.title),
+          channelTitle: decodeHtmlEntities(video.channelTitle),
+          description: decodeHtmlEntities(video.description),
+        }))
+      : [];
   } catch {
     return [];
   }

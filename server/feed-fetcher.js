@@ -2,6 +2,7 @@ const Parser = require("rss-parser");
 const axios = require("axios");
 const { createHash } = require("node:crypto");
 const { getHighResolutionVideoThumbnail } = require("./video-thumbnails");
+const { decodeHtmlEntities } = require("./html-entities");
 
 const FEED_FETCH_RETRY_STATUSES = new Set([408, 429, 500, 502, 503, 504]);
 const UPLOADS_PLAYLIST_FETCH_LIMIT = 15;
@@ -53,10 +54,11 @@ function getMediaAttribute(value, attributeName) {
 
 function getTextValue(value) {
 	if (!value) return "";
-	if (typeof value === "string") return value;
-	if (typeof value.simpleText === "string") return value.simpleText;
+	if (typeof value === "string") return decodeHtmlEntities(value);
+	if (typeof value.simpleText === "string")
+		return decodeHtmlEntities(value.simpleText);
 	if (Array.isArray(value.runs)) {
-		return value.runs.map((run) => run.text || "").join("");
+		return decodeHtmlEntities(value.runs.map((run) => run.text || "").join(""));
 	}
 	return "";
 }
@@ -221,7 +223,9 @@ function parseUploadsPlaylistVideos(
 function buildVideoFromFeedItem(item, { channelId, channelTitle }) {
 	const videoId = item.id?.split(":").pop() || item.guid;
 	const mediaGroup = item.mediaGroup || item["media:group"] || {};
-	const mediaDescription = getFirstMediaValue(mediaGroup["media:description"]);
+	const mediaDescription = decodeHtmlEntities(
+		getFirstMediaValue(mediaGroup["media:description"]),
+	);
 	const mediaThumbnailUrl = getMediaAttribute(
 		mediaGroup["media:thumbnail"],
 		"url",
@@ -233,14 +237,14 @@ function buildVideoFromFeedItem(item, { channelId, channelTitle }) {
 	const duration = durationSeconds ? parseInt(durationSeconds, 10) : null;
 	const looksLikeShort =
 		/#shorts?\b|#ytshorts?\b|#fyp\b|\bshorts\b|youtube\.com\/shorts\//i.test(
-			`${item.title || ""} ${mediaDescription || ""}`,
+		`${decodeHtmlEntities(item.title)} ${mediaDescription || ""}`,
 		);
 
 	const video = {
 		id: videoId,
-		title: item.title,
+		title: decodeHtmlEntities(item.title),
 		channelId: channelId,
-		channelTitle,
+		channelTitle: decodeHtmlEntities(channelTitle),
 		publishedAt: item.pubDate || item.isoDate,
 		thumbnail: getHighResolutionVideoThumbnail(
 			item.media?.thumbnail?.[0]?.url ||
@@ -249,7 +253,9 @@ function buildVideoFromFeedItem(item, { channelId, channelTitle }) {
 			videoId,
 			{ isShort: looksLikeShort },
 		),
-		description: item.contentSnippet || item.content || mediaDescription || "",
+		description: decodeHtmlEntities(
+			item.contentSnippet || item.content || mediaDescription || "",
+		),
 		duration: Number.isFinite(duration) ? duration : null,
 	};
 
@@ -346,15 +352,17 @@ async function fetchYouTubeApiVideos(
 		.filter((item) => item?.id?.videoId)
 		.map((item) => ({
 			id: item.id.videoId,
-			title: item.snippet?.title || "Untitled",
+			title: decodeHtmlEntities(item.snippet?.title || "Untitled"),
 			channelId,
-			channelTitle: item.snippet?.channelTitle || "Unknown",
+			channelTitle: decodeHtmlEntities(
+				item.snippet?.channelTitle || "Unknown",
+			),
 			publishedAt: item.snippet?.publishedAt || null,
 			thumbnail: getHighResolutionVideoThumbnail(
 				item.snippet?.thumbnails?.high?.url,
 				item.id.videoId,
 			),
-			description: item.snippet?.description || "",
+			description: decodeHtmlEntities(item.snippet?.description || ""),
 			duration: null,
 			fetchedVia: "youtube-api",
 		}));
@@ -409,7 +417,9 @@ async function fetchChannelFeed(channelId, feedParser = parser, options = {}) {
 		for (const item of feed.items || []) {
 			const video = buildVideoFromFeedItem(item, {
 				channelId,
-				channelTitle: feed.title || item.author || "Unknown",
+				channelTitle: decodeHtmlEntities(
+					feed.title || item.author || "Unknown",
+				),
 			});
 			if (!video.id || seen.has(video.id)) continue;
 			seen.add(video.id);
@@ -435,7 +445,7 @@ async function fetchChannelFeed(channelId, feedParser = parser, options = {}) {
 			etag,
 			lastModified,
 			channelMetadata: {
-				title: feed.title || "Unknown Channel",
+				title: decodeHtmlEntities(feed.title || "Unknown Channel"),
 				thumbnail: null,
 			},
 		};

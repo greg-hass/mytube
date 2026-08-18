@@ -35,6 +35,7 @@ import { useStore } from "../store/useStore";
 import { isLiveVideo } from "../lib/video-live";
 import { isShortVideo } from "../lib/video-feed-index";
 import { buildYouTubeWatchUrl } from "../lib/youtube-watch-url";
+import { decodeHtmlEntities } from "../lib/html-entities";
 
 interface Props {
 	video: YouTubeVideo;
@@ -92,6 +93,8 @@ const StatefulVideoCard = ({
 	const hasPlaybackProgress = progressPercent > 0;
 	const showWatchedState = isWatched && !hasPlaybackProgress;
 	const isLive = isLiveVideo(video);
+	const displayTitle = decodeHtmlEntities(video.title);
+	const displayChannelTitle = decodeHtmlEntities(video.channelTitle);
 	const savedHandoffProgress = getVideoProgress(video.id);
 	const youtubeWatchUrl = buildYouTubeWatchUrl(
 		video.id,
@@ -438,13 +441,13 @@ const StatefulVideoCard = ({
 					<div
 						ref={inlinePlayerContainerRef}
 						data-testid="inline-video-player"
-						title={`${video.title} player`}
+						title={`${displayTitle} player`}
 						className="h-full w-full"
 					/>
 				) : (
 					<button
 						type="button"
-						aria-label={`Play ${video.title} inline`}
+						aria-label={`Play ${displayTitle} inline`}
 						onClick={playInline}
 						className="relative h-full w-full cursor-pointer bg-black p-0 text-left"
 					>
@@ -456,7 +459,7 @@ const StatefulVideoCard = ({
 						)}
 						<img
 							src={thumbnailSrc}
-							alt={video.title}
+							alt={displayTitle}
 							loading="lazy"
 							onError={() => {
 								applyNextThumbnailFallback();
@@ -527,22 +530,22 @@ const StatefulVideoCard = ({
 				<div className="mb-1 h-10">
 					<h4 className="font-medium text-sm line-clamp-2 text-gray-900 dark:text-ios-50 transition-colors">
 						<span className="line-clamp-2 text-left transition-colors">
-							{video.title}
+							{displayTitle}
 						</span>
 					</h4>
 				</div>
 
-				<div className="mb-1 flex min-w-0 items-center gap-2">
+				<div className="mb-1 flex min-w-0 items-center gap-2 pr-36">
 					{channelThumbnail && (
 						<img
-							src={getDisplayThumbnail(channelThumbnail, video.channelTitle)}
-							alt={`${video.channelTitle} icon`}
+							src={getDisplayThumbnail(channelThumbnail, displayChannelTitle)}
+							alt={`${displayChannelTitle} icon`}
 							className="h-5 w-5 flex-none rounded-full object-cover"
 							loading="lazy"
 						/>
 					)}
-					<p className="truncate text-xs text-gray-600 dark:text-ios-400">
-						{video.channelTitle}
+					<p className="min-w-0 truncate text-xs text-gray-600 dark:text-ios-400">
+						{displayChannelTitle}
 					</p>
 				</div>
 
@@ -565,7 +568,7 @@ const StatefulVideoCard = ({
 					<a
 						href={youtubeWatchUrl}
 						onClick={handleYouTubeHandoff}
-						aria-label={`Open ${video.title} in YouTube for Picture in Picture`}
+						aria-label={`Open ${displayTitle} in YouTube for Picture in Picture`}
 						title="Open in YouTube for Picture in Picture"
 						className="absolute bottom-3 right-[6.5rem] flex h-10 w-10 flex-none items-center justify-center rounded-full text-gray-400 transition-colors hover:bg-gray-100 hover:text-red-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-500 dark:text-ios-500 dark:hover:bg-ios-800 dark:hover:text-red-400"
 					>

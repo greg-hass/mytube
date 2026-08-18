@@ -71,6 +71,44 @@ describe("VideoCard", () => {
 		).toBeTruthy();
 	});
 
+	it("keeps long channel names clear of the card actions", () => {
+		render(
+			<MemoryRouter>
+				<VideoCard
+					video={{
+						...video,
+						channelTitle: "Judge Napolitano - Judging Freedom",
+					}}
+					index={0}
+				/>
+			</MemoryRouter>,
+		);
+
+		const channelTitle = screen.getByText("Judge Napolitano - Judging Freedom");
+
+		expect(channelTitle).toHaveClass("min-w-0", "truncate");
+		expect(channelTitle.parentElement).toHaveClass("pr-36");
+	});
+
+	it("renders decoded video titles when legacy data contains entities", () => {
+		render(
+			<MemoryRouter>
+				<VideoCard
+					video={{
+						...video,
+						title: "Fox News Doesn&#39;t Support The Troops",
+					}}
+					index={0}
+				/>
+			</MemoryRouter>,
+		);
+
+		expect(
+			screen.getByText("Fox News Doesn't Support The Troops"),
+		).toBeInTheDocument();
+		expect(screen.queryByText("Fox News Doesn&#39;t Support The Troops")).not.toBeInTheDocument();
+	});
+
 	it("does not cover the thumbnail with a selection control", () => {
 		render(
 			<MemoryRouter>

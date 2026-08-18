@@ -1,6 +1,7 @@
 const SHORTS_TEXT_PATTERN = /#shorts?\b|#ytshorts?\b|#fyp\b|\bshorts\b|youtube\.com\/shorts\//i;
 const SHORTS_THUMBNAIL_PATTERN = /\/(?:oar2|maxres2|hq2|frame0)\.(?:jpg|webp)(?:\?|$)/i;
 const YOUTUBE_VIDEO_THUMBNAIL_PATTERN = /\/(?:vi|vi_webp)\/([^/]+)\/(?:maxresdefault|hq720|sddefault|hqdefault|mqdefault|default|oar2|maxres2|hq2|frame0|0|1|2|3)\.(jpg|webp)(\?.*)?$/i;
+const { decodeHtmlEntities } = require("./html-entities");
 
 function isShortVideo(video = {}) {
     if (video.isShort === true) return true;
@@ -32,6 +33,9 @@ function normalizeVideoThumbnail(video) {
     const isShort = isShortVideo(video);
     const normalized = {
         ...video,
+        title: decodeHtmlEntities(video.title),
+        channelTitle: decodeHtmlEntities(video.channelTitle),
+        description: decodeHtmlEntities(video.description),
         thumbnail: getHighResolutionVideoThumbnail(video.thumbnail, video.id, { isShort }),
     };
 

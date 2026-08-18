@@ -21,11 +21,11 @@ const videosSnapshot = {
 	videos: [
 		{
 			id: "video123456",
-			title: "Browser regression video",
+			title: "Fox News Doesn&#39;t Support The Troops",
 			description: "A deterministic browser-test video",
 			thumbnail: "",
 			channelId: "UC1234567890123456789012",
-			channelTitle: "Test Channel",
+			channelTitle: "Judge Napolitano - Judging Freedom",
 			publishedAt: "2026-07-17T09:00:00.000Z",
 		},
 	],
@@ -174,7 +174,7 @@ test("mobile Latest stays in a loading state until videos arrive", async ({
 
 	await expect(page.getByTestId("latest-videos-loading")).toBeVisible();
 	await expect(page.getByText("No videos found")).toHaveCount(0);
-	await expect(page.getByText("Browser regression video")).toBeVisible();
+	await expect(page.getByText("Fox News Doesn't Support The Troops")).toBeVisible();
 });
 
 test("mobile channel search explains rate limiting without blaming connectivity", async ({
@@ -224,9 +224,9 @@ test("mobile video cards keep thumbnails clear, expose PiP handoff, and show wat
 	await mockHealthyApi(page);
 	await page.goto("/");
 
-	await expect(page.getByText("Browser regression video")).toBeVisible();
+	await expect(page.getByText("Fox News Doesn't Support The Troops")).toBeVisible();
 	await expect(
-		page.getByRole("checkbox", { name: "Select Browser regression video" }),
+		page.getByRole("checkbox", { name: "Select Fox News Doesn't Support The Troops" }),
 	).toHaveCount(0);
 	await expect(page.getByTestId("video-progress-indicator")).toHaveClass(
 		/orange/,
@@ -236,7 +236,7 @@ test("mobile video cards keep thumbnails clear, expose PiP handoff, and show wat
 		"75",
 	);
 	const pipHandoff = page.getByRole("link", {
-		name: "Open Browser regression video in YouTube for Picture in Picture",
+		name: "Open Fox News Doesn't Support The Troops in YouTube for Picture in Picture",
 	});
 	await expect(pipHandoff).toBeVisible();
 	await expect(pipHandoff).toHaveAttribute(
@@ -292,7 +292,19 @@ test("authenticated desktop feed supports favorites and Settings workflows", asy
 	await mockHealthyApi(page);
 	await page.goto("/");
 
-	await expect(page.getByText("Browser regression video")).toBeVisible();
+	await expect(page.getByText("Fox News Doesn't Support The Troops")).toBeVisible();
+	const channelTitle = page.getByText("Judge Napolitano - Judging Freedom");
+	const channelBox = await channelTitle.boundingBox();
+	const pipBox = await page
+		.getByRole("link", {
+			name: "Open Fox News Doesn't Support The Troops in YouTube for Picture in Picture",
+		})
+		.boundingBox();
+	expect(channelBox).not.toBeNull();
+	expect(pipBox).not.toBeNull();
+	expect((channelBox?.x || 0) + (channelBox?.width || 0)).toBeLessThanOrEqual(
+		pipBox?.x || 0,
+	);
 	await page.getByRole("button", { name: "Refresh feeds" }).click();
 	await expect(
 		page.getByText("Feed refresh started — pulling new videos..."),
@@ -303,7 +315,7 @@ test("authenticated desktop feed supports favorites and Settings workflows", asy
 		.getByRole("button", { name: "Faves", exact: true })
 		.click();
 
-	await expect(page.getByText("Browser regression video")).toBeVisible();
+	await expect(page.getByText("Fox News Doesn't Support The Troops")).toBeVisible();
 
 	await page.getByRole("button", { name: "Settings", exact: true }).click();
 	await expect(page.getByText("Settings", { exact: true })).toBeVisible();

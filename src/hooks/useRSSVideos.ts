@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import type { YouTubeVideo } from "../types/youtube.js";
 import type { RefreshFailureKind } from "../types/server";
+import { decodeHtmlEntities } from "../lib/html-entities";
 
 export interface SyncStatus {
 	total: number;
@@ -49,6 +50,24 @@ interface ServerData {
 	totalChannels?: number;
 	videos?: YouTubeVideo[];
 	lastUpdated?: string;
+}
+
+function normalizeVideoText(video: YouTubeVideo): YouTubeVideo {
+	return {
+		...video,
+		title: decodeHtmlEntities(video.title),
+		channelTitle: decodeHtmlEntities(video.channelTitle),
+		description: decodeHtmlEntities(video.description),
+	};
+}
+
+function normalizeServerData(data: ServerData): ServerData {
+	return {
+		...data,
+		videos: Array.isArray(data.videos)
+			? data.videos.map(normalizeVideoText)
+			: data.videos,
+	};
 }
 
 export interface UseRSSVideosOptions {
@@ -149,7 +168,7 @@ function useServerVideos(isAggregating: boolean, enabled: boolean) {
 			if (!response.ok) {
 				throw new Error("Failed to fetch videos from server");
 			}
-			return response.json();
+			return normalizeServerData(await response.json());
 		},
 		placeholderData: (previousData: ServerData | undefined) => previousData,
 		staleTime: 1000 * 60, // 1 minute

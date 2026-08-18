@@ -93,6 +93,38 @@ describe("useRSSVideos", () => {
 		expect(fetchMock).not.toHaveBeenCalled();
 	});
 
+	it("decodes entities in cached server video titles", async () => {
+		const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+			const url = String(input);
+			if (url.startsWith("/api/videos/status")) return statusResponse();
+			if (url === "/api/videos") {
+				return videosResponse(
+					[
+						video(
+							"Fox News Doesn&#39;t Support The Troops",
+							"video-encoded",
+							"2026-05-06T20:00:00.000Z",
+						),
+					],
+					"2026-05-06T20:00:00.000Z",
+				);
+			}
+			throw new Error(`Unexpected fetch ${url}`);
+		});
+
+		vi.stubGlobal("fetch", fetchMock);
+
+		const { result } = renderHook(() => useRSSVideos(), {
+			wrapper: createWrapper(),
+		});
+
+		await waitFor(() => {
+			expect(result.current.videos[0]?.title).toBe(
+				"Fox News Doesn't Support The Troops",
+			);
+		});
+	});
+
 	it("keeps manual refresh quiet and leaves cached videos visible", async () => {
 		const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
 			const url = String(input);
