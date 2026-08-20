@@ -1,5 +1,5 @@
 import { motion, AnimatePresence } from "framer-motion";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
 	X,
 	Plus,
@@ -12,6 +12,7 @@ import {
 	Sparkles,
 	RotateCw,
 	Loader2,
+	Video,
 } from "lucide-react";
 import { getDisplayText } from "../lib/youtube-parser";
 import {
@@ -19,10 +20,13 @@ import {
 	type ChannelSearchError,
 } from "../hooks/useAddChannelSearch";
 import { useChannelSuggestions } from "../hooks/useChannelSuggestions";
+import { useVideoSearch } from "../hooks/useVideoSearch";
 import { useModalFocus } from "../hooks/useModalFocus";
 import { formatSubscriberCount, formatVideoCount } from "./channelSearch";
 import { AddChannelPreview } from "./AddChannelPreview";
-import type { YouTubeChannel } from "../types/youtube";
+import type { YouTubeChannel, VideoSearchResult } from "../types/youtube";
+
+type SearchMode = "channels" | "videos";
 
 interface AddChannelModalProps {
 	isOpen: boolean;
@@ -42,6 +46,45 @@ export const AddChannelModal = ({
 		onAdd,
 	});
 	const suggestions = useChannelSuggestions();
+	const videoSearch = useVideoSearch();
+	const videoSearchReset = videoSearch.reset;
+	const [searchMode, setSearchMode] = useState<SearchMode>("channels");
+
+	const trimmedInput = search.input.trim();
+	const canSearch = trimmedInput.length >= 2;
+
+	const handleVideoSubmit = () => {
+		if (canSearch) void videoSearch.search(trimmedInput);
+	};
+
+	const handleSelectVideo = async (video: VideoSearchResult) => {
+		if (search.previewChannel?.id === video.channelId) {
+			search.handleDismissPreview();
+			return;
+		}
+		const channel = await videoSearch.resolveChannelForVideo(video);
+		if (channel) search.handleSelectPreviewChannel(channel);
+	};
+
+	const handleModeChange = (mode: SearchMode) => {
+		if (mode === searchMode) return;
+		setSearchMode(mode);
+		search.handleDismissPreview();
+		if (mode === "videos") {
+			videoSearch.reset();
+			if (canSearch) void videoSearch.search(trimmedInput);
+		}
+	};
+
+	// Leaving videos mode drops any in-flight video request and results.
+	useEffect(() => {
+		if (searchMode !== "videos") videoSearchReset();
+	}, [searchMode, videoSearchReset]);
+
+	// Input changes invalidate the video results alongside the channel ones.
+	useEffect(() => {
+		if (searchMode === "videos" && trimmedInput.length < 2) videoSearchReset();
+	}, [searchMode, trimmedInput, videoSearchReset]);
 	const { modalRef, onKeyDown } = useModalFocus<HTMLDivElement>({
 		isOpen,
 		onClose,
@@ -63,6 +106,11 @@ export const AddChannelModal = ({
 				search={search}
 				suggestions={suggestions}
 				existingSubscriptions={existingSubscriptions}
+				videoSearch={videoSearch}
+				searchMode={searchMode}
+				onModeChange={handleModeChange}
+				onVideoSubmit={handleVideoSubmit}
+				onSelectVideo={handleSelectVideo}
 			/>
 		</div>
 	) : null;
@@ -74,19 +122,39 @@ function ModalBody({
 	search,
 	suggestions,
 	existingSubscriptions,
+	videoSearch,
+	searchMode,
+	onModeChange,
+	onVideoSubmit,
+	onSelectVideo,
 }: {
 	search: ReturnType<typeof useAddChannelSearch>;
 	suggestions: ReturnType<typeof useChannelSuggestions>;
 	existingSubscriptions: YouTubeChannel[];
+	videoSearch: ReturnType<typeof useVideoSearch>;
+	searchMode: SearchMode;
+	onModeChange: (mode: SearchMode) => void;
+	onVideoSubmit: () => void;
+	onSelectVideo: (video: VideoSearchResult) => void;
 }) {
+	const trimmedInput = search.input.trim();
+	const isVideosMode = searchMode === "videos";
+
 	return (
 		<div className="flex-1 min-h-0 overflow-y-auto custom-scrollbar">
 			<div className="p-5 space-y-6">
 				<AddChannelSearchInput
 					input={search.input}
 					onChange={search.handleInputChange}
-					onKeyDown={search.handleInputKeyDown}
-					onSearch={search.handleSearchSubmit}
+					onKeyDown={(event) => {
+						if (isVideosMode && event.key === "Enter") {
+							event.preventDefault();
+							onVideoSubmit();
+							return;
+						}
+						search.handleInputKeyDown(event);
+					}}
+					onSearch={isVideosMode ? onVideoSubmit : search.handleSearchSubmit}
 					canSubmitSearch={search.canSubmitSearch}
 					inputRef={search.inputRef}
 					validationError={search.validationError}
@@ -96,10 +164,17 @@ function ModalBody({
 					parsedInput={search.parsedInput}
 				/>
 
+				{trimmedInput.length >= 2 && (
+					<SearchModeToggle mode={searchMode} onChange={onModeChange} />
+				)}
+
 				<SearchResultsBody
 					search={search}
 					suggestions={suggestions}
 					existingSubscriptions={existingSubscriptions}
+					videoSearch={videoSearch}
+					searchMode={searchMode}
+					onSelectVideo={onSelectVideo}
 				/>
 
 				<AnimatePresence initial={false}>
@@ -114,29 +189,49 @@ function SearchResultsBody({
 	search,
 	suggestions,
 	existingSubscriptions,
+	videoSearch,
+	searchMode,
+	onSelectVideo,
 }: {
 	search: ReturnType<typeof useAddChannelSearch>;
 	suggestions: ReturnType<typeof useChannelSuggestions>;
 	existingSubscriptions: YouTubeChannel[];
+	videoSearch: ReturnType<typeof useVideoSearch>;
+	searchMode: SearchMode;
+	onSelectVideo: (video: VideoSearchResult) => void;
 }) {
 	return (
 		<>
-			<SearchStatusDisplay
-				isSearching={search.isSearching}
-				isValidating={search.isValidating}
-				hasResults={search.hasResults}
-				visibleSearchResults={search.visibleSearchResults}
-				previewChannel={search.previewChannel}
-				isChannelKnown={search.isChannelKnown}
-				channelInfo={search.channelInfo}
-				searchError={search.searchError}
-				hasSubmittedSearch={search.hasSubmittedSearch}
-				input={search.input}
-				isLoading={search.isLoading}
-				onSelectPreview={search.handleSelectPreviewChannel}
-				onAdd={search.handleAddPreviewChannel}
-				onDismiss={search.handleDismissPreview}
-			/>
+			{searchMode === "videos" ? (
+				<VideoSearchSection
+					state={videoSearch.state}
+					resolvingId={videoSearch.resolvingId}
+					input={search.input}
+					previewChannel={search.previewChannel}
+					isChannelKnown={search.isChannelKnown}
+					isLoading={search.isLoading}
+					onSelectVideo={onSelectVideo}
+					onAdd={search.handleAddPreviewChannel}
+					onDismiss={search.handleDismissPreview}
+				/>
+			) : (
+				<SearchStatusDisplay
+					isSearching={search.isSearching}
+					isValidating={search.isValidating}
+					hasResults={search.hasResults}
+					visibleSearchResults={search.visibleSearchResults}
+					previewChannel={search.previewChannel}
+					isChannelKnown={search.isChannelKnown}
+					channelInfo={search.channelInfo}
+					searchError={search.searchError}
+					hasSubmittedSearch={search.hasSubmittedSearch}
+					input={search.input}
+					isLoading={search.isLoading}
+					onSelectPreview={search.handleSelectPreviewChannel}
+					onAdd={search.handleAddPreviewChannel}
+					onDismiss={search.handleDismissPreview}
+				/>
+			)}
 
 			<ChannelAddActions
 				search={search}
@@ -439,9 +534,7 @@ function AddChannelSearchInput({
 			</p>
 
 			{validationError && (
-				<p className="text-sm text-red-600 dark:text-red-400">
-					{validationError}
-				</p>
+				<p className="text-sm text-red-600 dark:text-red-400">{validationError}</p>
 			)}
 
 			{parsedInput &&
@@ -453,6 +546,251 @@ function AddChannelSearchInput({
 					</p>
 				)}
 		</section>
+	);
+}
+
+function SearchModeToggle({
+	mode,
+	onChange,
+}: {
+	mode: SearchMode;
+	onChange: (mode: SearchMode) => void;
+}) {
+	const base =
+		"inline-flex flex-1 items-center justify-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-medium transition-colors";
+	return (
+		<div
+			role="tablist"
+			aria-label="Search mode"
+			className="flex gap-1 rounded-xl border border-gray-200 bg-gray-50 p-1 dark:border-ios-800 dark:bg-ios-800/40"
+		>
+			<button
+				type="button"
+				role="tab"
+				aria-selected={mode === "channels"}
+				data-testid="search-mode-channels"
+				className={`${base} ${
+					mode === "channels"
+						? "bg-white text-gray-900 shadow-sm dark:bg-ios-900 dark:text-white"
+						: "text-gray-500 hover:text-gray-700 dark:text-ios-400 dark:hover:text-ios-200"
+				}`}
+				onClick={() => onChange("channels")}
+			>
+				<Search className="h-4 w-4" />
+				Channels
+			</button>
+			<button
+				type="button"
+				role="tab"
+				aria-selected={mode === "videos"}
+				data-testid="search-mode-videos"
+				className={`${base} ${
+					mode === "videos"
+						? "bg-white text-gray-900 shadow-sm dark:bg-ios-900 dark:text-white"
+						: "text-gray-500 hover:text-gray-700 dark:text-ios-400 dark:hover:text-ios-200"
+				}`}
+				onClick={() => onChange("videos")}
+			>
+				<Video className="h-4 w-4" />
+				Videos
+			</button>
+		</div>
+	);
+}
+
+function formatVideoDuration(seconds: number | null): string {
+	if (seconds === null) return "";
+	const hours = Math.floor(seconds / 3600);
+	const minutes = Math.floor((seconds % 3600) / 60);
+	const secs = seconds % 60;
+	const minutePart =
+		hours > 0 ? String(minutes).padStart(2, "0") : String(minutes);
+	return `${hours > 0 ? `${hours}:` : ""}${minutePart}:${String(secs).padStart(2, "0")}`;
+}
+
+function VideoSearchSection({
+	state,
+	resolvingId,
+	input,
+	previewChannel,
+	isChannelKnown,
+	isLoading,
+	onSelectVideo,
+	onAdd,
+	onDismiss,
+}: {
+	state: ReturnType<typeof useVideoSearch>["state"];
+	resolvingId: string | null;
+	input: string;
+	previewChannel: YouTubeChannel | null;
+	isChannelKnown: (channel: YouTubeChannel) => boolean;
+	isLoading: boolean;
+	onSelectVideo: (video: VideoSearchResult) => void;
+	onAdd: () => Promise<void>;
+	onDismiss: () => void;
+}) {
+	const hasQuery = input.trim().length >= 2;
+
+	if (!hasQuery) {
+		return (
+			<motion.section
+				initial={{ opacity: 0 }}
+				animate={{ opacity: 1 }}
+				exit={{ opacity: 0 }}
+				className="space-y-3"
+			>
+				<p className="text-sm text-gray-500 dark:text-ios-400">
+					Type at least 2 characters to search for videos by title.
+				</p>
+			</motion.section>
+		);
+	}
+
+	if (state.phase === "loading") {
+		return (
+			<motion.section
+				initial={{ opacity: 0 }}
+				animate={{ opacity: 1 }}
+				exit={{ opacity: 0 }}
+				className="space-y-3"
+			>
+				<div className="flex items-center gap-2 text-sm text-gray-500 dark:text-ios-400">
+					<div className="w-4 h-4 border-2 border-red-600 border-t-transparent rounded-full animate-spin" />
+					Searching latest videos…
+				</div>
+			</motion.section>
+		);
+	}
+
+	if (state.phase === "error") {
+		return (
+			<motion.section
+				initial={{ opacity: 0 }}
+				animate={{ opacity: 1 }}
+				exit={{ opacity: 0 }}
+				className="space-y-3"
+			>
+				<p
+					data-testid="video-search-error"
+					className="text-sm text-red-600 dark:text-red-400"
+				>
+					Video search failed. Check your connection and try again.
+				</p>
+			</motion.section>
+		);
+	}
+
+	if (state.phase === "idle") {
+		return (
+			<motion.section
+				initial={{ opacity: 0 }}
+				animate={{ opacity: 1 }}
+				exit={{ opacity: 0 }}
+				className="space-y-3"
+			>
+				<p className="text-sm text-gray-500 dark:text-ios-400">
+					Press Enter or Search to find the latest videos with your words in the
+					title.
+				</p>
+			</motion.section>
+		);
+	}
+
+	const { videos } = state;
+
+	return (
+		<motion.section
+			initial={{ opacity: 0, y: 8 }}
+			animate={{ opacity: 1, y: 0 }}
+			exit={{ opacity: 0, y: 8 }}
+			className="space-y-3"
+			data-testid="video-search-results"
+		>
+			<div className="flex items-center justify-between">
+				<h3 className="text-sm font-semibold text-gray-900 dark:text-white flex items-center gap-2">
+					<Video className="h-4 w-4 text-red-600" />
+					Latest Videos
+				</h3>
+				<span className="text-xs text-gray-400">{videos.length} found</span>
+			</div>
+
+			{videos.length === 0 ? (
+				<p className="py-4 text-center text-sm text-gray-500 dark:text-ios-400">
+					No recent videos found with "{input.trim()}" in the title
+				</p>
+			) : (
+				<div className="space-y-2 pr-1">
+					{videos.map((video) => {
+						const isPreviewing = previewChannel?.id === video.channelId;
+						const isResolving = resolvingId === video.id;
+						return (
+							<div key={video.id} className="overflow-hidden rounded-xl">
+								<button
+									type="button"
+									onClick={() => onSelectVideo(video)}
+									aria-label={`Preview channel ${video.channelTitle}`}
+									data-testid={`video-result-${video.id}`}
+									className={`flex w-full items-start gap-3 border p-3 text-left transition-all ${
+										isPreviewing
+											? "rounded-t-xl border-red-500 bg-red-50 dark:border-red-500/70 dark:bg-red-950/20"
+											: "rounded-xl border-gray-200 bg-white hover:border-gray-300 hover:bg-gray-50 dark:border-ios-800 dark:bg-ios-900 dark:hover:border-ios-700 dark:hover:bg-ios-800"
+									}`}
+								>
+									<img
+										src={video.thumbnail}
+										alt={video.title}
+										loading="lazy"
+										className="h-14 w-24 flex-none rounded-lg object-cover"
+									/>
+									<span className="min-w-0 flex-1">
+										<span className="flex items-center gap-2">
+											<span className="line-clamp-2 text-sm font-medium text-gray-900 dark:text-ios-100">
+												{video.title}
+											</span>
+										</span>
+										<span className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-gray-500 dark:text-ios-400">
+											<span className="truncate font-medium text-gray-600 dark:text-ios-300">
+												{video.channelTitle}
+											</span>
+											{video.publishedText && <span>· {video.publishedText}</span>}
+											{video.duration !== null && (
+												<span>· {formatVideoDuration(video.duration)}</span>
+											)}
+											{video.isShort && (
+												<span className="rounded-full bg-gray-100 px-1.5 py-0.5 font-medium dark:bg-ios-800">
+													Short
+												</span>
+											)}
+										</span>
+										{isResolving ? (
+											<span className="mt-1 flex items-center gap-1.5 text-xs font-medium text-red-600 dark:text-red-400">
+												<Loader2 className="h-3 w-3 animate-spin" />
+												Resolving channel…
+											</span>
+										) : (
+											<span className="mt-1 inline-flex items-center text-xs font-medium text-red-600 dark:text-red-400">
+												View channel
+											</span>
+										)}
+									</span>
+								</button>
+								<AnimatePresence initial={false}>
+									{isPreviewing && previewChannel && (
+										<AddChannelPreview
+											channel={previewChannel}
+											isLoading={isLoading}
+											isAdded={isChannelKnown(previewChannel)}
+											onAdd={onAdd}
+											onDismiss={onDismiss}
+										/>
+									)}
+								</AnimatePresence>
+							</div>
+						);
+					})}
+				</div>
+			)}
+		</motion.section>
 	);
 }
 
@@ -709,7 +1047,9 @@ function AddParsedInputButton({
 				type="button"
 				onClick={onAdd}
 				disabled={isLoading || isKnown}
-				aria-label={isKnown ? `Already subscribed: ${displayText}` : `Add ${displayText}`}
+				aria-label={
+					isKnown ? `Already subscribed: ${displayText}` : `Add ${displayText}`
+				}
 				className="flex h-10 w-10 flex-none items-center justify-center rounded-full bg-red-600 text-white transition-all hover:bg-red-700 disabled:opacity-60"
 			>
 				{isLoading ? (

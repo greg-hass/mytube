@@ -22,10 +22,7 @@ function buildAppStore(databaseFile) {
 	const store = createSqliteStore({
 		databaseFile,
 		legacyDataFile: path.join(path.dirname(databaseFile), "legacy-db.json"),
-		legacyVideosFile: path.join(
-			path.dirname(databaseFile),
-			"legacy-videos.json",
-		),
+		legacyVideosFile: path.join(path.dirname(databaseFile), "legacy-videos.json"),
 	});
 	return {
 		DEFAULT_DATA: {
@@ -149,6 +146,19 @@ describe("createApp integration", () => {
 	it("rejects requests without an API key", async () => {
 		const response = await request(resources.app).get("/api/sync");
 		expect(response.status).toBe(401);
+	});
+
+	it("POST /api/video-search rejects short queries and unauthenticated calls", async () => {
+		const tooShort = await authedRequest(resources.app)
+			.post("/api/video-search")
+			.send({ query: "w" });
+		expect(tooShort.status).toBe(400);
+		expect(tooShort.body.error).toBe("Query must be at least 2 characters");
+
+		const unauthenticated = await request(resources.app)
+			.post("/api/video-search")
+			.send({ query: "woodworking" });
+		expect(unauthenticated.status).toBe(401);
 	});
 
 	it("GET /api/sync returns an ETag header and the current revision", async () => {
@@ -356,9 +366,7 @@ describe("createApp integration", () => {
 			defaultVideoCache: appStore.DEFAULT_VIDEO_CACHE,
 		});
 		try {
-			const response = await authedRequest(app).get(
-				"/api/videos/status?limit=10",
-			);
+			const response = await authedRequest(app).get("/api/videos/status?limit=10");
 			expect(response.status).toBe(200);
 			expect(response.body.activeChannels).toEqual(active);
 		} finally {
@@ -485,14 +493,12 @@ describe("createApp integration", () => {
 		});
 		try {
 			expect(
-				(await authedRequest(app).post(
-					"/api/videos/refresh/channel/UC_MISSING",
-				)).status,
+				(await authedRequest(app).post("/api/videos/refresh/channel/UC_MISSING"))
+					.status,
 			).toBe(404);
 			expect(
-				(await authedRequest(app).post(
-					"/api/videos/refresh/channel/not-a-channel",
-				)).status,
+				(await authedRequest(app).post("/api/videos/refresh/channel/not-a-channel"))
+					.status,
 			).toBe(400);
 		} finally {
 			appStore.close();
@@ -590,16 +596,13 @@ describe("createApp integration", () => {
 		});
 
 		try {
-			const response = await authedRequest(app).get(
-				"/api/videos/live?refresh=1",
-			);
+			const response = await authedRequest(app).get("/api/videos/live?refresh=1");
 			expect(response.status).toBe(200);
 			expect(response.headers["cache-control"]).toBe("private, no-store");
 			expect(response.body.videos).toEqual([{ id: "live-1", isLive: true }]);
-			expect(scanSubscriptions).toHaveBeenCalledWith(
-				[subscriptions[0]],
-				{ force: true },
-			);
+			expect(scanSubscriptions).toHaveBeenCalledWith([subscriptions[0]], {
+				force: true,
+			});
 		} finally {
 			appStore.close();
 			await fs.promises.rm(path.dirname(databaseFile), {

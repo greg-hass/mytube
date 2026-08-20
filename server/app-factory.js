@@ -13,6 +13,7 @@ const {
 	searchChannels,
 } = require("./channel-search");
 const { getChannelSuggestions } = require("./channel-suggestions");
+const { searchVideos } = require("./video-search");
 const { normalizeVideoCacheThumbnails } = require("./video-thumbnails");
 const { extractYouTubeChannelMetadata } = require("./youtube-html-parser");
 const { createLiveStreamService } = require("./live-stream-service");
@@ -129,8 +130,7 @@ function createThumbnailProxyHandler({ thumbnailRateLimiter }) {
 				signal: controller.signal,
 				headers: {
 					"User-Agent": "Mozilla/5.0",
-					Accept:
-						"image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8",
+					Accept: "image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8",
 				},
 			});
 		} finally {
@@ -325,6 +325,21 @@ function createApp({
 	);
 
 	app.post(
+		"/api/video-search",
+		channelSearchRateLimiter,
+		asyncHandler(async (req, res) => {
+			const query = String((req.body || {}).query || "").trim();
+			if (query.length < 2) {
+				return res
+					.status(400)
+					.json({ error: "Query must be at least 2 characters" });
+			}
+			const { results, source } = await searchVideos(query);
+			res.json({ results, source });
+		}, "Failed to search videos"),
+	);
+
+	app.post(
 		"/api/sync",
 		asyncHandler(async (req, res) => {
 			const data = removeSensitiveSyncSettings(req.body);
@@ -371,8 +386,7 @@ function createApp({
 			feedAggregator
 				.aggregateFeeds()
 				.catch((err) => logger.error("Aggregation trigger failed:", err));
-			const newRevision =
-				savedData.syncRevision ?? appStore.getCurrentRevision();
+			const newRevision = savedData.syncRevision ?? appStore.getCurrentRevision();
 			res.setHeader("ETag", `"${newRevision}"`);
 			res.json({
 				success: true,
@@ -407,15 +421,14 @@ function createApp({
 			feedAggregator
 				.aggregateFeeds()
 				.catch((err) => logger.error("Aggregation trigger failed:", err));
-			const newRevision =
-				savedData.syncRevision ?? appStore.getCurrentRevision();
+			const newRevision = savedData.syncRevision ?? appStore.getCurrentRevision();
 			res.setHeader("ETag", `"${newRevision}"`);
 			res.json({
 				success: true,
 				deletedId: id,
 				syncRevision: newRevision,
 			});
-	}, "Failed to delete subscription"),
+		}, "Failed to delete subscription"),
 	);
 
 	app.post(
@@ -450,8 +463,7 @@ function createApp({
 			feedAggregator
 				.aggregateFeeds()
 				.catch((err) => logger.error("Aggregation trigger failed:", err));
-			const newRevision =
-				savedData.syncRevision ?? appStore.getCurrentRevision();
+			const newRevision = savedData.syncRevision ?? appStore.getCurrentRevision();
 			res.setHeader("ETag", `"${newRevision}"`);
 			res.json({
 				success: true,
@@ -569,17 +581,16 @@ function createApp({
 		"/api/videos/refresh/channel/:channelId",
 		asyncHandler(async (req, res) => {
 			const { channelId } = req.params;
-			if (
-				typeof channelId !== "string" ||
-				!/^UC[\w-]{2,}$/.test(channelId)
-			) {
+			if (typeof channelId !== "string" || !/^UC[\w-]{2,}$/.test(channelId)) {
 				return res.status(400).json({ error: "Invalid channel ID" });
 			}
 
 			const data = await appStore.readData(
 				appStore.DEFAULT_DATA || { subscriptions: [] },
 			);
-			if (!data.subscriptions?.some((subscription) => subscription.id === channelId)) {
+			if (
+				!data.subscriptions?.some((subscription) => subscription.id === channelId)
+			) {
 				return res.status(404).json({ error: "Subscription not found" });
 			}
 
@@ -652,9 +663,7 @@ function createApp({
 				response.data,
 			);
 			if (disabled) {
-				return res
-					.status(503)
-					.json({ error: "YouTube HTML parsing is disabled" });
+				return res.status(503).json({ error: "YouTube HTML parsing is disabled" });
 			}
 			if (!channelId) {
 				return res.status(404).json({ error: "Could not resolve channel ID" });

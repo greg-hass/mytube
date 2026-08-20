@@ -13,6 +13,19 @@ export interface YouTubeChannel {
   reason?: string;
 }
 
+export interface VideoSearchResult {
+  id: string;
+  title: string;
+  channelId: string;
+  channelTitle: string;
+  publishedAt: string;
+  publishedText: string;
+  duration: number | null;
+  thumbnail: string;
+  description: string;
+  isShort: boolean;
+}
+
 export interface YouTubeVideo {
   id: string;
   title: string;
@@ -26,7 +39,7 @@ export interface YouTubeVideo {
   videoHeight?: number;
   isShort?: boolean;
   isLive?: boolean;
-  liveBroadcastContent?: 'live' | 'upcoming' | 'none';
+  liveBroadcastContent?: "live" | "upcoming" | "none";
   viewCount?: string;
 }
 
@@ -66,28 +79,28 @@ export interface RSSVideoEntry {
     uri: string;
   };
   link: {
-    '@_href': string;
-    '@_rel'?: string;
+    "@_href": string;
+    "@_rel"?: string;
   };
-  'media:group': {
-    'media:title'?: string;
-    'media:thumbnail': {
-      '@_url': string;
-      '@_width'?: string;
-      '@_height'?: string;
+  "media:group": {
+    "media:title"?: string;
+    "media:thumbnail": {
+      "@_url": string;
+      "@_width"?: string;
+      "@_height"?: string;
     };
-    'media:description': string;
-    'media:community'?: {
-      'media:starRating'?: {
-        '@_count': string;
-        '@_average': string;
+    "media:description": string;
+    "media:community"?: {
+      "media:starRating"?: {
+        "@_count": string;
+        "@_average": string;
       };
-      'media:statistics'?: {
-        '@_views': string;
+      "media:statistics"?: {
+        "@_views": string;
       };
     };
   };
 }
 
-export type ViewMode = 'grid' | 'list';
-export type SortBy = 'name' | 'recent' | 'oldest';
+export type ViewMode = "grid" | "list";
+export type SortBy = "name" | "recent" | "oldest";
