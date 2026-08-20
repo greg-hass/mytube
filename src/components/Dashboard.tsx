@@ -22,6 +22,7 @@ import {
 	AlertTriangle,
 } from "lucide-react";
 import { toast } from "sonner";
+import { useNavigate } from "react-router";
 import { FirstRunOnboarding } from "./FirstRunOnboarding";
 import { Header } from "./Header";
 import { AddChannelModal } from "./AddChannelModal";
@@ -31,10 +32,7 @@ import { SubscriptionsList } from "./SubscriptionsList";
 import { SubscriptionCard } from "./SubscriptionCard";
 import { VirtualizedVideoGrid } from "./VirtualizedVideoGrid";
 import { EmptyState, EmptyStateAction } from "./EmptyState";
-import {
-	FirstRefreshGuide,
-	type FirstRefreshState,
-} from "./FirstRefreshGuide";
+import { FirstRefreshGuide, type FirstRefreshState } from "./FirstRefreshGuide";
 import { ServerAuthSetup } from "./ServerAuthSetup";
 import { SavedFeedViews } from "./SavedFeedViews";
 import { FeedFiltersPanel } from "./FeedFiltersPanel";
@@ -218,8 +216,7 @@ class DashboardContentBoundary extends Component<
 						Subscriptions unavailable
 					</h2>
 					<p className="mt-2 text-sm text-gray-500 dark:text-ios-400">
-						This view could not be displayed. You can still use the rest of the
-						app.
+						This view could not be displayed. You can still use the rest of the app.
 					</p>
 					<button
 						type={BTN}
@@ -237,6 +234,7 @@ class DashboardContentBoundary extends Component<
 }
 
 export const Dashboard = () => {
+	const navigate = useNavigate();
 	const persistedQualityFilters = useMemo(
 		() => readPersistedQualityFilters(),
 		[],
@@ -290,9 +288,9 @@ export const Dashboard = () => {
 		useState("all");
 	const [newSubscriptionGroupName, setNewSubscriptionGroupName] = useState("");
 	const [isNewGroupModalOpen, setIsNewGroupModalOpen] = useState(false);
-	const [customSubscriptionGroups, setCustomSubscriptionGroups] = useState<string[]>(
-		() => readSubscriptionGroups(),
-	);
+	const [customSubscriptionGroups, setCustomSubscriptionGroups] = useState<
+		string[]
+	>(() => readSubscriptionGroups());
 	const [isGroupManagerOpen, setIsGroupManagerOpen] = useState(false);
 	const [groupManagerMode, setGroupManagerMode] =
 		useState<SubscriptionGroupManagerMode>("list");
@@ -360,17 +358,10 @@ export const Dashboard = () => {
 		clearServerAuth,
 		setSubscriptionGroup,
 	} = useSubscriptionStorage();
-	const {
-		favoriteVideoIds,
-		favoriteVideos: savedFavoriteVideos,
-	} =
+	const { favoriteVideoIds, favoriteVideos: savedFavoriteVideos } =
 		useFavoriteVideos();
-	const {
-		searchQuery,
-		watchedVideos,
-		markAsWatched,
-		setSearchQuery,
-	} = useStore();
+	const { searchQuery, watchedVideos, markAsWatched, setSearchQuery } =
+		useStore();
 
 	// Check if any channels have temporary IDs (can't fetch videos)
 	const hasTemporaryChannels = rawSubscriptions.some(
@@ -413,9 +404,9 @@ export const Dashboard = () => {
 				...allSubscriptions
 					.map((channel) => channel.group?.trim())
 					.filter((group): group is string => Boolean(group)),
-		...customSubscriptionGroups,
-		]),
-	).sort((a, b) => a.localeCompare(b));
+				...customSubscriptionGroups,
+			]),
+		).sort((a, b) => a.localeCompare(b));
 	}, [allSubscriptions, customSubscriptionGroups]);
 	const visibleSubscriptionChannels = useMemo(
 		() =>
@@ -501,10 +492,7 @@ export const Dashboard = () => {
 			!syncStatus.isSyncing;
 		if (refreshPhase === "queuing" || refreshPhase === "refreshing") {
 			setFirstRefreshState("refreshing");
-		} else if (
-			syncStatus.isSyncing ||
-			syncStatus.state === "running"
-		) {
+		} else if (syncStatus.isSyncing || syncStatus.state === "running") {
 			setFirstRefreshState("refreshing");
 		} else if (refreshHasCompleted && syncStatus.errors > 0) {
 			setFirstRefreshState("error");
@@ -610,7 +598,9 @@ export const Dashboard = () => {
 	}, [favoriteChannels]);
 
 	useEffect(() => {
-		const subscriptionIdSet = new Set(allSubscriptions.map((channel) => channel.id));
+		const subscriptionIdSet = new Set(
+			allSubscriptions.map((channel) => channel.id),
+		);
 		setSelectedSubscriptionChannelIds((current) => {
 			const next = new Set(
 				Array.from(current).filter((id) => subscriptionIdSet.has(id)),
@@ -661,7 +651,9 @@ export const Dashboard = () => {
 		);
 	const allFavoriteChannelsSelected =
 		favoriteChannels.length > 0 &&
-		favoriteChannels.every((channel) => selectedFavoriteChannelIds.has(channel.id));
+		favoriteChannels.every((channel) =>
+			selectedFavoriteChannelIds.has(channel.id),
+		);
 	const removeSelectedFavorites = async () => {
 		try {
 			await Promise.all(
@@ -676,7 +668,9 @@ export const Dashboard = () => {
 		}
 	};
 
-	const updateSelectedSubscriptionFavoriteState = async (isFavorite: boolean) => {
+	const updateSelectedSubscriptionFavoriteState = async (
+		isFavorite: boolean,
+	) => {
 		const channelsToUpdate = selectedSubscriptionChannels.filter(
 			(channel) => Boolean(channel.isFavorite) !== isFavorite,
 		);
@@ -736,18 +730,19 @@ export const Dashboard = () => {
 	};
 
 	const confirmBulkUnsubscribe = async () => {
-		const subscriptionsToRemove = selectedSubscriptionChannels.map((channel) =>
-			rawSubscriptions.find((subscription) => subscription.id === channel.id) ?? {
-				id: channel.id,
-				title: channel.title,
-				description: channel.description,
-				thumbnail: channel.thumbnail,
-				customUrl: channel.customUrl,
-				addedAt: channel.addedAt ?? Date.now(),
-				isFavorite: channel.isFavorite,
-				isMuted: channel.isMuted,
-				group: channel.group,
-			},
+		const subscriptionsToRemove = selectedSubscriptionChannels.map(
+			(channel) =>
+				rawSubscriptions.find((subscription) => subscription.id === channel.id) ?? {
+					id: channel.id,
+					title: channel.title,
+					description: channel.description,
+					thumbnail: channel.thumbnail,
+					customUrl: channel.customUrl,
+					addedAt: channel.addedAt ?? Date.now(),
+					isFavorite: channel.isFavorite,
+					isMuted: channel.isMuted,
+					group: channel.group,
+				},
 		);
 		if (subscriptionsToRemove.length === 0) return;
 
@@ -826,10 +821,7 @@ export const Dashboard = () => {
 			let rollbackFailed = false;
 			for (const channelId of updatedChannelIds) {
 				try {
-					await setSubscriptionGroup(
-						channelId,
-						previousGroups.get(channelId) || "",
-					);
+					await setSubscriptionGroup(channelId, previousGroups.get(channelId) || "");
 				} catch {
 					rollbackFailed = true;
 				}
@@ -886,7 +878,6 @@ export const Dashboard = () => {
 		if (tab === "favorites") {
 			sessionStorage.removeItem("favorite-videos-scroll");
 		}
-
 	};
 
 	const handleLatestTabClick = () => {
@@ -899,10 +890,7 @@ export const Dashboard = () => {
 		}
 
 		const lastTapAt = lastActiveLatestTapAtRef.current;
-		if (
-			lastTapAt !== null &&
-			now - lastTapAt <= LATEST_DOUBLE_TAP_INTERVAL_MS
-		) {
+		if (lastTapAt !== null && now - lastTapAt <= LATEST_DOUBLE_TAP_INTERVAL_MS) {
 			lastActiveLatestTapAtRef.current = null;
 			sessionStorage.removeItem(LATEST_TIMELINE_SCROLL_STORAGE_KEY);
 			window.scrollTo({ top: 0 });
@@ -953,7 +941,9 @@ export const Dashboard = () => {
 	};
 
 	const getAssignedSubscriptions = (group: string) =>
-		rawSubscriptions.filter((subscription) => subscription.group?.trim() === group);
+		rawSubscriptions.filter(
+			(subscription) => subscription.group?.trim() === group,
+		);
 
 	const rollbackGroupAssignments = async (
 		channelIds: string[],
@@ -1079,8 +1069,32 @@ export const Dashboard = () => {
 	};
 
 	const openChannel = (channelId: string) => {
-		setSearchQuery("");
-		window.location.href = `/channel/${channelId}`;
+		navigate(`/channel/${channelId}`);
+	};
+
+	const handleRemoveChannelFromSearch = async (channelId: string) => {
+		const removedChannel = rawSubscriptions.find(
+			(channel) => channel.id === channelId,
+		);
+		await removeSubscription(channelId);
+		if (removedChannel) {
+			toast.success(`Removed ${removedChannel.title}`, {
+				description: "Channel removed from subscriptions",
+				action: {
+					label: "Undo",
+					onClick: async () => {
+						try {
+							await addSubscriptions([removedChannel]);
+							toast.success(`Restored ${removedChannel.title}`);
+						} catch (error) {
+							toast.error("Could not restore channel", {
+								description: error instanceof Error ? error.message : "Unknown error",
+							});
+						}
+					},
+				},
+			});
+		}
 	};
 
 	useEffect(() => {
@@ -1145,10 +1159,7 @@ export const Dashboard = () => {
 			setFeedViewPresets(readFeedViewPresets());
 		};
 
-		window.addEventListener(
-			FEED_VIEW_PRESETS_CHANGED_EVENT,
-			syncFeedViewPresets,
-		);
+		window.addEventListener(FEED_VIEW_PRESETS_CHANGED_EVENT, syncFeedViewPresets);
 		return () =>
 			window.removeEventListener(
 				FEED_VIEW_PRESETS_CHANGED_EVENT,
@@ -1236,9 +1247,7 @@ export const Dashboard = () => {
 	};
 
 	const deleteSavedFeedViewPreset = (presetId: string) => {
-		const preset = feedViewPresets.find(
-			(candidate) => candidate.id === presetId,
-		);
+		const preset = feedViewPresets.find((candidate) => candidate.id === presetId);
 
 		try {
 			const updatedPresets = writeFeedViewPresets(
@@ -1409,10 +1418,7 @@ export const Dashboard = () => {
 					data-testid="dashboard-page-chrome"
 					className="relative max-w-7xl mx-auto pt-[var(--app-sticky-gap)] pb-[calc(5rem+env(safe-area-inset-bottom))] sm:pb-[calc(6rem+env(safe-area-inset-bottom))]"
 					style={{
-						transform:
-							pullDistance > 0
-								? `translateY(${pullDistance}px)`
-								: undefined,
+						transform: pullDistance > 0 ? `translateY(${pullDistance}px)` : undefined,
 						willChange: pullDistance > 0 ? "transform" : undefined,
 					}}
 				>
@@ -1428,20 +1434,17 @@ export const Dashboard = () => {
 								className="flex items-start gap-2 border-b border-gray-200/70 pb-[var(--app-sticky-gap)] dark:border-ios-800/80 sm:items-center"
 							>
 								<div className="mr-auto flex min-w-0 flex-1 flex-wrap items-center gap-2">
-									<label
-										htmlFor="subscription-group-filter"
-										className="sr-only"
-									>
+									<label htmlFor="subscription-group-filter" className="sr-only">
 										Filter group
 									</label>
 									<select
 										id="subscription-group-filter"
 										aria-label="Filter group"
-									value={selectedSubscriptionGroup}
-											onChange={(e) => {
-												clearSubscriptionSelection();
-												setSelectedSubscriptionGroup(e.target.value);
-											}}
+										value={selectedSubscriptionGroup}
+										onChange={(e) => {
+											clearSubscriptionSelection();
+											setSelectedSubscriptionGroup(e.target.value);
+										}}
 										className="h-10 max-w-[11rem] rounded-lg border border-gray-200 bg-white px-3 text-sm font-medium text-gray-700 outline-none focus:border-red-500 dark:border-ios-800 dark:bg-ios-900 dark:text-ios-200"
 									>
 										<option value="all">All groups</option>
@@ -1450,45 +1453,45 @@ export const Dashboard = () => {
 												{group}
 											</option>
 										))}
-					</select>
-					<button
-						type={BTN}
-						aria-pressed={allVisibleSubscriptionChannelsSelected}
-						aria-label={
-							allVisibleSubscriptionChannelsSelected
-								? "Deselect all visible channels"
-								: "Select all visible channels"
-						}
-						onClick={() =>
-							toggleAllSelectionIds(
-								setSelectedSubscriptionChannelIds,
-								visibleSubscriptionChannels.map((channel) => channel.id),
-							)
-						}
-						className="h-10 rounded-lg border border-gray-300 bg-white px-3 text-sm font-medium text-gray-700 hover:bg-gray-50 dark:border-ios-700 dark:bg-ios-900 dark:text-ios-200 dark:hover:bg-ios-800"
-					>
-						{allVisibleSubscriptionChannelsSelected
-							? "Deselect visible"
-							: "Select all visible"}
-					</button>
+									</select>
+									<button
+										type={BTN}
+										aria-pressed={allVisibleSubscriptionChannelsSelected}
+										aria-label={
+											allVisibleSubscriptionChannelsSelected
+												? "Deselect all visible channels"
+												: "Select all visible channels"
+										}
+										onClick={() =>
+											toggleAllSelectionIds(
+												setSelectedSubscriptionChannelIds,
+												visibleSubscriptionChannels.map((channel) => channel.id),
+											)
+										}
+										className="h-10 rounded-lg border border-gray-300 bg-white px-3 text-sm font-medium text-gray-700 hover:bg-gray-50 dark:border-ios-700 dark:bg-ios-900 dark:text-ios-200 dark:hover:bg-ios-800"
+									>
+										{allVisibleSubscriptionChannelsSelected
+											? "Deselect visible"
+											: "Select all visible"}
+									</button>
 
-					<button
-						type={BTN}
-						onClick={() => setIsNewGroupModalOpen(true)}
-						className="h-10 rounded-lg bg-gray-800 px-3 text-sm font-medium text-white hover:bg-gray-700 dark:bg-ios-700 dark:hover:bg-ios-600"
-					>
-						Add group
-					</button>
-					{customSubscriptionGroups.length > 0 && (
-						<button
-							type={BTN}
-							onClick={openGroupManager}
-							className="h-10 rounded-lg border border-gray-300 bg-white px-3 text-sm font-medium text-gray-700 hover:bg-gray-50 dark:border-ios-700 dark:bg-ios-900 dark:text-ios-200 dark:hover:bg-ios-800"
-						>
-							Manage groups
-						</button>
-					)}
-				</div>
+									<button
+										type={BTN}
+										onClick={() => setIsNewGroupModalOpen(true)}
+										className="h-10 rounded-lg bg-gray-800 px-3 text-sm font-medium text-white hover:bg-gray-700 dark:bg-ios-700 dark:hover:bg-ios-600"
+									>
+										Add group
+									</button>
+									{customSubscriptionGroups.length > 0 && (
+										<button
+											type={BTN}
+											onClick={openGroupManager}
+											className="h-10 rounded-lg border border-gray-300 bg-white px-3 text-sm font-medium text-gray-700 hover:bg-gray-50 dark:border-ios-700 dark:bg-ios-900 dark:text-ios-200 dark:hover:bg-ios-800"
+										>
+											Manage groups
+										</button>
+									)}
+								</div>
 								<button
 									disabled={isRepairingIcons}
 									onClick={handleRepairChannelIcons}
@@ -1514,86 +1517,86 @@ export const Dashboard = () => {
 									className="flex flex-nowrap items-center justify-between gap-1 sm:gap-2"
 								>
 									<div className="flex min-w-0 flex-nowrap items-center gap-2 sm:gap-3">
-											<div className="hidden items-center gap-2 text-xs font-medium text-gray-500 dark:text-ios-400 sm:flex">
-												<span>
-													Last refreshed {formatRefreshAge(syncStatus.lastUpdated)}
+										<div className="hidden items-center gap-2 text-xs font-medium text-gray-500 dark:text-ios-400 sm:flex">
+											<span>
+												Last refreshed {formatRefreshAge(syncStatus.lastUpdated)}
+											</span>
+											{scheduledRefreshIntervalMinutes && (
+												<span className="rounded-full bg-gray-100 px-2 py-1 text-gray-600 dark:bg-ios-800 dark:text-ios-300">
+													Auto {scheduledRefreshIntervalMinutes}m
 												</span>
-												{scheduledRefreshIntervalMinutes && (
-													<span className="rounded-full bg-gray-100 px-2 py-1 text-gray-600 dark:bg-ios-800 dark:text-ios-300">
-														Auto {scheduledRefreshIntervalMinutes}m
-													</span>
-												)}
-											</div>
+											)}
 										</div>
+									</div>
 
 									<div
 										data-testid="latest-toolbar-actions"
-											className="ml-auto flex shrink-0 flex-nowrap items-center gap-1 sm:gap-2"
+										className="ml-auto flex shrink-0 flex-nowrap items-center gap-1 sm:gap-2"
+									>
+										<button
+											type={BTN}
+											onClick={() => changeTab("live")}
+											className="inline-flex h-10 items-center justify-center gap-1.5 rounded-lg border border-red-200 bg-red-50 px-3 text-sm font-semibold text-red-700 transition-colors hover:bg-red-100 dark:border-red-900/60 dark:bg-red-950/30 dark:text-red-300 dark:hover:bg-red-950/50"
 										>
-											<button
-												type={BTN}
-												onClick={() => changeTab("live")}
-												className="inline-flex h-10 items-center justify-center gap-1.5 rounded-lg border border-red-200 bg-red-50 px-3 text-sm font-semibold text-red-700 transition-colors hover:bg-red-100 dark:border-red-900/60 dark:bg-red-950/30 dark:text-red-300 dark:hover:bg-red-950/50"
-											>
-												<Radio className="h-4 w-4" aria-hidden="true" />
-												<span>Live</span>
-											</button>
-											<button
-												type={BTN}
-												aria-expanded={isFeedFiltersOpen}
-												aria-controls="feed-filters-panel"
-												aria-label={
-													activeAdvancedFilterCount > 0
-														? `Filters, ${activeAdvancedFilterCount} active`
-														: "Filters"
-												}
-												onClick={() => setIsFeedFiltersOpen((open) => !open)}
-												className={`inline-flex h-10 items-center justify-center gap-1.5 rounded-lg border px-3 text-sm font-medium transition-colors ${
-													isFeedFiltersOpen || activeAdvancedFilterCount > 0
-														? "border-red-200 bg-red-50 text-red-700 dark:border-red-900/60 dark:bg-red-950/30 dark:text-red-300"
-														: "border-gray-200 bg-white text-gray-700 hover:bg-gray-50 dark:border-ios-800 dark:bg-ios-900 dark:text-ios-200 dark:hover:bg-ios-800"
-												}`}
-											>
-												<Filter className="h-4 w-4" aria-hidden="true" />
-												<span className="hidden sm:inline">Filters</span>
-												{activeAdvancedFilterCount > 0 && (
-													<span className="min-w-4 rounded-full bg-red-600 px-1 text-center text-[10px] leading-4 text-white dark:bg-red-500">
-														{activeAdvancedFilterCount}
-													</span>
-												)}
-																									</button>
-																					<div className="hidden xl:flex">
-												<SavedFeedViews
-													presets={feedViewPresets}
-													onApply={applyFeedViewPreset}
-													onSave={saveCurrentFeedViewPreset}
-													onDelete={deleteSavedFeedViewPreset}
-												/>
-											</div>
-											{visibleLatestVideos.length > 0 && (
-												<>
-													<label htmlFor="bulk-watched-action" className="sr-only">
-														Bulk watched action
-													</label>
-													<select
-														id="bulk-watched-action"
-														aria-label="Bulk watched action"
-														defaultValue=""
-														onChange={(event) => {
-															handleBulkWatchedAction(event.target.value);
-															event.target.value = "";
-														}}
-														className="hidden h-10 rounded-lg border border-gray-200 bg-white px-3 text-sm font-medium text-gray-700 outline-none focus:border-red-500 dark:border-ios-800 dark:bg-ios-900 dark:text-ios-200 sm:block"
-													>
-														<option value="" disabled>
-															Mark watched
-														</option>
-														<option value="shown">Shown videos</option>
-														<option value="older-7">Older than 7 days</option>
-														<option value="older-30">Older than 30 days</option>
-													</select>
-												</>
+											<Radio className="h-4 w-4" aria-hidden="true" />
+											<span>Live</span>
+										</button>
+										<button
+											type={BTN}
+											aria-expanded={isFeedFiltersOpen}
+											aria-controls="feed-filters-panel"
+											aria-label={
+												activeAdvancedFilterCount > 0
+													? `Filters, ${activeAdvancedFilterCount} active`
+													: "Filters"
+											}
+											onClick={() => setIsFeedFiltersOpen((open) => !open)}
+											className={`inline-flex h-10 items-center justify-center gap-1.5 rounded-lg border px-3 text-sm font-medium transition-colors ${
+												isFeedFiltersOpen || activeAdvancedFilterCount > 0
+													? "border-red-200 bg-red-50 text-red-700 dark:border-red-900/60 dark:bg-red-950/30 dark:text-red-300"
+													: "border-gray-200 bg-white text-gray-700 hover:bg-gray-50 dark:border-ios-800 dark:bg-ios-900 dark:text-ios-200 dark:hover:bg-ios-800"
+											}`}
+										>
+											<Filter className="h-4 w-4" aria-hidden="true" />
+											<span className="hidden sm:inline">Filters</span>
+											{activeAdvancedFilterCount > 0 && (
+												<span className="min-w-4 rounded-full bg-red-600 px-1 text-center text-[10px] leading-4 text-white dark:bg-red-500">
+													{activeAdvancedFilterCount}
+												</span>
 											)}
+										</button>
+										<div className="hidden xl:flex">
+											<SavedFeedViews
+												presets={feedViewPresets}
+												onApply={applyFeedViewPreset}
+												onSave={saveCurrentFeedViewPreset}
+												onDelete={deleteSavedFeedViewPreset}
+											/>
+										</div>
+										{visibleLatestVideos.length > 0 && (
+											<>
+												<label htmlFor="bulk-watched-action" className="sr-only">
+													Bulk watched action
+												</label>
+												<select
+													id="bulk-watched-action"
+													aria-label="Bulk watched action"
+													defaultValue=""
+													onChange={(event) => {
+														handleBulkWatchedAction(event.target.value);
+														event.target.value = "";
+													}}
+													className="hidden h-10 rounded-lg border border-gray-200 bg-white px-3 text-sm font-medium text-gray-700 outline-none focus:border-red-500 dark:border-ios-800 dark:bg-ios-900 dark:text-ios-200 sm:block"
+												>
+													<option value="" disabled>
+														Mark watched
+													</option>
+													<option value="shown">Shown videos</option>
+													<option value="older-7">Older than 7 days</option>
+													<option value="older-30">Older than 30 days</option>
+												</select>
+											</>
+										)}
 									</div>
 								</div>
 								{isFeedFiltersOpen && (
@@ -1601,16 +1604,12 @@ export const Dashboard = () => {
 										durationFilter={durationFilter}
 										onDurationFilterChange={setDurationFilter}
 										hideLiveReplays={hideLiveReplays}
-										onToggleLiveReplays={() =>
-										setHideLiveReplays((value) => !value)
-										}
+										onToggleLiveReplays={() => setHideLiveReplays((value) => !value)}
 										hidePremieres={hidePremieres}
-										onTogglePremieres={() =>
-										setHidePremieres((value) => !value)
-										}
+										onTogglePremieres={() => setHidePremieres((value) => !value)}
 										hideDuplicateTitles={hideDuplicateTitles}
 										onToggleDuplicateTitles={() =>
-										setHideDuplicateTitles((value) => !value)
+											setHideDuplicateTitles((value) => !value)
 										}
 										mutedKeywordText={mutedKeywordText}
 										onMutedKeywordTextChange={setMutedKeywordText}
@@ -1667,133 +1666,143 @@ export const Dashboard = () => {
 								key={searchQuery.trim()}
 								query={searchQuery.trim()}
 								scope={searchScope}
-							results={unifiedSearchResults}
-							onScopeChange={setSearchScope}
-							onToggleChannelFavorite={toggleChannelFavorite}
-							channelThumbnails={channelThumbnails}
+								results={unifiedSearchResults}
+								onScopeChange={setSearchScope}
+								onToggleChannelFavorite={toggleChannelFavorite}
+								onRemoveChannel={(channelId) => {
+									void handleRemoveChannelFromSearch(channelId);
+								}}
+								channelThumbnails={channelThumbnails}
 							/>
 						) : activeTab === "subscriptions" ? (
-											<div>
-												<div className="mb-4 px-4">
-												<BulkSelectionToolbar
-														selectedChannelCount={selectedSubscriptionChannels.length}
-														groupOptions={subscriptionGroups}
-															addToFavoritesCount={selectedSubscriptionChannels.filter((channel) => !channel.isFavorite).length}
-															removeFromFavoritesCount={selectedSubscriptionChannels.filter((channel) => channel.isFavorite).length}
-															showMuteActions
-															showUnsubscribeAction
-															muteChannelsCount={selectedSubscriptionChannels.filter((channel) => !channel.isMuted).length}
-															unmuteChannelsCount={selectedSubscriptionChannels.filter((channel) => channel.isMuted).length}
-															onAddToFavorites={addSelectedSubscriptionsToFavorites}
-															onRemoveFromFavorites={removeSelectedSubscriptionsFromFavorites}
-															onMuteChannels={muteSelectedSubscriptions}
-															onUnmuteChannels={unmuteSelectedSubscriptions}
-															onUnsubscribeChannels={requestBulkUnsubscribe}
-															onAssignChannelsToGroup={assignSelectedSubscriptionChannelsToGroup}
-															onClear={clearSubscriptionSelection}
-													/>
-												</div>
-												<DashboardContentBoundary
+							<div>
+								<div className="mb-4 px-4">
+									<BulkSelectionToolbar
+										selectedChannelCount={selectedSubscriptionChannels.length}
+										groupOptions={subscriptionGroups}
+										addToFavoritesCount={
+											selectedSubscriptionChannels.filter((channel) => !channel.isFavorite)
+												.length
+										}
+										removeFromFavoritesCount={
+											selectedSubscriptionChannels.filter((channel) => channel.isFavorite)
+												.length
+										}
+										showMuteActions
+										showUnsubscribeAction
+										muteChannelsCount={
+											selectedSubscriptionChannels.filter((channel) => !channel.isMuted)
+												.length
+										}
+										unmuteChannelsCount={
+											selectedSubscriptionChannels.filter((channel) => channel.isMuted)
+												.length
+										}
+										onAddToFavorites={addSelectedSubscriptionsToFavorites}
+										onRemoveFromFavorites={removeSelectedSubscriptionsFromFavorites}
+										onMuteChannels={muteSelectedSubscriptions}
+										onUnmuteChannels={unmuteSelectedSubscriptions}
+										onUnsubscribeChannels={requestBulkUnsubscribe}
+										onAssignChannelsToGroup={assignSelectedSubscriptionChannelsToGroup}
+										onClear={clearSubscriptionSelection}
+									/>
+								</div>
+								<DashboardContentBoundary
 									onReturnToLatest={() => changeTab(TAB_LATEST)}
 								>
 									<SubscriptionsList
-															selectedGroup={selectedSubscriptionGroup}
-															groups={subscriptionGroups}
-															selectable
-															selectedChannelIds={selectedSubscriptionChannelIds}
-															onToggleSelect={(channelId) =>
-																toggleSelectionId(
-																	setSelectedSubscriptionChannelIds,
-																	channelId,
-																)
-															}
-															onClearGroup={() => setSelectedSubscriptionGroup("all")}
+										selectedGroup={selectedSubscriptionGroup}
+										groups={subscriptionGroups}
+										selectable
+										selectedChannelIds={selectedSubscriptionChannelIds}
+										onToggleSelect={(channelId) =>
+											toggleSelectionId(setSelectedSubscriptionChannelIds, channelId)
+										}
+										onClearGroup={() => setSelectedSubscriptionGroup("all")}
 									/>
 								</DashboardContentBoundary>
 							</div>
-							) : activeTab === TAB_LATEST ? (
-								<div className="px-4">
-									{firstRefreshState ? (
-										<FirstRefreshGuide
-											state={firstRefreshState}
-											isRefreshing={isRefreshing}
-											onRefresh={() => void refetchVideos()}
-											guideRef={firstRefreshGuideRef}
-										/>
-									) : videosLoading ? (
-										<div
-											className="flex min-h-[45vh] flex-col items-center justify-center gap-3 text-gray-500 dark:text-ios-400"
-											data-testid="latest-videos-loading"
-											role="status"
-											aria-live="polite"
-										>
-											<Loader2 className="h-8 w-8 animate-spin" aria-hidden="true" />
-											<span>Loading videos…</span>
+						) : activeTab === TAB_LATEST ? (
+							<div className="px-4">
+								{firstRefreshState ? (
+									<FirstRefreshGuide
+										state={firstRefreshState}
+										isRefreshing={isRefreshing}
+										onRefresh={() => void refetchVideos()}
+										guideRef={firstRefreshGuideRef}
+									/>
+								) : videosLoading ? (
+									<div
+										className="flex min-h-[45vh] flex-col items-center justify-center gap-3 text-gray-500 dark:text-ios-400"
+										data-testid="latest-videos-loading"
+										role="status"
+										aria-live="polite"
+									>
+										<Loader2 className="h-8 w-8 animate-spin" aria-hidden="true" />
+										<span>Loading videos…</span>
+									</div>
+								) : videos.length === 0 ? (
+									hasTemporaryChannels ? (
+										<div className="text-center py-12">
+											<p className="text-gray-600 dark:text-ios-400 text-lg mb-2">
+												Some channels need channel IDs to fetch videos
+											</p>
+											<p className="text-sm text-gray-500">
+												Channels added with handles or custom names will be updated
+												automatically when videos are discovered
+											</p>
+											<EmptyStateAction
+												onClick={() => void refetchVideos()}
+												disabled={isRefreshing}
+											>
+												{isRefreshing ? "Refreshing feeds..." : "Refresh feeds"}
+											</EmptyStateAction>
 										</div>
-									) : videos.length === 0 ? (
-										hasTemporaryChannels ? (
-											<div className="text-center py-12">
-												<p className="text-gray-600 dark:text-ios-400 text-lg mb-2">
-													Some channels need channel IDs to fetch videos
-													</p>
-													<p className="text-sm text-gray-500">
-														Channels added with handles or custom names will be
-																updated automatically when videos are discovered
-															</p>
-														<EmptyStateAction
-															onClick={() => void refetchVideos()}
-															disabled={isRefreshing}
-														>
-															{isRefreshing ? "Refreshing feeds..." : "Refresh feeds"}
-														</EmptyStateAction>
-													</div>
-											) : (
-												<EmptyState
-													icon={TrendingUp}
-													iconName={TAB_LATEST}
-													title="No videos found"
-													detail="New uploads from your subscriptions will appear here."
-													action={
-														<EmptyStateAction
-															onClick={() => void refetchVideos()}
-															disabled={isRefreshing}
-														>
-																	{isRefreshing ? "Refreshing feeds..." : "Refresh feeds"}
-																</EmptyStateAction>
-																}
-															/>
-												)
-										) : filteredVideos.length === 0 ? (
-											<EmptyState
-												icon={Filter}
-												iconName="filtered-latest"
-												title="No videos match your filters"
-												detail="Clear the active filters to see more videos in Latest."
-												action={
-													<EmptyStateAction onClick={clearFeedFilters}>
-														Clear filters
-													</EmptyStateAction>
-												}
-											/>
-																) : (
-																	<div>
-															<p className="hidden sm:block text-sm text-gray-500 dark:text-ios-400 mb-4">
+									) : (
+										<EmptyState
+											icon={TrendingUp}
+											iconName={TAB_LATEST}
+											title="No videos found"
+											detail="New uploads from your subscriptions will appear here."
+											action={
+												<EmptyStateAction
+													onClick={() => void refetchVideos()}
+													disabled={isRefreshing}
+												>
+													{isRefreshing ? "Refreshing feeds..." : "Refresh feeds"}
+												</EmptyStateAction>
+											}
+										/>
+									)
+								) : filteredVideos.length === 0 ? (
+									<EmptyState
+										icon={Filter}
+										iconName="filtered-latest"
+										title="No videos match your filters"
+										detail="Clear the active filters to see more videos in Latest."
+										action={
+											<EmptyStateAction onClick={clearFeedFilters}>
+												Clear filters
+											</EmptyStateAction>
+										}
+									/>
+								) : (
+									<div>
+										<p className="hidden sm:block text-sm text-gray-500 dark:text-ios-400 mb-4">
 											Showing {filteredVideos.length} recent videos
 										</p>
 										<VirtualizedVideoGrid
 											videos={visibleLatestVideos}
-																					columns={4}
-																				scrollStorageKey="latest-videos-scroll"
-																				channelThumbnails={channelThumbnails}
-																				/>
+											columns={4}
+											scrollStorageKey="latest-videos-scroll"
+											channelThumbnails={channelThumbnails}
+										/>
 										{visibleLatestVideos.length < filteredVideos.length && (
 											<div className="mt-4 flex justify-center pb-8 sm:hidden">
 												<button
 													type={BTN}
 													onClick={() =>
-														setMobileVideoLimit(
-															(count) => count + MOBILE_TIMELINE_INCREMENT,
-														)
+														setMobileVideoLimit((count) => count + MOBILE_TIMELINE_INCREMENT)
 													}
 													className="rounded-lg bg-gray-800 px-4 py-2 text-sm font-medium text-white dark:bg-ios-700"
 												>
@@ -1804,111 +1813,124 @@ export const Dashboard = () => {
 									</div>
 								)}
 							</div>
-							) : activeTab === "live" ? (
-								<div className="px-4">
-									{liveVideosLoading ? (
-										<div
-											className="flex min-h-[45vh] flex-col items-center justify-center gap-3 text-center text-gray-500 dark:text-ios-400"
-											role="status"
-											aria-live="polite"
-										>
-											<Loader2 className="h-8 w-8 animate-spin text-red-600" aria-hidden="true" />
-											<span className="font-medium">Checking your subscriptions…</span>
-											<span className="max-w-sm text-xs">
-												The first scan can take a moment. Recent results are cached for one minute.
-											</span>
-										</div>
-									) : liveVideosFailed ? (
+						) : activeTab === "live" ? (
+							<div className="px-4">
+								{liveVideosLoading ? (
+									<div
+										className="flex min-h-[45vh] flex-col items-center justify-center gap-3 text-center text-gray-500 dark:text-ios-400"
+										role="status"
+										aria-live="polite"
+									>
+										<Loader2
+											className="h-8 w-8 animate-spin text-red-600"
+											aria-hidden="true"
+										/>
+										<span className="font-medium">Checking your subscriptions…</span>
+										<span className="max-w-sm text-xs">
+											The first scan can take a moment. Recent results are cached for one
+											minute.
+										</span>
+									</div>
+								) : liveVideosFailed ? (
+									<EmptyState
+										icon={AlertTriangle}
+										iconName="live-error"
+										title="Could not check live streams"
+										detail={getErrorDescription(liveVideosError)}
+										action={
+											<EmptyStateAction onClick={() => void refreshLiveVideos()}>
+												Try again
+											</EmptyStateAction>
+										}
+									/>
+								) : liveLookup.videos.length === 0 ? (
+									<div>
+										{liveLookup.failedChannels.length > 0 && (
+											<div
+												className="mb-4 flex items-start gap-2 rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900 dark:border-amber-900/60 dark:bg-amber-950/30 dark:text-amber-200"
+												role="status"
+											>
+												<AlertTriangle
+													className="mt-0.5 h-4 w-4 shrink-0"
+													aria-hidden="true"
+												/>
+												<span>
+													{liveLookup.failedChannels.length} channel
+													{liveLookup.failedChannels.length === 1 ? "" : "s"} could not be
+													checked, so this result may be incomplete.
+												</span>
+											</div>
+										)}
 										<EmptyState
-											icon={AlertTriangle}
-											iconName="live-error"
-											title="Could not check live streams"
-											detail={getErrorDescription(liveVideosError)}
+											icon={Radio}
+											iconName="live"
+											title="No subscriptions are live"
+											detail={`Checked ${liveLookup.checkedChannels} of ${liveLookup.totalChannels} subscriptions${liveLookup.invalidChannels ? ` · ${liveLookup.invalidChannels} unresolved` : ""}.`}
 											action={
-												<EmptyStateAction onClick={() => void refreshLiveVideos()}>
-													Try again
+												<EmptyStateAction onClick={() => changeTab(TAB_LATEST)}>
+													View Latest
 												</EmptyStateAction>
 											}
 										/>
-									) : liveLookup.videos.length === 0 ? (
-										<div>
-											{liveLookup.failedChannels.length > 0 && (
-												<div
-													className="mb-4 flex items-start gap-2 rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900 dark:border-amber-900/60 dark:bg-amber-950/30 dark:text-amber-200"
-													role="status"
-												>
-													<AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
-													<span>
-														{liveLookup.failedChannels.length} channel{liveLookup.failedChannels.length === 1 ? "" : "s"} could not be checked, so this result may be incomplete.
-													</span>
-												</div>
-											)}
-											<EmptyState
-												icon={Radio}
-												iconName="live"
-												title="No subscriptions are live"
-												detail={`Checked ${liveLookup.checkedChannels} of ${liveLookup.totalChannels} subscriptions${liveLookup.invalidChannels ? ` · ${liveLookup.invalidChannels} unresolved` : ""}.`}
-												action={
-													<EmptyStateAction onClick={() => changeTab(TAB_LATEST)}>
-														View Latest
-													</EmptyStateAction>
-												}
-											/>
-										</div>
-									) : (
-										<div>
-											{liveLookup.failedChannels.length > 0 && (
-												<div
-													className="mb-4 flex items-start gap-2 rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900 dark:border-amber-900/60 dark:bg-amber-950/30 dark:text-amber-200"
-													role="status"
-												>
-													<AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
-													<span>
-														Showing confirmed live streams. {liveLookup.failedChannels.length} channel{liveLookup.failedChannels.length === 1 ? " was" : "s were"} unavailable during this scan.
-													</span>
-												</div>
-											)}
-											<p className="mb-4 text-sm text-gray-500 dark:text-ios-400">
-												{liveLookup.videos.length} subscription{liveLookup.videos.length === 1 ? " is" : "s are"} live now
-											</p>
-											<VirtualizedVideoGrid
-												videos={liveLookup.videos}
-												columns={4}
-												scrollStorageKey="live-videos-scroll"
-												channelThumbnails={channelThumbnails}
-											/>
-										</div>
-									)}
-								</div>
-							) : activeTab === "favorites" ? (
+									</div>
+								) : (
+									<div>
+										{liveLookup.failedChannels.length > 0 && (
+											<div
+												className="mb-4 flex items-start gap-2 rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900 dark:border-amber-900/60 dark:bg-amber-950/30 dark:text-amber-200"
+												role="status"
+											>
+												<AlertTriangle
+													className="mt-0.5 h-4 w-4 shrink-0"
+													aria-hidden="true"
+												/>
+												<span>
+													Showing confirmed live streams. {liveLookup.failedChannels.length}{" "}
+													channel{liveLookup.failedChannels.length === 1 ? " was" : "s were"}{" "}
+													unavailable during this scan.
+												</span>
+											</div>
+										)}
+										<p className="mb-4 text-sm text-gray-500 dark:text-ios-400">
+											{liveLookup.videos.length} subscription
+											{liveLookup.videos.length === 1 ? " is" : "s are"} live now
+										</p>
+										<VirtualizedVideoGrid
+											videos={liveLookup.videos}
+											columns={4}
+											scrollStorageKey="live-videos-scroll"
+											channelThumbnails={channelThumbnails}
+										/>
+									</div>
+								)}
+							</div>
+						) : activeTab === "favorites" ? (
 							<div className="px-4">
-								{favoriteChannels.length === 0 &&
-								favoriteVideos.length === 0 ? (
-																	<EmptyState
-																		icon={Heart}
-																		iconName="favorites"
-																		title="No favorites yet"
-																		detail="Favorite channels or videos to find them here."
-																		action={
-																			<EmptyStateAction onClick={() => changeTab(TAB_LATEST)}>
-																			Browse Latest
-																		</EmptyStateAction>
-																	}
-																	/>
+								{favoriteChannels.length === 0 && favoriteVideos.length === 0 ? (
+									<EmptyState
+										icon={Heart}
+										iconName="favorites"
+										title="No favorites yet"
+										detail="Favorite channels or videos to find them here."
+										action={
+											<EmptyStateAction onClick={() => changeTab(TAB_LATEST)}>
+												Browse Latest
+											</EmptyStateAction>
+										}
+									/>
 								) : (
 									<div className="space-y-8">
-						<BulkSelectionToolbar
-							selectedChannelCount={selectedFavoriteChannels.length}
+										<BulkSelectionToolbar
+											selectedChannelCount={selectedFavoriteChannels.length}
 											groupOptions={subscriptionGroups}
-							addToFavoritesCount={0}
-										removeFromFavoritesCount={selectedFavoriteChannels.length}
-							onAddToFavorites={() => undefined}
-							onRemoveFromFavorites={removeSelectedFavorites}
+											addToFavoritesCount={0}
+											removeFromFavoritesCount={selectedFavoriteChannels.length}
+											onAddToFavorites={() => undefined}
+											onRemoveFromFavorites={removeSelectedFavorites}
 											onAssignChannelsToGroup={assignSelectedFavoriteChannelsToGroup}
-							onClear={clearFavoriteSelection}
+											onClear={clearFavoriteSelection}
 										/>
-										{(favoriteChannels.length > 0 ||
-											favoriteVideos.length > 0) && (
+										{(favoriteChannels.length > 0 || favoriteVideos.length > 0) && (
 											<div
 												data-testid="favorite-section-switcher"
 												className="grid grid-cols-2 gap-1 rounded-xl bg-gray-100 p-1 dark:bg-ios-900 sm:hidden"
@@ -1945,34 +1967,32 @@ export const Dashboard = () => {
 											className={`${visibleFavoriteSection === "channels" ? "block" : "hidden sm:block"} ${favoriteChannels.length === 0 ? "sm:hidden" : ""}`}
 										>
 											<div className="mb-4 flex items-center justify-between gap-3">
-													<h2 className="text-lg font-semibold text-gray-900 dark:text-ios-100">
-														Channels
-													</h2>
-													<div className="flex items-center gap-2">
-														<span className="text-sm text-gray-500 dark:text-ios-400">
-															{favoriteChannels.length}
-														</span>
-														<button
-															type={BTN}
-															aria-pressed={allFavoriteChannelsSelected}
-															aria-label={
-																allFavoriteChannelsSelected
-																	? "Deselect all visible channels"
-																	: "Select all visible channels"
-															}
-															onClick={() =>
-																toggleAllSelectionIds(
-																	setSelectedFavoriteChannelIds,
-																	favoriteChannels.map((channel) => channel.id),
-																)
-															}
-															className="rounded-lg border border-gray-200 px-2 py-1 text-xs font-medium text-gray-600 hover:bg-gray-100 dark:border-ios-700 dark:text-ios-300 dark:hover:bg-ios-800"
-														>
-															{allFavoriteChannelsSelected
-																? "Deselect"
-																: "Select all"}
-														</button>
-													</div>
+												<h2 className="text-lg font-semibold text-gray-900 dark:text-ios-100">
+													Channels
+												</h2>
+												<div className="flex items-center gap-2">
+													<span className="text-sm text-gray-500 dark:text-ios-400">
+														{favoriteChannels.length}
+													</span>
+													<button
+														type={BTN}
+														aria-pressed={allFavoriteChannelsSelected}
+														aria-label={
+															allFavoriteChannelsSelected
+																? "Deselect all visible channels"
+																: "Select all visible channels"
+														}
+														onClick={() =>
+															toggleAllSelectionIds(
+																setSelectedFavoriteChannelIds,
+																favoriteChannels.map((channel) => channel.id),
+															)
+														}
+														className="rounded-lg border border-gray-200 px-2 py-1 text-xs font-medium text-gray-600 hover:bg-gray-100 dark:border-ios-700 dark:text-ios-300 dark:hover:bg-ios-800"
+													>
+														{allFavoriteChannelsSelected ? "Deselect" : "Select all"}
+													</button>
+												</div>
 											</div>
 											{favoriteChannels.length === 0 ? (
 												<div className="rounded-xl border border-dashed border-gray-200 p-6 text-center text-sm text-gray-500 dark:border-ios-800 dark:text-ios-400">
@@ -1983,26 +2003,21 @@ export const Dashboard = () => {
 													{favoriteChannels.map((channel, index) => (
 														<SubscriptionCard
 															key={channel.id}
-																channel={channel}
-																index={index}
-																groups={subscriptionGroups}
-																selectable
-																selected={selectedFavoriteChannelIds.has(channel.id)}
-																onToggleSelect={(channelId) =>
-														toggleSelectionId(
-																		setSelectedFavoriteChannelIds,
-																		channelId,
-																	)
-																}
-																onToggleFavorite={async (channelId) => {
+															channel={channel}
+															index={index}
+															groups={subscriptionGroups}
+															selectable
+															selected={selectedFavoriteChannelIds.has(channel.id)}
+															onToggleSelect={(channelId) =>
+																toggleSelectionId(setSelectedFavoriteChannelIds, channelId)
+															}
+															onToggleFavorite={async (channelId) => {
 																const channel = allSubscriptions.find(
 																	(s) => s.id === channelId,
 																);
 																await toggleChannelFavorite(channelId);
 																if (channel) {
-																	toast.success(
-																		`Removed ${channel.title} from favorites`,
-																	);
+																	toast.success(`Removed ${channel.title} from favorites`);
 																}
 															}}
 														/>
@@ -2016,14 +2031,14 @@ export const Dashboard = () => {
 											className={`${visibleFavoriteSection === "videos" ? "block" : "hidden sm:block"} ${favoriteVideos.length === 0 ? "sm:hidden" : ""}`}
 										>
 											<div className="mb-4 flex items-center justify-between gap-3">
-													<h2 className="text-lg font-semibold text-gray-900 dark:text-ios-100">
-														Videos
-													</h2>
-													<div className="flex items-center gap-2">
-														<span className="text-sm text-gray-500 dark:text-ios-400">
-															{favoriteVideos.length}
-														</span>
-													</div>
+												<h2 className="text-lg font-semibold text-gray-900 dark:text-ios-100">
+													Videos
+												</h2>
+												<div className="flex items-center gap-2">
+													<span className="text-sm text-gray-500 dark:text-ios-400">
+														{favoriteVideos.length}
+													</span>
+												</div>
 											</div>
 											{favoriteVideos.length === 0 ? (
 												<div className="rounded-xl border border-dashed border-gray-200 p-6 text-center text-sm text-gray-500 dark:border-ios-800 dark:text-ios-400">
@@ -2031,11 +2046,11 @@ export const Dashboard = () => {
 												</div>
 											) : (
 												<VirtualizedVideoGrid
-																	videos={favoriteVideos}
-																	columns={4}
-																	scrollStorageKey="favorite-videos-scroll"
-																	channelThumbnails={channelThumbnails}
-																				/>
+													videos={favoriteVideos}
+													columns={4}
+													scrollStorageKey="favorite-videos-scroll"
+													channelThumbnails={channelThumbnails}
+												/>
 											)}
 										</section>
 									</div>
@@ -2044,17 +2059,17 @@ export const Dashboard = () => {
 						) : (
 							<div className="px-4">
 								{activeChannels.length === 0 ? (
-																<EmptyState
-																	icon={Activity}
-																	iconName="activity"
-																	title="No activity yet"
-																	detail="Recent uploads from your channels will appear here."
-																	action={
-																		<EmptyStateAction onClick={() => changeTab(TAB_LATEST)}>
-																			View Latest
-																		</EmptyStateAction>
-																	}
-																/>
+									<EmptyState
+										icon={Activity}
+										iconName="activity"
+										title="No activity yet"
+										detail="Recent uploads from your channels will appear here."
+										action={
+											<EmptyStateAction onClick={() => changeTab(TAB_LATEST)}>
+												View Latest
+											</EmptyStateAction>
+										}
+									/>
 								) : (
 									<>
 										<div className="mb-4">
@@ -2063,8 +2078,8 @@ export const Dashboard = () => {
 											</h2>
 											<p className="text-sm text-gray-500 dark:text-ios-400">
 												{activeChannels.length} channel
-												{activeChannels.length === 1 ? "" : "s"} with uploads in the
-												past 7 days, ordered by volume and recency
+												{activeChannels.length === 1 ? "" : "s"} with uploads in the past 7
+												days, ordered by volume and recency
 											</p>
 										</div>
 										<div className="space-y-3">
@@ -2089,8 +2104,7 @@ export const Dashboard = () => {
 															{item.channel.title}
 														</h3>
 														<p className="text-sm text-gray-500 dark:text-ios-400">
-															{item.count} video{item.count !== 1 ? "s" : ""}{" "}
-															this week
+															{item.count} video{item.count !== 1 ? "s" : ""} this week
 														</p>
 													</div>
 													<div className="text-right">
@@ -2131,7 +2145,7 @@ export const Dashboard = () => {
 				isOpen={isAddChannelModalOpen}
 				onClose={() => setIsAddChannelModalOpen(false)}
 				onAdd={handleAddChannel}
-					existingSubscriptions={allSubscriptions}
+				existingSubscriptions={allSubscriptions}
 			/>
 
 			{isBulkUnsubscribeConfirmOpen && (
@@ -2235,7 +2249,8 @@ export const Dashboard = () => {
 						{groupManagerMode === "list" && (
 							<div className="space-y-3">
 								<p className="text-sm leading-5 text-gray-600 dark:text-ios-300">
-									Renaming keeps channels in the group. Deleting a group only removes its label and un-groups its channels.
+									Renaming keeps channels in the group. Deleting a group only removes its
+									label and un-groups its channels.
 								</p>
 								<div className="space-y-2">
 									{customSubscriptionGroups.map((group) => {
@@ -2287,7 +2302,9 @@ export const Dashboard = () => {
 								}}
 							>
 								<p className="text-sm leading-5 text-gray-600 dark:text-ios-300">
-									Channels assigned to <span className="font-medium">{groupManagerTarget}</span> will stay assigned under the new name.
+									Channels assigned to{" "}
+									<span className="font-medium">{groupManagerTarget}</span> will stay
+									assigned under the new name.
 								</p>
 								<label
 									htmlFor="rename-subscription-group"
@@ -2325,11 +2342,15 @@ export const Dashboard = () => {
 						{groupManagerMode === "delete" && groupManagerTarget && (
 							<div className="space-y-4">
 								{(() => {
-									const assignedCount = getAssignedSubscriptions(groupManagerTarget).length;
+									const assignedCount =
+										getAssignedSubscriptions(groupManagerTarget).length;
 									return (
 										<>
 											<p className="text-sm leading-5 text-gray-700 dark:text-ios-200">
-												Delete <span className="font-semibold">{groupManagerTarget}</span>? This will remove the group label and un-group {assignedCount} channel{assignedCount === 1 ? "" : "s"}. Your subscriptions will not be deleted.
+												Delete <span className="font-semibold">{groupManagerTarget}</span>?
+												This will remove the group label and un-group {assignedCount}{" "}
+												channel{assignedCount === 1 ? "" : "s"}. Your subscriptions will not
+												be deleted.
 											</p>
 											<div className="flex gap-2">
 												<button

@@ -17,6 +17,7 @@ type Props = {
 	results: SearchResults;
 	onScopeChange: (scope: SearchScope) => void;
 	onToggleChannelFavorite?: (channelId: string) => Promise<void>;
+	onRemoveChannel?: (channelId: string) => void;
 	channelThumbnails: Map<string, string>;
 };
 
@@ -32,10 +33,12 @@ function ChannelResults({
 	channels,
 	selectedChannelIds,
 	onToggleSelect,
+	onRemove,
 }: {
 	channels: YouTubeChannel[];
 	selectedChannelIds: ReadonlySet<string>;
 	onToggleSelect: (channelId: string) => void;
+	onRemove?: (channelId: string) => void;
 }) {
 	if (channels.length === 0) return null;
 
@@ -60,6 +63,7 @@ function ChannelResults({
 						selectable
 						selected={selectedChannelIds.has(channel.id)}
 						onToggleSelect={onToggleSelect}
+						onRemove={onRemove}
 					/>
 				))}
 			</div>
@@ -102,13 +106,16 @@ export function UnifiedSearchResults({
 	results,
 	onScopeChange,
 	onToggleChannelFavorite,
+	onRemoveChannel,
 	channelThumbnails,
 }: Props) {
 	const [selectedChannelIds, setSelectedChannelIds] = useState<Set<string>>(
 		() => new Set(),
 	);
 	const isFavoritesScope = scope === "favorites";
-	const channels = isFavoritesScope ? results.favoriteChannels : results.allChannels;
+	const channels = isFavoritesScope
+		? results.favoriteChannels
+		: results.allChannels;
 	const videos = isFavoritesScope ? results.favoriteVideos : results.allVideos;
 	const showChannels = scope !== "videos";
 	const showVideos = scope !== "channels";
@@ -140,7 +147,10 @@ export function UnifiedSearchResults({
 		});
 	};
 
-	const completeAction = async (message: string, action: () => Promise<void> | void) => {
+	const completeAction = async (
+		message: string,
+		action: () => Promise<void> | void,
+	) => {
 		try {
 			await action();
 			clearSelection();
@@ -174,10 +184,7 @@ export function UnifiedSearchResults({
 	};
 
 	return (
-		<main
-			data-testid="unified-search-results"
-			className="space-y-8 px-4 pb-8"
-		>
+		<main data-testid="unified-search-results" className="space-y-8 px-4 pb-8">
 			<div className="space-y-3">
 				<div>
 					<p className="text-sm font-medium text-red-600 dark:text-red-400">
@@ -195,12 +202,12 @@ export function UnifiedSearchResults({
 					{SEARCH_SCOPE_OPTIONS.map((option) => {
 						const optionCount =
 							option.value === "favorites"
-									? results.favoriteChannels.length + results.favoriteVideos.length
-									: option.value === "channels"
-										? results.allChannels.length
-										: option.value === "videos"
-											? results.allVideos.length
-											: results.allChannels.length + results.allVideos.length;
+								? results.favoriteChannels.length + results.favoriteVideos.length
+								: option.value === "channels"
+									? results.allChannels.length
+									: option.value === "videos"
+										? results.allVideos.length
+										: results.allChannels.length + results.allVideos.length;
 
 						return (
 							<button
@@ -233,29 +240,27 @@ export function UnifiedSearchResults({
 					</p>
 				</div>
 			) : (
-			<div className="space-y-10">
-				<BulkSelectionToolbar
-					selectedChannelCount={selectedChannels.length}
-					addToFavoritesCount={addToFavoritesCount}
-					removeFromFavoritesCount={removeFromFavoritesCount}
-					onAddToFavorites={handleAddToFavorites}
-					onRemoveFromFavorites={handleRemoveFromFavorites}
-					onClear={clearSelection}
-				/>
-				{showChannels && (
-					<ChannelResults
-						channels={channels}
-						selectedChannelIds={selectedChannelIds}
-						onToggleSelect={(channelId) =>
-							toggleSelectedId(setSelectedChannelIds, channelId)
-						}
+				<div className="space-y-10">
+					<BulkSelectionToolbar
+						selectedChannelCount={selectedChannels.length}
+						addToFavoritesCount={addToFavoritesCount}
+						removeFromFavoritesCount={removeFromFavoritesCount}
+						onAddToFavorites={handleAddToFavorites}
+						onRemoveFromFavorites={handleRemoveFromFavorites}
+						onClear={clearSelection}
 					/>
+					{showChannels && (
+						<ChannelResults
+							channels={channels}
+							selectedChannelIds={selectedChannelIds}
+							onToggleSelect={(channelId) =>
+								toggleSelectedId(setSelectedChannelIds, channelId)
+							}
+							onRemove={onRemoveChannel}
+						/>
 					)}
 					{showVideos && (
-						<VideoResults
-							videos={videos}
-							channelThumbnails={channelThumbnails}
-						/>
+						<VideoResults videos={videos} channelThumbnails={channelThumbnails} />
 					)}
 				</div>
 			)}
