@@ -62,4 +62,17 @@ function mergeVideoArchive(
 	return { videos, evictedCount };
 }
 
-module.exports = { mergeVideoArchive };
+function pruneVideosToActiveChannels(
+	existingVideos,
+	activeChannelIds,
+	options = {},
+) {
+	const { videos } = mergeVideoArchive(existingVideos, [], {
+		activeChannelIds,
+		maxVideos: options.maxVideos || 5000,
+		cacheUpdatedAt: null,
+	});
+	return videos;
+}
+
+module.exports = { mergeVideoArchive, pruneVideosToActiveChannels };

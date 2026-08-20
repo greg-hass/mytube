@@ -283,6 +283,168 @@ describe("createApp integration", () => {
 		expect(snapshot.body.subscriptionTombstones).toEqual([]);
 	});
 
+	it("POST /api/sync with no new subscriptions does not trigger aggregation", async () => {
+		const aggregateFeeds = vi.fn().mockResolvedValue(undefined);
+		resources.aggregator.aggregateFeeds = aggregateFeeds;
+
+		const subscription = {
+			id: "UCaaaaaaaaaaaaaaaaaaaaaa",
+			title: "Steady",
+			thumbnail: "",
+			description: "",
+		};
+		await authedRequest(resources.app)
+			.post("/api/sync")
+			.send({ subscriptions: [subscription], settings: {}, watchedVideos: [] });
+		aggregateFeeds.mockClear();
+
+		// Second push with the same list (e.g. a watched-video sync) must not refresh.
+		const again = await authedRequest(resources.app)
+			.post("/api/sync")
+			.send({
+				subscriptions: [subscription],
+				settings: {},
+				watchedVideos: ["some-video"],
+			});
+		expect(again.status).toBe(200);
+		expect(aggregateFeeds).not.toHaveBeenCalled();
+	});
+
+	it("POST /api/sync adding one channel refreshes only that channel", async () => {
+		const aggregateFeeds = vi.fn().mockResolvedValue(undefined);
+		resources.aggregator.aggregateFeeds = aggregateFeeds;
+
+		await authedRequest(resources.app)
+			.post("/api/sync")
+			.send({
+				subscriptions: [
+					{
+						id: "UCaaaaaaaaaaaaaaaaaaaaaa",
+						title: "First",
+						thumbnail: "",
+						description: "",
+					},
+				],
+				settings: {},
+				watchedVideos: [],
+			});
+
+		await vi.waitFor(() => {
+			expect(aggregateFeeds).toHaveBeenCalledWith({
+				channelId: "UCaaaaaaaaaaaaaaaaaaaaaa",
+			});
+		});
+		expect(aggregateFeeds).toHaveBeenCalledTimes(1);
+	});
+
+	it("POST /api/sync adding a temporary id falls back to a full refresh", async () => {
+		const aggregateFeeds = vi.fn().mockResolvedValue(undefined);
+		resources.aggregator.aggregateFeeds = aggregateFeeds;
+
+		await authedRequest(resources.app)
+			.post("/api/sync")
+			.send({
+				subscriptions: [
+					{
+						id: "handle_tempchannel1",
+						title: "Temp",
+						thumbnail: "",
+						description: "",
+					},
+				],
+				settings: {},
+				watchedVideos: [],
+			});
+
+		await vi.waitFor(() => {
+			expect(aggregateFeeds).toHaveBeenCalledWith();
+		});
+	});
+
+	it("DELETE /api/subscriptions/:id prunes cached videos without a feed refresh", async () => {
+		const aggregateFeeds = vi.fn().mockResolvedValue(undefined);
+		resources.aggregator.aggregateFeeds = aggregateFeeds;
+
+		const keep = "UCaaaaaaaaaaaaaaaaaaaaaa";
+		const remove = "UCbbbbbbbbbbbbbbbbbbbbbb";
+		await authedRequest(resources.app)
+			.post("/api/sync")
+			.send({
+				subscriptions: [
+					{ id: keep, title: "Keep", thumbnail: "", description: "" },
+					{ id: remove, title: "Remove", thumbnail: "", description: "" },
+				],
+				settings: {},
+				watchedVideos: [],
+			});
+		aggregateFeeds.mockClear();
+
+		await resources.appStore.writeVideoCache({
+			videos: [
+				{
+					id: "keep-video",
+					channelId: keep,
+					channelTitle: "Keep",
+					title: "Kept upload",
+					publishedAt: "2026-08-19T00:00:00.000Z",
+					thumbnail: "",
+					description: "",
+				},
+				{
+					id: "remove-video",
+					channelId: remove,
+					channelTitle: "Remove",
+					title: "Doomed upload",
+					publishedAt: "2026-08-19T00:00:00.000Z",
+					thumbnail: "",
+					description: "",
+				},
+			],
+			lastUpdated: "2026-08-19T00:00:00.000Z",
+			totalChannels: 2,
+			totalVideos: 2,
+		});
+
+		const deleted = await authedRequest(resources.app).delete(
+			`/api/subscriptions/${remove}`,
+		);
+		expect(deleted.status).toBe(200);
+		expect(aggregateFeeds).not.toHaveBeenCalled();
+
+		const videos = await authedRequest(resources.app).get("/api/videos");
+		expect(videos.status).toBe(200);
+		expect(videos.body.videos.map((video) => video.id)).toEqual(["keep-video"]);
+	});
+
+	it("POST /api/subscriptions/restore refreshes only the restored channel", async () => {
+		const aggregateFeeds = vi.fn().mockResolvedValue(undefined);
+		resources.aggregator.aggregateFeeds = aggregateFeeds;
+		const subscription = {
+			id: "UCaaaaaaaaaaaaaaaaaaaaaa",
+			title: "Restore Me",
+			thumbnail: "",
+			description: "",
+		};
+		await authedRequest(resources.app)
+			.post("/api/sync")
+			.send({ subscriptions: [subscription], settings: {}, watchedVideos: [] });
+		await authedRequest(resources.app).delete(
+			`/api/subscriptions/${subscription.id}`,
+		);
+		aggregateFeeds.mockClear();
+
+		const restored = await authedRequest(resources.app)
+			.post("/api/subscriptions/restore")
+			.send({ subscriptions: [subscription] });
+		expect(restored.status).toBe(200);
+
+		await vi.waitFor(() => {
+			expect(aggregateFeeds).toHaveBeenCalledWith({
+				channelId: "UCaaaaaaaaaaaaaaaaaaaaaa",
+			});
+		});
+	});
+
 	it("POST /api/sync with stale If-Match returns 412 and current ETag", async () => {
 		const first = await authedRequest(resources.app)
 			.post("/api/sync")

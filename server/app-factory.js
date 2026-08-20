@@ -13,9 +13,10 @@ const {
 	searchChannels,
 } = require("./channel-search");
 const { getChannelSuggestions } = require("./channel-suggestions");
-const { createChannelBackfillService } = require("./channel-backfill");
 const { searchVideos } = require("./video-search");
+const { createChannelBackfillService } = require("./channel-backfill");
 const { normalizeVideoCacheThumbnails } = require("./video-thumbnails");
+const { pruneVideosToActiveChannels } = require("./video-archive");
 const { extractYouTubeChannelMetadata } = require("./youtube-html-parser");
 const { createLiveStreamService } = require("./live-stream-service");
 const {
@@ -65,6 +66,54 @@ function asyncHandler(handler, errorMessage) {
 			res.status(500).json({ error: errorMessage });
 		}
 	};
+}
+
+// Refresh at most this many newly-added subscriptions individually; larger
+// batches (imports, initial sync) are cheaper as one full sweep.
+const TARGETED_REFRESH_MAX_CHANNELS = 3;
+
+function getAddedSubscriptionIds(previousSubscriptions, nextSubscriptions) {
+	const previousIds = new Set(
+		(previousSubscriptions || []).map((subscription) => subscription?.id),
+	);
+	return (nextSubscriptions || [])
+		.map((subscription) => subscription?.id)
+		.filter((id) => id && !previousIds.has(id));
+}
+
+/**
+ * Refresh only what a subscription change actually needs. Small batches of
+ * canonical UC ids get single-channel runs so the rest of the archive keeps
+ * its refresh cadence; temp ids (handle_/custom_) and bulk adds fall back to
+ * a full run because they need the resolver machinery or sheer volume.
+ */
+function triggerRefreshForAddedChannels(feedAggregator, addedIds) {
+	if (addedIds.length === 0) return;
+
+	const canonicalIds = addedIds.filter((id) => id.startsWith("UC"));
+	const needsFullRun =
+		canonicalIds.length !== addedIds.length ||
+		canonicalIds.length > TARGETED_REFRESH_MAX_CHANNELS;
+
+	if (needsFullRun) {
+		feedAggregator
+			.aggregateFeeds()
+			.catch((err) => logger.error("Aggregation trigger failed:", err));
+		return;
+	}
+
+	(async () => {
+		for (const channelId of canonicalIds) {
+			try {
+				await feedAggregator.aggregateFeeds({ channelId });
+			} catch (err) {
+				logger.error(
+					`Targeted refresh failed for ${channelId}:`,
+					err.message || err,
+				);
+			}
+		}
+	})();
 }
 
 // ── Route handler factories ─────────────────────────────────
@@ -172,8 +221,7 @@ function createApp({
 	if (!feedAggregator) throw new Error("createApp requires feedAggregator");
 
 	const channelBackfill =
-		config.channelBackfillService ||
-		createChannelBackfillService({ appStore });
+		config.channelBackfillService || createChannelBackfillService({ appStore });
 
 	const app = express(); // nosemgrep: express-check-csurf-middleware-usage (bearer-token auth, not cookies)
 
@@ -371,6 +419,8 @@ function createApp({
 				}
 			}
 			data.lastSyncedAt = new Date().toISOString();
+			const previousSubscriptions = (await appStore.readData(defaultData))
+				.subscriptions;
 			const savedData = await appStore.updateData(
 				defaultData,
 				(existingData) => {
@@ -388,9 +438,12 @@ function createApp({
 				},
 				{ trackSubscriptionChanges: true },
 			);
-			feedAggregator
-				.aggregateFeeds()
-				.catch((err) => logger.error("Aggregation trigger failed:", err));
+			// Refresh only the channels this sync actually added — a plain watched-
+			// video push must not restart the sweep clock for every subscription.
+			triggerRefreshForAddedChannels(
+				feedAggregator,
+				getAddedSubscriptionIds(previousSubscriptions, savedData.subscriptions),
+			);
 			const newRevision = savedData.syncRevision ?? appStore.getCurrentRevision();
 			res.setHeader("ETag", `"${newRevision}"`);
 			res.json({
@@ -423,9 +476,25 @@ function createApp({
 				}),
 				{ trackSubscriptionChanges: true },
 			);
-			feedAggregator
-				.aggregateFeeds()
-				.catch((err) => logger.error("Aggregation trigger failed:", err));
+			// A deletion needs no feed fetching: prune the channel's videos from
+			// the archive locally so they vanish immediately; the next scheduled
+			// run would have evicted them anyway.
+			const videoCache = await appStore.readVideoCache(defaultVideoCache);
+			const activeChannelIds = new Set(
+				(savedData.subscriptions || []).map((subscription) => subscription.id),
+			);
+			const prunedVideos = pruneVideosToActiveChannels(
+				videoCache.videos || [],
+				activeChannelIds,
+			);
+			if (prunedVideos.length !== (videoCache.videos || []).length) {
+				await appStore.writeVideoCache({
+					...videoCache,
+					videos: prunedVideos,
+					totalVideos: prunedVideos.length,
+					lastUpdated: new Date().toISOString(),
+				});
+			}
 			const newRevision = savedData.syncRevision ?? appStore.getCurrentRevision();
 			res.setHeader("ETag", `"${newRevision}"`);
 			res.json({
@@ -465,9 +534,11 @@ function createApp({
 				}),
 				{ trackSubscriptionChanges: false },
 			);
-			feedAggregator
-				.aggregateFeeds()
-				.catch((err) => logger.error("Aggregation trigger failed:", err));
+			// Undoing a deletion re-adds channels; refresh exactly those.
+			triggerRefreshForAddedChannels(
+				feedAggregator,
+				Array.from(restoredById.keys()),
+			);
 			const newRevision = savedData.syncRevision ?? appStore.getCurrentRevision();
 			res.setHeader("ETag", `"${newRevision}"`);
 			res.json({
@@ -594,9 +665,7 @@ function createApp({
 				appStore.DEFAULT_DATA || { subscriptions: [] },
 			);
 			if (
-				!data.subscriptions?.some(
-					(subscription) => subscription.id === channelId,
-				)
+				!data.subscriptions?.some((subscription) => subscription.id === channelId)
 			) {
 				return res.status(404).json({ error: "Subscription not found" });
 			}
@@ -606,9 +675,7 @@ function createApp({
 				return res.status(429).json({ error: "Backfill already in progress" });
 			}
 			if (result?.error === "fetch_failed") {
-				return res
-					.status(502)
-					.json({ error: "Failed to load channel videos" });
+				return res.status(502).json({ error: "Failed to load channel videos" });
 			}
 			res.json({
 				success: true,
