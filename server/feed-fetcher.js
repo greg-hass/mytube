@@ -36,9 +36,7 @@ function getHttpStatusFromError(error) {
 	if (Number.isInteger(error?.status)) return error.status;
 	if (Number.isInteger(error?.response?.status)) return error.response.status;
 
-	const match = String(error?.message || "").match(
-		/\bstatus code\s+(\d{3})\b/i,
-	);
+	const match = String(error?.message || "").match(/\bstatus code\s+(\d{3})\b/i);
 	return match ? Number(match[1]) : null;
 }
 
@@ -65,9 +63,7 @@ function getTextValue(value) {
 
 function getBestThumbnailUrl(thumbnails = []) {
 	if (!Array.isArray(thumbnails) || thumbnails.length === 0) return "";
-	const sorted = [...thumbnails].sort(
-		(a, b) => (b.width || 0) - (a.width || 0),
-	);
+	const sorted = [...thumbnails].sort((a, b) => (b.width || 0) - (a.width || 0));
 	const url = sorted[0]?.url || "";
 	if (url.startsWith("//")) return `https:${url}`;
 	return url.replace(/\\u0026/g, "&");
@@ -169,7 +165,7 @@ function walkYouTubeRenderers(value, visitor) {
 
 function parseUploadsPlaylistVideos(
 	html,
-	{ channelId, now = Date.now() } = {},
+	{ channelId, now = Date.now(), limit = UPLOADS_PLAYLIST_FETCH_LIMIT } = {},
 ) {
 	const initialData = parseYtInitialData(html);
 	if (!initialData) return { videos: [], title: null };
@@ -184,9 +180,7 @@ function parseUploadsPlaylistVideos(
 
 	walkYouTubeRenderers(initialData, (node) => {
 		const renderer =
-			node.playlistVideoRenderer ||
-			node.gridVideoRenderer ||
-			node.videoRenderer;
+			node.playlistVideoRenderer || node.gridVideoRenderer || node.videoRenderer;
 		if (!renderer?.videoId || seenVideoIds.has(renderer.videoId)) return;
 
 		seenVideoIds.add(renderer.videoId);
@@ -215,7 +209,7 @@ function parseUploadsPlaylistVideos(
 	});
 
 	return {
-		videos: videos.slice(0, UPLOADS_PLAYLIST_FETCH_LIMIT),
+		videos: videos.slice(0, limit),
 		title: playlistTitle || null,
 	};
 }
@@ -237,7 +231,7 @@ function buildVideoFromFeedItem(item, { channelId, channelTitle }) {
 	const duration = durationSeconds ? parseInt(durationSeconds, 10) : null;
 	const looksLikeShort =
 		/#shorts?\b|#ytshorts?\b|#fyp\b|\bshorts\b|youtube\.com\/shorts\//i.test(
-		`${decodeHtmlEntities(item.title)} ${mediaDescription || ""}`,
+			`${decodeHtmlEntities(item.title)} ${mediaDescription || ""}`,
 		);
 
 	const video = {
@@ -247,9 +241,7 @@ function buildVideoFromFeedItem(item, { channelId, channelTitle }) {
 		channelTitle: decodeHtmlEntities(channelTitle),
 		publishedAt: item.pubDate || item.isoDate,
 		thumbnail: getHighResolutionVideoThumbnail(
-			item.media?.thumbnail?.[0]?.url ||
-				mediaThumbnailUrl ||
-				item.enclosure?.url,
+			item.media?.thumbnail?.[0]?.url || mediaThumbnailUrl || item.enclosure?.url,
 			videoId,
 			{ isShort: looksLikeShort },
 		),
@@ -288,6 +280,7 @@ async function fetchUploadsPlaylistFeed(
 	const { videos, title } = parseUploadsPlaylistVideos(response.data, {
 		channelId,
 		now: options.now,
+		limit: options.limit,
 	});
 
 	if (title) {
@@ -354,9 +347,7 @@ async function fetchYouTubeApiVideos(
 			id: item.id.videoId,
 			title: decodeHtmlEntities(item.snippet?.title || "Untitled"),
 			channelId,
-			channelTitle: decodeHtmlEntities(
-				item.snippet?.channelTitle || "Unknown",
-			),
+			channelTitle: decodeHtmlEntities(item.snippet?.channelTitle || "Unknown"),
 			publishedAt: item.snippet?.publishedAt || null,
 			thumbnail: getHighResolutionVideoThumbnail(
 				item.snippet?.thumbnails?.high?.url,
@@ -417,9 +408,7 @@ async function fetchChannelFeed(channelId, feedParser = parser, options = {}) {
 		for (const item of feed.items || []) {
 			const video = buildVideoFromFeedItem(item, {
 				channelId,
-				channelTitle: decodeHtmlEntities(
-					feed.title || item.author || "Unknown",
-				),
+				channelTitle: decodeHtmlEntities(feed.title || item.author || "Unknown"),
 			});
 			if (!video.id || seen.has(video.id)) continue;
 			seen.add(video.id);
@@ -494,9 +483,7 @@ async function fetchChannelThumbnail(channelId) {
 		const html = response.data;
 
 		// og:image is a standard Open Graph tag and is relatively stable.
-		const avatarMatch = html.match(
-			/<meta property="og:image" content="([^"]+)"/,
-		);
+		const avatarMatch = html.match(/<meta property="og:image" content="([^"]+)"/);
 		if (avatarMatch) {
 			return avatarMatch[1];
 		}
@@ -508,8 +495,7 @@ async function fetchChannelThumbnail(channelId) {
 			let avatarUrl = null;
 			walkYouTubeRenderers(initialData, (node) => {
 				if (avatarUrl) return;
-				const thumbnails =
-					node.avatar?.thumbnails || node.thumbnail?.thumbnails;
+				const thumbnails = node.avatar?.thumbnails || node.thumbnail?.thumbnails;
 				if (Array.isArray(thumbnails) && thumbnails.length > 0) {
 					const best = thumbnails[thumbnails.length - 1];
 					if (best?.url) {

@@ -18,6 +18,7 @@ let mockVideos = [
 let mockWatchedVideos = new Set<string>();
 const mockMarkAsWatched = vi.fn();
 const mockSetSearchQuery = vi.fn();
+const mockBackfillChannel = vi.fn();
 
 vi.mock('./Header', () => ({
   Header: () => <header>Header</header>,
@@ -29,6 +30,8 @@ vi.mock('../hooks/useRSSVideos', () => ({
     isLoading: false,
     error: null,
     refresh: vi.fn(),
+    backfillChannel: mockBackfillChannel,
+    isBackfilling: false,
   }),
 }));
 
@@ -60,6 +63,7 @@ describe('ChannelViewer', () => {
     mockWatchedVideos = new Set<string>();
     mockMarkAsWatched.mockClear();
     mockSetSearchQuery.mockClear();
+    mockBackfillChannel.mockClear();
 
     mockVideos = [
       {
@@ -240,5 +244,33 @@ describe('ChannelViewer', () => {
 
     expect(mockMarkAsWatched).toHaveBeenCalledTimes(1);
     expect(mockMarkAsWatched).toHaveBeenCalledWith('video-2');
+  });
+
+  it('offers a load-more control that backfills the channel timeline', () => {
+    mockVideos = [
+      {
+        id: 'video-1',
+        title: 'Only recent upload',
+        description: '',
+        thumbnail: 'https://example.com/recent.jpg',
+        channelId: 'UC123',
+        channelTitle: 'Test Channel',
+        publishedAt: '2026-05-07T11:00:00.000Z',
+      },
+    ];
+
+    render(
+      <MemoryRouter initialEntries={['/channel/UC123']}>
+        <Routes>
+          <Route path="/channel/:channelId" element={<ChannelViewer />} />
+        </Routes>
+      </MemoryRouter>
+    );
+
+    const loadMore = screen.getByTestId('load-more-videos');
+    expect(loadMore).toBeInTheDocument();
+    fireEvent.click(loadMore);
+
+    expect(mockBackfillChannel).toHaveBeenCalledWith('UC123');
   });
 });

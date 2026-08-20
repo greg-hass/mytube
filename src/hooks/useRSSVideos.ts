@@ -122,10 +122,7 @@ function computeCacheStatus(
 function statusRefetchInterval(query: {
 	state: { data?: AggregationStatus };
 }): number | false {
-	if (
-		typeof document !== "undefined" &&
-		document.visibilityState === "hidden"
-	) {
+	if (typeof document !== "undefined" && document.visibilityState === "hidden") {
 		return false;
 	}
 	return query.state.data?.state === "running" ? 1500 : 5000;
@@ -262,9 +259,46 @@ function useRefreshMutation(queryClient: ReturnType<typeof useQueryClient>) {
 		},
 	});
 
+	const backfillMutation = useMutation({
+		mutationFn: async (channelId: string) => {
+			const response = await fetch(
+				`/api/videos/backfill/channel/${encodeURIComponent(channelId)}`,
+				{
+					method: "POST",
+					cache: "no-store",
+					credentials: "same-origin",
+				},
+			);
+			if (!response.ok) {
+				const errorText = await response.text().catch(() => "Unknown error");
+				throw new Error(`Server returned ${response.status}: ${errorText}`);
+			}
+			return response.json() as Promise<{
+				added?: number;
+				channelTotal?: number;
+			}>;
+		},
+		onSuccess: async (response) => {
+			await refetchFeedQueries();
+			if (response.added === 0) {
+				toast.info("No more videos found for this channel");
+			} else {
+				toast.success(
+					`Loaded ${response.added} more video${response.added === 1 ? "" : "s"}`,
+				);
+			}
+		},
+		onError: (error: unknown) => {
+			toast.error(
+				`Loading older videos failed: ${error instanceof Error ? error.message : "Unknown error"}`,
+			);
+		},
+	});
+
 	return {
 		mutation,
 		channelMutation,
+		backfillMutation,
 		refreshTriggered,
 		setRefreshTriggered,
 		retryingChannelId,
@@ -359,8 +393,8 @@ export const useRSSVideos = ({ enabled = true }: UseRSSVideosOptions = {}) => {
 		refreshTriggered,
 		setRefreshTriggered,
 		retryingChannelId,
-	} =
-		useRefreshMutation(queryClient);
+		backfillMutation,
+	} = useRefreshMutation(queryClient);
 
 	const { data: aggregationStatus } = useAggregationStatus(
 		refreshTriggered,
@@ -424,7 +458,12 @@ export const useRSSVideos = ({ enabled = true }: UseRSSVideosOptions = {}) => {
 				serverData,
 				mutation.isPending || channelMutation.isPending,
 			),
-		[aggregationStatus, serverData, mutation.isPending, channelMutation.isPending],
+		[
+			aggregationStatus,
+			serverData,
+			mutation.isPending,
+			channelMutation.isPending,
+		],
 	);
 
 	const cacheStatus = useMemo(
@@ -455,6 +494,12 @@ export const useRSSVideos = ({ enabled = true }: UseRSSVideosOptions = {}) => {
 				channelMutation.mutate(channelId);
 			}
 		},
+		backfillChannel: (channelId: string) => {
+			if (enabled && !backfillMutation.isPending) {
+				backfillMutation.mutate(channelId);
+			}
+		},
+		isBackfilling: backfillMutation.isPending,
 		retryingChannelId,
 		clearCache: async () => {
 			queryClient.invalidateQueries({ queryKey: ["server-videos"] });

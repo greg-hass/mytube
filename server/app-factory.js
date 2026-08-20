@@ -13,6 +13,7 @@ const {
 	searchChannels,
 } = require("./channel-search");
 const { getChannelSuggestions } = require("./channel-suggestions");
+const { createChannelBackfillService } = require("./channel-backfill");
 const { searchVideos } = require("./video-search");
 const { normalizeVideoCacheThumbnails } = require("./video-thumbnails");
 const { extractYouTubeChannelMetadata } = require("./youtube-html-parser");
@@ -169,6 +170,10 @@ function createApp({
 } = {}) {
 	if (!appStore) throw new Error("createApp requires appStore");
 	if (!feedAggregator) throw new Error("createApp requires feedAggregator");
+
+	const channelBackfill =
+		config.channelBackfillService ||
+		createChannelBackfillService({ appStore });
 
 	const app = express(); // nosemgrep: express-check-csurf-middleware-usage (bearer-token auth, not cookies)
 
@@ -575,6 +580,43 @@ function createApp({
 					: "Refresh queued. Check status for progress.",
 			});
 		}, "Failed to trigger refresh"),
+	);
+
+	app.post(
+		"/api/videos/backfill/channel/:channelId",
+		asyncHandler(async (req, res) => {
+			const { channelId } = req.params;
+			if (typeof channelId !== "string" || !/^UC[\w-]{2,}$/.test(channelId)) {
+				return res.status(400).json({ error: "Invalid channel ID" });
+			}
+
+			const data = await appStore.readData(
+				appStore.DEFAULT_DATA || { subscriptions: [] },
+			);
+			if (
+				!data.subscriptions?.some(
+					(subscription) => subscription.id === channelId,
+				)
+			) {
+				return res.status(404).json({ error: "Subscription not found" });
+			}
+
+			const result = await channelBackfill.backfillChannel(channelId);
+			if (result?.error === "already_running") {
+				return res.status(429).json({ error: "Backfill already in progress" });
+			}
+			if (result?.error === "fetch_failed") {
+				return res
+					.status(502)
+					.json({ error: "Failed to load channel videos" });
+			}
+			res.json({
+				success: true,
+				channelId,
+				added: result?.added ?? 0,
+				channelTotal: result?.channelTotal ?? 0,
+			});
+		}, "Failed to backfill channel videos"),
 	);
 
 	app.post(

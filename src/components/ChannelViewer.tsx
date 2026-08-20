@@ -1,6 +1,6 @@
 import { useParams, useNavigate } from 'react-router';
 import { useEffect, useMemo, useState } from 'react';
-import { ArrowLeft, CheckCircle2, RefreshCw } from 'lucide-react';
+import { ArrowLeft, CheckCircle2, ChevronDown, RefreshCw } from 'lucide-react';
 import { Header } from './Header';
 import { VirtualizedVideoGrid } from './VirtualizedVideoGrid';
 import { useRSSVideos } from '../hooks/useRSSVideos';
@@ -19,7 +19,7 @@ export const ChannelViewer = () => {
   const channelInfo = allSubscriptions.find(sub => sub.id === channelId);
 
   // Fetch videos for this specific channel
-  const { videos: allVideos, isLoading, error, refresh } = useRSSVideos();
+  const { videos: allVideos, isLoading, error, refresh, backfillChannel, isBackfilling } = useRSSVideos();
 
   const channelVideos = useMemo(() => {
     return allVideos
@@ -210,15 +210,32 @@ export const ChannelViewer = () => {
                   </p>
                 </div>
               ) : (
-                <VirtualizedVideoGrid
-                  videos={videos}
-                  columns={4}
-                  channelThumbnails={
-                    resolvedChannelInfo
-                      ? new Map([[resolvedChannelInfo.id, resolvedChannelInfo.thumbnail]])
-                      : undefined
-                  }
-                />
+                <>
+                  <VirtualizedVideoGrid
+                    videos={videos}
+                    columns={4}
+                    channelThumbnails={
+                      resolvedChannelInfo
+                        ? new Map([[resolvedChannelInfo.id, resolvedChannelInfo.thumbnail]])
+                        : undefined
+                    }
+                  />
+                  <div className="mt-6 flex justify-center">
+                    <button
+                      type="button"
+                      onClick={() => channelId && backfillChannel(channelId)}
+                      disabled={isBackfilling || isLoading}
+                      aria-busy={isBackfilling}
+                      data-testid="load-more-videos"
+                      className="flex items-center gap-2 rounded-lg bg-gray-100 px-4 py-2.5 text-sm font-medium text-gray-800 transition-all hover:bg-gray-200 disabled:cursor-not-allowed disabled:opacity-60 dark:bg-ios-800 dark:text-ios-100 dark:hover:bg-ios-700"
+                    >
+                      <ChevronDown className={`w-4 h-4 ${isBackfilling ? "animate-bounce" : ""}`} />
+                      <span>
+                        {isBackfilling ? "Loading older videos…" : "Load more videos"}
+                      </span>
+                    </button>
+                  </div>
+                </>
               )}
             </div>
           )}
