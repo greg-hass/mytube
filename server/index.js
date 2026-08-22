@@ -21,6 +21,7 @@ const path = require("path");
 const appStore = require("./app-store");
 const feedAggregatorModule = require("./feed-aggregator");
 const { createApp } = require("./app-factory");
+const { createChannelBackfillService } = require("./channel-backfill");
 const {
 	describeAllowlist,
 	parseAllowedOrigins,
@@ -126,6 +127,8 @@ init()
 
 		feedAggregator = feedAggregatorModule;
 		feedAggregator.start();
+		const channelBackfillService = createChannelBackfillService({ appStore });
+		channelBackfillService.startTrickleLoop();
 		const { app } = createApp({
 			appStore,
 			feedAggregator,
@@ -137,6 +140,7 @@ init()
 				rateLimitMax: API_WRITE_RATE_LIMIT_MAX,
 				defaultData: appStore.DEFAULT_DATA,
 				defaultVideoCache: appStore.DEFAULT_VIDEO_CACHE,
+				channelBackfillService,
 			},
 		});
 		server = app.listen(PORT, () => {

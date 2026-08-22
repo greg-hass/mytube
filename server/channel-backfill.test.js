@@ -192,6 +192,81 @@ describe("channel-backfill", () => {
 		expect(store.writeVideoCache).not.toHaveBeenCalled();
 	});
 
+	describe("startTrickleLoop", () => {
+		it("backfills the thinnest channels up to maxPerRun per tick", async () => {
+			vi.useFakeTimers();
+			try {
+				const thin = "UCthin0000000000000001";
+				const medium = "UCmedium00000000000002";
+				const healthy = "UChealthy0000000000003";
+				store = buildStore([
+					buildVideo("t1", thin),
+					buildVideo("m1", medium),
+					buildVideo("m2", medium),
+					buildVideo("h1", healthy),
+					buildVideo("h2", healthy),
+					buildVideo("h3", healthy),
+				]);
+				store.readData = vi.fn(async () => ({
+					subscriptions: [
+						{ id: thin, title: "Thin" },
+						{ id: medium, title: "Medium" },
+						{ id: healthy, title: "Healthy" },
+					],
+				}));
+				service = createChannelBackfillService({ appStore: store });
+				const backfillSpy = vi
+					.spyOn(service, "backfillChannel")
+					.mockResolvedValue({ added: 0 });
+
+				const stop = service.startTrickleLoop({
+					minVideosPerChannel: 3,
+					maxPerRun: 2,
+					intervalMs: 1000,
+				});
+
+				await vi.advanceTimersByTimeAsync(1000);
+
+				// thin (1 video) and medium (2 videos) are under the bar and
+				// thinnest-first; healthy (3) is not a candidate.
+				expect(backfillSpy).toHaveBeenCalledTimes(2);
+				expect(backfillSpy).toHaveBeenNthCalledWith(1, thin);
+				expect(backfillSpy).toHaveBeenNthCalledWith(2, medium);
+
+				stop?.();
+			} finally {
+				vi.useRealTimers();
+			}
+		});
+
+		it("does nothing when every channel is topped up", async () => {
+			vi.useFakeTimers();
+			try {
+				store.readData = vi.fn(async () => ({
+					subscriptions: [{ id: CHANNEL_ID, title: "Full" }],
+				}));
+				const backfillSpy = vi
+					.spyOn(service, "backfillChannel")
+					.mockResolvedValue({ added: 0 });
+
+				const stop = service.startTrickleLoop({
+					minVideosPerChannel: 2,
+					intervalMs: 1000,
+				});
+				await vi.advanceTimersByTimeAsync(1000);
+
+				expect(backfillSpy).not.toHaveBeenCalled();
+				stop?.();
+			} finally {
+				vi.useRealTimers();
+			}
+		});
+
+		it("can be disabled", () => {
+			expect(service.startTrickleLoop({ enabled: false })).toBeNull();
+		});
+	});
+
 	it("requests the full backfill window", async () => {
 		const httpClient = buildHttpClient([]);
 		await service.backfillChannel(CHANNEL_ID, { httpClient });

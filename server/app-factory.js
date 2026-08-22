@@ -87,7 +87,11 @@ function getAddedSubscriptionIds(previousSubscriptions, nextSubscriptions) {
  * its refresh cadence; temp ids (handle_/custom_) and bulk adds fall back to
  * a full run because they need the resolver machinery or sheer volume.
  */
-function triggerRefreshForAddedChannels(feedAggregator, addedIds) {
+function triggerRefreshForAddedChannels(
+	feedAggregator,
+	addedIds,
+	channelBackfill,
+) {
 	if (addedIds.length === 0) return;
 
 	const canonicalIds = addedIds.filter((id) => id.startsWith("UC"));
@@ -106,6 +110,18 @@ function triggerRefreshForAddedChannels(feedAggregator, addedIds) {
 		for (const channelId of canonicalIds) {
 			try {
 				await feedAggregator.aggregateFeeds({ channelId });
+				// A newly-added subscription only has ~15 RSS videos on day one —
+				// backfill its uploads playlist so the archive starts deep.
+				if (channelBackfill) {
+					channelBackfill
+						.backfillChannel(channelId)
+						.catch((err) =>
+							logger.error(
+								`On-add backfill failed for ${channelId}:`,
+								err.message || err,
+							),
+						);
+				}
 			} catch (err) {
 				logger.error(
 					`Targeted refresh failed for ${channelId}:`,
@@ -443,6 +459,7 @@ function createApp({
 			triggerRefreshForAddedChannels(
 				feedAggregator,
 				getAddedSubscriptionIds(previousSubscriptions, savedData.subscriptions),
+				channelBackfill,
 			);
 			const newRevision = savedData.syncRevision ?? appStore.getCurrentRevision();
 			res.setHeader("ETag", `"${newRevision}"`);
@@ -538,6 +555,7 @@ function createApp({
 			triggerRefreshForAddedChannels(
 				feedAggregator,
 				Array.from(restoredById.keys()),
+				channelBackfill,
 			);
 			const newRevision = savedData.syncRevision ?? appStore.getCurrentRevision();
 			res.setHeader("ETag", `"${newRevision}"`);

@@ -66,6 +66,14 @@ function buildFeedAggregatorStub(overrides = {}) {
 	};
 }
 
+function buildChannelBackfillStub() {
+	return {
+		backfillChannel: vi.fn().mockResolvedValue({ added: 0, channelTotal: 0 }),
+		isRunning: () => false,
+		startTrickleLoop: () => null,
+	};
+}
+
 function buildApp({
 	databaseFile,
 	apiKey = TEST_TOKEN,
@@ -74,6 +82,7 @@ function buildApp({
 } = {}) {
 	const appStore = buildAppStore(databaseFile);
 	const aggregator = feedAggregator ?? buildFeedAggregatorStub();
+	const channelBackfill = buildChannelBackfillStub();
 	const result = createApp({
 		appStore,
 		feedAggregator: aggregator,
@@ -81,6 +90,7 @@ function buildApp({
 			allowedOrigins: [LOCAL_ORIGIN],
 			apiKey,
 			allowInsecureUnauthenticatedApi: false,
+			channelBackfillService: channelBackfill,
 			...config,
 		},
 	});
@@ -88,6 +98,7 @@ function buildApp({
 		app: result.app,
 		appStore,
 		aggregator,
+		channelBackfill,
 		databaseFile,
 		thumbnailRateLimiter: result.thumbnailRateLimiter,
 	};
@@ -98,6 +109,7 @@ async function bootstrap(databaseFile) {
 		app,
 		appStore,
 		aggregator,
+		channelBackfill,
 		thumbnailRateLimiter,
 		databaseFile: dbFile,
 	} = buildApp({ databaseFile });
@@ -109,6 +121,7 @@ async function bootstrap(databaseFile) {
 		app,
 		appStore,
 		aggregator,
+		channelBackfill,
 		thumbnailRateLimiter,
 		databaseFile: dbFile,
 	};
@@ -335,6 +348,37 @@ describe("createApp integration", () => {
 			});
 		});
 		expect(aggregateFeeds).toHaveBeenCalledTimes(1);
+	});
+
+	it("POST /api/sync adding one channel backfills its archive after the refresh", async () => {
+		const aggregateFeeds = vi.fn().mockResolvedValue(undefined);
+		const backfillChannel = vi.fn().mockResolvedValue({ added: 5 });
+		resources.aggregator.aggregateFeeds = aggregateFeeds;
+		resources.channelBackfill.backfillChannel = backfillChannel;
+
+		await authedRequest(resources.app)
+			.post("/api/sync")
+			.send({
+				subscriptions: [
+					{
+						id: "UCaaaaaaaaaaaaaaaaaaaaaa",
+						title: "Fresh",
+						thumbnail: "",
+						description: "",
+					},
+				],
+				settings: {},
+				watchedVideos: [],
+			});
+
+		await vi.waitFor(() => {
+			expect(aggregateFeeds).toHaveBeenCalledWith({
+				channelId: "UCaaaaaaaaaaaaaaaaaaaaaa",
+			});
+		});
+		await vi.waitFor(() => {
+			expect(backfillChannel).toHaveBeenCalledWith("UCaaaaaaaaaaaaaaaaaaaaaa");
+		});
 	});
 
 	it("POST /api/sync adding a temporary id falls back to a full refresh", async () => {

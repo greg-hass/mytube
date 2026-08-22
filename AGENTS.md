@@ -28,6 +28,10 @@ It's a feed reader, not a video archive. Videos still play through YouTube.
 | `FEED_REFRESH_ENABLED` | No | Enable background feed refresh (default: `true`) |
 | `FEED_REFRESH_INTERVAL_MINUTES` | No | Refresh interval (default: `5`) |
 | `FEED_REFRESH_ON_START` | No | Refresh on startup when cache is stale (default: `true`) |
+| `BACKFILL_TRICKLE_ENABLED` | No | Top up channels with a thin video archive every interval (default: `true`) |
+| `BACKFILL_TRICKLE_MIN_VIDEOS` | No | Archive depth the trickle aims for per channel (default: `15`) |
+| `BACKFILL_TRICKLE_MAX_PER_RUN` | No | Max playlist fetches per trickle tick (default: `2`) |
+| `BACKFILL_TRICKLE_INTERVAL_MINUTES` | No | Trickle tick interval (default: `15`) |
 | `ALLOWED_ORIGINS` | No | Comma-separated browser origin allowlist |
 
 ### Deployment
