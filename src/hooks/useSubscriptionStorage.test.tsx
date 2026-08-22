@@ -54,12 +54,15 @@ const remoteSubscription = {
 	addedAt: 1,
 };
 
+let activeQueryClient: QueryClient | null = null;
+
 function wrapper({ children }: { children: ReactNode }) {
 	const queryClient = new QueryClient({
 		defaultOptions: {
 			queries: { retry: false },
 		},
 	});
+	activeQueryClient = queryClient;
 
 	return (
 		<QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
@@ -92,6 +95,23 @@ describe("useSubscriptionStorage", () => {
 					title: "Server channel",
 				}),
 			]);
+		});
+	});
+
+	it("keeps the header channel count in sync with the loaded subscription list", async () => {
+		// Boot race regression: the count query resolves against the empty
+		// local database (0) while the merged server list loads — the header
+		// must not stay stuck at 0 once the list arrives.
+		const { result } = renderHook(() => useSubscriptionStorage(), { wrapper });
+
+		await waitFor(() => {
+			expect(result.current.allSubscriptions.length).toBe(1);
+		});
+
+		await waitFor(() => {
+			expect(
+				activeQueryClient?.getQueryData<number>(["subscriptions-count"]),
+			).toBe(1);
 		});
 	});
 

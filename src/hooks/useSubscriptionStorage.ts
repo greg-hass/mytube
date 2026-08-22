@@ -6,10 +6,7 @@ import {
 	getSubscriptionCount,
 	type StoredSubscription,
 } from "../lib/indexeddb";
-import {
-	isAuthError,
-	SERVER_AUTH_REQUIRED_EVENT,
-} from "../lib/api-auth";
+import { isAuthError, SERVER_AUTH_REQUIRED_EVENT } from "../lib/api-auth";
 import {
 	downloadJSON,
 	downloadOPML,
@@ -173,8 +170,7 @@ function useSyncRunner(
 				initialSyncRef.current = true;
 			},
 			getStoreState: () => useStore.getState(),
-			setWatchedVideos: (videos) =>
-				useStore.getState().setWatchedVideos(videos),
+			setWatchedVideos: (videos) => useStore.getState().setWatchedVideos(videos),
 			setQuota: (q) => useStore.getState().setQuota(q),
 			setApiExhausted: (e) => useStore.getState().setApiExhausted(e),
 		}),
@@ -416,6 +412,23 @@ function useSubscriptionEffects(deps: EffectDeps) {
 		};
 	}, [subscriptions, queryClient]);
 
+	// The header's count query races the list query at boot and can resolve
+	// against a not-yet-populated IndexedDB (showing "0 channels" while the
+	// merged list renders). The merged list is authoritative — keep the count
+	// cache in lockstep with it.
+	useEffect(() => {
+		if (!subscriptions) return;
+		const currentCount = queryClient.getQueryData<number>(
+			SUBSCRIPTIONS_COUNT_QUERY_KEY,
+		);
+		if (currentCount !== subscriptions.length) {
+			queryClient.setQueryData(
+				SUBSCRIPTIONS_COUNT_QUERY_KEY,
+				subscriptions.length,
+			);
+		}
+	}, [subscriptions, queryClient]);
+
 	useEffect(() => {
 		let isMounted = true;
 		void syncWithBackend({ importRemoteWatched: true })
@@ -598,8 +611,7 @@ export const useSubscriptionStorage = () => {
 		importOPML: mutations.importOPML.mutateAsync,
 		importSubscriptions: mutations.importSubscriptionsMutation.mutateAsync,
 		addSubscriptions: mutations.addSubscriptionsMutation.mutateAsync,
-		restoreSubscriptions:
-			mutations.restoreSubscriptionsMutation.mutateAsync,
+		restoreSubscriptions: mutations.restoreSubscriptionsMutation.mutateAsync,
 		removeSubscription: mutations.removeSubscriptionMutation.mutateAsync,
 		clearAll: mutations.clearAllMutation.mutateAsync,
 		toggleFavorite: cacheHandlers.toggleFavorite,
