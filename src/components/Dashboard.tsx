@@ -43,6 +43,10 @@ import { useModalFocus } from "../hooks/useModalFocus";
 import { KeyboardShortcutsHelp } from "./KeyboardShortcutsHelp";
 import { PullToRefreshIndicator } from "./PullToRefreshIndicator";
 import { useRSSVideos } from "../hooks/useRSSVideos";
+import {
+	computeLastUploadByChannel,
+	filterStaleChannels,
+} from "../lib/stale-channels";
 import { useLiveVideos } from "../hooks/useLiveVideos";
 import { useSubscriptionStorage } from "../hooks/useSubscriptionStorage";
 import { useFavoriteVideos } from "../hooks/useFavoriteVideos";
@@ -360,8 +364,14 @@ export const Dashboard = () => {
 	} = useSubscriptionStorage();
 	const { favoriteVideoIds, favoriteVideos: savedFavoriteVideos } =
 		useFavoriteVideos();
-	const { searchQuery, watchedVideos, markAsWatched, setSearchQuery } =
-		useStore();
+	const {
+		searchQuery,
+		watchedVideos,
+		markAsWatched,
+		setSearchQuery,
+		staleChannelDays,
+		setStaleChannelDays,
+	} = useStore();
 
 	// Check if any channels have temporary IDs (can't fetch videos)
 	const hasTemporaryChannels = rawSubscriptions.some(
@@ -416,6 +426,20 @@ export const Dashboard = () => {
 						(channel) => (channel.group || "") === selectedSubscriptionGroup,
 					),
 		[selectedSubscriptionGroup, allSubscriptions],
+	);
+	const lastUploadByChannel = useMemo(
+		() => computeLastUploadByChannel(videos),
+		[videos],
+	);
+	const [staleOnly, setStaleOnly] = useState(false);
+	const staleSubscriptionChannels = useMemo(
+		() =>
+			filterStaleChannels(
+				visibleSubscriptionChannels,
+				lastUploadByChannel,
+				staleChannelDays,
+			),
+		[visibleSubscriptionChannels, lastUploadByChannel, staleChannelDays],
 	);
 	const videoFeedIndex = useMemo(() => {
 		return buildVideoFeedIndex(videos, allSubscriptions);
@@ -1455,6 +1479,42 @@ export const Dashboard = () => {
 										))}
 									</select>
 									<button
+										type="button"
+										aria-pressed={staleOnly}
+										data-testid="stale-filter-toggle"
+										onClick={() => {
+											clearSubscriptionSelection();
+											setStaleOnly((value) => !value);
+										}}
+										className={`h-10 shrink-0 rounded-lg border px-3 text-sm font-medium transition-colors ${
+											staleOnly
+												? "border-red-600 bg-red-600 text-white"
+												: "border-gray-300 bg-white text-gray-700 hover:bg-gray-50 dark:border-ios-700 dark:bg-ios-900 dark:text-ios-200 dark:hover:bg-ios-800"
+										}`}
+									>
+										Stale ({staleSubscriptionChannels.length})
+									</button>
+									{staleOnly && (
+										<>
+											<label htmlFor="stale-threshold" className="sr-only">
+												Stale threshold in days
+											</label>
+											<select
+												id="stale-threshold"
+												aria-label="Stale threshold"
+												value={staleChannelDays}
+												onChange={(e) => setStaleChannelDays(Number(e.target.value))}
+												className="h-10 rounded-lg border border-gray-200 bg-white px-2 text-sm text-gray-700 outline-none focus:border-red-500 dark:border-ios-800 dark:bg-ios-900 dark:text-ios-200"
+											>
+												<option value={30}>≥ 1 month</option>
+												<option value={60}>≥ 2 months</option>
+												<option value={90}>≥ 3 months</option>
+												<option value={180}>≥ 6 months</option>
+												<option value={365}>≥ 1 year</option>
+											</select>
+										</>
+									)}
+									<button
 										type={BTN}
 										aria-pressed={allVisibleSubscriptionChannelsSelected}
 										aria-label={
@@ -1719,6 +1779,8 @@ export const Dashboard = () => {
 											toggleSelectionId(setSelectedSubscriptionChannelIds, channelId)
 										}
 										onClearGroup={() => setSelectedSubscriptionGroup("all")}
+										staleOnly={staleOnly}
+										lastUploadByChannel={lastUploadByChannel}
 									/>
 								</DashboardContentBoundary>
 							</div>

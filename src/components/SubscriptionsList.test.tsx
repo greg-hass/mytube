@@ -35,13 +35,14 @@ vi.mock('../hooks/useSubscriptionStorage', () => ({
 }));
 
 vi.mock('../store/useStore', () => ({
-  useStore: () => ({ viewMode: 'grid' }),
+  useStore: () => ({ viewMode: 'grid', staleChannelDays: 90 }),
 }));
 
 vi.mock('./SubscriptionCard', () => ({
-  SubscriptionCard: ({ channel, onSetGroup, selectable, selected, onToggleSelect }: any) => (
+  SubscriptionCard: ({ channel, lastUploadAt, onSetGroup, selectable, selected, onToggleSelect }: any) => (
     <article>
       <span>{channel.title}</span>
+      {lastUploadAt && <span>Last upload {new Date(lastUploadAt).toISOString().slice(0, 10)}</span>}
       {selectable && onToggleSelect && (
         <input
           type="checkbox"
@@ -138,5 +139,49 @@ describe('SubscriptionsList', () => {
     expect(screen.getByText('No subscriptions in Empty group')).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Show all subscriptions' }));
     expect(mockClearGroup).toHaveBeenCalledOnce();
+  });
+
+  it('shows only dormant channels, stalest first, when the stale view is on', () => {
+    const staleDate = new Date(Date.now() - 200 * 24 * 60 * 60 * 1000);
+    const midDate = new Date(Date.now() - 100 * 24 * 60 * 60 * 1000);
+    const freshDate = new Date(Date.now() - 24 * 60 * 60 * 1000);
+    const lastUploadByChannel = new Map([
+      ['UC1', staleDate.toISOString()],
+      ['UC2', freshDate.toISOString()],
+      ['UC3', midDate.toISOString()],
+    ]);
+    mockSubscriptions = [
+      ...mockSubscriptions,
+      { id: 'UC3', title: 'Three', description: '', thumbnail: 'https://example.com/3.jpg', group: 'Tech' },
+    ];
+
+    render(
+      <SubscriptionsList staleOnly lastUploadByChannel={lastUploadByChannel} />,
+    );
+
+    // UC2 is fresh; UC1 (200d) sorts before UC3 (100d).
+    const titles = screen.getAllByText(/^(One|Two|Three)$/).map(
+      (node) => node.textContent,
+    );
+    expect(titles).toEqual(['One', 'Three']);
+    expect(screen.queryByText('Two')).not.toBeInTheDocument();
+    expect(screen.getAllByText(/Last upload/)).toHaveLength(2);
+  });
+
+  it('explains when no channel is dormant and counts unknown channels', () => {
+    const freshDate = new Date(Date.now() - 24 * 60 * 60 * 1000);
+    const lastUploadByChannel = new Map([
+      ['UC1', freshDate.toISOString()],
+      ['UC2', freshDate.toISOString()],
+    ]);
+
+    render(
+      <SubscriptionsList staleOnly lastUploadByChannel={lastUploadByChannel} />,
+    );
+
+    expect(screen.getByText('No stale channels')).toBeInTheDocument();
+    expect(
+      screen.getByText(/dormant for 90\+ days/),
+    ).toBeInTheDocument();
   });
 });

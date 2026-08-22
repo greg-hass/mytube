@@ -1,11 +1,12 @@
-import type { StateCreator } from 'zustand';
-import type { SortBy } from '../types/youtube';
+import type { StateCreator } from "zustand";
+import type { SortBy } from "../types/youtube";
 
 export interface UISlice {
-    theme: 'light' | 'dark';
-    viewMode: 'grid' | 'list' | 'compact';
+    theme: "light" | "dark";
+    viewMode: "grid" | "list" | "compact";
     sortBy: SortBy;
     searchQuery: string;
+    staleChannelDays: number;
 
     // Video filters
     dateRangeStart: string | null;
@@ -14,9 +15,10 @@ export interface UISlice {
     showWatchedOnly: boolean;
 
     toggleTheme: () => void;
-    setViewMode: (mode: 'grid' | 'list' | 'compact') => void;
+    setViewMode: (mode: "grid" | "list" | "compact") => void;
     setSortBy: (sortBy: SortBy) => void;
     setSearchQuery: (query: string) => void;
+    setStaleChannelDays: (days: number) => void;
 
     // Filter actions
     setDateRange: (start: string | null, end: string | null) => void;
@@ -26,10 +28,11 @@ export interface UISlice {
 }
 
 export const createUISlice: StateCreator<UISlice> = (set) => ({
-    theme: 'dark',
-    viewMode: 'list',
-    sortBy: 'recent',
-    searchQuery: '',
+    theme: "dark",
+    viewMode: "list",
+    sortBy: "recent",
+    searchQuery: "",
+    staleChannelDays: 90,
 
     // Filter state
     dateRangeStart: null,
@@ -37,32 +40,38 @@ export const createUISlice: StateCreator<UISlice> = (set) => ({
     selectedChannelIds: [],
     showWatchedOnly: false,
 
-    toggleTheme: () => set((state) => ({
-        theme: state.theme === 'light' ? 'dark' : 'light'
-    })),
+    toggleTheme: () =>
+        set((state) => ({
+            theme: state.theme === "light" ? "dark" : "light",
+        })),
 
     setViewMode: (mode) => set({ viewMode: mode }),
     setSortBy: (sortBy) => set({ sortBy }),
     setSearchQuery: (query) => set({ searchQuery: query }),
+    setStaleChannelDays: (days) => set({ staleChannelDays: days }),
 
     // Filter actions
-    setDateRange: (start, end) => set({
-        dateRangeStart: start,
-        dateRangeEnd: end
-    }),
+    setDateRange: (start, end) =>
+        set({
+            dateRangeStart: start,
+            dateRangeEnd: end,
+        }),
 
-    setSelectedChannels: (channelIds) => set({
-        selectedChannelIds: channelIds
-    }),
+    setSelectedChannels: (channelIds) =>
+        set({
+            selectedChannelIds: channelIds,
+        }),
 
-    toggleShowWatchedOnly: () => set((state) => ({
-        showWatchedOnly: !state.showWatchedOnly
-    })),
+    toggleShowWatchedOnly: () =>
+        set((state) => ({
+            showWatchedOnly: !state.showWatchedOnly,
+        })),
 
-    clearFilters: () => set({
-        dateRangeStart: null,
-        dateRangeEnd: null,
-        selectedChannelIds: [],
-        showWatchedOnly: false,
-    }),
+    clearFilters: () =>
+        set({
+            dateRangeStart: null,
+            dateRangeEnd: null,
+            selectedChannelIds: [],
+            showWatchedOnly: false,
+        }),
 });

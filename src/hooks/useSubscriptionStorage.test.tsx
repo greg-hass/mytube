@@ -116,9 +116,11 @@ describe("useSubscriptionStorage", () => {
 	});
 
 	it("surfaces authentication failure without retrying the subscription query", async () => {
-		const fetchMock = vi.fn().mockResolvedValue(
-			new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401 }),
-		);
+		const fetchMock = vi
+			.fn()
+			.mockResolvedValue(
+				new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401 }),
+			);
 		vi.stubGlobal("fetch", fetchMock);
 
 		const { result } = renderHook(() => useSubscriptionStorage(), { wrapper });

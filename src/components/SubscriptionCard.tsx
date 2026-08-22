@@ -1,9 +1,10 @@
 import { motion } from 'framer-motion';
-import { ExternalLink, Users, Video, Trash2, Heart, Volume2, VolumeX } from 'lucide-react';
+import { ExternalLink, Users, Video, Trash2, Heart, Volume2, VolumeX, Clock } from 'lucide-react';
 import type { YouTubeChannel } from '../types/youtube';
 import { useState, memo } from 'react';
 import { useNavigate } from 'react-router';
 import { getDisplayThumbnail, handleImageLoadError } from '../lib/icon-loader';
+import { formatTimeAgo } from '../lib/format';
 
 interface Props {
   channel: YouTubeChannel;
@@ -11,6 +12,7 @@ interface Props {
   groups?: string[];
   selectable?: boolean;
   selected?: boolean;
+  lastUploadAt?: string;
   onToggleSelect?: (channelId: string) => void;
   onRemove?: (channelId: string) => void;
   onToggleFavorite?: (channelId: string) => void;
@@ -18,7 +20,7 @@ interface Props {
   onSetGroup?: (channelId: string, group: string) => void;
 }
 
-export const SubscriptionCard = memo(({ channel, groups = [], selectable = false, selected = false, onToggleSelect, onRemove, onToggleFavorite, onToggleMute, onSetGroup }: Props) => {
+export const SubscriptionCard = memo(({ channel, groups = [], selectable = false, selected = false, lastUploadAt, onToggleSelect, onRemove, onToggleFavorite, onToggleMute, onSetGroup }: Props) => {
   const [imageLoaded, setImageLoaded] = useState(false);
   const navigate = useNavigate();
 
@@ -157,6 +159,13 @@ export const SubscriptionCard = memo(({ channel, groups = [], selectable = false
         <h3 className="font-semibold text-base sm:text-lg mb-2 line-clamp-1 group-hover:text-red-600 dark:group-hover:text-red-400 transition-colors">
           {channel.title}
         </h3>
+
+        {lastUploadAt && (
+          <p className="mb-2 flex items-center gap-1 text-xs font-medium text-gray-500 dark:text-ios-400">
+            <Clock className="h-3.5 w-3.5" />
+            Last upload {formatTimeAgo(new Date(lastUploadAt))}
+          </p>
+        )}
 
         {onSetGroup && (
           <div className="mb-3">

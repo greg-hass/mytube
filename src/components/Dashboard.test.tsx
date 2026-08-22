@@ -137,6 +137,7 @@ let mockNeedsServerAuth = false;
 const mockToggleChannelFavorite = vi.fn();
 const mockToggleChannelMute = vi.fn();
 const mockRemoveSubscription = vi.fn(async (_channelId: string) => {});
+const mockSetStaleChannelDays = vi.fn();
 const mockSetSubscriptionGroup = vi.fn(
   async (_channelId: string, _group: string) => {},
 );
@@ -417,6 +418,8 @@ vi.mock("../store/useStore", () => ({
     markAsWatched: mockMarkAsWatched,
     markAsUnwatched: mockMarkAsUnwatched,
     setSearchQuery: mockSetSearchQuery,
+    staleChannelDays: 90,
+    setStaleChannelDays: mockSetStaleChannelDays,
   }),
 }));
 
@@ -992,6 +995,68 @@ describe("Dashboard", () => {
 
     expect(screen.getByText("Subscriptions list content")).toBeInTheDocument();
     expect(screen.queryByText("No videos found")).not.toBeInTheDocument();
+  });
+
+  it("shows only dormant channels when the stale filter is on", () => {
+    window.history.replaceState(null, "", "/?tab=subscriptions");
+    const staleDate = new Date(Date.now() - 200 * 24 * 60 * 60 * 1000);
+    const freshDate = new Date(Date.now() - 2 * 24 * 60 * 60 * 1000);
+    mockRSSVideosState = {
+      ...mockRSSVideosState,
+      videos: [
+        {
+          id: "stale-video",
+          title: "Old upload",
+          description: "",
+          thumbnail: "",
+          channelId: "UC123",
+          channelTitle: "Test Channel",
+          publishedAt: staleDate.toISOString(),
+        },
+        {
+          id: "fresh-video",
+          title: "Fresh upload",
+          description: "",
+          thumbnail: "",
+          channelId: "UCfresh",
+          channelTitle: "Fresh Channel",
+          publishedAt: freshDate.toISOString(),
+        },
+      ],
+    };
+    mockAllSubscriptions = [
+      {
+        id: "UC123",
+        title: "Test Channel",
+        description: "",
+        thumbnail: "",
+        group: "Tech",
+        isFavorite: false,
+      },
+      {
+        id: "UCfresh",
+        title: "Fresh Channel",
+        description: "",
+        thumbnail: "",
+        group: "Tech",
+        isFavorite: false,
+      },
+    ];
+
+    render(
+      <MemoryRouter>
+        <Dashboard />
+      </MemoryRouter>,
+    );
+
+    // The chip's live count proves the stale computation is wired through;
+    // filtering itself is covered in SubscriptionsList.test.
+    const staleToggle = screen.getByTestId("stale-filter-toggle");
+    expect(staleToggle).toHaveTextContent("Stale (1)");
+    expect(staleToggle).toHaveAttribute("aria-pressed", "false");
+    fireEvent.click(staleToggle);
+    expect(staleToggle).toHaveAttribute("aria-pressed", "true");
+    expect(screen.getByLabelText("Stale threshold")).toHaveValue("90");
   });
 
   it("keeps the selected dashboard tab in the URL for browser back restores", () => {

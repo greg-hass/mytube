@@ -16,7 +16,8 @@ export const useStore = create<AppState>()(
 			partialize: (state) => ({
 				theme: state.theme,
 				viewMode: state.viewMode,
-				 sortBy: state.sortBy,
+				sortBy: state.sortBy,
+				staleChannelDays: state.staleChannelDays,
 				apiKey: state.apiKey,
 				deepseekApiKey: state.deepseekApiKey,
 				customApiKey: state.customApiKey,
@@ -43,11 +44,9 @@ export const useStore = create<AppState>()(
 					llmProvider:
 						persisted.llmProvider === "opencode"
 							? "deepseek"
-							: persisted.llmProvider ?? currentState.llmProvider,
+							: (persisted.llmProvider ?? currentState.llmProvider),
 					watchedVideos: new Set(
-						Array.isArray(persisted.watchedVideos)
-							? persisted.watchedVideos
-							: [],
+						Array.isArray(persisted.watchedVideos) ? persisted.watchedVideos : [],
 					),
 				};
 			},
