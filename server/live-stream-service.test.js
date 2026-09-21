@@ -2,6 +2,7 @@ const { describe, expect, it, vi } = globalThis;
 const {
 	createLiveStreamService,
 	parseLiveChannelPage,
+	selectLiveCandidateChannelIds,
 } = require("./live-stream-service");
 
 const CHANNEL_ID = "UCaaaaaaaaaaaaaaaaaaaaaa";
@@ -173,5 +174,86 @@ describe("live stream service", () => {
 		await Promise.all([first, second]);
 
 		expect(fetchImpl).toHaveBeenCalledTimes(1);
+	});
+});
+
+describe("live stream candidate pre-filter", () => {
+	const THIRD_CHANNEL_ID = "UCcccccccccccccccccccccc";
+
+	it("selects channels with recent videos plus channels with no archive", () => {
+		const now = Date.parse("2026-08-11T12:00:00.000Z");
+		const candidates = selectLiveCandidateChannelIds({
+			now,
+			windowHours: 168,
+			videos: [
+				{ channelId: CHANNEL_ID, publishedAt: "2026-08-11T11:00:00.000Z" },
+			{
+					channelId: SECOND_CHANNEL_ID,
+					publishedAt: "2026-08-01T00:00:00.000Z",
+				},
+				{ channelId: null, publishedAt: "2026-08-11T11:30:00.000Z" },
+			],
+			subscriptions: [
+				{ id: CHANNEL_ID },
+				{ id: SECOND_CHANNEL_ID },
+				{ id: THIRD_CHANNEL_ID },
+			],
+		});
+
+		expect(candidates.has(CHANNEL_ID)).toBe(true);
+		expect(candidates.has(SECOND_CHANNEL_ID)).toBe(false);
+		expect(candidates.has(THIRD_CHANNEL_ID)).toBe(true);
+	});
+
+	it("scans only candidate channels and reports what was skipped", async () => {
+		const fetchImpl = vi.fn(async () => response(channelPage()));
+		const service = createLiveStreamService({ fetchImpl });
+
+		const result = await service.scanSubscriptions(
+			[
+				{ id: CHANNEL_ID, title: "Recent" },
+				{ id: SECOND_CHANNEL_ID, title: "Old only" },
+				{ id: THIRD_CHANNEL_ID, title: "No videos" },
+				{ id: "handle_channel", title: "Unresolved" },
+			],
+			{
+				candidateChannelIds: new Set([
+					CHANNEL_ID,
+					THIRD_CHANNEL_ID,
+					"UCnotasubscription0000001",
+				]),
+			},
+		);
+
+		expect(fetchImpl).toHaveBeenCalledTimes(2);
+		const requestedUrls = fetchImpl.mock.calls.map(([url]) => String(url));
+		expect(requestedUrls.some((url) => url.includes(CHANNEL_ID))).toBe(true);
+		expect(requestedUrls.some((url) => url.includes(THIRD_CHANNEL_ID))).toBe(
+			true,
+		);
+		expect(
+				requestedUrls.some((url) => url.includes(SECOND_CHANNEL_ID)),
+		).toBe(false);
+		expect(result).toMatchObject({
+			totalChannels: 4,
+			checkedChannels: 2,
+			invalidChannels: 1,
+			scanMode: "candidates",
+			skippedChannels: 1,
+		});
+	});
+
+	it("reports a full scan when no candidates are supplied", async () => {
+		const fetchImpl = vi.fn(async () => response(channelPage()));
+		const service = createLiveStreamService({ fetchImpl });
+
+		const result = await service.scanSubscriptions([
+			{ id: CHANNEL_ID, title: "Channel" },
+		]);
+
+		expect(result).toMatchObject({
+			scanMode: "full",
+			skippedChannels: 0,
+		});
 	});
 });

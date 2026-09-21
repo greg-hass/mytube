@@ -18,7 +18,19 @@ const { createChannelBackfillService } = require("./channel-backfill");
 const { normalizeVideoCacheThumbnails } = require("./video-thumbnails");
 const { pruneVideosToActiveChannels } = require("./video-archive");
 const { extractYouTubeChannelMetadata } = require("./youtube-html-parser");
-const { createLiveStreamService } = require("./live-stream-service");
+const {
+	createLiveStreamService,
+	selectLiveCandidateChannelIds,
+} = require("./live-stream-service");
+
+// Live view candidate pre-filter: channels without a feed entry this recent
+// cannot currently be live (a running stream stays in its channel's RSS
+// feed), so only plausible candidates get the per-channel page check.
+// Override with LIVE_CANDIDATE_WINDOW_HOURS; refresh=1 always sweeps all.
+const liveCandidateWindowHours =
+	Number(process.env.LIVE_CANDIDATE_WINDOW_HOURS) > 0
+		? Number(process.env.LIVE_CANDIDATE_WINDOW_HOURS)
+		: 24 * 7;
 const {
 	createApiKeyAuthMiddleware,
 	createBucketRateLimiter,
@@ -638,8 +650,23 @@ function createApp({
 			const subscriptions = Array.isArray(data.subscriptions)
 				? data.subscriptions.filter((subscription) => !subscription.isMuted)
 				: [];
+			const force = req.query.refresh === "1";
+			let candidateChannelIds = null;
+			if (!force) {
+				// A live stream appears in its channel's RSS feed when it starts and
+				// stays there while it runs, so channels with no recent feed entries
+				// cannot be live. Verify only plausible candidates; an explicit
+				// refresh=1 still sweeps every channel.
+				const videoCache = await appStore.readVideoCache(defaultVideoCache);
+				candidateChannelIds = selectLiveCandidateChannelIds({
+					videos: videoCache.videos,
+					subscriptions,
+					windowHours: liveCandidateWindowHours,
+				});
+			}
 			const result = await liveStreamService.scanSubscriptions(subscriptions, {
-				force: req.query.refresh === "1",
+				force,
+				candidateChannelIds,
 			});
 			res.setHeader("Cache-Control", "private, no-store");
 			res.json(result);

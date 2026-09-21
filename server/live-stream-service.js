@@ -6,6 +6,7 @@ const DEFAULT_ERROR_CACHE_TTL_MS = 10 * 1000;
 const DEFAULT_TIMEOUT_MS = 7000;
 const DEFAULT_CONCURRENCY = 6;
 const CHANNEL_ID_PATTERN = /^UC[\w-]{22}$/;
+const DEFAULT_LIVE_CANDIDATE_WINDOW_HOURS = 24 * 7;
 
 function extractPlayerResponse(html) {
 	const source = String(html || "");
@@ -89,6 +90,37 @@ function parseLiveChannelPage(html, subscription, { now = Date.now() } = {}) {
 	};
 }
 
+function selectLiveCandidateChannelIds({
+	videos,
+	subscriptions,
+	now = Date.now(),
+	windowHours = DEFAULT_LIVE_CANDIDATE_WINDOW_HOURS,
+}) {
+	const cutoff = now - windowHours * 60 * 60 * 1000;
+	const candidates = new Set();
+	const archivedChannelIds = new Set();
+
+	for (const video of videos || []) {
+		const channelId = video?.channelId;
+		if (!channelId) continue;
+		archivedChannelIds.add(channelId);
+		const publishedAtMs = Date.parse(video.publishedAt || "");
+		if (Number.isFinite(publishedAtMs) && publishedAtMs >= cutoff) {
+			candidates.add(channelId);
+		}
+	}
+
+	// Channels with no archived videos (freshly added, or not yet swept)
+	// stay in the scan so new subscriptions are still checked.
+	for (const subscription of subscriptions || []) {
+		if (subscription?.id && !archivedChannelIds.has(subscription.id)) {
+			candidates.add(subscription.id);
+		}
+	}
+
+	return candidates;
+}
+
 function createLiveStreamService(options = {}) {
 	const {
 		fetchImpl = fetch,
@@ -154,11 +186,20 @@ function createLiveStreamService(options = {}) {
 		return request;
 	}
 
-	async function scanSubscriptions(subscriptions, { force = false } = {}) {
-		const validSubscriptions = subscriptions.filter(
+	async function scanSubscriptions(
+		subscriptions,
+		{ force = false, candidateChannelIds = null } = {},
+	) {
+		let validSubscriptions = subscriptions.filter(
 			(subscription) =>
 					subscription && CHANNEL_ID_PATTERN.test(String(subscription.id || "")),
 		);
+		const totalValidSubscriptions = validSubscriptions.length;
+		if (candidateChannelIds) {
+			validSubscriptions = validSubscriptions.filter((subscription) =>
+				candidateChannelIds.has(subscription.id),
+			);
+		}
 		const activeChannelIds = new Set(
 			validSubscriptions.map((subscription) => subscription.id),
 		);
@@ -204,8 +245,10 @@ function createLiveStreamService(options = {}) {
 			checkedAt: new Date(now()).toISOString(),
 			totalChannels: subscriptions.length,
 			checkedChannels: validSubscriptions.length - failedChannels.length,
-			invalidChannels: subscriptions.length - validSubscriptions.length,
+			invalidChannels: subscriptions.length - totalValidSubscriptions,
 			failedChannels,
+			scanMode: candidateChannelIds ? "candidates" : "full",
+			skippedChannels: totalValidSubscriptions - validSubscriptions.length,
 		};
 	}
 
@@ -217,5 +260,6 @@ module.exports = {
 	extractCanonicalUrl,
 	extractPlayerResponse,
 	parseLiveChannelPage,
+	selectLiveCandidateChannelIds,
 	CHANNEL_ID_PATTERN,
 };

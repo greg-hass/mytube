@@ -824,7 +824,86 @@ describe("createApp integration", () => {
 			expect(response.body.videos).toEqual([{ id: "live-1", isLive: true }]);
 			expect(scanSubscriptions).toHaveBeenCalledWith([subscriptions[0]], {
 				force: true,
+				candidateChannelIds: null,
 			});
+		} finally {
+			appStore.close();
+			await fs.promises.rm(path.dirname(databaseFile), {
+				recursive: true,
+				force: true,
+			});
+		}
+	});
+
+	it("GET /api/videos/live pre-filters to channels with recent feed activity", async () => {
+		const scanSubscriptions = vi.fn().mockResolvedValue({
+			videos: [],
+			checkedAt: "2026-08-11T10:00:00.000Z",
+			totalChannels: 3,
+			checkedChannels: 2,
+			invalidChannels: 0,
+			failedChannels: [],
+		});
+		const { app, appStore, databaseFile } = buildApp({
+			databaseFile: createTempDatabaseFile(),
+			config: { liveStreamService: { scanSubscriptions } },
+		});
+		await appStore.init({
+			defaultData: appStore.DEFAULT_DATA,
+			defaultVideoCache: appStore.DEFAULT_VIDEO_CACHE,
+		});
+		const recentChannel = "UCaaaaaaaaaaaaaaaaaaaaaa";
+		const staleChannel = "UCbbbbbbbbbbbbbbbbbbbbbb";
+		const noVideosChannel = "UCcccccccccccccccccccccc";
+		const subscriptions = [
+			{ id: recentChannel, title: "Recent Channel" },
+			{ id: staleChannel, title: "Stale Channel" },
+			{ id: noVideosChannel, title: "New Channel" },
+		];
+		await appStore.writeData({
+			subscriptions,
+			settings: {},
+			watchedVideos: [],
+			redirects: {},
+		});
+		await appStore.writeVideoCache({
+			videos: [
+				{
+					id: "recent-video",
+					channelId: recentChannel,
+					channelTitle: "Recent Channel",
+					title: "Recent upload",
+					publishedAt: new Date(Date.now() - 60 * 60 * 1000).toISOString(),
+					thumbnail: "",
+					description: "",
+				},
+				{
+					id: "stale-video",
+					channelId: staleChannel,
+					channelTitle: "Stale Channel",
+					title: "Old upload",
+					publishedAt: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString(),
+					thumbnail: "",
+					description: "",
+				},
+			],
+			lastUpdated: new Date().toISOString(),
+			totalChannels: 2,
+			totalVideos: 2,
+			channelRefreshes: {},
+		});
+
+		try {
+			const response = await authedRequest(app).get("/api/videos/live");
+			expect(response.status).toBe(200);
+			expect(scanSubscriptions).toHaveBeenCalledTimes(1);
+			const [calledSubscriptions, options] = scanSubscriptions.mock.calls[0];
+			expect(calledSubscriptions).toEqual(subscriptions);
+			expect(options.force).toBe(false);
+			expect(options.candidateChannelIds).toBeInstanceOf(Set);
+			expect([...options.candidateChannelIds].sort()).toEqual(
+				[noVideosChannel, recentChannel].sort(),
+			);
 		} finally {
 			appStore.close();
 			await fs.promises.rm(path.dirname(databaseFile), {
