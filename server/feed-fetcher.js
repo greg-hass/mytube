@@ -473,11 +473,58 @@ async function fetchChannelFeed(channelId, feedParser = parser, options = {}) {
 	}
 }
 
-async function fetchChannelThumbnail(channelId) {
+function getBestApiChannelThumbnail(data) {
+	const thumbnails = data?.items?.[0]?.snippet?.thumbnails;
+	if (!thumbnails) return null;
+	const best =
+		thumbnails.maxres ||
+		thumbnails.standard ||
+		thumbnails.high ||
+		thumbnails.medium ||
+		thumbnails.default;
+	return best?.url || null;
+}
+
+async function fetchChannelThumbnail(
+	channelId,
+	apiKey = process.env.YOUTUBE_API_KEY,
+	httpClient = axios,
+	fetchImpl = fetch,
+) {
+	// API-first: one channels.list call costs a single quota unit and skips
+	// downloading the multi-megabyte channel page entirely.
+	if (apiKey) {
+		const controller = new AbortController();
+		const timeoutId = setTimeout(() => controller.abort(), 10_000);
+		try {
+			const params = new URLSearchParams({
+				part: "snippet",
+				id: channelId,
+				key: apiKey,
+			});
+			const response = await fetchImpl(
+				`https://www.googleapis.com/youtube/v3/channels?${params.toString()}`,
+				{ signal: controller.signal },
+			);
+			if (response.ok) {
+				const apiThumbnail = getBestApiChannelThumbnail(await response.json());
+				if (apiThumbnail) return apiThumbnail;
+			}
+		} catch (error) {
+			console.warn(
+				`YouTube API thumbnail lookup failed for ${channelId}; falling back to HTML:`,
+				error.message,
+			);
+		} finally {
+			clearTimeout(timeoutId);
+		}
+	}
+
 	try {
 		const url = `https://www.youtube.com/channel/${channelId}`;
-		const response = await axios.get(url, {
+		const response = await httpClient.get(url, {
 			headers: { "User-Agent": "Mozilla/5.0" },
+			timeout: 10_000,
 		});
 
 		const html = response.data;

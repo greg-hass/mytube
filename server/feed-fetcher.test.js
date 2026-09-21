@@ -7,6 +7,7 @@ const {
 	classifyFeedFailure,
 	createVideoItemHash,
 	fetchChannelFeed,
+	fetchChannelThumbnail,
 } = require("./feed-fetcher");
 
 describe("RSS-first feed fetcher", () => {
@@ -174,5 +175,120 @@ describe("RSS-first feed fetcher", () => {
 			errorMessage: "Feed returned 404",
 		});
 		expect(fetchImpl).toHaveBeenCalledTimes(1);
+	});
+});
+
+describe("fetchChannelThumbnail", () => {
+	it("uses the YouTube Data API when a key is provided", async () => {
+		const fetchImpl = vi.fn(async () => ({
+			ok: true,
+			json: async () => ({
+				items: [
+					{
+						snippet: {
+							thumbnails: {
+								high: { url: "https://yt3.ggpht.com/api-avatar.jpg" },
+							},
+						},
+					},
+				],
+			}),
+		}));
+		const httpClient = { get: vi.fn() };
+
+		const url = await fetchChannelThumbnail(
+			"UC_TEST",
+			"key123",
+			httpClient,
+			fetchImpl,
+		);
+
+		expect(url).toBe("https://yt3.ggpht.com/api-avatar.jpg");
+		expect(fetchImpl).toHaveBeenCalledTimes(1);
+		expect(httpClient.get).not.toHaveBeenCalled();
+		const calledUrl = fetchImpl.mock.calls[0][0];
+		expect(calledUrl).toContain("/youtube/v3/channels?");
+		expect(calledUrl).toContain("id=UC_TEST");
+		expect(calledUrl).toContain("key=key123");
+	});
+
+	it("prefers the highest-resolution API thumbnail available", async () => {
+		const fetchImpl = vi.fn(async () => ({
+			ok: true,
+			json: async () => ({
+				items: [
+					{
+						snippet: {
+							thumbnails: {
+								medium: { url: "https://yt3.ggpht.com/medium.jpg" },
+								default: { url: "https://yt3.ggpht.com/default.jpg" },
+							},
+						},
+					},
+				],
+			}),
+		}));
+
+		const url = await fetchChannelThumbnail(
+			"UC_TEST",
+			"key123",
+			{ get: vi.fn() },
+			fetchImpl,
+		);
+
+		expect(url).toBe("https://yt3.ggpht.com/medium.jpg");
+	});
+
+	it("falls back to HTML scraping when the API returns no items", async () => {
+		const fetchImpl = vi.fn(async () => ({
+			ok: true,
+			json: async () => ({ items: [] }),
+		}));
+		const httpClient = {
+			get: vi.fn(async () => ({
+				data: '<meta property="og:image" content="https://i.ytimg.com/og.jpg">',
+			})),
+		};
+
+		const url = await fetchChannelThumbnail(
+			"UC_TEST",
+			"key123",
+			httpClient,
+			fetchImpl,
+		);
+
+		expect(url).toBe("https://i.ytimg.com/og.jpg");
+		expect(httpClient.get).toHaveBeenCalledTimes(1);
+	});
+
+	it("falls back to HTML scraping when the API call fails", async () => {
+		const fetchImpl = vi.fn(async () => {
+			throw new Error("network down");
+		});
+		const httpClient = {
+			get: vi.fn(async () => ({
+				data: '<meta property="og:image" content="https://i.ytimg.com/og.jpg">',
+			})),
+		};
+
+		const url = await fetchChannelThumbnail(
+			"UC_TEST",
+			"key123",
+			httpClient,
+			fetchImpl,
+		);
+
+		expect(url).toBe("https://i.ytimg.com/og.jpg");
+	});
+
+	it("scrapes HTML only when no API key is configured", async () => {
+		const fetchImpl = vi.fn();
+		const httpClient = { get: vi.fn(async () => ({ data: "" })) };
+
+		const url = await fetchChannelThumbnail("UC_TEST", "", httpClient, fetchImpl);
+
+		expect(url).toBe(null);
+		expect(fetchImpl).not.toHaveBeenCalled();
+		expect(httpClient.get).toHaveBeenCalledTimes(1);
 	});
 });
