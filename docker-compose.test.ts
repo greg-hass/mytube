@@ -14,12 +14,13 @@ describe('docker compose persistence', () => {
     expect(compose).not.toContain('./server/data:/app/server/data');
   });
 
-  it('publishes a cached image for the production x86 server without emulation', () => {
+  it('publishes a multi-arch image using native runners without emulation', () => {
     const workflow = readFileSync('.github/workflows/docker-publish.yml', 'utf8');
 
-    expect(workflow).toContain('platforms: linux/amd64');
+    expect(workflow).toContain('platform: linux/amd64');
+    expect(workflow).toContain('platform: linux/arm64');
+    expect(workflow).toContain('ubuntu-24.04-arm');
     expect(workflow).not.toContain('docker/setup-qemu-action@v3');
-    expect(workflow).not.toContain('linux/arm64');
     expect(workflow).toContain('cache-from: type=gha');
     expect(workflow).toContain('cache-to: type=gha,mode=max');
   });
