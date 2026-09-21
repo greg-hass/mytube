@@ -497,6 +497,13 @@ function createApp({
 				return res.status(404).json({ error: "Subscription not found" });
 			}
 
+			const videoCache = await appStore.readVideoCache(defaultVideoCache);
+			const removedVideoIds = new Set(
+				(videoCache.videos || [])
+					.filter((video) => video?.channelId === id)
+					.map((video) => video.id),
+			);
+
 			const savedData = await appStore.updateData(
 				defaultData,
 				(data) => ({
@@ -504,13 +511,15 @@ function createApp({
 					subscriptions: (data.subscriptions || []).filter(
 						(subscription) => subscription.id !== id,
 					),
+					watchedVideos: (data.watchedVideos || []).filter(
+						(videoId) => !removedVideoIds.has(videoId),
+					),
 				}),
 				{ trackSubscriptionChanges: true },
 			);
 			// A deletion needs no feed fetching: prune the channel's videos from
 			// the archive locally so they vanish immediately; the next scheduled
 			// run would have evicted them anyway.
-			const videoCache = await appStore.readVideoCache(defaultVideoCache);
 			const activeChannelIds = new Set(
 				(savedData.subscriptions || []).map((subscription) => subscription.id),
 			);
@@ -518,11 +527,25 @@ function createApp({
 				videoCache.videos || [],
 				activeChannelIds,
 			);
-			if (prunedVideos.length !== (videoCache.videos || []).length) {
+			const { [id]: removedRefresh, ...prunedChannelRefreshes } =
+				videoCache.channelRefreshes || {};
+			const prunedShortsStatus = Object.fromEntries(
+				Object.entries(videoCache.shortsStatusById || {}).filter(
+					([videoId]) => !removedVideoIds.has(videoId),
+				),
+			);
+			if (
+				prunedVideos.length !== (videoCache.videos || []).length ||
+				removedRefresh !== undefined ||
+				Object.keys(prunedShortsStatus).length !==
+					Object.keys(videoCache.shortsStatusById || {}).length
+			) {
 				await appStore.writeVideoCache({
 					...videoCache,
 					videos: prunedVideos,
 					totalVideos: prunedVideos.length,
+					channelRefreshes: prunedChannelRefreshes,
+					shortsStatusById: prunedShortsStatus,
 					lastUpdated: new Date().toISOString(),
 				});
 			}

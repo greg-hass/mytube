@@ -20,6 +20,7 @@ vi.mock("../lib/indexeddb", () => ({
 	getAllSubscriptions: vi.fn().mockResolvedValue([]),
 	addSubscriptions,
 	removeSubscription: vi.fn().mockResolvedValue(undefined),
+	removeVideosByChannel: vi.fn().mockResolvedValue(undefined),
 	clearAllSubscriptions: vi.fn().mockResolvedValue(undefined),
 	getSubscriptionCount: vi.fn().mockResolvedValue(0),
 	toggleFavorite: vi.fn().mockResolvedValue(undefined),

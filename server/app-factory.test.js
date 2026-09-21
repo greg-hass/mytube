@@ -420,7 +420,7 @@ describe("createApp integration", () => {
 					{ id: remove, title: "Remove", thumbnail: "", description: "" },
 				],
 				settings: {},
-				watchedVideos: [],
+				watchedVideos: ["keep-video", "remove-video"],
 			});
 		aggregateFeeds.mockClear();
 
@@ -448,6 +448,8 @@ describe("createApp integration", () => {
 			lastUpdated: "2026-08-19T00:00:00.000Z",
 			totalChannels: 2,
 			totalVideos: 2,
+			channelRefreshes: { [remove]: { etag: "removed-etag" } },
+			shortsStatusById: { "remove-video": true, "keep-video": false },
 		});
 
 		const deleted = await authedRequest(resources.app).delete(
@@ -459,6 +461,16 @@ describe("createApp integration", () => {
 		const videos = await authedRequest(resources.app).get("/api/videos");
 		expect(videos.status).toBe(200);
 		expect(videos.body.videos.map((video) => video.id)).toEqual(["keep-video"]);
+
+		const health = await authedRequest(resources.app).get("/api/health");
+		expect(health.status).toBe(200);
+		expect(health.body.watchedVideos).toBe(1);
+
+		const videoCache = await resources.appStore.readVideoCache(
+			resources.appStore.DEFAULT_VIDEO_CACHE,
+		);
+		expect(videoCache.shortsStatusById).toEqual({ "keep-video": false });
+		expect(videoCache.channelRefreshes?.[remove]).toBeUndefined();
 	});
 
 	it("POST /api/subscriptions/restore refreshes only the restored channel", async () => {

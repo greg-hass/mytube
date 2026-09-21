@@ -281,8 +281,11 @@ function useSubscriptionMutations(deps: MutationDeps) {
 	const removeSubscriptionMutation = useMutation({
 		mutationFn: async (channelId: string) => {
 			await deleteSubscriptionOnServer(channelId);
-			const { removeSubscription } = await import("../lib/indexeddb");
+			const { removeSubscription, removeVideosByChannel } = await import("../lib/indexeddb");
 			await removeSubscription(channelId);
+			await removeVideosByChannel(channelId);
+			const { removeFavoriteVideosByChannel } = await import("./useFavoriteVideos");
+			removeFavoriteVideosByChannel(channelId);
 			return channelId;
 		},
 		onSuccess: async (removedChannelId: string) => {

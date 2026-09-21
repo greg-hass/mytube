@@ -1,6 +1,6 @@
 import { act, fireEvent, render, renderHook, screen } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { useFavoriteVideos } from './useFavoriteVideos';
+import { useFavoriteVideos, removeFavoriteVideosByChannel } from './useFavoriteVideos';
 import type { YouTubeVideo } from '../types/youtube';
 
 const video: YouTubeVideo = {
@@ -52,6 +52,47 @@ describe('useFavoriteVideos', () => {
         id: 'video-1',
         title: 'A favorite from Latest',
       },
+    ]);
+  });
+
+  it('removes every favorite for a channel when the channel is purged', () => {
+    const otherChannelVideo: YouTubeVideo = {
+      ...video,
+      id: 'video-2',
+      channelId: 'UC456',
+      channelTitle: 'Other Channel',
+      title: 'Another favorite',
+    };
+
+    function MultiFavoriteHarness() {
+      const { favoriteVideos, toggleFavoriteVideo } = useFavoriteVideos();
+      return (
+        <div>
+          <button type="button" onClick={() => toggleFavoriteVideo(video)}>
+            Toggle first
+          </button>
+          <button type="button" onClick={() => toggleFavoriteVideo(otherChannelVideo)}>
+            Toggle second
+          </button>
+          <p>{favoriteVideos.map((favorite) => favorite.title).join(', ') || 'No favorites'}</p>
+        </div>
+      );
+    }
+
+    render(<MultiFavoriteHarness />);
+    fireEvent.click(screen.getByRole('button', { name: 'Toggle first' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Toggle second' }));
+    expect(screen.getByText('A favorite from Latest, Another favorite')).toBeInTheDocument();
+
+    act(() => {
+      removeFavoriteVideosByChannel('UC123');
+    });
+
+    expect(screen.getByText('Another favorite')).toBeInTheDocument();
+    expect(screen.queryByText('A favorite from Latest, Another favorite')).not.toBeInTheDocument();
+    expect(JSON.parse(localStorage.getItem('favorite-video-ids') || '[]')).toEqual(['video-2']);
+    expect(JSON.parse(localStorage.getItem('favorite-videos') || '[]')).toMatchObject([
+      { id: 'video-2' },
     ]);
   });
 

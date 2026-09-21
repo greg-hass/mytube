@@ -45,6 +45,31 @@ function writeFavorites(ids: Set<string>, videosById: Map<string, YouTubeVideo>)
   window.dispatchEvent(new Event(FAVORITES_CHANGED_EVENT));
 }
 
+/**
+ * Drop every favorited video belonging to a channel. Called when the
+ * subscription is deleted so its videos disappear from the Favorites tab
+ * instead of lingering as orphans.
+ */
+export function removeFavoriteVideosByChannel(channelId: string) {
+  const storedVideos = parseVideos(readRawStorage(VIDEOS_STORAGE_KEY));
+  const removedIds = new Set(
+    storedVideos
+      .filter((video) => video.channelId === channelId)
+      .map((video) => video.id),
+  );
+  if (removedIds.size === 0) return;
+
+  const ids = new Set(parseVideoIds(readRawStorage(IDS_STORAGE_KEY)));
+  for (const removedId of removedIds) ids.delete(removedId);
+
+  const videosById = new Map<string, YouTubeVideo>();
+  for (const video of storedVideos) {
+    if (!removedIds.has(video.id)) videosById.set(video.id, video);
+  }
+
+  writeFavorites(ids, videosById);
+}
+
 export function useFavoriteVideos() {
   const { favoriteVideoIds, favoriteVideos } = useSyncExternalStore(
     subscribeToFavorites, getFavoriteSnapshot, () => EMPTY_SNAPSHOT,

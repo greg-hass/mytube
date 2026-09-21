@@ -309,6 +309,37 @@ export async function removeSubscription(channelId: string): Promise<void> {
 }
 
 /**
+ * Remove every cached video belonging to a channel, used when the
+ * subscription is deleted so no orphaned videos linger on disk.
+ */
+export async function removeVideosByChannel(channelId: string): Promise<void> {
+	const db = await getDB();
+	await new Promise<void>((resolve, reject) => {
+		try {
+			const transaction = db.transaction(VIDEOS_CACHE_STORE, "readwrite");
+			const index = transaction.objectStore(VIDEOS_CACHE_STORE).index("channelId");
+			const request = index.openCursor(IDBKeyRange.only(channelId));
+			request.onsuccess = () => {
+				const cursor = request.result;
+				if (cursor) {
+					cursor.delete();
+					cursor.continue();
+				}
+			};
+			transaction.oncomplete = () => resolve();
+			transaction.onerror = () =>
+					reject(
+						new Error(
+							`Failed to remove cached videos: ${transaction.error?.message}`,
+						),
+					);
+		} catch (error) {
+			reject(error instanceof Error ? error : new Error(String(error)));
+		}
+	});
+}
+
+/**
  * Update an existing subscription with new information
  */
 export async function updateSubscription(
