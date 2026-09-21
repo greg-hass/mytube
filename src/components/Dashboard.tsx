@@ -1934,22 +1934,6 @@ export const Dashboard = () => {
 									</div>
 								) : (
 									<div>
-										{liveLookup.failedChannels.length > 0 && (
-											<div
-												className="mb-4 flex items-start gap-2 rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900 dark:border-amber-900/60 dark:bg-amber-950/30 dark:text-amber-200"
-												role="status"
-											>
-												<AlertTriangle
-													className="mt-0.5 h-4 w-4 shrink-0"
-													aria-hidden="true"
-												/>
-												<span>
-													Showing confirmed live streams. {liveLookup.failedChannels.length}{" "}
-													channel{liveLookup.failedChannels.length === 1 ? " was" : "s were"}{" "}
-													unavailable during this scan.
-												</span>
-											</div>
-										)}
 										<p className="mb-4 text-sm text-gray-500 dark:text-ios-400">
 											{liveLookup.videos.length} subscription
 											{liveLookup.videos.length === 1 ? " is" : "s are"} live now
