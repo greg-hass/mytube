@@ -399,10 +399,10 @@ export const useRSSVideos = ({ enabled = true }: UseRSSVideosOptions = {}) => {
 		backfillMutation,
 	} = useRefreshMutation(queryClient);
 
-	const { data: aggregationStatus } = useAggregationStatus(
-		refreshTriggered,
-		enabled,
-	);
+	const {
+		data: aggregationStatus,
+		dataUpdatedAt: statusDataUpdatedAt,
+	} = useAggregationStatus(refreshTriggered, enabled);
 
 	const isAggregating = aggregationStatus?.state === "running";
 
@@ -413,11 +413,19 @@ export const useRSSVideos = ({ enabled = true }: UseRSSVideosOptions = {}) => {
 		error,
 	} = useServerVideos(isAggregating, enabled, aggregationStatus?.cacheUpdatedAt !== undefined);
 
-	// Invalidate video cache when status indicates newer data
+	// Invalidate video cache when status indicates newer data.
+	// `statusDataUpdatedAt` re-runs this check on every status poll: if a
+	// triggered refetch fails transiently, the next poll re-attempts it instead
+	// of latching the timeline on stale data until the next server-side write.
 	useEffect(() => {
 		if (aggregationStatus?.cacheUpdatedAt !== undefined && serverData) {
 			if (aggregationStatus.cacheUpdatedAt !== (serverData.lastUpdated ?? null)) {
-				queryClient.invalidateQueries({ queryKey: ["server-videos"] });
+				// cancelRefetch: false lets an in-flight /api/videos request finish
+				// instead of restarting it on every status tick mid-refresh.
+				void queryClient.invalidateQueries(
+					{ queryKey: ["server-videos"] },
+					{ cancelRefetch: false },
+				);
 			}
 			return;
 		}
@@ -431,9 +439,17 @@ export const useRSSVideos = ({ enabled = true }: UseRSSVideosOptions = {}) => {
 			Number.isFinite(videosUpdatedAt) &&
 			statusUpdatedAt > videosUpdatedAt
 		) {
-			queryClient.invalidateQueries({ queryKey: ["server-videos"] });
+			void queryClient.invalidateQueries(
+				{ queryKey: ["server-videos"] },
+				{ cancelRefetch: false },
+			);
 		}
-	}, [aggregationStatus?.cacheUpdatedAt, aggregationStatus?.lastUpdated, queryClient, serverData]);
+	}, [
+		statusDataUpdatedAt,
+		aggregationStatus,
+		queryClient,
+		serverData,
+	]);
 
 	useRefreshLifecycle(
 		refreshTriggered,

@@ -461,4 +461,70 @@ describe("useRSSVideos", () => {
 		});
 		expect(videoCalls).toBeGreaterThanOrEqual(2);
 	});
+
+	it("recovers the timeline after a transient /api/videos failure during a cache version change", async () => {
+		vi.useFakeTimers();
+		const T1 = "2026-05-06T20:00:00.000Z";
+		const T2 = "2026-05-06T21:00:00.000Z";
+		let cacheVersion = T1;
+		let videosHealthy = true;
+
+		vi.stubGlobal(
+			"fetch",
+			vi.fn(async (input: RequestInfo | URL) => {
+				const url = String(input);
+				if (url.startsWith("/api/videos/status"))
+					return statusResponse({ cacheUpdatedAt: cacheVersion });
+				if (url === "/api/videos") {
+					if (!videosHealthy) return new Response("boom", { status: 500 });
+					return videosResponse(
+						[video(cacheVersion, "video-1", cacheVersion)],
+						cacheVersion,
+					);
+				}
+				throw new Error(`Unexpected fetch ${url}`);
+			}),
+		);
+
+		const queryClient = new QueryClient({
+			defaultOptions: { queries: { retry: false } },
+		});
+		const { result, unmount } = renderHook(() => useRSSVideos(), {
+			wrapper: ({ children }: { children: ReactNode }) => (
+				<QueryClientProvider client={queryClient}>
+					{children}
+				</QueryClientProvider>
+			),
+		});
+
+		try {
+			await act(async () => {
+				await vi.advanceTimersByTimeAsync(100);
+			});
+			expect(result.current.videos.map((item) => item.title)).toEqual([T1]);
+
+			// A server-side refresh completes while the client is idle, but the
+			// invalidation-triggered /api/videos refetch fails transiently.
+			cacheVersion = T2;
+			videosHealthy = false;
+			await act(async () => {
+				await vi.advanceTimersByTimeAsync(10_000);
+			});
+			expect(result.current.videos.map((item) => item.title)).toEqual([T1]);
+
+			// The server recovers. Status polls keep reporting the same
+		// cacheUpdatedAt — the timeline must converge anyway, without a window
+			// focus event or any further server-side writes.
+			videosHealthy = true;
+			await act(async () => {
+				await vi.advanceTimersByTimeAsync(30_000);
+			});
+
+			expect(result.current.videos.map((item) => item.title)).toEqual([T2]);
+		} finally {
+			unmount();
+			queryClient.clear();
+			vi.useRealTimers();
+		}
+	});
 });
